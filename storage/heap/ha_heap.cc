@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -16,7 +23,6 @@
 
 
 #define MYSQL_SERVER 1
-#include "sql_priv.h"
 #include "probes_mysql.h"
 #include "sql_plugin.h"
 #include "ha_heap.h"
@@ -98,7 +104,7 @@ const char **ha_heap::bas_ext() const
 int ha_heap::open(const char *name, int mode, uint test_if_locked)
 {
   internal_table= MY_TEST(test_if_locked & HA_OPEN_INTERNAL_TABLE);
-  if (internal_table || (!(file= heap_open(name, mode)) && my_errno == ENOENT))
+  if (internal_table || (!(file= heap_open(name, mode)) && my_errno() == ENOENT))
   {
     HP_CREATE_INFO create_info;
     my_bool created_new_share;
@@ -200,6 +206,9 @@ void ha_heap::update_key_stats()
   for (uint i= 0; i < table->s->keys; i++)
   {
     KEY *key=table->key_info+i;
+
+    key->set_in_memory_estimate(1.0);           // Index is in memory
+
     if (!key->rec_per_key)
       continue;
     if (key->algorithm != HA_KEY_ALG_BTREE)
@@ -283,7 +292,7 @@ int ha_heap::index_read_map(uchar *buf, const uchar *key,
                             enum ha_rkey_function find_flag)
 {
   MYSQL_INDEX_READ_ROW_START(table_share->db.str, table_share->table_name.str);
-  DBUG_ASSERT(inited==INDEX);
+  assert(inited==INDEX);
   ha_statistic_increment(&SSV::ha_read_key_count);
   int error = heap_rkey(file,buf,active_index, key, keypart_map, find_flag);
   table->status = error ? STATUS_NOT_FOUND : 0;
@@ -295,7 +304,7 @@ int ha_heap::index_read_last_map(uchar *buf, const uchar *key,
                                  key_part_map keypart_map)
 {
   MYSQL_INDEX_READ_ROW_START(table_share->db.str, table_share->table_name.str);
-  DBUG_ASSERT(inited==INDEX);
+  assert(inited==INDEX);
   ha_statistic_increment(&SSV::ha_read_key_count);
   int error= heap_rkey(file, buf, active_index, key, keypart_map,
 		       HA_READ_PREFIX_LAST);
@@ -319,7 +328,7 @@ int ha_heap::index_read_idx_map(uchar *buf, uint index, const uchar *key,
 int ha_heap::index_next(uchar * buf)
 {
   MYSQL_INDEX_READ_ROW_START(table_share->db.str, table_share->table_name.str);
-  DBUG_ASSERT(inited==INDEX);
+  assert(inited==INDEX);
   ha_statistic_increment(&SSV::ha_read_next_count);
   int error=heap_rnext(file,buf);
   table->status=error ? STATUS_NOT_FOUND: 0;
@@ -330,7 +339,7 @@ int ha_heap::index_next(uchar * buf)
 int ha_heap::index_prev(uchar * buf)
 {
   MYSQL_INDEX_READ_ROW_START(table_share->db.str, table_share->table_name.str);
-  DBUG_ASSERT(inited==INDEX);
+  assert(inited==INDEX);
   ha_statistic_increment(&SSV::ha_read_prev_count);
   int error=heap_rprev(file,buf);
   table->status=error ? STATUS_NOT_FOUND: 0;
@@ -341,7 +350,7 @@ int ha_heap::index_prev(uchar * buf)
 int ha_heap::index_first(uchar * buf)
 {
   MYSQL_INDEX_READ_ROW_START(table_share->db.str, table_share->table_name.str);
-  DBUG_ASSERT(inited==INDEX);
+  assert(inited==INDEX);
   ha_statistic_increment(&SSV::ha_read_first_count);
   int error=heap_rfirst(file, buf, active_index);
   table->status=error ? STATUS_NOT_FOUND: 0;
@@ -352,7 +361,7 @@ int ha_heap::index_first(uchar * buf)
 int ha_heap::index_last(uchar * buf)
 {
   MYSQL_INDEX_READ_ROW_START(table_share->db.str, table_share->table_name.str);
-  DBUG_ASSERT(inited==INDEX);
+  assert(inited==INDEX);
   ha_statistic_increment(&SSV::ha_read_last_count);
   int error=heap_rlast(file, buf, active_index);
   table->status=error ? STATUS_NOT_FOUND: 0;
@@ -411,6 +420,7 @@ int ha_heap::info(uint flag)
   stats.create_time=          (ulong) hp_info.create_time;
   if (flag & HA_STATUS_AUTO)
     stats.auto_increment_value= hp_info.auto_increment;
+  stats.table_in_mem_estimate= 1.0;             // Table entirely in memory
   /*
     If info() is called for the first time after open(), we will still
     have to update the key statistics. Hoping that a table lock is now
@@ -580,6 +590,12 @@ THR_LOCK_DATA **ha_heap::store_lock(THD *thd,
 				    THR_LOCK_DATA **to,
 				    enum thr_lock_type lock_type)
 {
+  /*
+    This method should not be called for internal temporary tables
+    as they don't have properly initialized THR_LOCK and THR_LOCK_DATA
+    structures.
+  */
+  assert(!internal_table);
   if (lock_type != TL_IGNORE && file->lock.type == TL_UNLOCK)
     file->lock.type=lock_type;
   *to++= &file->lock;
@@ -629,7 +645,7 @@ ha_rows ha_heap::records_in_range(uint inx, key_range *min_key,
     return stats.records;
 
   /* Assert that info() did run. We need current statistics here. */
-  DBUG_ASSERT(key_stat_version == file->s->key_stat_version);
+  assert(key_stat_version == file->s->key_stat_version);
   return key->rec_per_key[key->user_defined_key_parts - 1];
 }
 
@@ -651,10 +667,11 @@ heap_prepare_hp_create_info(TABLE *table_arg, bool internal_table,
   for (key= parts= 0; key < keys; key++)
     parts+= table_arg->key_info[key].user_defined_key_parts;
 
-  if (!(keydef= (HP_KEYDEF*) my_malloc(keys * sizeof(HP_KEYDEF) +
+  if (!(keydef= (HP_KEYDEF*) my_malloc(hp_key_memory_HP_KEYDEF,
+                                       keys * sizeof(HP_KEYDEF) +
 				       parts * sizeof(HA_KEYSEG),
 				       MYF(MY_WME))))
-    return my_errno;
+    return my_errno();
   seg= reinterpret_cast<HA_KEYSEG*>(keydef + keys);
   for (key= 0; key < keys; key++)
   {
@@ -670,14 +687,14 @@ heap_prepare_hp_create_info(TABLE *table_arg, bool internal_table,
     case HA_KEY_ALG_UNDEF:
     case HA_KEY_ALG_HASH:
       keydef[key].algorithm= HA_KEY_ALG_HASH;
-      mem_per_row+= sizeof(char*) * 2; // = sizeof(HASH_INFO)
+      mem_per_row+= sizeof(HASH_INFO);
       break;
     case HA_KEY_ALG_BTREE:
       keydef[key].algorithm= HA_KEY_ALG_BTREE;
       mem_per_row+=sizeof(TREE_ELEMENT)+pos->key_length+sizeof(char*);
       break;
     default:
-      DBUG_ASSERT(0); // cannot happen
+      assert(0); // cannot happen
     }
 
     for (; key_part != key_part_end; key_part++, seg++)
@@ -766,7 +783,7 @@ int ha_heap::create(const char *name, TABLE *table_arg,
 				  create_info->auto_increment_value - 1 : 0);
   error= heap_create(name, &hp_create_info, &internal_share, &created);
   my_free(hp_create_info.keydef);
-  DBUG_ASSERT(file == 0);
+  assert(file == 0);
   return (error);
 }
 
@@ -786,7 +803,7 @@ void ha_heap::get_auto_increment(ulonglong offset, ulonglong increment,
   ha_heap::info(HA_STATUS_AUTO);
   *first_value= stats.auto_increment_value;
   /* such table has only table-level locking so reserves up to +inf */
-  *nb_reserved_values= ULONGLONG_MAX;
+  *nb_reserved_values= ULLONG_MAX;
 }
 
 

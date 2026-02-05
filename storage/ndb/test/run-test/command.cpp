@@ -1,15 +1,21 @@
 /*
-   Copyright (C) 2008 MySQL AB, 2008-2010 Sun Microsystems, Inc.
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -25,13 +31,13 @@
 MYSQL* find_atrtdb_client(atrt_config& config)
 {
   atrt_cluster* cluster = 0;
-  for (size_t i = 0; i<config.m_clusters.size(); i++)
+  for (unsigned i = 0; i<config.m_clusters.size(); i++)
   {
     if (strcmp(config.m_clusters[i]->m_name.c_str(), ".atrt") == 0)
     {
       cluster = config.m_clusters[i];
 
-      for (size_t i = 0; i<cluster->m_processes.size(); i++)
+      for (unsigned i = 0; i<cluster->m_processes.size(); i++)
       {
         if (cluster->m_processes[i]->m_type == atrt_process::AP_CLIENT)
         {
@@ -40,7 +46,7 @@ MYSQL* find_atrtdb_client(atrt_config& config)
             return NULL; /* No atrt db */
 
           atrt_process* f_mysqld = atrt_client->m_mysqld;
-          assert(f_mysqld);
+          require(f_mysqld);
 
           return &f_mysqld->m_mysql;
         }
@@ -100,6 +106,24 @@ set_env_var(const BaseString& existing,
   }
 
   return newEnv;
+}
+
+static
+char *
+dirname(const char * path)
+{
+  char * s = strdup(path);
+  size_t len = strlen(s);
+  for (size_t i = 1; i<len; i++)
+  {
+    if (s[len - i] == '/')
+    {
+      s[len - i] = 0;
+      return s;
+    }
+  }
+  free(s);
+  return 0;
 }
 
 
@@ -162,13 +186,55 @@ do_change_version(atrt_config& config, SqlResultSet& command,
                                   BaseString("MYSQL_BASE_DIR"),
                                   BaseString(new_prefix));
   proc.m_proc.m_env.assign(newEnv);
-  BaseString suffix(proc.m_proc.m_path.substr(strlen(old_prefix)));
-  proc.m_proc.m_path.assign(new_prefix).append(suffix);
+
+  ssize_t pos = proc.m_proc.m_path.lastIndexOf('/') + 1;
+  BaseString exename(proc.m_proc.m_path.substr(pos));
+  char * exe = find_bin_path(new_prefix, exename.c_str());
+  proc.m_proc.m_path = exe;
+  if (exe)
+  {
+    free(exe);
+  }
   if (process_args && strlen(process_args))
   {
     /* Beware too long args */
     proc.m_proc.m_args.append(" ");
     proc.m_proc.m_args.append(process_args);
+  }
+
+  {
+    /**
+     * In 5.5...binaries aren't compiled with rpath
+     * So we need an explicit LD_LIBRARY_PATH
+     * So when upgrading..we need to change LD_LIBRARY_PATH
+     * So I hate 5.5...
+     */
+#if defined(__MACH__)
+    ssize_t p0 = proc.m_proc.m_env.indexOf(" DYLD_LIBRARY_PATH=");
+#else
+    ssize_t p0 = proc.m_proc.m_env.indexOf(" LD_LIBRARY_PATH=");
+#endif
+    ssize_t p1 = proc.m_proc.m_env.indexOf(' ', p0 + 1);
+
+    BaseString part0 = proc.m_proc.m_env.substr(0, p0);
+    BaseString part1 = proc.m_proc.m_env.substr(p1);
+
+    proc.m_proc.m_env.assfmt("%s%s",
+                             part0.c_str(),
+                             part1.c_str());
+
+    BaseString lib(g_libmysqlclient_so_path);
+    ssize_t pos = lib.lastIndexOf('/') + 1;
+    BaseString libname(lib.substr(pos));
+    char * exe = find_bin_path(new_prefix, libname.c_str());
+    char * dir = dirname(exe);
+#if defined(__MACH__)
+    proc.m_proc.m_env.appfmt(" DYLD_LIBRARY_PATH=%s", dir);
+#else
+    proc.m_proc.m_env.appfmt(" LD_LIBRARY_PATH=%s", dir);
+#endif
+    free(exe);
+    free(dir);
   }
 
   ndbout << proc << endl;

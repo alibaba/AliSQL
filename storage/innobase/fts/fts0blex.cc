@@ -451,19 +451,27 @@ static yyconst flex_int16_t yy_chk[32] =
 #line 1 "fts0blex.l"
 /*****************************************************************************
 
-Copyright (c) 2007, 2016, Oracle and/or its affiliates. All Rights Reserved.
+Copyright (c) 2007, 2023, Oracle and/or its affiliates.
 
-This program is free software; you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation; version 2 of the License.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License, version 2.0,
+as published by the Free Software Foundation.
 
-This program is distributed in the hope that it will be useful, but WITHOUT
-ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+This program is also distributed with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have included with MySQL.
 
-You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc.,
-51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License, version 2.0, for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 
 *****************************************************************************/
 /**
@@ -479,9 +487,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 /* Required for reentrant parser */
 #define YY_DECL int fts_blexer(YYSTYPE* val, yyscan_t yyscanner)
+#define exit(A)   ut_error
 
 #define YY_NO_INPUT 1
-#line 484 "fts0blex.cc"
+#line 485 "fts0blex.cc"
 
 #define INITIAL 0
 
@@ -706,7 +715,7 @@ YY_DECL
 	register int yy_act;
 	struct yyguts_t * yyg = (struct yyguts_t*)yyscanner;
 
-#line 43 "fts0blex.l"
+#line 44 "fts0blex.l"
 
 
 #line 712 "fts0blex.cc"
@@ -790,12 +799,12 @@ do_action:	/* This label is used only to access EOF actions. */
 
 case 1:
 YY_RULE_SETUP
-#line 45 "fts0blex.l"
+#line 46 "fts0blex.l"
 /* Ignore whitespace */ ;
 	YY_BREAK
 case 2:
 YY_RULE_SETUP
-#line 47 "fts0blex.l"
+#line 48 "fts0blex.l"
 {
 	val->oper = fts0bget_text(yyscanner)[0];
 
@@ -804,7 +813,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 3:
 YY_RULE_SETUP
-#line 53 "fts0blex.l"
+#line 54 "fts0blex.l"
 {
 	val->token = fts_ast_string_create(reinterpret_cast<const byte*>(fts0bget_text(yyscanner)), fts0bget_leng(yyscanner));
 
@@ -813,7 +822,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 4:
 YY_RULE_SETUP
-#line 59 "fts0blex.l"
+#line 60 "fts0blex.l"
 {
 	val->token = fts_ast_string_create(reinterpret_cast<const byte*>(fts0bget_text(yyscanner)), fts0bget_leng(yyscanner));
 
@@ -822,7 +831,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 5:
 YY_RULE_SETUP
-#line 65 "fts0blex.l"
+#line 66 "fts0blex.l"
 {
 	val->token = fts_ast_string_create(reinterpret_cast<const byte*>(fts0bget_text(yyscanner)), fts0bget_leng(yyscanner));
 
@@ -832,12 +841,12 @@ YY_RULE_SETUP
 case 6:
 /* rule 6 can match eol */
 YY_RULE_SETUP
-#line 71 "fts0blex.l"
+#line 72 "fts0blex.l"
 
 	YY_BREAK
 case 7:
 YY_RULE_SETUP
-#line 73 "fts0blex.l"
+#line 74 "fts0blex.l"
 ECHO;
 	YY_BREAK
 #line 843 "fts0blex.cc"
@@ -1953,5 +1962,5 @@ void fts0bfree (void * ptr ,            yyscan_t yyscanner MY_ATTRIBUTE((unused)
 
 #define YYTABLES_NAME "yytables"
 
-#line 73 "fts0blex.l"
+#line 74 "fts0blex.l"
 

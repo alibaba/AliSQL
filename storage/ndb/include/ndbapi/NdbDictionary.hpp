@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -122,7 +129,10 @@ public:
       Datafile = 22,          ///< Datafile
       Undofile = 23,          ///< Undofile
       ReorgTrigger = 19,
-      HashMap = 24
+      HashMap = 24,
+      ForeignKey = 25,
+      FKParentTrigger = 26,
+      FKChildTrigger = 27
     };
 
     /**
@@ -204,7 +214,6 @@ public:
   class Table; // forward declaration
   class Tablespace; // forward declaration
   class HashMap; // Forward
-//  class NdbEventOperation; // forward declaration
 
   /**
    * @class Column
@@ -259,7 +268,17 @@ public:
       Longvarbinary = NDB_TYPE_LONGVARBINARY, ///< Length bytes: 2, little-endian
       Time = NDB_TYPE_TIME,        ///< Time without date
       Year = NDB_TYPE_YEAR,   ///< Year 1901-2155 (1 byte)
-      Timestamp = NDB_TYPE_TIMESTAMP  ///< Unix time
+      Timestamp = NDB_TYPE_TIMESTAMP, ///< Unix time
+      /**
+       * Time types in MySQL 5.6 add microsecond fraction.
+       * One should use setPrecision(x) to set number of fractional
+       * digits (x = 0-6, default 0).  Data formats are as in MySQL
+       * and must use correct byte length.  NDB does not check data
+       * itself since any values can be compared as binary strings.
+       */
+      Time2 = NDB_TYPE_TIME2, ///< 3 bytes + 0-3 fraction
+      Datetime2 = NDB_TYPE_DATETIME2, ///< 5 bytes plus 0-3 fraction
+      Timestamp2 = NDB_TYPE_TIMESTAMP2 ///< 4 bytes + 0-3 fraction
     };
 
     /*
@@ -343,6 +362,7 @@ public:
     /**
      * Get precision of column.
      * @note Only applicable for decimal types
+     * @note Also applicable for Time2 etc in mysql 5.6
      */
     int getPrecision() const;
 
@@ -357,6 +377,11 @@ public:
      * Array length for column or max length for variable length arrays.
      */
     int getLength() const;
+
+    /**
+     * Get size required to store column in NdbRecord layout.
+     */
+    int getSizeInBytesForRecord() const;
 
     /**
      * For Char or Varchar or Text, get MySQL CHARSET_INFO.  This
@@ -484,6 +509,7 @@ public:
     /**
      * Set precision of column.
      * @note Only applicable for decimal types
+     * @note Also applicable for Time2 etc in mysql 5.6
      */
     void setPrecision(int);
 
@@ -1426,6 +1452,9 @@ public:
       TE_NODE_FAILURE=1<<10, ///< Node failed
       TE_SUBSCRIBE   =1<<11, ///< Node subscribes
       TE_UNSUBSCRIBE =1<<12, ///< Node unsubscribes
+      TE_EMPTY         =1<<15, ///< Empty epoch from data nodes
+      TE_INCONSISTENT  =1<<21, ///< MISSING_DATA (buffer overflow) at data node
+      TE_OUT_OF_MEMORY =1<<22, ///< Buffer overflow in event buffer
       TE_ALL=0xFFFF         ///< Any/all event on table (not relevant when 
                             ///< events are received)
     };
@@ -1446,7 +1475,10 @@ public:
       _TE_SUBSCRIBE=11,
       _TE_UNSUBSCRIBE=12,
       _TE_NUL=13, // internal (e.g. INS o DEL within same GCI)
-      _TE_ACTIVE=14 // internal (node becomes active)
+      _TE_ACTIVE=14, // internal (node becomes active)
+      _TE_EMPTY=15,
+      _TE_INCONSISTENT=21,
+      _TE_OUT_OF_MEMORY=22
     };
 #endif
     /**
@@ -1526,6 +1558,7 @@ public:
      * @note preferred way is using setTable(const NdbDictionary::Table&)
      *       or constructor with table object parameter
      */
+    int setTable(const NdbDictionary::Table *table);
     int setTable(const char *tableName);
     /**
      * Get table name for events
@@ -1653,9 +1686,19 @@ public:
     */
     RecMysqldShrinkVarchar= 0x1,
     /* Use the mysqld record format for bitfields, only used inside mysqld. */
-    RecMysqldBitfield= 0x2
+    RecMysqldBitfield= 0x2,
+    /* Use the column specific flags from RecordSpecification. */
+    RecPerColumnFlags= 0x4
   };
   struct RecordSpecification {
+    /*
+      Size of the RecordSpecification structure.
+    */
+    static inline Uint32 size()
+    {
+        return sizeof(RecordSpecification);
+    }
+
     /*
       Column described by this entry (the column maximum size defines field
       size in row).
@@ -1684,6 +1727,31 @@ public:
     */
     Uint32 nullbit_byte_offset;
     /* NULL bit, 0-7. Not used for columns that are not NULLable. */
+    Uint32 nullbit_bit_in_byte;
+    /*
+      Column specific flags
+      Used only when RecPerColumnFlags is enabled
+    */
+    enum ColumnFlags
+    {
+      /*
+        Skip reading/writing overflow bits in bitmap
+        Used for MySQLD char(0) column
+        Used only with RecMysqldBitfield flag
+      */
+      BitColMapsNullBitOnly= 0x1
+    };
+    Uint32 column_flags;
+  };
+
+  /*
+    First version of RecordSpecification
+    Maintained here for backward compatibility reasons.
+  */
+  struct RecordSpecification_v1 {
+    const Column *column;
+    Uint32 offset;
+    Uint32 nullbit_byte_offset;
     Uint32 nullbit_bit_in_byte;
   };
 
@@ -2042,6 +2110,94 @@ public:
   };
 
   /**
+   * @class ForeignKey
+   * @brief Represents a foreign key in an NDB Cluster
+   *
+   */
+  class ForeignKey : public Object {
+  public:
+    ForeignKey();
+    ForeignKey(const ForeignKey&);
+    virtual ~ForeignKey();
+
+    enum FkAction
+    {
+      NoAction = NDB_FK_NO_ACTION, // deferred check
+      Restrict = NDB_FK_RESTRICT,
+      Cascade = NDB_FK_CASCADE,
+      SetNull = NDB_FK_SET_NULL,
+      SetDefault = NDB_FK_SET_DEFAULT
+    };
+
+    const char * getName() const;
+    const char * getParentTable() const;
+    const char * getChildTable() const;
+    unsigned getParentColumnCount() const;
+    unsigned getChildColumnCount() const;
+    int getParentColumnNo(unsigned no) const;
+    int getChildColumnNo(unsigned no) const;
+
+    /**
+     * return 0 if child referes to parent PK
+     */
+    const char * getParentIndex() const;
+
+    /**
+     * return 0 if child references are resolved using child PK
+     */
+    const char * getChildIndex() const;
+
+    FkAction getOnUpdateAction() const;
+    FkAction getOnDeleteAction() const;
+
+    /**
+     *
+     */
+    void setName(const char *);
+
+    /**
+     * specify parent/child table
+     * optionally an index
+     * and columns in parent/child table (optionally)
+     *
+     * if index is not specified primary key is used
+     *
+     * if columns is not specified, index order is used
+     *
+     * if columns and index is specified, and index is ordered index
+     *   column order must match given column order
+     *
+     */
+    void setParent(const Table&, const Index * index = 0,
+                   const Column * cols[] = 0);
+    void setChild(const Table&, const Index * index = 0,
+                  const Column * cols[] = 0);
+
+    void setOnUpdateAction(FkAction);
+    void setOnDeleteAction(FkAction);
+
+    /**
+     * Get object status
+     */
+    virtual Object::Status getObjectStatus() const;
+
+    /**
+     * Get object id
+     */
+    virtual int getObjectId() const;
+
+    /**
+     * Get object version
+     */
+    virtual int getObjectVersion() const;
+
+  private:
+    friend class NdbForeignKeyImpl;
+    class NdbForeignKeyImpl & m_impl;
+    ForeignKey(NdbForeignKeyImpl&);
+  };
+
+  /**
    * @class Dictionary
    * @brief Dictionary for defining and retreiving meta data
    */
@@ -2168,6 +2324,8 @@ public:
      */
     const Index * getIndex(const char * indexName,
 			   const char * tableName) const;
+    const Index * getIndex(const char * indexName,
+                           const Table& base) const;
 
     /**
      * Fetch list of indexes of given table.
@@ -2188,6 +2346,14 @@ public:
      * @return  0 if successful, otherwise -1
      */
     int listIndexes(List & list, const Table &table) const;
+
+    /**
+     * Fetch list of objects that table depend on
+     * @param list  Reference to list where to store the listed objects
+     * @param table  Reference to table that objects belongs to.
+     * @return  0 if successful, otherwise -1
+     */
+    int listDependentObjects(List & list, const Table &table) const;
 #endif
 
     /** @} *******************************************************************/
@@ -2274,6 +2440,9 @@ public:
      * Drop table given retrieved Table instance
      * @param table Table to drop
      * @return 0 if successful otherwise -1.
+     *
+     * @note dropTable() drops indexes and foreign keys
+     * where the table is child or parent
      */
     int dropTable(Table & table);
 
@@ -2458,18 +2627,54 @@ public:
      * Get default HashMap
      */
     int getDefaultHashMap(HashMap& dst, Uint32 fragments);
+    int getDefaultHashMap(HashMap& dst, Uint32 buckets, Uint32 fragments);
 
 
     /**
      * Init a default HashMap
      */
     int initDefaultHashMap(HashMap& dst, Uint32 fragments);
+    int initDefaultHashMap(HashMap& dst, Uint32 buckets, Uint32 fragments);
 
     /**
      * create (or retreive) a HashMap suitable for alter
      * NOTE: Requires a started schema transaction
      */
     int prepareHashMap(const Table& oldTable, Table& newTable);
+    int prepareHashMap(const Table& oldTable, Table& newTable, Uint32 buckets);
+
+    /** @} *******************************************************************/
+
+    /** @} *******************************************************************/
+    /**
+     * @name ForeignKey
+     * @{
+     */
+
+    enum CreateFKFlags
+    {
+      /**
+       * CreateFK_NoVerify
+       * - don't verify FK as part of Create.
+       * - @NOTE: This allows creation of inconsistent FK
+       */
+      CreateFK_NoVerify = 1
+    };
+
+    /**
+     * Create a ForeignKey in database
+     */
+    int createForeignKey(const ForeignKey&, ObjectId* = 0, int flags = 0);
+
+    /**
+     * Get a ForeignKey by name
+     */
+    int getForeignKey(ForeignKey& dst, const char* name);
+
+    /**
+     * Drop a ForeignKey
+     */
+    int dropForeignKey(const ForeignKey&);
 
     /** @} *******************************************************************/
 
@@ -2562,8 +2767,8 @@ public:
 #endif
     class NdbDictionaryImpl & m_impl;
     Dictionary(NdbDictionaryImpl&);
-    const Table * getIndexTable(const char * indexName, 
-				const char * tableName) const;
+    const Table * getIndexTable(const char * indexName,
+                                const char * tableName) const;
   public:
 #ifndef DOXYGEN_SHOULD_SKIP_INTERNAL
     const Table * getTable(const char * name, void **data) const;
@@ -2576,6 +2781,21 @@ public:
     const Table * getTableGlobal(const char * tableName) const;
     int alterTableGlobal(const Table &f, const Table &t);
     int dropTableGlobal(const Table &ndbtab);
+    /* Flags for second variant of dropTableGlobal */
+    enum {
+      /*
+       * Drop any referring foreign keys on child tables.
+       * Named after oracle "drop table .. cascade constraints".
+       */
+      DropTableCascadeConstraints = 0x1
+
+      /*
+       * Drop any referring foreign keys within same DB
+       *   used when dropping database
+       */
+      ,DropTableCascadeConstraintsDropDB = 0x2
+    };
+    int dropTableGlobal(const Table &ndbtab, int flags);
     int dropIndexGlobal(const Index &index);
     int removeIndexGlobal(const Index &ndbidx, int invalidate) const;
     int removeTableGlobal(const Table &ndbtab, int invalidate) const;
@@ -2616,6 +2836,13 @@ public:
       createRecord
     */
     void releaseRecord(NdbRecord *rec);
+
+    /*
+      Methods to print objects more verbose than possible from
+      object itself.
+     */
+    void print(class NdbOut& out, NdbDictionary::Index const& idx);
+    void print(class NdbOut& out, NdbDictionary::Table const& tab);
   }; // class Dictionary
 
   class NdbDataPrintFormat
@@ -2640,9 +2867,14 @@ public:
                                     const NdbDictionary::Column* c,
                                     const void* val);
   
-
 }; // class NdbDictionary
 
 class NdbOut& operator <<(class NdbOut& out, const NdbDictionary::Column& col);
+class NdbOut& operator <<(class NdbOut& out, const NdbDictionary::Index& idx);
+class NdbOut& operator <<(class NdbOut& out, const NdbDictionary::Index::Type type);
+class NdbOut& operator <<(class NdbOut& out, const NdbDictionary::Object::FragmentType fragtype);
+class NdbOut& operator <<(class NdbOut& out, const NdbDictionary::Object::Status status);
+class NdbOut& operator <<(class NdbOut& out, const NdbDictionary::Object::Type type);
+class NdbOut& operator <<(class NdbOut& out, const NdbDictionary::Table& tab);
 
 #endif

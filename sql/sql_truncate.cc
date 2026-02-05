@@ -1,17 +1,26 @@
-/* Copyright (c) 2010, 2015, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
+
+#include "sql_truncate.h"
 
 #include "debug_sync.h"  // DEBUG_SYNC
 #include "table.h"       // TABLE, FOREIGN_KEY_INFO
@@ -20,10 +29,10 @@
 #include "sql_table.h"   // write_bin_log
 #include "datadict.h"    // dd_recreate_table()
 #include "lock.h"        // MYSQL_OPEN_* flags
-#include "sql_acl.h"     // DROP_ACL
+#include "auth_common.h" // DROP_ACL
 #include "sql_parse.h"   // check_one_table_access()
-#include "sql_truncate.h"
 #include "sql_show.h"    //append_identifier()
+#include "sql_audit.h"
 
 
 /**
@@ -147,13 +156,13 @@ fk_truncate_illegal_if_parent(THD *thd, TABLE *table)
   /* Loop over the set of foreign keys for which this table is a parent. */
   while ((fk_info= it++))
   {
-    DBUG_ASSERT(!my_strcasecmp(system_charset_info,
-                               fk_info->referenced_db->str,
-                               table->s->db.str));
+    assert(!my_strcasecmp(system_charset_info,
+                          fk_info->referenced_db->str,
+                          table->s->db.str));
 
-    DBUG_ASSERT(!my_strcasecmp(system_charset_info,
-                               fk_info->referenced_table->str,
-                               table->s->table_name.str));
+    assert(!my_strcasecmp(system_charset_info,
+                          fk_info->referenced_table->str,
+                          table->s->table_name.str));
 
     if (my_strcasecmp(system_charset_info, fk_info->foreign_db->str,
                       table->s->db.str) ||
@@ -207,7 +216,7 @@ Sql_cmd_truncate_table::handler_truncate(THD *thd, TABLE_LIST *table_ref,
   if (!is_tmp_table)
   {
     /* We don't need to load triggers. */
-    DBUG_ASSERT(table_ref->trg_event_map == 0);
+    assert(table_ref->trg_event_map == 0);
     /*
       Our metadata lock guarantees that no transaction is reading
       or writing into the table. Yet, to open a write cursor we need
@@ -231,7 +240,7 @@ Sql_cmd_truncate_table::handler_truncate(THD *thd, TABLE_LIST *table_ref,
   }
 
   /* Open the table as it will handle some required preparations. */
-  if (open_and_lock_tables(thd, table_ref, FALSE, flags))
+  if (open_and_lock_tables(thd, table_ref, flags))
     DBUG_RETURN(TRUNCATE_FAILED_SKIP_BINLOG);
 
   /* Whether to truncate regardless of foreign keys. */
@@ -278,8 +287,6 @@ static bool recreate_temporary_table(THD *thd, TABLE *table)
   HA_CREATE_INFO create_info;
   handlerton *table_type= table->s->db_type();
   DBUG_ENTER("recreate_temporary_table");
-
-  memset(&create_info, 0, sizeof(create_info));
 
   table->file->info(HA_STATUS_AUTO | HA_STATUS_NO_LOCK);
 
@@ -336,9 +343,9 @@ bool Sql_cmd_truncate_table::lock_table(THD *thd, TABLE_LIST *table_ref,
   DBUG_ENTER("Sql_cmd_truncate_table::lock_table");
 
   /* Lock types are set in the parser. */
-  DBUG_ASSERT(table_ref->lock_type == TL_WRITE);
+  assert(table_ref->lock_type == TL_WRITE);
   /* The handler truncate protocol dictates a exclusive lock. */
-  DBUG_ASSERT(table_ref->mdl_request.type == MDL_EXCLUSIVE);
+  assert(table_ref->mdl_request.type == MDL_EXCLUSIVE);
 
   /*
     Before doing anything else, acquire a metadata lock on the table,
@@ -366,7 +373,7 @@ bool Sql_cmd_truncate_table::lock_table(THD *thd, TABLE_LIST *table_ref,
   else
   {
     /* Acquire an exclusive lock. */
-    DBUG_ASSERT(table_ref->next_global == NULL);
+    assert(table_ref->next_global == NULL);
     if (lock_table_names(thd, table_ref, NULL,
                          thd->variables.lock_wait_timeout, 0))
       DBUG_RETURN(TRUE);
@@ -423,8 +430,8 @@ bool Sql_cmd_truncate_table::truncate_table(THD *thd, TABLE_LIST *table_ref)
   bool binlog_stmt;
   DBUG_ENTER("Sql_cmd_truncate_table::truncate_table");
 
-  DBUG_ASSERT((!table_ref->table) ||
-              (table_ref->table && table_ref->table->s));
+  assert((!table_ref->table) ||
+         (table_ref->table && table_ref->table->s));
 
   /* Initialize, or reinitialize in case of reexecution (SP). */
   m_ticket_downgrade= NULL;
@@ -443,7 +450,8 @@ bool Sql_cmd_truncate_table::truncate_table(THD *thd, TABLE_LIST *table_ref)
       if ((error= recreate_temporary_table(thd, tmp_table)))
         binlog_stmt= FALSE; /* No need to binlog failed truncate-by-recreate. */
 
-      DBUG_ASSERT(! thd->transaction.stmt.cannot_safely_rollback());
+      assert(! thd->get_transaction()->cannot_safely_rollback(
+                                                              Transaction_ctx::STMT));
     }
     else
     {
@@ -465,6 +473,13 @@ bool Sql_cmd_truncate_table::truncate_table(THD *thd, TABLE_LIST *table_ref)
   }
   else /* It's not a temporary table. */
   {
+    /*
+      Truncate is allowed for performance schema tables in both read_only and
+      super_read_only mode.
+    */
+    if (is_perfschema_db(table_ref->db))
+      thd->set_skip_readonly_check();
+
     bool hton_can_recreate;
 
     if (lock_table(thd, table_ref, &hton_can_recreate))
@@ -472,6 +487,12 @@ bool Sql_cmd_truncate_table::truncate_table(THD *thd, TABLE_LIST *table_ref)
 
     if (hton_can_recreate)
     {
+#ifndef EMBEDDED_LIBRARY
+      if (mysql_audit_table_access_notify(thd, table_ref))
+      {
+        DBUG_RETURN(true);
+      }
+#endif /* !EMBEDDED_LIBRARY */
      /*
         The storage engine can truncate the table by creating an
         empty table with the same structure.
@@ -489,6 +510,8 @@ bool Sql_cmd_truncate_table::truncate_table(THD *thd, TABLE_LIST *table_ref)
       /*
         The engine does not support truncate-by-recreate.
         Attempt to use the handler truncate method.
+        MYSQL_AUDIT_TABLE_ACCESS_READ audit event is generated when opening
+        tables using open_tables function.
       */
       error= handler_truncate(thd, table_ref, FALSE);
 
@@ -511,12 +534,12 @@ bool Sql_cmd_truncate_table::truncate_table(THD *thd, TABLE_LIST *table_ref)
       query_cache_invalidate does not need a valid TABLE object.
     */
     table_ref->table= NULL;
-    query_cache_invalidate3(thd, table_ref, FALSE);
+    query_cache.invalidate(thd, table_ref, FALSE);
   }
 
   /* DDL is logged in statement format, regardless of binlog format. */
   if (binlog_stmt)
-    error|= write_bin_log(thd, !error, thd->query(), thd->query_length());
+    error|= write_bin_log(thd, !error, thd->query().str, thd->query().length);
 
   /*
     A locked table ticket was upgraded to a exclusive lock. After the
@@ -540,7 +563,7 @@ bool Sql_cmd_truncate_table::truncate_table(THD *thd, TABLE_LIST *table_ref)
 bool Sql_cmd_truncate_table::execute(THD *thd)
 {
   bool res= TRUE;
-  TABLE_LIST *first_table= thd->lex->select_lex.table_list.first;
+  TABLE_LIST *first_table= thd->lex->select_lex->table_list.first;
   DBUG_ENTER("Sql_cmd_truncate_table::execute");
 
   if (check_one_table_access(thd, DROP_ACL, first_table))

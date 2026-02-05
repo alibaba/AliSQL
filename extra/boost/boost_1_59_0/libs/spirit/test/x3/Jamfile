@@ -1,0 +1,179 @@
+#==============================================================================
+#   Copyright (c) 2001-2013 Joel de Guzman
+#   Copyright (c) 2001-2012 Hartmut Kaiser
+#   Copyright (c)      2011 Bryce Lelbach
+#
+#   Use, modification and distribution is subject to the Boost Software
+#   License, Version 1.0. (See accompanying file LICENSE_1_0.txt or copy at
+#   http://www.boost.org/LICENSE_1_0.txt)
+#==============================================================================
+
+# bring in rules for testing
+import testing ;
+import modules ;
+import feature ;
+
+###############################################################################
+project spirit_test
+    : requirements
+        <include>.
+        <toolset>gcc:<cxxflags>-std=c++1y
+        <toolset>gcc:<cxxflags>-ftemplate-depth-512
+        <toolset>clang:<cxxflags>-std=c++1y
+        <toolset>clang:<cxxflags>-ftemplate-depth-512
+        <toolset>darwin:<cxxflags>-std=c++1y
+        <toolset>darwin:<cxxflags>-ftemplate-depth-512
+    :
+    :
+    ;
+
+tests = ;
+
+rule run ( sources + : args * : input-files * : requirements * : target-name ? :  default-build * )
+{
+    target-name ?= $(sources[1]:D=:S=) ;
+    tests += [ testing.run $(sources) : $(args)
+      : $(input-files) : $(requirements) : $(target-name)-p3 : $(default-build) ] ;
+}
+
+rule compile ( sources + : requirements * : target-name ? )
+{
+    target-name ?= $(sources[1]:D=:S=) ;
+    tests += [ testing.compile $(sources) : $(requirements) : $(target-name)-p3 ] ;
+}
+
+rule compile-fail ( sources + : requirements * : target-name ? )
+{
+    target-name ?= $(sources[1]:D=:S=) ;
+    tests += [ testing.compile-fail $(sources) : $(requirements) : $(target-name)-p3 ] ;
+}
+
+###############################################################################
+
+{
+    ###########################################################################
+    test-suite spirit_v3/qi :
+
+     [ run actions.cpp          : : : : x3_actions ]
+     #~ [ run actions2.cpp         : : : : x3_actions2 ]
+     [ run alternative.cpp      : : : : x3_alternative ]
+     [ run and_predicate.cpp    : : : : x3_and_predicate ]
+     [ run any_parser.cpp    : : : : x3_any_parser ]
+     [ run attr.cpp             : : : : x3_attr ]
+     #~ [ run attribute1.cpp       : : : : x3_attribute1 ]
+     #~ [ run attribute2.cpp       : : : : x3_attribute2 ]
+     #~ [ run auto.cpp             : : : : x3_auto ]
+     [ run binary.cpp           : : : : x3_binary ]
+     [ run bool.cpp             : : : : x3_bool ]
+     #~ [ run bool2.cpp            : : : : x3_bool2 ]
+     [ run char1.cpp            : : : : x3_char1 ]
+     #~ [ run char2.cpp            : : : : x3_char2 ]
+     [ run char_class.cpp       : : : : x3_char_class ]
+     [ run debug.cpp            : : : : x3_debug ]
+     [ run difference.cpp       : : : : x3_difference ]
+     #~ [ run encoding.cpp         : : : : x3_encoding ]
+     [ run eoi.cpp              : : : : x3_eoi ]
+     [ run eol.cpp              : : : : x3_eol ]
+     [ run eps.cpp              : : : : x3_eps ]
+     [ run expect.cpp           : : : : x3_expect ]
+     #~ [ run grammar.cpp          : : : : x3_grammar ]
+     [ run int1.cpp             : : : : x3_int1 ]
+     #~ [ run int2.cpp             : : : : x3_int2 ]
+     #~ [ run int3.cpp             : : : : x3_int3 ]
+     [ run kleene.cpp           : : : : x3_kleene ]
+     #~ [ run lazy.cpp             : : : : x3_lazy ]
+     [ run lexeme.cpp           : : : : x3_lexeme ]
+     [ run lit1.cpp             : : : : x3_lit1 ]
+     [ run lit2.cpp             : : : : x3_lit2 ]
+     [ run list.cpp             : : : : x3_list ]
+     #~ [ run hold.cpp             : : : : x3_hold ]
+     #~ [ run match_manip1.cpp     : : : : x3_match_manip1 ]
+     #~ [ run match_manip2.cpp     : : : : x3_match_manip2 ]
+     #~ [ run match_manip3.cpp     : : : : x3_match_manip3 ]
+     #~ [ run match_manip_attr.cpp : : : : x3_match_manip_attr ]
+     [ run matches.cpp          : : : : x3_matches ]
+     [ run no_case.cpp          : : : : x3_no_case ]
+     [ run no_skip.cpp          : : : : x3_no_skip ]
+     [ run not_predicate.cpp    : : : : x3_not_predicate ]
+     [ run optional.cpp         : : : : x3_optional ]
+     #~ [ run parse_attr.cpp       : : : : x3_parse_attr ]
+     #~ [ run pass_container1.cpp  : : : : x3_pass_container1 ]
+     #~ [ run pass_container2.cpp  : : : : x3_pass_container2 ]
+     #~ [ run permutation.cpp      : : : : x3_permutation ]
+     [ run plus.cpp             : : : : x3_plus ]
+     [ run with.cpp             : : : : x3_with ]
+
+     # $$$ remove this fpermissive flag once lexical_cast is fixed $$$
+     #~ [ run range_run.cpp
+        #~ : : : <toolset>gcc:<cxxflags>-fpermissive
+                                   #~ : x3_range_run ]
+
+     [ run raw.cpp              : : : : x3_raw ]
+     [ run real1.cpp            : : : : x3_real1 ]
+     [ run real2.cpp            : : : : x3_real2 ]
+     [ run real3.cpp            : : : : x3_real3 ]
+     [ run real4.cpp            : : : : x3_real4 ]
+     # [ run real5.cpp            : : : : x3_real5 ]
+     # [ run repeat.cpp           : : : : x3_repeat ]
+     [ run rule1.cpp            : : : : x3_rule1 ]
+     [ run rule2.cpp            : : : : x3_rule2 ]
+     [ run rule3.cpp            : : : : x3_rule3 ]
+     [ run rule4.cpp            : : : : x3_rule4 ]
+     [ run sequence.cpp         : : : : x3_sequence ]
+     #~ [ run sequential_or.cpp    : : : : x3_sequential_or ]
+     [ run skip.cpp             : : : : x3_skip ]
+     #~ [ run stream.cpp           : : : : x3_stream ]
+     [ run symbols1.cpp         : : : : x3_symbols1 ]
+     [ run symbols2.cpp         : : : : x3_symbols2 ]
+     [ run symbols3.cpp         : : : : x3_symbols3 ]
+     #~ [ run terminal_ex.cpp      : : : : x3_terminal_ex ]
+     [ run tst.cpp
+       $(BOOST_ROOT)/libs/system/build//boost_system
+                                   : : : : x3_tst ]
+     [ run uint1.cpp            : : : : x3_uint1 ]
+     #~ [ run uint2.cpp            : : : : x3_uint2 ]
+     #~ [ run uint3.cpp            : : : : x3_uint3 ]
+     [ run uint_radix.cpp       : : : : x3_uint_radix ]
+     #~ [ run utree1.cpp           : : : : x3_utree1 ]
+     #~ [ run utree2.cpp           : : : : x3_utree2 ]
+     #~ [ run utree3.cpp           : : : : x3_utree3 ]
+     #~ [ run utree4.cpp           : : : : x3_utree4 ]
+
+    ;
+
+    #~ ###########################################################################
+    #~ test-suite spirit_v3/x3_regressions :
+
+     #~ [ compile pass_container3.cpp                             : : x3_pass_container3 ]
+     #~ [ compile regression_attr_with_action.cpp                 : : x3_regression_attr_with_action ]
+     #~ [ compile regression_container_attribute.cpp              : : x3_regression_container_attribute ]
+     #~ [ compile regression_debug_optional.cpp                   : : x3_regression_debug_optional ]
+     #~ [ compile regression_one_element_fusion_sequence.cpp      : : x3_regression_one_element_fusion_sequence ]
+     #~ [ compile regression_one_element_sequence_attribute.cpp   : : x3_regression_one_element_sequence_attribute ]
+
+     #~ [ run regression_adapt_adt.cpp                            : : : : x3_regression_adapt_adt ]
+     #~ [ run regression_clear.cpp                                : : : : x3_regression_clear ]
+     #~ #[ run regression_float_fraction.cpp                      : : : : x3_regression_float_fraction ]
+     #~ [ run regression_lazy_repeat.cpp                          : : : : x3_regression_lazy_repeat ]
+     #~ [ run regression_numeric_alternatives.cpp                 : : : : x3_regression_numeric_alternatives ]
+     #~ [ run regression_reorder.cpp                              : : : : x3_regression_reorder ]
+     #~ [ run regression_repeat.cpp                               : : : : x3_regression_repeat ]
+     #~ [ run regression_transform_assignment.cpp                 : : : : x3_regression_transform_assignment ]
+     #~ [ run regression_binary_action.cpp                        : : : : x3_regression_binary_action ]
+    #~ ;
+
+    ###########################################################################
+    test-suite spirit_v3/qi/x3_extensions :
+
+     [ run extensions/confix.cpp       : : : : x3_confix ]
+     [ run extensions/repeat.cpp       : : : : x3_repeat ]
+     [ run extensions/seek.cpp         : : : : x3_seek ]
+
+    ;
+
+}
+
+# use this alias to build Spirit against Phoenix V3
+#~ alias test_using_phoenix_v3 : $(tests) ;
+
+#~ explicit test_using_phoenix_v3 ;

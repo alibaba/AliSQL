@@ -1,13 +1,20 @@
-/* Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
@@ -23,7 +30,7 @@
 #define NON_DISABLED_UNITTEST_GTID
 
 #include "sql_class.h"
-#include "my_pthread.h"
+#include "my_thread.h"
 #include "binlog.h"
 #include "rpl_gtid.h"
 
@@ -103,8 +110,8 @@ public:
     rpl_sidno sidno;
     rpl_gno gno;
     const rpl_sid *sid;
-    char sid_str[rpl_sid::TEXT_LENGTH + 1];
-    char gtid_str[rpl_sid::TEXT_LENGTH + 1 + MAX_GNO_TEXT_LENGTH + 1];
+    char sid_str[binary_log::Uuid::TEXT_LENGTH + 1];
+    char gtid_str[binary_log::Uuid::TEXT_LENGTH + 1 + MAX_GNO_TEXT_LENGTH + 1];
     bool is_first, is_last, is_auto;
 #ifndef NO_DBUG
     void print() const
@@ -192,8 +199,8 @@ public:
         ASSERT_NE((rpl_sid *)NULL, substage.sid) << group_test->errtext;
         substage.sid->to_string(substage.sid_str);
         substage.sid->to_string(substage.gtid_str);
-        substage.gtid_str[rpl_sid::TEXT_LENGTH]= ':';
-        format_gno(substage.gtid_str + rpl_sid::TEXT_LENGTH + 1, substage.gno);
+        substage.gtid_str[rpl_sid.TEXT_LENGTH]= ':';
+        format_gno(substage.gtid_str + rpl_sid.TEXT_LENGTH + 1, substage.gno);
 
         ASSERT_LE(1, other_sm->add_permanent(substage.sid))
           << group_test->errtext;
@@ -246,7 +253,8 @@ public:
   int errtext_stack_pos;
   bool verbose;
 
-  void append_errtext(int line, const char *fmt, ...) ATTRIBUTE_FORMAT(printf, 3, 4)
+  void append_errtext(int line, const char *fmt, ...)
+    MY_ATTRIBUTE((format(printf, 3, 4)))
   {
     va_list argp;
     va_start(argp, fmt);
@@ -352,7 +360,7 @@ TEST_F(GroupTest, Sid_map)
     const rpl_sid *sid;
     char buf[100];
     EXPECT_NE((rpl_sid *)NULL, sid= sm.sidno_to_sid(sidno)) << errtext;
-    const int max_len= Uuid::TEXT_LENGTH;
+    const int max_len= binary_log::Uuid::TEXT_LENGTH;
     EXPECT_EQ(max_len, sid->to_string(buf)) << errtext;
     EXPECT_STRCASEEQ(uuids[i], buf) << errtext;
     EXPECT_EQ(sidno, sm.sid_to_sidno(sid)) << errtext;
@@ -508,7 +516,7 @@ TEST_F(GroupTest, Group_containers)
 
   // Do not generate warnings (because that causes segfault when done
   // from a unittest).
-  global_system_variables.log_warnings= 0;
+  global_system_variables.log_error_verbosity= 1;
 
   mysql_bin_log.server_uuid_sidno= 1;
 
@@ -591,7 +599,7 @@ TEST_F(GroupTest, Group_containers)
   THD *thd= (THD *)malloc(sizeof(THD));
   ASSERT_NE((THD *)NULL, thd) << errtext;
   Gtid_specification *gtid_next= &thd->variables.gtid_next;
-  thd->thread_id= 4711;
+  thd->set_new_thread_id();
   gtid_next->type= Gtid_specification::AUTOMATIC;
   my_bool &gtid_end= thd->variables.gtid_end;
   my_bool &gtid_commit= thd->variables.gtid_commit;
@@ -660,14 +668,14 @@ TEST_F(GroupTest, Group_containers)
       {
         printf("======== stage=%d combination=%d ========\n",
                stage_i, combination_i);
-#ifndef DBUG_OFF
+#ifndef NDEBUG
         printf("group log state:\n");
         group_log_state.print();
         printf("trx cache:\n");
         trx_cache.print(sid_maps[0]);
         printf("stmt cache:\n");
         stmt_cache.print(sid_maps[0]);
-#endif // ifdef DBUG_OFF
+#endif // ifdef NDEBUG
       }
       
       Gtid_set ended_groups(sid_maps[0]);
@@ -803,13 +811,13 @@ TEST_F(GroupTest, Group_containers)
           }
         }
 
-#ifndef DBUG_OFF
+#ifndef NDEBUG
         if (verbose)
         {
           printf("stmt_cache:\n");
           stmt_cache.print(sid_maps[0]);
         }
-#endif // ifndef DBUG_OFF
+#endif // ifndef NDEBUG
         if (!stmt_cache.is_empty())
           gtid_flush_group_cache(thd, &lock,
                                  &group_log_state, NULL/*group log*/,
@@ -826,7 +834,7 @@ TEST_F(GroupTest, Group_containers)
           // execute a COMMIT statement
           thd->variables.gtid_has_ongoing_super_group= 0;
 
-#ifndef DBUG_OFF
+#ifndef NDEBUG
           if (verbose)
           {
             printf("trx_cache:\n");
@@ -835,7 +843,7 @@ TEST_F(GroupTest, Group_containers)
                    trx_cache.is_empty(), trx_cache.get_n_subgroups(),
                    trx_contains_logged_subgroup);
           }
-#endif // ifndef DBUG_OFF
+#endif // ifndef NDEBUG
 
           if (!trx_cache.is_empty())
             gtid_flush_group_cache(thd, &lock, 

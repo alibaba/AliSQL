@@ -1,15 +1,21 @@
 /*
-   Copyright (C) 2003, 2005, 2006, 2008 MySQL AB, 2008 Sun Microsystems, Inc.
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -24,6 +30,9 @@
 #include <NdbMutex.h>
 #include <NdbTick.h>
 
+#define JAM_FILE_ID 253
+
+
 extern "C" void* runWatchDog(void* w);
 
 class WatchDog{
@@ -32,8 +41,8 @@ class WatchDog{
   struct WatchedThread {
     Uint32 *m_watchCounter;
     Uint32 m_threadId;
-    /* This is the time that activity was last registered from thread. */
-    MicroSecondTimer m_startTime;
+    /* This is the tick count when activity was last registered from thread. */
+    NDB_TICKS m_startTicks;
     /*
       During slow operation (memory allocation), warnings are output less
       frequently, and this is the point when the next warning should be given.
@@ -63,6 +72,8 @@ public:
   /* Remove a thread from registration, identified by thread id. */
   void unregisterWatchedThread(Uint32 threadId);
 
+  void setKillSwitch(bool kill);
+
 protected:
   /**
    * Thread function
@@ -88,9 +99,13 @@ private:
   NdbMutex *m_mutex;
 
   bool theStop;
+  bool killer;
   
   void run();
   void shutdownSystem(const char *last_stuck_action);
 };
+
+
+#undef JAM_FILE_ID
 
 #endif // WatchDog_H

@@ -5,10 +5,12 @@ mtr.global_suppressions                            OK
 mtr.test_suppressions                              OK
 mysql.columns_priv                                 OK
 mysql.db                                           OK
+mysql.engine_cost                                  OK
 mysql.event                                        OK
 mysql.func                                         OK
 mysql.general_log
 note     : The storage engine for the table doesn't support analyze
+mysql.gtid_executed                                OK
 mysql.help_category                                OK
 mysql.help_keyword                                 OK
 mysql.help_relation                                OK
@@ -20,6 +22,7 @@ mysql.plugin                                       OK
 mysql.proc                                         OK
 mysql.procs_priv                                   OK
 mysql.proxies_priv                                 OK
+mysql.server_cost                                  OK
 mysql.servers                                      OK
 mysql.slave_master_info                            OK
 mysql.slave_relay_log_info                         OK
@@ -33,18 +36,34 @@ mysql.time_zone_name                               OK
 mysql.time_zone_transition                         OK
 mysql.time_zone_transition_type                    OK
 mysql.user                                         OK
+sys.sys_config                                     OK
 mtr.global_suppressions                            Table is already up to date
 mtr.test_suppressions                              Table is already up to date
 mysql.columns_priv                                 OK
 mysql.db                                           OK
+mysql.engine_cost
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
 mysql.event                                        OK
 mysql.func                                         OK
 mysql.general_log
 note     : The storage engine for the table doesn't support optimize
-mysql.help_category                                OK
-mysql.help_keyword                                 OK
-mysql.help_relation                                OK
-mysql.help_topic                                   OK
+mysql.gtid_executed
+Warning  : Please do not modify the gtid_executed table. This is a mysql internal system table to store GTIDs for committed transactions. Modifying it can lead to an inconsistent GTID state.
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
+mysql.help_category
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
+mysql.help_keyword
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
+mysql.help_relation
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
+mysql.help_topic
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
 mysql.innodb_index_stats
 note     : Table does not support optimize, doing recreate + analyze instead
 status   : OK
@@ -52,11 +71,18 @@ mysql.innodb_table_stats
 note     : Table does not support optimize, doing recreate + analyze instead
 status   : OK
 mysql.ndb_binlog_index                             OK
-mysql.plugin                                       OK
+mysql.plugin
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
 mysql.proc                                         OK
 mysql.procs_priv                                   OK
 mysql.proxies_priv                                 OK
-mysql.servers                                      OK
+mysql.server_cost
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
+mysql.servers
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
 mysql.slave_master_info
 note     : Table does not support optimize, doing recreate + analyze instead
 status   : OK
@@ -69,18 +95,33 @@ status   : OK
 mysql.slow_log
 note     : The storage engine for the table doesn't support optimize
 mysql.tables_priv                                  OK
-mysql.time_zone                                    OK
-mysql.time_zone_leap_second                        OK
-mysql.time_zone_name                               OK
-mysql.time_zone_transition                         OK
-mysql.time_zone_transition_type                    OK
+mysql.time_zone
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
+mysql.time_zone_leap_second
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
+mysql.time_zone_name
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
+mysql.time_zone_transition
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
+mysql.time_zone_transition_type
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
 mysql.user                                         OK
+sys.sys_config
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
 mysql.columns_priv                                 OK
 mysql.db                                           OK
+mysql.engine_cost                                  OK
 mysql.event                                        OK
 mysql.func                                         OK
 mysql.general_log
 note     : The storage engine for the table doesn't support analyze
+mysql.gtid_executed                                OK
 mysql.help_category                                OK
 mysql.help_keyword                                 OK
 mysql.help_relation                                OK
@@ -92,6 +133,7 @@ mysql.plugin                                       OK
 mysql.proc                                         OK
 mysql.procs_priv                                   OK
 mysql.proxies_priv                                 OK
+mysql.server_cost                                  OK
 mysql.servers                                      OK
 mysql.slave_master_info                            OK
 mysql.slave_relay_log_info                         OK
@@ -107,14 +149,29 @@ mysql.time_zone_transition_type                    OK
 mysql.user                                         OK
 mysql.columns_priv                                 Table is already up to date
 mysql.db                                           Table is already up to date
+mysql.engine_cost
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
 mysql.event                                        Table is already up to date
 mysql.func                                         Table is already up to date
 mysql.general_log
 note     : The storage engine for the table doesn't support optimize
-mysql.help_category                                Table is already up to date
-mysql.help_keyword                                 Table is already up to date
-mysql.help_relation                                Table is already up to date
-mysql.help_topic                                   Table is already up to date
+mysql.gtid_executed
+Warning  : Please do not modify the gtid_executed table. This is a mysql internal system table to store GTIDs for committed transactions. Modifying it can lead to an inconsistent GTID state.
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
+mysql.help_category
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
+mysql.help_keyword
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
+mysql.help_relation
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
+mysql.help_topic
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
 mysql.innodb_index_stats
 note     : Table does not support optimize, doing recreate + analyze instead
 status   : OK
@@ -122,11 +179,18 @@ mysql.innodb_table_stats
 note     : Table does not support optimize, doing recreate + analyze instead
 status   : OK
 mysql.ndb_binlog_index                             Table is already up to date
-mysql.plugin                                       Table is already up to date
+mysql.plugin
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
 mysql.proc                                         Table is already up to date
 mysql.procs_priv                                   Table is already up to date
 mysql.proxies_priv                                 Table is already up to date
-mysql.servers                                      Table is already up to date
+mysql.server_cost
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
+mysql.servers
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
 mysql.slave_master_info
 note     : Table does not support optimize, doing recreate + analyze instead
 status   : OK
@@ -139,11 +203,21 @@ status   : OK
 mysql.slow_log
 note     : The storage engine for the table doesn't support optimize
 mysql.tables_priv                                  Table is already up to date
-mysql.time_zone                                    Table is already up to date
-mysql.time_zone_leap_second                        Table is already up to date
-mysql.time_zone_name                               Table is already up to date
-mysql.time_zone_transition                         Table is already up to date
-mysql.time_zone_transition_type                    Table is already up to date
+mysql.time_zone
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
+mysql.time_zone_leap_second
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
+mysql.time_zone_name
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
+mysql.time_zone_transition
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
+mysql.time_zone_transition_type
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
 mysql.user                                         Table is already up to date
 create table t1 (a int) engine=myisam;
 create view v1 as select * from t1;
@@ -220,6 +294,7 @@ t1
 #mysql50#v-1
 v1
 test.t1                                            OK
+WARNING: --fix-table-names is deprecated and will be removed in a future version
 show tables;
 Tables_in_test
 t1
@@ -234,6 +309,7 @@ Tables_in_test
 #mysql50#@
 SET NAMES DEFAULT;
 mysqlcheck --fix-table-names --databases test
+WARNING: --fix-table-names is deprecated and will be removed in a future version
 SET NAMES utf8;
 SHOW TABLES;
 Tables_in_test
@@ -258,15 +334,17 @@ CREATE TABLE t1 (a INT) engine=myisam;
 SELECT * FROM INFORMATION_SCHEMA.TRIGGERS
 WHERE TRIGGER_SCHEMA="#mysql50#a@b" ORDER BY trigger_name;
 TRIGGER_CATALOG	TRIGGER_SCHEMA	TRIGGER_NAME	EVENT_MANIPULATION	EVENT_OBJECT_CATALOG	EVENT_OBJECT_SCHEMA	EVENT_OBJECT_TABLE	ACTION_ORDER	ACTION_CONDITION	ACTION_STATEMENT	ACTION_ORIENTATION	ACTION_TIMING	ACTION_REFERENCE_OLD_TABLE	ACTION_REFERENCE_NEW_TABLE	ACTION_REFERENCE_OLD_ROW	ACTION_REFERENCE_NEW_ROW	CREATED	SQL_MODE	DEFINER	CHARACTER_SET_CLIENT	COLLATION_CONNECTION	DATABASE_COLLATION
-def	#mysql50#a@b	tr1	INSERT	def	#mysql50#a@b	#mysql50#c@d	0	NULL	SET NEW.a = 10 * NEW.a	ROW	BEFORE	NULL	NULL	OLD	NEW	NULL		root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
-def	#mysql50#a@b	tr2	INSERT	def	#mysql50#a@b	t1	0	NULL	SET NEW.a = 100 * NEW.a	ROW	BEFORE	NULL	NULL	OLD	NEW	NULL		root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
+def	#mysql50#a@b	tr1	INSERT	def	#mysql50#a@b	#mysql50#c@d	1	NULL	SET NEW.a = 10 * NEW.a	ROW	BEFORE	NULL	NULL	OLD	NEW	NULL		root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
+def	#mysql50#a@b	tr2	INSERT	def	#mysql50#a@b	t1	1	NULL	SET NEW.a = 100 * NEW.a	ROW	BEFORE	NULL	NULL	OLD	NEW	NULL		root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
 mysqlcheck --fix-db-names --fix-table-names --all-databases
+WARNING: --fix-db-names is deprecated and will be removed in a future version
+WARNING: --fix-table-names is deprecated and will be removed in a future version
 USE `a@b`;
 SELECT * FROM INFORMATION_SCHEMA.TRIGGERS
 WHERE TRIGGER_SCHEMA="a@b" ORDER BY trigger_name;
 TRIGGER_CATALOG	TRIGGER_SCHEMA	TRIGGER_NAME	EVENT_MANIPULATION	EVENT_OBJECT_CATALOG	EVENT_OBJECT_SCHEMA	EVENT_OBJECT_TABLE	ACTION_ORDER	ACTION_CONDITION	ACTION_STATEMENT	ACTION_ORIENTATION	ACTION_TIMING	ACTION_REFERENCE_OLD_TABLE	ACTION_REFERENCE_NEW_TABLE	ACTION_REFERENCE_OLD_ROW	ACTION_REFERENCE_NEW_ROW	CREATED	SQL_MODE	DEFINER	CHARACTER_SET_CLIENT	COLLATION_CONNECTION	DATABASE_COLLATION
-def	a@b	tr1	INSERT	def	a@b	c@d	0	NULL	SET NEW.a = 10 * NEW.a	ROW	BEFORE	NULL	NULL	OLD	NEW	NULL		root@localhost	utf8	utf8_general_ci	latin1_swedish_ci
-def	a@b	tr2	INSERT	def	a@b	t1	0	NULL	SET NEW.a = 100 * NEW.a	ROW	BEFORE	NULL	NULL	OLD	NEW	NULL		root@localhost	utf8	utf8_general_ci	latin1_swedish_ci
+def	a@b	tr1	INSERT	def	a@b	c@d	1	NULL	SET NEW.a = 10 * NEW.a	ROW	BEFORE	NULL	NULL	OLD	NEW	NULL		root@localhost	utf8	utf8_general_ci	latin1_swedish_ci
+def	a@b	tr2	INSERT	def	a@b	t1	1	NULL	SET NEW.a = 100 * NEW.a	ROW	BEFORE	NULL	NULL	OLD	NEW	NULL		root@localhost	utf8	utf8_general_ci	latin1_swedish_ci
 INSERT INTO `c@d` VALUES (2), (1);
 SELECT * FROM `c@d`;
 a
@@ -284,11 +362,13 @@ USE test;
 #
 drop table if exists `#mysql50#t1-1`;
 create table `#mysql50#t1-1` (a int) engine=myisam;
+WARNING: --fix-table-names is deprecated and will be removed in a future version
 show tables like 't1-1';
 Tables_in_test (t1-1)
 t1-1
 drop table `t1-1`;
 create table `#mysql50#t1-1` (a int) engine=myisam;
+WARNING: --fix-table-names is deprecated and will be removed in a future version
 show tables like 't1-1';
 Tables_in_test (t1-1)
 t1-1
@@ -297,6 +377,8 @@ End of 5.1 tests
 #
 # Bug #35269: mysqlcheck behaves different depending on order of parameters
 #
+WARNING: --fix-table-names is deprecated and will be removed in a future version
+mysqlcheck doesn't support multiple contradicting commands.
 #
 # Bug#11755431 47205: MAP 'REPAIR TABLE' TO RECREATE +ANALYZE FOR
 #              ENGINES NOT SUPPORTING NATIVE
@@ -335,6 +417,9 @@ test.bug47205
 error    : Table rebuild required. Please do "ALTER TABLE `bug47205` FORCE" or dump/reload to fix it!
 
 Repairing tables
+`test`.`bug47205`
+Running  : ALTER TABLE `test`.`bug47205` FORCE
+status   : OK
 # Table should now be ok
 CHECK TABLE bug47205 FOR UPGRADE;
 Table	Op	Msg_type	Msg_text
@@ -363,7 +448,34 @@ DROP TABLE bug47205;
 #
 DROP DATABASE IF EXISTS b12688860_db;
 CREATE DATABASE b12688860_db;
-Warning: Using a password on the command line interface can be insecure.
+mysqlcheck: [Warning] Using a password on the command line interface can be insecure.
+WARNING: --fix-db-names is deprecated and will be removed in a future version
 DROP DATABASE b12688860_db;
+#
+# WL#2284: Increase the length of a user name
+#
+CREATE USER 'user_with_length_32_abcdefghijkl'@'localhost';
+GRANT ALL ON *.* TO 'user_with_length_32_abcdefghijkl'@'localhost';
+mysql.user                                         OK
+DROP USER 'user_with_length_32_abcdefghijkl'@'localhost';
+#
+# Bug#20868496: MYSQL_UPGRADE IN 5.7.7+ REPAIR LOOKS USER TABLES
+#               IN TEST WHEN LOAD FROM 50/51/55
+#
+CREATE DATABASE db1;
+CREATE DATABASE db2;
+CREATE TABLE db1.t1 (a INT) ENGINE=MYISAM;
+CREATE TABLE db2.t2 (a INT);
+db1.t1
+Error    : Incorrect file format 't1'
+error    : Corrupt
+db2.t2                                             OK
+
+Repairing tables
+db1.t1
+Error    : Incorrect file format 't1'
+error    : Corrupt
+DROP DATABASE db1;
+DROP DATABASE db2;
 
 End of tests

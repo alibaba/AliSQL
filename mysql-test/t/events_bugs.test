@@ -1,3 +1,8 @@
+# The include statement below is a temp one for tests that are yet to
+#be ported to run with InnoDB,
+#but needs to be kept for tests that would need MyISAM in future.
+--source include/force_myisam_default.inc
+
 #### t/events_bugs.test
 #
 # Last change:
@@ -127,7 +132,7 @@ let $fixed_bug41925= 0;
 #                 The session which will soon change its identity to event creator.
 #
 #    2. Reason two: If an event modifies a MyISAM table than a delayed visibilty of changes
-#                   might occur (concurrent_inserts=on or delayed inserts ...).
+#                   might occur (concurrent_inserts=on).
 #
 
 # Can't test with embedded server that doesn't support grants
@@ -152,7 +157,9 @@ set @@global.concurrent_insert = 0;
 # NOTE!! this test must come first! It's testing that the --event-scheduler
 # option with no argument in events_bugs-master.opt turns the scheduler on.
 
+--disable_warnings
 select * from information_schema.global_variables where variable_name like 'event_scheduler';
+--enable_warnings
 # Check that the event_scheduler is really running
 --source include/running_event_scheduler.inc
 
@@ -216,11 +223,11 @@ create event e_55 on schedule at 20000101000000 do drop table t;
 show events;
 
 --error ER_PARSE_ERROR
-create event e_55 on schedule at 20200101000000 starts 10000101000000 do drop table t;
+create event e_55 on schedule at 20380101000000 starts 10000101000000 do drop table t;
 --error ER_PARSE_ERROR
-create event e_55 on schedule at 20200101000000 ends 10000101000000 do drop table t;
+create event e_55 on schedule at 20380101000000 ends 10000101000000 do drop table t;
 --error ER_PARSE_ERROR
-create event e_55 on schedule at 20200101000000 starts 10000101000000 ends 10000101000000 do drop table t;
+create event e_55 on schedule at 20380101000000 starts 10000101000000 ends 10000101000000 do drop table t;
 --error ER_WRONG_VALUE
 create event e_55 on schedule every 10 hour starts 10000101000000 do drop table t;
 
@@ -723,7 +730,7 @@ SHOW EVENTS;
 
 # This will update event time zone.
 SET TIME_ZONE= '-03:00';
-ALTER EVENT e1 ON SCHEDULE EVERY 1 DAY ENDS '2030-01-03 00:00:00'
+ALTER EVENT e1 ON SCHEDULE EVERY 1 DAY ENDS '2038-01-03 00:00:00'
   ON COMPLETION PRESERVE DISABLE;
 SHOW EVENTS;
 
@@ -912,7 +919,7 @@ CREATE TABLE events_test.event_log
 ENGINE=$engine;
 SET autocommit=0;
 CREATE USER evtest1@localhost;
-SET PASSWORD FOR evtest1@localhost = password('ev1');
+ALTER USER evtest1@localhost IDENTIFIED BY 'ev1';
 REVOKE ALL PRIVILEGES, GRANT OPTION FROM evtest1@localhost;
 GRANT create, insert, select, event ON events_test.* TO evtest1@localhost;
 GRANT select,insert ON test.* TO evtest1@localhost;
@@ -1016,7 +1023,10 @@ DROP EVENT IF EXISTS e2;
 # Check that an ordinary user can not create/update/drop events in the
 # read-only mode.
 
+set @orig_sql_mode = @@sql_mode;
+set sql_mode=(select replace(@@sql_mode,'NO_AUTO_CREATE_USER',''));
 GRANT EVENT ON *.* TO mysqltest_u1@localhost;
+set sql_mode= @orig_sql_mode;
 
 --echo
 
@@ -1033,7 +1043,7 @@ SET GLOBAL READ_ONLY = 1;
 --echo
 
 --error ER_OPTION_PREVENTS_STATEMENT
-CREATE EVENT e1 ON SCHEDULE AT '2020-01-01 00:00:00' DO SET @a = 1;
+CREATE EVENT e1 ON SCHEDULE AT '2038-01-01 00:00:00' DO SET @a = 1;
 
 --echo
 
@@ -1057,7 +1067,7 @@ DROP EVENT e1;
 
 --echo
 
-CREATE EVENT e1 ON SCHEDULE AT '2020-01-01 00:00:00' DO SET @a = 1;
+CREATE EVENT e1 ON SCHEDULE AT '2038-01-01 00:00:00' DO SET @a = 1;
 
 --echo
 
@@ -1303,6 +1313,37 @@ SHOW EVENTS IN event_test11764334 WHERE NAME='ev1';
 DROP EVENT ev1;
 DROP DATABASE event_test11764334;
 USE test; 
+
+--echo #
+--echo # BUG#18311187 - SQL_MODE IS CHANGED TO WRONG VALUE AFTER DUMP/DATA
+--echo #                UPGRADE FOR TRIGGERS
+--echo #
+--echo # Check that Inserting NO_ZERO_DATE, NO_ZERO_IN_DATE and ERROR_FOR_DIVISION_BY_ZERO modes
+--echo # manually into mysql.event table do not show up in SHOW CREATE event OUTPUT.
+--echo #
+INSERT IGNORE INTO mysql.event VALUES ('test','ev1','select 1','root@localhost','NULL','1','SECOND','1970-01-01 05:30:00','1970-01-01 05:30:00','NULL','1970-01-01 05:30:00','NULL','ENABLED','DROP','NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,STRICT_ALL_TABLES','','0','SYSTEM', 'utf8', 'utf8_general_ci', 'latin1_swedish_ci', 'select 1');
+
+--echo # NO_ZERO_* modes should not show up in the output.
+SHOW CREATE EVENT ev1;
+
+--echo # Clean-up
+DROP EVENT ev1;
+
+--echo #
+--echo # Bug#17435114 ASSERTION FAILED: THD->LEX->LOCK_TABLES_STATE == QUERY_TABLES_LIST::LTS_NOT_LOCK
+--echo #
+
+--error ER_EVENT_INTERVAL_NOT_POSITIVE_OR_TOO_BIG
+ALTER EVENT e1 ON SCHEDULE EVERY
+EXISTS (SELECT 1 AS x ORDER BY x LIMIT 0) NOT IN (1) MINUTE_SECOND;
+--error ER_EVENT_DOES_NOT_EXIST
+ALTER EVENT e1 ON SCHEDULE EVERY
+EXISTS (SELECT 1 AS x ORDER BY x LIMIT 0) NOT IN (2) MINUTE_SECOND;
+CREATE EVENT e1 ON SCHEDULE EVERY 2 HOUR DO SELECT 1;
+ALTER EVENT e1 ON SCHEDULE EVERY
+EXISTS (SELECT 1 AS x ORDER BY x LIMIT 0) NOT IN (2) MINUTE_SECOND;
+DROP EVENT e1;
+
 ###########################################################################
 #
 # End of tests

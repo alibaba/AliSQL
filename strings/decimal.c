@@ -1,13 +1,25 @@
-/* Copyright (c) 2004, 2015, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2004, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -28,7 +40,7 @@
   integer that determines the number of significant digits in a
   particular radix R, where R is either 2 or 10. S is a non-negative
   integer. Every value of an exact numeric type of scale S is of the
-  form n*10^{-S}, where n is an integer such that ­-R^P <= n <= R^P.
+  form n*10^{-S}, where n is an integer such that ï¿½-R^P <= n <= R^P.
 
   [...]
 
@@ -136,12 +148,7 @@ static const dec1 frac_max[DIG_PER_DEC1-1]={
   999900000, 999990000, 999999000,
   999999900, 999999990 };
 
-#ifdef HAVE_purify
-#define sanity(d) DBUG_ASSERT((d)->len > 0)
-#else
-#define sanity(d) DBUG_ASSERT((d)->len >0 && ((d)->buf[0] | \
-                              (d)->buf[(d)->len-1] | 1))
-#endif
+#define sanity(d) assert((d)->len >0)
 
 #define FIX_INTG_FRAC_ERROR(len, intg1, frac1, error)                   \
         do                                                              \
@@ -168,7 +175,7 @@ static const dec1 frac_max[DIG_PER_DEC1-1]={
         do                                                              \
         {                                                               \
           dec1 a=(from1)+(from2)+(carry);                               \
-          DBUG_ASSERT((carry) <= 1);                                    \
+          assert((carry) <= 1);                                         \
           if (((carry)= a >= DIG_BASE)) /* no division here! */         \
             a-=DIG_BASE;                                                \
           (to)=a;                                                       \
@@ -230,17 +237,17 @@ static inline int count_leading_zeroes(int i, dec1 val)
   switch (i)
   {
   /* @note Intentional fallthrough in all case labels */
-  case 9: if (val >= 1000000000) break; ++ret;
-  case 8: if (val >= 100000000) break; ++ret;
-  case 7: if (val >= 10000000) break; ++ret;
-  case 6: if (val >= 1000000) break; ++ret;
-  case 5: if (val >= 100000) break; ++ret;
-  case 4: if (val >= 10000) break; ++ret;
-  case 3: if (val >= 1000) break; ++ret;
-  case 2: if (val >= 100) break; ++ret;
-  case 1: if (val >= 10) break; ++ret;
-  case 0: if (val >= 1) break; ++ret;
-  default: { DBUG_ASSERT(FALSE); }
+  case 9: if (val >= 1000000000) break; ++ret;  // Fall through.
+  case 8: if (val >= 100000000) break; ++ret;  // Fall through.
+  case 7: if (val >= 10000000) break; ++ret;  // Fall through.
+  case 6: if (val >= 1000000) break; ++ret;  // Fall through.
+  case 5: if (val >= 100000) break; ++ret;  // Fall through.
+  case 4: if (val >= 10000) break; ++ret;  // Fall through.
+  case 3: if (val >= 1000) break; ++ret;  // Fall through.
+  case 2: if (val >= 100) break; ++ret;  // Fall through.
+  case 1: if (val >= 10) break; ++ret;  // Fall through.
+  case 0: if (val >= 1) break; ++ret;  // Fall through.
+  default: { assert(FALSE); }
   }
   return ret;
 }
@@ -263,17 +270,17 @@ static inline int count_trailing_zeroes(int i, dec1 val)
   switch(i)
   {
   /* @note Intentional fallthrough in all case labels */
-  case 0: if ((val % 1) != 0) break; ++ret;
-  case 1: if ((val % 10) != 0) break; ++ret;
-  case 2: if ((val % 100) != 0) break; ++ret;
-  case 3: if ((val % 1000) != 0) break; ++ret;
-  case 4: if ((val % 10000) != 0) break; ++ret;
-  case 5: if ((val % 100000) != 0) break; ++ret;
-  case 6: if ((val % 1000000) != 0) break; ++ret;
-  case 7: if ((val % 10000000) != 0) break; ++ret;
-  case 8: if ((val % 100000000) != 0) break; ++ret;
-  case 9: if ((val % 1000000000) != 0) break; ++ret;
-  default: { DBUG_ASSERT(FALSE); }
+  case 0: if ((val % 1) != 0) break; ++ret;  // Fall through.
+  case 1: if ((val % 10) != 0) break; ++ret;  // Fall through.
+  case 2: if ((val % 100) != 0) break; ++ret;  // Fall through.
+  case 3: if ((val % 1000) != 0) break; ++ret;  // Fall through.
+  case 4: if ((val % 10000) != 0) break; ++ret;  // Fall through.
+  case 5: if ((val % 100000) != 0) break; ++ret;  // Fall through.
+  case 6: if ((val % 1000000) != 0) break; ++ret;  // Fall through.
+  case 7: if ((val % 10000000) != 0) break; ++ret;  // Fall through.
+  case 8: if ((val % 100000000) != 0) break; ++ret;  // Fall through.
+  case 9: if ((val % 1000000000) != 0) break; ++ret;  // Fall through.
+  default: { assert(FALSE); }
   }
   return ret;
 }
@@ -293,7 +300,7 @@ void max_decimal(int precision, int frac, decimal_t *to)
 {
   int intpart;
   dec1 *buf= to->buf;
-  DBUG_ASSERT(precision && precision >= frac);
+  assert(precision && precision >= frac);
 
   to->sign= 0;
   if ((intpart= to->intg= (precision - frac)))
@@ -330,7 +337,7 @@ static dec1 *remove_leading_zeroes(const decimal_t *from, int *intg_result)
   if (intg > 0)
   {
     intg-= count_leading_zeroes((intg - 1) % DIG_PER_DEC1, *buf0);
-    DBUG_ASSERT(intg > 0);
+    assert(intg > 0);
   }
   else
     intg=0;
@@ -406,7 +413,7 @@ int decimal2string(const decimal_t *from, char *to, int *to_len,
   char *s=to;
   dec1 *buf, *buf0=from->buf, tmp;
 
-  DBUG_ASSERT(*to_len >= 2+from->sign);
+  assert(*to_len >= 2+from->sign);
 
   /* removing leading zeroes */
   buf0= remove_leading_zeroes(from, &intg);
@@ -508,7 +515,6 @@ int decimal2string(const decimal_t *from, char *to, int *to_len,
   return error;
 }
 
-
 /*
   Return bounds of decimal digits in the number
 
@@ -594,8 +600,8 @@ void do_mini_left_shift(decimal_t *dec, int shift, int beg, int last)
   dec1 *from= dec->buf + ROUND_UP(beg + 1) - 1;
   dec1 *end= dec->buf + ROUND_UP(last) - 1;
   int c_shift= DIG_PER_DEC1 - shift;
-  DBUG_ASSERT(from >= dec->buf);
-  DBUG_ASSERT(end < dec->buf + dec->len);
+  assert(from >= dec->buf);
+  assert(end < dec->buf + dec->len);
   if (beg % DIG_PER_DEC1 < shift)
     *(from - 1)= (*from) / powers10[c_shift];
   for(; from < end; from++)
@@ -624,8 +630,8 @@ void do_mini_right_shift(decimal_t *dec, int shift, int beg, int last)
   dec1 *from= dec->buf + ROUND_UP(last) - 1;
   dec1 *end= dec->buf + ROUND_UP(beg + 1) - 1;
   int c_shift= DIG_PER_DEC1 - shift;
-  DBUG_ASSERT(from < dec->buf + dec->len);
-  DBUG_ASSERT(end >= dec->buf);
+  assert(from < dec->buf + dec->len);
+  assert(end >= dec->buf);
   if (DIG_PER_DEC1 - ((last - 1) % DIG_PER_DEC1 + 1) < shift)
     *(from + 1)= (*from % powers10[shift]) * powers10[c_shift];
   for(; from > end; from--)
@@ -733,7 +739,7 @@ int decimal_shift(decimal_t *dec, int shift)
         result
       */
       do_left= l_mini_shift <= beg;
-      DBUG_ASSERT(do_left || (dec->len * DIG_PER_DEC1 - end) >= r_mini_shift);
+      assert(do_left || (dec->len * DIG_PER_DEC1 - end) >= r_mini_shift);
     }
     else
     {
@@ -741,7 +747,7 @@ int decimal_shift(decimal_t *dec, int shift)
       l_mini_shift= DIG_PER_DEC1 - r_mini_shift;
       /* see comment above */
       do_left= !((dec->len * DIG_PER_DEC1 - end) >= r_mini_shift);
-      DBUG_ASSERT(!do_left || l_mini_shift <= beg);
+      assert(!do_left || l_mini_shift <= beg);
     }
     if (do_left)
     {
@@ -781,8 +787,8 @@ int decimal_shift(decimal_t *dec, int shift)
       d_shift= new_front / DIG_PER_DEC1;
       to= dec->buf + (ROUND_UP(beg + 1) - 1 - d_shift);
       barier= dec->buf + (ROUND_UP(end) - 1 - d_shift);
-      DBUG_ASSERT(to >= dec->buf);
-      DBUG_ASSERT(barier + d_shift < dec->buf + dec->len);
+      assert(to >= dec->buf);
+      assert(barier + d_shift < dec->buf + dec->len);
       for(; to <= barier; to++)
         *to= *(to + d_shift);
       for(barier+= d_shift; to <= barier; to++)
@@ -795,8 +801,8 @@ int decimal_shift(decimal_t *dec, int shift)
       d_shift= (1 - new_front) / DIG_PER_DEC1;
       to= dec->buf + ROUND_UP(end) - 1 + d_shift;
       barier= dec->buf + ROUND_UP(beg + 1) - 1 + d_shift;
-      DBUG_ASSERT(to < dec->buf + dec->len);
-      DBUG_ASSERT(barier - d_shift >= dec->buf);
+      assert(to < dec->buf + dec->len);
+      assert(barier - d_shift >= dec->buf);
       for(; to >= barier; to--)
         *to= *(to - d_shift);
       for(barier-= d_shift; to >= barier; to--)
@@ -815,7 +821,7 @@ int decimal_shift(decimal_t *dec, int shift)
   */
   beg= ROUND_UP(beg + 1) - 1;
   end= ROUND_UP(end) - 1;
-  DBUG_ASSERT(new_point >= 0);
+  assert(new_point >= 0);
   
   /* We don't want negative new_point below */
   if (new_point != 0)
@@ -1000,6 +1006,9 @@ internal_str2dec(const char *from, decimal_t *to, char **end, my_bool fixed)
         error= decimal_shift(to, (int) exponent);
     }
   }
+  /* Avoid returning negative zero, cfr. decimal_cmp() */
+  if (to->sign && decimal_is_zero(to))
+    to->sign= FALSE;
   return error;
 
 fatal_error:
@@ -1055,7 +1064,7 @@ int double2decimal(double from, decimal_t *to)
   char buff[FLOATING_POINT_BUFFER], *end;
   int res;
   DBUG_ENTER("double2decimal");
-  end= buff + my_gcvt(from, MY_GCVT_ARG_DOUBLE, sizeof(buff) - 1, buff, NULL);
+  end= buff + my_gcvt(from, MY_GCVT_ARG_DOUBLE, (int)sizeof(buff) - 1, buff, NULL);
   res= string2decimal(buff, to, &end);
   DBUG_PRINT("exit", ("res: %d", res));
   DBUG_RETURN(res);
@@ -1117,7 +1126,7 @@ int decimal2ulonglong(decimal_t *from, ulonglong *to)
 
   if (from->sign)
   {
-      *to=ULL(0);
+      *to=0ULL;
       return E_DEC_OVERFLOW;
   }
 
@@ -1125,9 +1134,9 @@ int decimal2ulonglong(decimal_t *from, ulonglong *to)
   {
     ulonglong y=x;
     x=x*DIG_BASE + *buf++;
-    if (unlikely(y > ((ulonglong) ULONGLONG_MAX/DIG_BASE) || x < y))
+    if (unlikely(y > ((ulonglong) ULLONG_MAX/DIG_BASE) || x < y))
     {
-      *to=ULONGLONG_MAX;
+      *to=ULLONG_MAX;
       return E_DEC_OVERFLOW;
     }
   }
@@ -1150,24 +1159,24 @@ int decimal2longlong(decimal_t *from, longlong *to)
     /*
       Attention: trick!
       we're calculating -|from| instead of |from| here
-      because |LONGLONG_MIN| > LONGLONG_MAX
+      because |LLONG_MIN| > LLONG_MAX
       so we can convert -9223372036854775808 correctly
     */
     x=x*DIG_BASE - *buf++;
-    if (unlikely(y < (LONGLONG_MIN/DIG_BASE) || x > y))
+    if (unlikely(y < (LLONG_MIN/DIG_BASE) || x > y))
     {
       /*
         the decimal is bigger than any possible integer
         return border integer depending on the sign
       */
-      *to= from->sign ? LONGLONG_MIN : LONGLONG_MAX;
+      *to= from->sign ? LLONG_MIN : LLONG_MAX;
       return E_DEC_OVERFLOW;
     }
   }
   /* boundary case: 9223372036854775808 */
-  if (unlikely(from->sign==0 && x == LONGLONG_MIN))
+  if (unlikely(from->sign==0 && x == LLONG_MIN))
   {
-    *to= LONGLONG_MAX;
+    *to= LLONG_MAX;
     return E_DEC_OVERFLOW;
   }
 
@@ -1410,7 +1419,7 @@ int decimal2bin(decimal_t *from, uchar *to, int precision, int frac)
       case 2: mi_int2store(to, x); break;
       case 3: mi_int3store(to, x); break;
       case 4: mi_int4store(to, x); break;
-      default: DBUG_ASSERT(0);
+    default: assert(0);
     }
     to+=i;
   }
@@ -1419,7 +1428,7 @@ int decimal2bin(decimal_t *from, uchar *to, int precision, int frac)
   for (stop1=buf1+intg1+frac1; buf1 < stop1; to+=sizeof(dec1))
   {
     dec1 x=*buf1++ ^ mask;
-    DBUG_ASSERT(sizeof(dec1) == 4);
+    assert(sizeof(dec1) == 4);
     mi_int4store(to, x);
   }
 
@@ -1438,7 +1447,7 @@ int decimal2bin(decimal_t *from, uchar *to, int precision, int frac)
       case 2: mi_int2store(to, x); break;
       case 3: mi_int3store(to, x); break;
       case 4: mi_int4store(to, x); break;
-      default: DBUG_ASSERT(0);
+    default: assert(0);
     }
     to+=i;
   }
@@ -1452,7 +1461,7 @@ int decimal2bin(decimal_t *from, uchar *to, int precision, int frac)
   orig_to[0]^= 0x80;
 
   /* Check that we have written the whole decimal and nothing more */
-  DBUG_ASSERT(to == orig_to + orig_fsize0 + orig_isize0);
+  assert(to == orig_to + orig_fsize0 + orig_isize0);
   return error;
 }
 
@@ -1513,14 +1522,14 @@ int bin2decimal(const uchar *from, decimal_t *to, int precision, int scale)
   if (intg0x)
   {
     int i=dig2bytes[intg0x];
-    dec1 UNINIT_VAR(x);
+    dec1 x= 0;
     switch (i)
     {
       case 1: x=mi_sint1korr(from); break;
       case 2: x=mi_sint2korr(from); break;
       case 3: x=mi_sint3korr(from); break;
       case 4: x=mi_sint4korr(from); break;
-      default: DBUG_ASSERT(0);
+    default: assert(0);
     }
     from+=i;
     *buf=x ^ mask;
@@ -1533,7 +1542,7 @@ int bin2decimal(const uchar *from, decimal_t *to, int precision, int scale)
   }
   for (stop=from+intg0*sizeof(dec1); from < stop; from+=sizeof(dec1))
   {
-    DBUG_ASSERT(sizeof(dec1) == 4);
+    assert(sizeof(dec1) == 4);
     *buf=mi_sint4korr(from) ^ mask;
     if (((uint32)*buf) > DIG_MAX)
       goto err;
@@ -1542,10 +1551,10 @@ int bin2decimal(const uchar *from, decimal_t *to, int precision, int scale)
     else
       to->intg-=DIG_PER_DEC1;
   }
-  DBUG_ASSERT(to->intg >=0);
+  assert(to->intg >=0);
   for (stop=from+frac0*sizeof(dec1); from < stop; from+=sizeof(dec1))
   {
-    DBUG_ASSERT(sizeof(dec1) == 4);
+    assert(sizeof(dec1) == 4);
     *buf=mi_sint4korr(from) ^ mask;
     if (((uint32)*buf) > DIG_MAX)
       goto err;
@@ -1554,21 +1563,20 @@ int bin2decimal(const uchar *from, decimal_t *to, int precision, int scale)
   if (frac0x)
   {
     int i=dig2bytes[frac0x];
-    dec1 UNINIT_VAR(x);
+    dec1 x= 0;
     switch (i)
     {
       case 1: x=mi_sint1korr(from); break;
       case 2: x=mi_sint2korr(from); break;
       case 3: x=mi_sint3korr(from); break;
       case 4: x=mi_sint4korr(from); break;
-      default: DBUG_ASSERT(0);
+    default: assert(0);
     }
     *buf=(x ^ mask) * powers10[DIG_PER_DEC1 - frac0x];
     if (((uint32)*buf) > DIG_MAX)
       goto err;
     buf++;
   }
-  my_afree(d_copy);
 
   /*
     No digits? We have read the number zero, of unspecified precision.
@@ -1579,7 +1587,6 @@ int bin2decimal(const uchar *from, decimal_t *to, int precision, int scale)
   return error;
 
 err:
-  my_afree(d_copy);
   decimal_make_zero(to);
   return(E_DEC_BAD_NUM);
 }
@@ -1594,7 +1601,7 @@ err:
 
 int decimal_size(int precision, int scale)
 {
-  DBUG_ASSERT(scale >= 0 && precision > 0 && scale <= precision);
+  assert(scale >= 0 && precision > 0 && scale <= precision);
   return ROUND_UP(precision-scale)+ROUND_UP(scale);
 }
 
@@ -1611,7 +1618,11 @@ int decimal_bin_size(int precision, int scale)
       intg0=intg/DIG_PER_DEC1, frac0=scale/DIG_PER_DEC1,
       intg0x=intg-intg0*DIG_PER_DEC1, frac0x=scale-frac0*DIG_PER_DEC1;
 
-  DBUG_ASSERT(scale >= 0 && precision > 0 && scale <= precision);
+  assert(scale >= 0 && precision > 0 && scale <= precision);
+  assert(intg0x >= 0);
+  assert(intg0x <= DIG_PER_DEC1);
+  assert(frac0x >= 0);
+  assert(frac0x <= DIG_PER_DEC1);
   return intg0*sizeof(dec1)+dig2bytes[intg0x]+
          frac0*sizeof(dec1)+dig2bytes[frac0x];
 }
@@ -1639,7 +1650,7 @@ decimal_round(const decimal_t *from, decimal_t *to, int scale,
               decimal_round_mode mode)
 {
   int frac0=scale>0 ? ROUND_UP(scale) : (scale + 1)/DIG_PER_DEC1,
-    frac1=ROUND_UP(from->frac), UNINIT_VAR(round_digit),
+    frac1=ROUND_UP(from->frac), round_digit= 0,
     intg0=ROUND_UP(from->intg), error=E_DEC_OK, len=to->len;
 
   dec1 *buf0=from->buf, *buf1=to->buf, x, y, carry=0;
@@ -1653,14 +1664,14 @@ decimal_round(const decimal_t *from, decimal_t *to, int scale,
   case CEILING:         round_digit= from->sign ? 10 : 0; break;
   case FLOOR:           round_digit= from->sign ? 0 : 10; break;
   case TRUNCATE:        round_digit=10; break;
-  default: DBUG_ASSERT(0);
+  default: assert(0);
   }
 
   /*
     For my_decimal we always use len == DECIMAL_BUFF_LENGTH == 9
     For internal testing here (ifdef MAIN) we always use len == 100/4
    */
-  DBUG_ASSERT(from->len == to->len);
+  assert(from->len == to->len);
 
   if (unlikely(frac0+intg0 > len))
   {
@@ -1680,8 +1691,8 @@ decimal_round(const decimal_t *from, decimal_t *to, int scale,
     dec1 *p0= buf0 + intg0 + MY_MAX(frac1, frac0);
     dec1 *p1= buf1 + intg0 + MY_MAX(frac1, frac0);
 
-    DBUG_ASSERT(p0 - buf0 <= len);
-    DBUG_ASSERT(p1 - buf1 <= len);
+    assert(p0 - buf0 <= len);
+    assert(p1 - buf1 <= len);
 
     while (buf0 < p0)
       *(--p1) = *(--p0);
@@ -1708,7 +1719,7 @@ decimal_round(const decimal_t *from, decimal_t *to, int scale,
   if (scale == frac0*DIG_PER_DEC1)
   {
     int do_inc= FALSE;
-    DBUG_ASSERT(frac0+intg0 >= 0);
+    assert(frac0+intg0 >= 0);
     switch (round_digit) {
     case 0:
     {
@@ -1750,7 +1761,7 @@ decimal_round(const decimal_t *from, decimal_t *to, int scale,
   {
     /* TODO - fix this code as it won't work for CEILING mode */
     int pos=frac0*DIG_PER_DEC1-scale-1;
-    DBUG_ASSERT(frac0+intg0 > 0);
+    assert(frac0+intg0 > 0);
     x=*buf1 / powers10[pos];
     y=x % 10;
     if (y > round_digit ||
@@ -1836,7 +1847,7 @@ decimal_round(const decimal_t *from, decimal_t *to, int scale,
     scale=0;
 
 done:
-  DBUG_ASSERT(to->intg <= (len * DIG_PER_DEC1));
+  assert(to->intg <= (len * DIG_PER_DEC1));
   to->frac=scale;
   return error;
 }
@@ -1878,7 +1889,7 @@ int decimal_result_size(decimal_t *from1, decimal_t *from2, char op, int param)
            ROUND_UP(from1->frac)+ROUND_UP(from2->frac);
   case '/':
     return ROUND_UP(from1->intg+from2->intg+1+from1->frac+from2->frac+param);
-  default: DBUG_ASSERT(0);
+  default: assert(0);
   }
   return -1; /* shut up the warning */
 }
@@ -1958,7 +1969,7 @@ static int do_add(const decimal_t *from1, const decimal_t *from2, decimal_t *to)
 
   if (unlikely(carry))
     *--buf0=1;
-  DBUG_ASSERT(buf0 == to->buf || buf0 == to->buf+1);
+  assert(buf0 == to->buf || buf0 == to->buf+1);
 
   return error;
 }
@@ -2125,6 +2136,11 @@ int decimal_cmp(const decimal_t *from1, const decimal_t *from2)
 {
   if (likely(from1->sign == from2->sign))
     return do_sub(from1, from2, 0);
+
+  // Reject negative zero, cfr. internal_str2dec()
+  assert(!(decimal_is_zero(from1) && from1->sign));
+  assert(!(decimal_is_zero(from2) && from2->sign));
+
   return from1->sign > from2->sign ? -1 : 1;
 }
 
@@ -2244,7 +2260,7 @@ int decimal_mul(const decimal_t *from1, const decimal_t *from2, decimal_t *to)
   {
     dec1 *buf= to->buf;
     dec1 *end= to->buf + intg0 + frac0;
-    DBUG_ASSERT(buf != end);
+    assert(buf != end);
     for (;;)
     {
       if (*buf)
@@ -2287,11 +2303,23 @@ int decimal_mul(const decimal_t *from1, const decimal_t *from2, decimal_t *to)
 static int do_div_mod(const decimal_t *from1, const decimal_t *from2,
                       decimal_t *to, decimal_t *mod, int scale_incr)
 {
+
+  /*
+    frac* - number of digits in fractional part of the number
+    prec* - precision of the number
+    intg* - number of digits in the integer part
+    buf* - buffer having the actual number
+    All variables ending with 0 - like frac0, intg0 etc are
+    for the final result. Similarly frac1, intg1 etc are for
+    the first number and frac2, intg2 etc are for the second number
+   */
   int frac1=ROUND_UP(from1->frac)*DIG_PER_DEC1, prec1=from1->intg+frac1,
       frac2=ROUND_UP(from2->frac)*DIG_PER_DEC1, prec2=from2->intg+frac2,
-      UNINIT_VAR(error), i, intg0, frac0, len1, len2, dintg, div_mod=(!mod);
-  dec1 *buf0, *buf1=from1->buf, *buf2=from2->buf, *tmp1,
-       *start2, *stop2, *stop1, *stop0, norm2, carry, *start1, dcarry;
+      error= 0, i, intg0, frac0, len1, len2,
+      dintg, /* Holds the estimate of number of integer digits in final result */
+      div_mod=(!mod) /*true if this is division */;
+  dec1 *buf0, *buf1=from1->buf, *buf2=from2->buf, *start1, *stop1,
+       *start2, *stop2, *stop0 ,norm2, carry, dcarry, *tmp1;
   dec2 norm_factor, x, guess, y;
 
   if (mod)
@@ -2299,7 +2327,10 @@ static int do_div_mod(const decimal_t *from1, const decimal_t *from2,
 
   sanity(to);
 
-  /* removing all the leading zeroes */
+  /*
+    removing all the leading zeroes in the second number. Leading zeroes are
+    added later to the result.
+   */
   i= ((prec2 - 1) % DIG_PER_DEC1) + 1;
   while (prec2 > 0 && *buf2 == 0)
   {
@@ -2309,8 +2340,19 @@ static int do_div_mod(const decimal_t *from1, const decimal_t *from2,
   }
   if (prec2 <= 0) /* short-circuit everything: from2 == 0 */
     return E_DEC_DIV_ZERO;
+
+  /*
+    Remove the remanining zeroes . For ex: for 0.000000000001
+    the above while loop removes 9 zeroes and the result will have 0.0001
+    these remaining zeroes are removed here
+   */
   prec2-= count_leading_zeroes((prec2 - 1) % DIG_PER_DEC1, *buf2);
-  DBUG_ASSERT(prec2 > 0);
+  assert(prec2 > 0);
+
+  /*
+   Do the same for the first number. Remove the leading zeroes.
+   Check if the number is actually 0. Then remove the remaining zeroes.
+   */
 
   i=((prec1-1) % DIG_PER_DEC1)+1;
   while (prec1 > 0 && *buf1 == 0)
@@ -2325,12 +2367,13 @@ static int do_div_mod(const decimal_t *from1, const decimal_t *from2,
     return E_DEC_OK;
   }
   prec1-= count_leading_zeroes((prec1-1) % DIG_PER_DEC1, *buf1);
-  DBUG_ASSERT(prec1 > 0);
+  assert(prec1 > 0);
 
   /* let's fix scale_incr, taking into account frac1,frac2 increase */
   if ((scale_incr-= frac1 - from1->frac + frac2 - from2->frac) < 0)
     scale_incr=0;
 
+  /* Calculate the integer digits in final result */
   dintg=(prec1-frac1)-(prec2-frac2)+(*buf1 >= *buf2);
   if (dintg < 0)
   {
@@ -2432,13 +2475,13 @@ static int do_div_mod(const decimal_t *from1, const decimal_t *from2,
           guess--;
         if (unlikely(start2[1]*guess > (x-guess*start2[0])*DIG_BASE+y))
           guess--;
-        DBUG_ASSERT(start2[1]*guess <= (x-guess*start2[0])*DIG_BASE+y);
+        assert(start2[1]*guess <= (x-guess*start2[0])*DIG_BASE+y);
       }
 
       /* D4: multiply and subtract */
       buf2=stop2;
       buf1=start1+len2;
-      DBUG_ASSERT(buf1 < stop1);
+      assert(buf1 < stop1);
       for (carry=0; buf2 > start2; buf1--)
       {
         dec1 hi, lo;
@@ -2465,7 +2508,7 @@ static int do_div_mod(const decimal_t *from1, const decimal_t *from2,
     }
     if (likely(div_mod))
     {
-      DBUG_ASSERT(buf0 < to->buf + to->len);
+      assert(buf0 < to->buf + to->len);
       *buf0=(dec1)guess;
     }
     dcarry= *start1;
@@ -2475,13 +2518,23 @@ static int do_div_mod(const decimal_t *from1, const decimal_t *from2,
   {
     /*
       now the result is in tmp1, it has
-        intg=prec1-frac1
-        frac=max(frac1, frac2)=to->frac
-    */
+      intg=prec1-frac1  if there were no leading zeroes.
+                        If leading zeroes were present, they have been removed
+                        earlier. We need to now add them back to the result.
+      frac=max(frac1, frac2)=to->frac
+     */
     if (dcarry)
       *--start1=dcarry;
     buf0=to->buf;
-    intg0=(int) (ROUND_UP(prec1-frac1)-(start1-tmp1));
+    /* Calculate the final result's integer digits */
+    dintg= (prec1 - frac1) - ((start1 - tmp1) * DIG_PER_DEC1);
+    if (dintg < 0)
+    {
+      /* If leading zeroes in the fractional part were earlier stripped */
+      intg0= dintg / DIG_PER_DEC1;
+    }
+    else
+      intg0= ROUND_UP(dintg);
     frac0=ROUND_UP(to->frac);
     error=E_DEC_OK;
     if (unlikely(frac0==0 && intg0==0))
@@ -2491,6 +2544,7 @@ static int do_div_mod(const decimal_t *from1, const decimal_t *from2,
     }
     if (intg0<=0)
     {
+      /* Add back the leading zeroes that were earlier stripped */
       if (unlikely(-intg0 >= to->len))
       {
         decimal_make_zero(to);
@@ -2512,7 +2566,7 @@ static int do_div_mod(const decimal_t *from1, const decimal_t *from2,
         error=E_DEC_OVERFLOW;
         goto done;
       }
-      DBUG_ASSERT(intg0 <= ROUND_UP(from2->intg));
+      assert(intg0 <= ROUND_UP(from2->intg));
       stop1=start1+frac0+intg0;
       to->intg= MY_MIN(intg0 * DIG_PER_DEC1, from2->intg);
     }
@@ -2523,12 +2577,11 @@ static int do_div_mod(const decimal_t *from1, const decimal_t *from2,
       to->frac=frac0*DIG_PER_DEC1;
         error=E_DEC_TRUNCATED;
     }
-    DBUG_ASSERT(buf0 + (stop1 - start1) <= to->buf + to->len);
+    assert(buf0 + (stop1 - start1) <= to->buf + to->len);
     while (start1 < stop1)
         *buf0++=*start1++;
   }
 done:
-  my_afree(tmp1);
   tmp1= remove_leading_zeroes(to, &to->intg);
   if(to->buf != tmp1)
     memmove(to->buf, tmp1,
@@ -2589,6 +2642,53 @@ decimal_div(const decimal_t *from1, const decimal_t *from2, decimal_t *to,
 int decimal_mod(const decimal_t *from1, const decimal_t *from2, decimal_t *to)
 {
   return do_div_mod(from1, from2, 0, to, 0);
+}
+
+uint32_t int32_to_uint32_memcpy(int32 src) {
+  uint32_t dest;
+  memcpy(&dest, &src, sizeof(src));
+  return dest;
+}
+
+static inline dec1 div_by_pow10(dec1 x, int p) {
+  /*
+    GCC can optimize division by a constant to a multiplication and some
+    shifts, which is faster than dividing by a variable, even taking into
+    account the extra cost of the switch. It is also (empirically on a Skylake)
+    faster than storing the magic multiplier constants in a table and doing it
+    ourselves. However, since the code is much bigger, we only use this in
+    a few select places.
+
+    Note the use of unsigned, which is faster for this specific operation.
+  */
+  assert(x >= 0);
+  switch (p) {
+    case 0:
+      return int32_to_uint32_memcpy(x) / 1;
+    case 1:
+      return int32_to_uint32_memcpy(x) / 10;
+    case 2:
+      return int32_to_uint32_memcpy(x) / 100;
+    case 3:
+      return int32_to_uint32_memcpy(x) / 1000;
+    case 4:
+      return int32_to_uint32_memcpy(x) / 10000;
+    case 5:
+      return int32_to_uint32_memcpy(x) / 100000;
+    case 6:
+      return int32_to_uint32_memcpy(x) / 1000000;
+    case 7:
+      return int32_to_uint32_memcpy(x) / 10000000;
+    case 8:
+      return int32_to_uint32_memcpy(x) / 100000000;
+    default:
+      assert(FALSE);
+      return x / powers10[p];
+  }
+}
+
+decimal_digit_t decimal_div_by_pow10(decimal_digit_t x, int p) {
+  return div_by_pow10(x, p);
 }
 
 #ifdef MAIN

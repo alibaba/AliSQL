@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2005, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2005, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -120,6 +127,7 @@ SignalSender::SignalSender(TransporterFacade *facade, int blockNo)
   Uint32 res = open(theFacade, blockNo);
   assert(res != 0);
   m_blockNo = refToBlock(res);
+  m_locked = false;
 }
 
 SignalSender::SignalSender(Ndb_cluster_connection* connection)
@@ -128,11 +136,13 @@ SignalSender::SignalSender(Ndb_cluster_connection* connection)
   Uint32 res = open(theFacade, -1);
   assert(res != 0);
   m_blockNo = refToBlock(res);
+  m_locked = false;
 }
 
 SignalSender::~SignalSender(){
   int i;
-  unlock();
+  if (m_locked)
+    unlock();
   close();
 
   // free these _after_ closing theFacade to ensure that
@@ -146,12 +156,19 @@ SignalSender::~SignalSender(){
 int SignalSender::lock()
 {
   start_poll();
+  assert(m_locked == false);
+  m_locked = true;
   return 0;
 }
 
 int SignalSender::unlock()
 {
-  complete_poll();
+  assert(m_locked == true);
+  if (m_locked)
+  {
+    complete_poll();
+    m_locked = false;
+  }
   return 0;
 }
 
@@ -242,10 +259,11 @@ SignalSender::waitFor(Uint32 timeOutMillis, T & t)
     delete m_usedBuffer[i];
   m_usedBuffer.clear();
 
-  NDB_TICKS now = NdbTick_CurrentMillisecond();
-  NDB_TICKS stop = now + timeOutMillis;
-  Uint32 wait = (timeOutMillis == 0 ? 10 : timeOutMillis);
+  const NDB_TICKS start = NdbTick_getCurrentTicks();
+  Uint32 waited = 0; //ms waited since 'start'
   do {
+    const Uint32 wait = (timeOutMillis == 0 ? 10 
+                        : timeOutMillis-waited);
     do_poll(wait);
     
     SimpleSignal * s = t.check(m_jobBuffer);
@@ -258,9 +276,11 @@ SignalSender::waitFor(Uint32 timeOutMillis, T & t)
       return s;
     }
     
-    now = NdbTick_CurrentMillisecond();
-    wait = (Uint32)(timeOutMillis == 0 ? 10 : stop - now);
-  } while(stop > now || timeOutMillis == 0);
+    // Calculate total wait(ms) since 'start'
+    const NDB_TICKS now = NdbTick_getCurrentTicks();
+    waited = (Uint32)NdbTick_Elapsed(start,now).milliSec();
+
+  } while(timeOutMillis == 0 || waited < timeOutMillis);
   
   return 0;
 } 
@@ -291,6 +311,11 @@ void
 SignalSender::trp_deliver_signal(const NdbApiSignal* signal,
                                  const struct LinearSectionPtr ptr[3])
 {
+  if (signal->theVerId_signalNumber == GSN_CLOSE_COMREQ)
+  {
+    theFacade->perform_close_clnt(this);
+    return;
+  }
   SimpleSignal * s = new SimpleSignal(true);
   s->header = * signal;
   for(Uint32 i = 0; i<s->header.m_noOfSections; i++){

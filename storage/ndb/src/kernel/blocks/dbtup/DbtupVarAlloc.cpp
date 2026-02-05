@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2005, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -18,6 +25,9 @@
 #define DBTUP_C
 #define DBTUP_VAR_ALLOC_CPP
 #include "Dbtup.hpp"
+
+#define JAM_FILE_ID 405
+
 
 void Dbtup::init_list_sizes(void)
 {
@@ -71,7 +81,8 @@ Uint32* Dbtup::alloc_var_rec(Uint32 * err,
   /**
    * TODO alloc fix+var part
    */
-  Uint32 *ptr = alloc_fix_rec(err, fragPtr, tabPtr, key, out_frag_page_id);
+  Uint32 *ptr = alloc_fix_rec(jamBuffer(), err, fragPtr, tabPtr, key,
+                              out_frag_page_id);
   if (unlikely(ptr == 0))
   {
     return 0;
@@ -119,17 +130,26 @@ Dbtup::alloc_var_part(Uint32 * err,
     }
     c_page_pool.getPtr(pagePtr);
     ((Var_page*)pagePtr.p)->init();
+    fragPtr->m_varWordsFree += ((Var_page*)pagePtr.p)->free_space;
     pagePtr.p->list_index = MAX_FREE_LIST - 1;
     LocalDLList<Page> list(c_page_pool, 
 			   fragPtr->free_var_page_array[MAX_FREE_LIST-1]);
-    list.add(pagePtr);
+    list.addFirst(pagePtr);
   } else {
     c_page_pool.getPtr(pagePtr);
     jam();
-  }
+  }  
+  /*
+    First we remove the current free space on this page from fragment total.
+    Then we calculate a new free space value for the page. Finally we call
+    update_free_page_list() which adds this new value to the fragment total.
+  */
+  ndbassert(fragPtr->m_varWordsFree >= ((Var_page*)pagePtr.p)->free_space);
+  fragPtr->m_varWordsFree -= ((Var_page*)pagePtr.p)->free_space;
   Uint32 idx= ((Var_page*)pagePtr.p)
     ->alloc_record(alloc_size, (Var_page*)ctemp_page, Var_page::CHAIN);
-  
+
+  fragPtr->m_varElemCount++;
   key->m_page_no = pagePtr.i;
   key->m_page_idx = idx;
   
@@ -151,7 +171,11 @@ void Dbtup::free_var_part(Fragrecord* fragPtr,
   if (key->m_page_no != RNIL)
   {
     c_page_pool.getPtr(pagePtr, key->m_page_no);
+    ndbassert(fragPtr->m_varWordsFree >= ((Var_page*)pagePtr.p)->free_space);
+    fragPtr->m_varWordsFree -= ((Var_page*)pagePtr.p)->free_space;
     ((Var_page*)pagePtr.p)->free_record(key->m_page_idx, Var_page::CHAIN);
+    ndbassert(fragPtr->m_varElemCount > 0);
+    fragPtr->m_varElemCount--;
 
     ndbassert(pagePtr.p->free_space <= Var_page::DATA_WORDS);
     if (pagePtr.p->free_space == Var_page::DATA_WORDS - 1)
@@ -164,8 +188,10 @@ void Dbtup::free_var_part(Fragrecord* fragPtr,
       fragPtr->noOfVarPages --;
     } else {
       jam();
+      // Adds the new free space value for the page to the fragment total.
       update_free_page_list(fragPtr, pagePtr);
     }
+    ndbassert(fragPtr->verifyVarSpace());
   }
   return;
 }
@@ -215,7 +241,11 @@ void Dbtup::free_var_rec(Fragrecord* fragPtr,
 void
 Dbtup::free_var_part(Fragrecord* fragPtr, PagePtr pagePtr, Uint32 page_idx)
 {
+  ndbassert(fragPtr->m_varWordsFree >= ((Var_page*)pagePtr.p)->free_space);
+  fragPtr->m_varWordsFree -= ((Var_page*)pagePtr.p)->free_space;
   ((Var_page*)pagePtr.p)->free_record(page_idx, Var_page::CHAIN);
+  ndbassert(fragPtr->m_varElemCount > 0);
+  fragPtr->m_varElemCount--;
 
   ndbassert(pagePtr.p->free_space <= Var_page::DATA_WORDS);
   if (pagePtr.p->free_space == Var_page::DATA_WORDS - 1)
@@ -230,8 +260,10 @@ Dbtup::free_var_part(Fragrecord* fragPtr, PagePtr pagePtr, Uint32 page_idx)
   else
   {
     jam();
+    // Adds the new free space value for the page to the fragment total.
     update_free_page_list(fragPtr, pagePtr);
   }
+  ndbassert(fragPtr->verifyVarSpace());
 }
 
 Uint32 *
@@ -267,13 +299,18 @@ Dbtup::realloc_var_part(Uint32 * err,
       memcpy(copyBuffer, new_var_ptr, 4*oldsz);
       pageP->set_entry_len(oldref.m_page_idx, 0);
       pageP->free_space += oldsz;
+      fragPtr->m_varWordsFree += oldsz;
       pageP->reorg((Var_page*)ctemp_page);
       new_var_ptr= pageP->get_free_space_ptr();
       memcpy(new_var_ptr, copyBuffer, 4*oldsz);
       pageP->set_entry_offset(oldref.m_page_idx, pageP->insert_pos);
       add += oldsz;
     }
+    ndbassert(fragPtr->m_varWordsFree >= pageP->free_space);
+    fragPtr->m_varWordsFree -= pageP->free_space;
+
     pageP->grow_entry(oldref.m_page_idx, add);
+    // Adds the new free space value for the page to the fragment total.
     update_free_page_list(fragPtr, pagePtr);
   }
   else
@@ -346,6 +383,9 @@ Dbtup::move_var_part(Fragrecord* fragPtr, Tablerec* tabPtr, PagePtr pagePtr,
 
   c_page_pool.getPtr(new_pagePtr);
 
+  ndbassert(fragPtr->m_varWordsFree >= ((Var_page*)new_pagePtr.p)->free_space);
+  fragPtr->m_varWordsFree -= ((Var_page*)new_pagePtr.p)->free_space;
+
   Uint32 idx= ((Var_page*)new_pagePtr.p)
     ->alloc_record(size,(Var_page*)ctemp_page, Var_page::CHAIN);
 
@@ -362,8 +402,9 @@ Dbtup::move_var_part(Fragrecord* fragPtr, Tablerec* tabPtr, PagePtr pagePtr,
    */
   memcpy(dst, src, 4*size);
 
+  fragPtr->m_varElemCount++;
   /**
-   * remove old var part of tuple
+   * remove old var part of tuple (and decrement m_varElemCount).
    */
   free_var_part(fragPtr, pagePtr, oldref.m_page_idx);
 
@@ -403,7 +444,7 @@ Dbtup::get_alloc_page(Fragrecord* fragPtr, Uint32 alloc_size)
     if (!fragPtr->free_var_page_array[i].isEmpty()) 
     {
       jam();
-      return fragPtr->free_var_page_array[i].firstItem;
+      return fragPtr->free_var_page_array[i].getFirst();
     }
   }
   ndbrequire(start_index > 0);
@@ -427,7 +468,7 @@ Dbtup::get_empty_var_page(Fragrecord* fragPtr)
 {
   PagePtr ptr;
   Uint32 cnt;
-  allocConsPages(1, cnt, ptr.i);
+  allocConsPages(jamBuffer(), 1, cnt, ptr.i);
   fragPtr->noOfVarPages+= cnt;
   if (unlikely(cnt == 0))
   {
@@ -453,6 +494,9 @@ void Dbtup::update_free_page_list(Fragrecord* fragPtr,
   Uint32 free_space, list_index;
   free_space= pagePtr.p->free_space;
   list_index= pagePtr.p->list_index;
+  fragPtr->m_varWordsFree+= free_space;
+  ndbassert(fragPtr->verifyVarSpace());
+
   if ((free_space < c_min_list_size[list_index]) ||
       (free_space > c_max_list_size[list_index])) {
     Uint32 new_list_index= calculate_free_list_impl(free_space);
@@ -483,7 +527,7 @@ void Dbtup::update_free_page_list(Fragrecord* fragPtr,
     {
       LocalDLList<Page> list(c_page_pool, 
                              fragPtr->free_var_page_array[new_list_index]);
-      list.add(pagePtr);
+      list.addFirst(pagePtr);
       pagePtr.p->list_index = new_list_index;
     }
   }

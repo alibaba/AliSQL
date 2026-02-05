@@ -3,37 +3,47 @@ Warnings:
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
 Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
 [connection master]
-call mtr.add_suppression("Did not write failed .* into binary log while "
-                         "revoking all_privileges from a list of users.");
-call mtr.add_suppression("Did not write failed .* into binary log while "
-                         "storing routine level grants in the privilege "
-                         "tables.");
+call mtr.add_suppression("REVOKE/GRANT failed while storing routine level "
+                         "grants in the privilege tables. An incident event "
+                         "has been written to the binary log which will "
+                         "stop the slaves.");
 delete from mysql.user where user=_binary'rpl_do_grant';
 delete from mysql.db where user=_binary'rpl_do_grant';
 flush privileges;
 delete from mysql.user where user=_binary'rpl_ignore_grant';
 delete from mysql.db where user=_binary'rpl_ignore_grant';
 flush privileges;
+set @orig_sql_mode= @@sql_mode;
+set sql_mode= (select replace(@@sql_mode,'NO_AUTO_CREATE_USER',''));
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 grant select on *.* to rpl_do_grant@localhost;
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
+set sql_mode= @orig_sql_mode;
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 grant drop on test.* to rpl_do_grant@localhost;
 show grants for rpl_do_grant@localhost;
 Grants for rpl_do_grant@localhost
 GRANT SELECT ON *.* TO 'rpl_do_grant'@'localhost'
 GRANT DROP ON `test`.* TO 'rpl_do_grant'@'localhost'
-set password for rpl_do_grant@localhost=password("does it work?");
-select password<>_binary'' from mysql.user where user=_binary'rpl_do_grant';
-password<>_binary''
+set password for rpl_do_grant@localhost="does it work?";
+select authentication_string<>_binary'' from mysql.user where user=_binary'rpl_do_grant';
+authentication_string<>_binary''
 1
-update mysql.user set password='' where user='rpl_do_grant';
+update mysql.user set authentication_string='' where user='rpl_do_grant';
 flush privileges;
-select password<>'' from mysql.user where user='rpl_do_grant';
-password<>''
+select authentication_string<>'' from mysql.user where user='rpl_do_grant';
+authentication_string<>''
 0
 set sql_mode='ANSI_QUOTES';
-set password for rpl_do_grant@localhost=password('does it work?');
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+set password for rpl_do_grant@localhost='does it work?';
 set sql_mode='';
-select password<>'' from mysql.user where user='rpl_do_grant';
-password<>''
+select authentication_string<>'' from mysql.user where user='rpl_do_grant';
+authentication_string<>''
 1
 delete from mysql.user where user=_binary'rpl_do_grant';
 delete from mysql.db where user=_binary'rpl_do_grant';
@@ -98,6 +108,8 @@ DROP DATABASE IF EXISTS bug42217_db;
 CREATE DATABASE  bug42217_db;
 GRANT CREATE ROUTINE ON bug42217_db.* TO 'create_rout_db'@'localhost'
         IDENTIFIED BY 'create_rout_db' WITH GRANT OPTION;
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
 USE bug42217_db;
 CREATE FUNCTION upgrade_del_func() RETURNS CHAR(30)
 BEGIN
@@ -115,13 +127,13 @@ Host	Db	User	Routine_name	Routine_type	Grantor	Proc_priv	Timestamp
 localhost	bug42217_db	create_rout_db	upgrade_del_func	FUNCTION	create_rout_db@localhost	Execute,Alter Routine	#
 SHOW GRANTS FOR 'create_rout_db'@'localhost';
 Grants for create_rout_db@localhost
-GRANT USAGE ON *.* TO 'create_rout_db'@'localhost' IDENTIFIED BY PASSWORD '*08792480350CBA057BDE781B9DF183B263934601'
+GRANT USAGE ON *.* TO 'create_rout_db'@'localhost'
 GRANT CREATE ROUTINE ON `bug42217_db`.* TO 'create_rout_db'@'localhost' WITH GRANT OPTION
 GRANT EXECUTE, ALTER ROUTINE ON FUNCTION `bug42217_db`.`upgrade_del_func` TO 'create_rout_db'@'localhost'
 USE bug42217_db;
 SHOW CREATE FUNCTION upgrade_del_func;
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
-upgrade_del_func	NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`create_rout_db`@`localhost` FUNCTION `upgrade_del_func`() RETURNS char(30) CHARSET latin1
+upgrade_del_func	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`create_rout_db`@`localhost` FUNCTION `upgrade_del_func`() RETURNS char(30) CHARSET latin1
 BEGIN
 RETURN "INSIDE upgrade_del_func()";
 END	latin1	latin1_swedish_ci	latin1_swedish_ci
@@ -132,7 +144,7 @@ INSIDE upgrade_del_func()
 USE bug42217_db;
 SHOW CREATE FUNCTION upgrade_del_func;
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
-upgrade_del_func	NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`create_rout_db`@`localhost` FUNCTION `upgrade_del_func`() RETURNS char(30) CHARSET latin1
+upgrade_del_func	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`create_rout_db`@`localhost` FUNCTION `upgrade_del_func`() RETURNS char(30) CHARSET latin1
 BEGIN
 RETURN "INSIDE upgrade_del_func()";
 END	latin1	latin1_swedish_ci	latin1_swedish_ci
@@ -157,7 +169,7 @@ upgrade_alter_func()
 INSIDE upgrade_alter_func()
 SHOW CREATE FUNCTION upgrade_alter_func;
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
-upgrade_alter_func	NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`create_rout_db`@`localhost` FUNCTION `upgrade_alter_func`() RETURNS char(30) CHARSET latin1
+upgrade_alter_func	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`create_rout_db`@`localhost` FUNCTION `upgrade_alter_func`() RETURNS char(30) CHARSET latin1
 BEGIN
 RETURN "INSIDE upgrade_alter_func()";
 END	latin1	latin1_swedish_ci	latin1_swedish_ci
@@ -252,16 +264,20 @@ DROP PROCEDURE p1;
 DROP USER 'user49119'@'localhost';
 include/rpl_reset.inc
 grant all on *.* to foo@"1.2.3.4";
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
 revoke all privileges, grant option from "foo";
 ERROR HY000: Can't revoke all privileges for one or more of the requested users
 include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
-master-bin.000001	#	Query	#	#	use `test`; grant all on *.* to foo@"1.2.3.4"
+master-bin.000001	#	Query	#	#	use `test`; GRANT ALL PRIVILEGES ON *.* TO 'foo'@'1.2.3.4'
 DROP USER foo@"1.2.3.4";
 
 # Bug#27606 GRANT statement should be replicated with DEFINER information
 include/rpl_reset.inc
 GRANT SELECT, INSERT ON mysql.user TO user_bug27606@localhost;
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
 SELECT Grantor FROM mysql.tables_priv WHERE User='user_bug27606';
 Grantor
 root@localhost

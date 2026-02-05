@@ -4,7 +4,16 @@ use mysqltest_db1;
 create table t_column_priv_only (a int, b int);
 create table t_select_priv like t_column_priv_only;
 create table t_no_priv like t_column_priv_only;
+set @orig_sql_mode= @@sql_mode;
+set sql_mode= (select replace(@@sql_mode,'NO_AUTO_CREATE_USER',''));
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 grant all privileges on test.* to mysqltest_u1@localhost;
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
+set sql_mode= @orig_sql_mode;
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 grant insert (a) on mysqltest_db1.t_column_priv_only to mysqltest_u1@localhost;
 grant select on mysqltest_db1.t_select_priv to mysqltest_u1@localhost;
 ** Connect as restricted user mysqltest_u1.
@@ -85,17 +94,17 @@ GRANT SHOW VIEW ON v2 to mysqltest_u1@localhost;
 GRANT SHOW VIEW, SELECT ON v3 to mysqltest_u1@localhost;
 use mysqltest_db1;
 ** Connect as restricted user mysqltest_u1.
-** SELECT FROM INFORMATION_SCHEMA.STATISTICS will succeed because any privileges will do (authentication is enough).
+# The user does not have table level grants on table t5. Hence cannot get
+# information about it from INFORMATION_SCHEMA.STATISTICS
 SELECT * FROM INFORMATION_SCHEMA.STATISTICS WHERE table_name='t5';
-TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	NON_UNIQUE	INDEX_SCHEMA	INDEX_NAME	SEQ_IN_INDEX	COLUMN_NAME	COLLATION	CARDINALITY	SUB_PART	PACKED	NULLABLE	INDEX_TYPE	COMMENT	INDEX_COMMENT	IS_VISIBLE
-def	mysqltest_db1	t5	1	mysqltest_db1	i	1	s1	A	NULL	NULL	NULL	YES	BTREE			YES
+TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	NON_UNIQUE	INDEX_SCHEMA	INDEX_NAME	SEQ_IN_INDEX	COLUMN_NAME	COLLATION	CARDINALITY	SUB_PART	PACKED	NULLABLE	INDEX_TYPE	COMMENT	INDEX_COMMENT
 ** SHOW INDEX FROM t5 will fail because we don't have any privileges on any column combination.
 SHOW INDEX FROM t5;
 ERROR 42000: SELECT command denied to user 'mysqltest_u1'@'localhost' for table 't5'
 ** SHOW INDEX FROM t6 will succeed because there exist a privilege on a column combination on t6.
 SHOW INDEX FROM t6;
-Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible
-t6	1	i	1	s1	A	NULL	NULL	NULL	YES	BTREE			YES
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment
+t6	1	i	1	s1	A	NULL	NULL	NULL	YES	BTREE		
 ** CHECK TABLE requires any privilege on any column combination and should succeed for t6:
 CHECK TABLE t6;
 Table	Op	Msg_type	Msg_text

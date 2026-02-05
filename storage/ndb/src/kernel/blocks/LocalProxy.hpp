@@ -1,13 +1,20 @@
-/* Copyright (c) 2008, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -19,7 +26,7 @@
 #include <pc.hpp>
 #include <SimulatedBlock.hpp>
 #include <Bitmask.hpp>
-#include <DLFifoList.hpp>
+#include <IntrusiveList.hpp>
 #include <signaldata/ReadConfig.hpp>
 #include <signaldata/NdbSttor.hpp>
 #include <signaldata/ReadNodesConf.hpp>
@@ -30,6 +37,9 @@
 #include <signaldata/DropTrigImpl.hpp>
 #include <signaldata/DbinfoScan.hpp>
 #include <signaldata/Sync.hpp>
+
+#define JAM_FILE_ID 438
+
 
 /*
  * Proxy blocks for MT LQH.
@@ -56,15 +66,12 @@ public:
   BLOCK_DEFINES(LocalProxy);
 
 protected:
-  enum { MaxLqhWorkers = MAX_NDBMT_LQH_WORKERS };
-  enum { MaxExtraWorkers = 1 };
-  enum { MaxWorkers = MaxLqhWorkers + MaxExtraWorkers };
+  enum { MaxWorkers = SimulatedBlock::MaxInstances };
   typedef Bitmask<(MaxWorkers+31)/32> WorkerMask;
-  Uint32 c_lqhWorkers;
-  Uint32 c_extraWorkers;
   Uint32 c_workers;
   // no gaps - extra worker has index c_lqhWorkers (not MaxLqhWorkers)
   SimulatedBlock* c_worker[MaxWorkers];
+  Uint32 c_anyWorkerCounter;
 
   virtual SimulatedBlock* newWorker(Uint32 instanceNo) = 0;
   virtual void loadWorkers();
@@ -77,44 +84,39 @@ protected:
     return c_worker[i];
   }
 
-  SimulatedBlock* extraWorkerBlock() {
-    return workerBlock(c_lqhWorkers);
-  }
-
   // get worker block reference by index (not by instance)
 
   BlockReference workerRef(Uint32 i) {
     return numberToRef(number(), workerInstance(i), getOwnNodeId());
   }
 
-  BlockReference extraWorkerRef() {
-    ndbrequire(c_workers == c_lqhWorkers + 1);
-    Uint32 i = c_lqhWorkers;
-    return workerRef(i);
-  }
-
   // convert between worker index and worker instance
 
   Uint32 workerInstance(Uint32 i) const {
     ndbrequire(i < c_workers);
-    Uint32 ino;
-    if (i < c_lqhWorkers)
-      ino = 1 + i;
-    else
-      ino = 1 + MaxLqhWorkers;
-    return ino;
+    return i + 1;
   }
 
   Uint32 workerIndex(Uint32 ino) const {
     ndbrequire(ino != 0);
-    Uint32 i;
-    if (ino != 1 + MaxLqhWorkers)
-      i = ino - 1;
-    else
-      i = c_lqhWorkers;
-    ndbrequire(i < c_workers);
-    return i;
+    return ino - 1;
   }
+
+  // Get a worker index - will balance round robin across
+  // workers over time.
+  Uint32 getAnyWorkerIndex()
+  {
+    return (c_anyWorkerCounter++) % c_workers;
+  }
+
+  // Statelessly forward a signal (including any sections) 
+  // to the worker with the supplied index.
+  void forwardToWorkerIndex(Signal* signal, Uint32 index);
+  
+  // Statelessly forward the signal (including any sections)
+  // to one of the workers, load balancing.
+  // Requires no arrival order constraints between signals.
+  void forwardToAnyWorker(Signal* signal);
 
   // support routines and classes ("Ss" = signal state)
 
@@ -160,14 +162,10 @@ protected:
   // run workers in parallel
   struct SsParallel : SsCommon {
     WorkerMask m_workerMask;
-    bool m_extraLast;   // run extra after LQH workers
-    Uint32 m_extraSent;
     SsParallel() {
-      m_extraLast = false;
-      m_extraSent = 0;
     }
   };
-  void sendREQ(Signal*, SsParallel& ss);
+  void sendREQ(Signal*, SsParallel& ss, bool skipLast = false);
   void recvCONF(Signal*, SsParallel& ss);
   void recvREF(Signal*, SsParallel& ss, Uint32 error);
   // for use in sendREQ
@@ -221,11 +219,17 @@ protected:
 
   template <class Ss>
   Ss& ssSeize() {
-    const Uint32 base = SsIdBase;
-    const Uint32 mask = ~base;
-    const Uint32 ssId = base | c_ssIdSeq;
-    c_ssIdSeq = (c_ssIdSeq + 1) & mask;
-    return ssSeize<Ss>(ssId);
+    SsPool<Ss>& sp = Ss::pool(this);
+    Ss* ssptr = ssSearch<Ss>(0);
+    ndbrequire(ssptr != 0);
+    // Use position in array as ssId
+    UintPtr pos = ssptr - sp.m_pool;
+    Uint32 ssId = Uint32(pos) + 1;
+    new (ssptr) Ss;
+    ssptr->m_ssId = ssId;
+    sp.m_usage++;
+    D("ssSeize()" << V(sp.m_usage) << hex << V(ssId) << " " << Ss::name());
+    return *ssptr;
   }
 
   template <class Ss>
@@ -589,6 +593,27 @@ protected:
   SsPool<Ss_SYNC_REQ> c_ss_SYNC_REQ;
 
   void execSYNC_PATH_REQ(Signal*);
+
+  // GSN_API_FAILREQ
+  struct Ss_API_FAILREQ : SsParallel {
+    Uint32 m_ref; //
+    Ss_API_FAILREQ() {
+      m_sendREQ = (SsFUNCREQ)&LocalProxy::sendAPI_FAILREQ;
+      m_sendCONF = (SsFUNCREP)&LocalProxy::sendAPI_FAILCONF;
+    }
+    enum { poolSize = MAX_NODES };
+    static SsPool<Ss_API_FAILREQ>& pool(LocalProxy* proxy) {
+      return proxy->c_ss_API_FAILREQ;
+    }
+  };
+  SsPool<Ss_API_FAILREQ> c_ss_API_FAILREQ;
+  void execAPI_FAILREQ(Signal*);
+  void sendAPI_FAILREQ(Signal*, Uint32 ssId, SectionHandle*);
+  void execAPI_FAILCONF(Signal*);
+  void sendAPI_FAILCONF(Signal*, Uint32 ssId);
 };
+
+
+#undef JAM_FILE_ID
 
 #endif

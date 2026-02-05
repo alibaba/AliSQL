@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2005, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -369,6 +376,7 @@ NdbIndexStat::clean_cache()
 void
 NdbIndexStat::get_cache_info(CacheInfo& info, CacheType type) const
 {
+  NdbMutex_Lock(m_impl.m_query_mutex);
   const NdbIndexStatImpl::Cache* c = 0;
   switch (type) {
   case CacheBuild:
@@ -387,6 +395,7 @@ NdbIndexStat::get_cache_info(CacheInfo& info, CacheType type) const
   info.m_totalBytes = 0;
   info.m_save_time = 0;
   info.m_sort_time = 0;
+  info.m_ref_count = 0;
   while (c != 0)
   {
     info.m_count += 1;
@@ -395,10 +404,12 @@ NdbIndexStat::get_cache_info(CacheInfo& info, CacheType type) const
     info.m_totalBytes += c->m_keyBytes + c->m_valueBytes + c->m_addrBytes;
     info.m_save_time += c->m_save_time;
     info.m_sort_time += c->m_sort_time;
+    info.m_ref_count += c->m_ref_count;
     c = c->m_nextClean;
   }
   // build and query cache have at most one instance
   require(type == CacheClean || info.m_count <= 1);
+  NdbMutex_Unlock(m_impl.m_query_mutex);
 }
 
 // read
@@ -589,7 +600,7 @@ NdbIndexStat::query_stat(const Range& range_f, Stat& stat_f)
   NdbIndexStatImpl::Bound& bound2 =
     *(NdbIndexStatImpl::Bound*)bound2_f.m_impl;
   NdbIndexStatImpl::Range range(bound1, bound2);
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   const uint sz = 8000;
   char buf[sz];
   DBUG_PRINT("index_stat", ("lo: %s", bound1.m_bound.print(buf, sz)));
@@ -625,7 +636,7 @@ NdbIndexStat::get_rir(const Stat& stat_f, double* rir)
     x = 1.0;
   require(rir != 0);
   *rir = x;
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   char buf[100];
   sprintf(buf, "%.2f", *rir);
 #endif
@@ -644,7 +655,7 @@ NdbIndexStat::get_rpk(const Stat& stat_f, Uint32 k, double* rpk)
     x = 1.0;
   require(rpk != 0);
   *rpk = x;
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   char buf[100];
   sprintf(buf, "%.2f", *rpk);
 #endif

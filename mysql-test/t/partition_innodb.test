@@ -79,9 +79,11 @@ DROP TABLE t1;
 --echo #            SELECT is not detected
 --echo #
 
+# we need concurrency of 2 to allow InnoDB intrinsic table (spawned
+# by Optimizer) to proceed.
 SET @old_innodb_thread_concurrency := @@innodb_thread_concurrency;
 SET @old_innodb_thread_sleep_delay := @@innodb_thread_sleep_delay;
-SET GLOBAL innodb_thread_concurrency = 1;
+SET GLOBAL innodb_thread_concurrency = 2;
 
 CREATE TABLE t1
 (user_num BIGINT,
@@ -176,6 +178,7 @@ SELECT * FROM t1;
 --echo # No changes.
 COMMIT;
 DROP TABLE t1;
+SET AUTOCOMMIT= default;
 
 
 --echo #
@@ -337,6 +340,7 @@ UPDATE t1 SET data = data*2 WHERE data = 2;
 #SHOW ENGINE InnoDB STATUS;
 
 SET @@session.tx_isolation = @old_tx_isolation;
+SET autocommit= default;
 
 DROP TABLE t1;
 
@@ -388,8 +392,10 @@ CREATE TABLE t2 (c1 INT, PRIMARY KEY (c1),
                  FOREIGN KEY (c1) REFERENCES t1 (c1)
                  ON DELETE CASCADE)
 ENGINE=INNODB;
---error ER_ROW_IS_REFERENCED
+--error ER_FOREIGN_KEY_ON_PARTITIONED
 ALTER TABLE t1 PARTITION BY HASH(c1) PARTITIONS 5;
+--error ER_FOREIGN_KEY_ON_PARTITIONED
+ALTER TABLE t2 PARTITION BY HASH(c1) PARTITIONS 5;
 --error ER_ROW_IS_REFERENCED
 ALTER TABLE t1 ENGINE=MyISAM;
 DROP TABLE t2;
@@ -400,8 +406,8 @@ DROP TABLE t1;
 #
 create table t1 (a int) engine=innodb partition by hash(a) ;
 # Avg_row_length (col 6) and Data_length (col 7) vary depending
-# on the page size.  Data_free for InnoDB tablespace varies depending on which
-# tests have been run before this one.  create_time(col 12) varies with time
+# on the page size.  Data_free for InnoDB tablespace varies
+# depending on which tests have been run before this one.
 --replace_column 6 # 7 # 10 # 12 #
 show table status like 't1';
 drop table t1;
@@ -413,16 +419,16 @@ create table t1 (a int)
 engine = innodb
 partition by key (a);
 # Avg_row_length (col 6) and Data_length (col 7) vary depending
-# on the page size.  Data_free for InnoDB tablespace varies depending on which
-# tests have been run before this one. create_time(col 12) varies with time
+# on the page size.  Data_free for InnoDB tablespace varies
+# depending on which tests have been run before this one.
 --replace_column 6 # 7 # 10 # 12 #
 show table status;
 insert into t1 values (0), (1), (2), (3);
 analyze table t1;
 # Avg_row_length (col 6) and Data_length (col 7) vary depending
-# on the page size.  Data_free for InnoDB tablespace varies depending on which
-# tests have been run before this one.  create_time(col 12) varies with time
---replace_column 6 # 7 # 10 # 12 #
+# on the page size.  Data_free for InnoDB tablespace varies
+# depending on which tests have been run before this one.
+--replace_column 6 # 7 # 10 # 12 # 13 #
 show table status;
 drop table t1;
 
@@ -430,23 +436,23 @@ create table t1 (a int auto_increment primary key)
 engine = innodb
 partition by key (a);
 # Avg_row_length (col 6) and Data_length (col 7) vary depending
-# on the page size.  Data_free for InnoDB tablespace varies depending on which
-# tests have been run before this one.create_time(col 12) varies with time
+# on the page size.  Data_free for InnoDB tablespace varies
+# depending on which tests have been run before this one.
 --replace_column 6 # 7 # 10 # 12 #
 show table status;
 insert into t1 values (NULL), (NULL), (NULL), (NULL);
 analyze table t1;
 # Avg_row_length (col 6) and Data_length (col 7) vary depending
-# on the page size.  Data_free for InnoDB tablespace varies depending on which
-# tests have been run before this one.create_time(col 12) varies with time
---replace_column 6 # 7 # 10 # 12 #
+# on the page size.  Data_free for InnoDB tablespace varies
+# depending on which tests have been run before this one.
+--replace_column 6 # 7 # 10 # 12 # 13 #
 show table status;
 insert into t1 values (NULL), (NULL), (NULL), (NULL);
 analyze table t1;
 # Avg_row_length (col 6) and Data_length (col 7) vary depending
-# on the page size.  Data_free for InnoDB tablespace varies depending on which
-# tests have been run before this one.create_time(col 12) varies with time
---replace_column 6 # 7 # 10 # 12 #
+# on the page size.  Data_free for InnoDB tablespace varies
+# depending on which tests have been run before this one.
+--replace_column 6 # 7 # 10 # 12 # 13 #
 show table status;
 drop table t1;
 
@@ -654,15 +660,15 @@ DROP TABLE t1;
 --disable_warnings
 DROP TABLE IF EXISTS t1;
 --enable_warnings
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 CREATE TABLE t1 (a INT, b TIMESTAMP DEFAULT '0000-00-00 00:00:00')
   ENGINE=INNODB PARTITION BY LINEAR HASH (a) PARTITIONS 1;
 SET @old_mode = @@sql_mode;
-SET SESSION sql_mode = 'NO_ZERO_DATE';
+SET SESSION sql_mode = '';
 OPTIMIZE TABLE t1;
 SET SESSION sql_mode = @old_mode;
 DROP TABLE t1;
-
+SET sql_mode = default;
 
 --echo #
 --echo # Bug#57985 "ONLINE/FAST ALTER PARTITION can fail and leave the
@@ -693,16 +699,31 @@ FLUSH TABLES t1 FOR EXPORT;
 --echo # List of files after EXPORT (should include a .cfg file for each part).
 --replace_result #p# #P#
 --list_files $MYSQLD_DATADIR/test/ t1*
+--echo # Copying the .cfg and .ibd files as backup
+--copy_file $MYSQLD_DATADIR/test/t1#P#p0.cfg $MYSQLD_DATADIR/test/backup_t1#P#p0.cfg
+--copy_file $MYSQLD_DATADIR/test/t1#P#p0.ibd $MYSQLD_DATADIR/test/backup_t1#P#p0.ibd
+--copy_file $MYSQLD_DATADIR/test/t1#P#p1.cfg $MYSQLD_DATADIR/test/backup_t1#P#p1.cfg
+--copy_file $MYSQLD_DATADIR/test/t1#P#p1.ibd $MYSQLD_DATADIR/test/backup_t1#P#p1.ibd
 UNLOCK TABLES;
 --echo # List of files after UNLOCK (no .cfg files).
 --replace_result #p# #P#
 --list_files $MYSQLD_DATADIR/test/ t1*
---error ER_ILLEGAL_HA
 ALTER TABLE t1 DISCARD TABLESPACE;
---error ER_ILLEGAL_HA
+--echo # List of files after DISCARD (no .cfg/.ibd files).
+--replace_result #p# #P#
+--list_files $MYSQLD_DATADIR/test/ t1*
+--echo # Moving the .cfg and .ibd files back from backup
+--move_file $MYSQLD_DATADIR/test/backup_t1#P#p0.cfg $MYSQLD_DATADIR/test/t1#P#p0.cfg
+--move_file $MYSQLD_DATADIR/test/backup_t1#P#p0.ibd $MYSQLD_DATADIR/test/t1#P#p0.ibd
+--move_file $MYSQLD_DATADIR/test/backup_t1#P#p1.cfg $MYSQLD_DATADIR/test/t1#P#p1.cfg
+--move_file $MYSQLD_DATADIR/test/backup_t1#P#p1.ibd $MYSQLD_DATADIR/test/t1#P#p1.ibd
 ALTER TABLE t1 IMPORT TABLESPACE;
+--echo # List of files after IMPORT (.cfg files still there).
+--replace_result #p# #P#
+--list_files $MYSQLD_DATADIR/test/ t1*
 DROP TABLE t1;
-USE test;
+--echo # List of files after DROP (.cfg files should also be removed).
+--list_files $MYSQLD_DATADIR/test/ t1*
 
 --echo #
 --echo # Bug#13737949: CRASH IN HA_PARTITION::INDEX_INIT
@@ -712,27 +733,29 @@ CREATE TABLE t1
 (a INT,
  b INT,
  PRIMARY KEY (a))
- ENGINE = InnoDB
- PARTITION BY HASH (a) PARTITIONS 3;
- START TRANSACTION WITH CONSISTENT SNAPSHOT;
- --connect (con1, localhost, root,,)
- --echo # con1
- ALTER TABLE t1 ADD INDEX idx1 (b);
- --connection default
- --echo # con default
- --error ER_TABLE_DEF_CHANGED
- SELECT b FROM t1 WHERE b = 0;
- --error ER_TABLE_DEF_CHANGED
- SELECT b FROM t1 WHERE b = 0;
- --disconnect con1
- DROP TABLE t1;
+ENGINE = InnoDB
+PARTITION BY HASH (a) PARTITIONS 3;
+START TRANSACTION WITH CONSISTENT SNAPSHOT;
+--connect (con1, localhost, root,,)
+--echo # con1
+ALTER TABLE t1 ADD INDEX idx1 (b);
+--connection default
+--echo # con default
+--error ER_TABLE_DEF_CHANGED
+SELECT b FROM t1 WHERE b = 0;
+--error ER_TABLE_DEF_CHANGED
+SELECT b FROM t1 WHERE b = 0;
+--error ER_TABLE_DEF_CHANGED
+SELECT * FROM t1;
+--disconnect con1
+DROP TABLE t1;
 
 --echo # Same test without partitioning
 CREATE TABLE t1
 (a INT,
  b INT,
  PRIMARY KEY (a))
- ENGINE = InnoDB;
+ENGINE = InnoDB;
 START TRANSACTION WITH CONSISTENT SNAPSHOT;
 --echo # con1
 --connect (con1, localhost, root,,)
@@ -743,6 +766,8 @@ ALTER TABLE t1 ADD INDEX idx1 (b);
 SELECT b FROM t1 WHERE b = 0;
 --error ER_TABLE_DEF_CHANGED
 SELECT b FROM t1 WHERE b = 0;
+--error ER_TABLE_DEF_CHANGED
+SELECT * FROM t1;
 --disconnect con1
 DROP TABLE t1;
 
@@ -873,10 +898,82 @@ ALTER TABLE t7 CHANGE f1 f1 INT AFTER f4, ALGORITHM=INPLACE;
 
 DROP TABLE t1,t2,t3,t4,t5,t6,t7;
 
+--echo # Coverage tests for Native InnoDB Partitioning
+
+--echo #
+--echo # Test enable/disable keys.
+--echo #
+CREATE TABLE t1 (a int, b int, primary key (a), key (b))
+ENGINE = InnoDB
+PARTITION BY HASH (a) PARTITIONS 3;
+INSERT INTO t1 VALUES (1,1),(2,1),(3,3),(4,1),(5,3),(6,1),(7,1),(8,1),(9,4),
+(10,1),(11,3),(12,1),(13,3),(14,1),(15,1),(16,3),(17,1),(18,1),(19,1),(20,3);
+EXPLAIN SELECT * FROM t1 WHERE b = 4;
+ALTER TABLE t1 DISABLE KEYS;
+INSERT INTO t1 VALUES (21,1),(22,1),(23,3),(24,1);
+EXPLAIN SELECT * FROM t1 WHERE b = 4;
+ALTER TABLE t1 ENABLE KEYS;
+EXPLAIN SELECT * FROM t1 WHERE b = 4;
+DROP TABLE t1;
+
+--echo #
+--echo # Test with different key sizes
+--echo #
+CREATE TABLE t1
+(a int NOT NULL,
+ b int NOT NULL,
+ c varchar(10) NOT NULL,
+ INDEX(a),
+ UNIQUE KEY  (c(5), a, b)
+)
+ENGINE=InnoDB
+PARTITION BY HASH (b) PARTITIONS 2;
+SELECT * FROM t1 WHERE a = '92' AND c = '0.73';
+SELECT * FROM t1 WHERE a = '1224';
+DROP TABLE t1;
+
+--echo #
+--echo # Test with index_merge using PK
+--echo #
+CREATE TABLE t1
+(
+  a int NOT NULL,
+  b int NOT NULL DEFAULT 2,
+  c int NOT NULL DEFAULT 3,
+  PRIMARY KEY (a),
+  INDEX i2(b),
+  INDEX i3(c)
+)
+ENGINE = InnoDB
+PARTITION BY HASH (a) PARTITIONS 3;
+
+INSERT INTO t1 (a) VALUES (1),(2),(3),(4),(5),(6),(7),(8);
+INSERT INTO t1 (a) SELECT a+8 FROM t1;
+
+UPDATE t1 SET b=a,c=a;
+
+ANALYZE TABLE t1;
+
+--replace_column 10 #
+EXPLAIN SELECT * FROM t1 WHERE a=3 OR b=4;
+SELECT * FROM t1 WHERE a=3 OR b=4;
+DROP TABLE t1;
+
+--echo #
+--echo # Test error handling in mysql_admin
+--echo #
+CREATE TABLE t1 (a int)
+PARTITION BY LINEAR HASH (a) PARTITIONS 8;
+LOAD INDEX INTO CACHE t1 PARTITION (ALL);
+ALTER TABLE t1 COALESCE PARTITION 2;
+DROP TABLE t1;
+
+
 --echo #
 --echo # Bug #17299181  CREATE_TIME AND UPDATE_TIME ARE
 --echo #                WRONG FOR PARTITIONED TABLES
 --echo #
+
 
 CREATE TABLE t1 (a int, PRIMARY KEY (a)) ENGINE=InnoDB
 PARTITION BY HASH (a) PARTITIONS 2;
@@ -884,11 +981,24 @@ PARTITION BY HASH (a) PARTITIONS 2;
 SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE
 CREATE_TIME IS NOT NULL AND TABLE_NAME='t1';
 
+INSERT INTO t1 VALUES (1),(2),(3),(4),(5),(6),(7),(8);
+
+ANALYZE TABLE t1;
+
+SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE
+CREATE_TIME IS NOT NULL AND UPDATE_TIME IS NOT NULL
+AND TABLE_NAME='t1';
+
 DROP TABLE t1;
 
 --echo #
 --echo # Bug#20160327 OPTIMIZE TABLE REMOVES THE DATA DIRECTORY IN PARTITIONS
 --echo #
+
+# Create one partition in default in data directory and other in
+# different path
+
+LET $MYSQL_DATA_DIR = `select @@datadir`;
 
 --replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
 eval CREATE TABLE `t1` (
@@ -910,32 +1020,344 @@ OPTIMIZE TABLE t1;
 SHOW CREATE TABLE t1;
 --replace_regex  /#P#/#p#/  /#SP#/#sp#/
 --list_files $MYSQL_TMP_DIR/temp_dir/test
+--replace_regex  /#P#/#p#/  /#SP#/#sp#/
+--list_files $MYSQL_DATA_DIR/test
+
 
 ALTER TABLE t1 OPTIMIZE PARTITION p0;
 --replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
 SHOW CREATE TABLE t1;
 --replace_regex  /#P#/#p#/  /#SP#/#sp#/
 --list_files $MYSQL_TMP_DIR/temp_dir/test
+--replace_regex  /#P#/#p#/  /#SP#/#sp#/
+--list_files $MYSQL_DATA_DIR/test
 
 ALTER TABLE t1 OPTIMIZE PARTITION p1;
 --replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
 SHOW CREATE TABLE t1;
 --replace_regex  /#P#/#p#/  /#SP#/#sp#/
 --list_files $MYSQL_TMP_DIR/temp_dir/test
+--replace_regex  /#P#/#p#/  /#SP#/#sp#/
+--list_files $MYSQL_DATA_DIR/test
+
 
 ALTER TABLE t1 REBUILD PARTITION ALL;
 --replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
 SHOW CREATE TABLE t1;
 --replace_regex  /#P#/#p#/  /#SP#/#sp#/
 --list_files $MYSQL_TMP_DIR/temp_dir/test
+--replace_regex  /#P#/#p#/  /#SP#/#sp#/
+--list_files $MYSQL_DATA_DIR/test
+
 
 ALTER TABLE t1 ADD extracol VARCHAR(32) NULL;
 --replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
 SHOW CREATE TABLE t1;
 --replace_regex  /#P#/#p#/  /#SP#/#sp#/
 --list_files $MYSQL_TMP_DIR/temp_dir/test
+--replace_regex  /#P#/#p#/  /#SP#/#sp#/
+--list_files $MYSQL_DATA_DIR/test
 
 DROP TABLE t1;
 
 --rmdir $MYSQL_TMP_DIR/temp_dir/test
 --rmdir $MYSQL_TMP_DIR/temp_dir
+
+
+#Create one partition in general tablespace and other in different path
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+eval CREATE TABLESPACE ts1 ADD DATAFILE '$MYSQL_TMP_DIR/ts1.ibd' ENGINE=Innodb;
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+eval CREATE TABLE `t1` (
+       `f1` INT(10) UNSIGNED NOT NULL AUTO_INCREMENT,
+       `f2` MEDIUMTEXT NOT NULL,
+       `f3` CHAR(100) NOT NULL,
+       `f4` TINYINT(1) unsigned NOT NULL,
+       PRIMARY KEY (`f1`,`f4`)
+     ) TABLESPACE ts1 ENGINE=InnoDB AUTO_INCREMENT=0 DEFAULT CHARSET=latin1
+     PARTITION BY LIST (`f4`)
+     (PARTITION p0 VALUES IN (0) ENGINE = InnoDB,
+      PARTITION p1 VALUES IN (1) DATA DIRECTORY = '$MYSQL_TMP_DIR/temp_tblspc' ENGINE = InnoDB);
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+SHOW CREATE TABLE t1;
+
+OPTIMIZE TABLE t1;
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+SHOW CREATE TABLE t1;
+
+ALTER TABLE t1 OPTIMIZE PARTITION p0;
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+SHOW CREATE TABLE t1;
+
+ALTER TABLE t1 OPTIMIZE PARTITION p1;
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+SHOW CREATE TABLE t1;
+
+DROP TABLE t1;
+DROP TABLESPACE ts1;
+
+--rmdir $MYSQL_TMP_DIR/temp_tblspc/test
+--rmdir $MYSQL_TMP_DIR/temp_tblspc
+
+#Create partitions in two different tablespaces
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+eval CREATE TABLESPACE ts1 ADD DATAFILE '$MYSQL_TMP_DIR/ts1.ibd' ENGINE=Innodb;
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+eval CREATE TABLESPACE ts2 ADD DATAFILE '$MYSQL_TMP_DIR/ts2.ibd' ENGINE=Innodb;
+
+eval CREATE TABLE `t1` (
+       `f1` INT(10) UNSIGNED NOT NULL AUTO_INCREMENT,
+       `f4` TINYINT(1) unsigned NOT NULL,
+       PRIMARY KEY (`f1`,`f4`)
+     )  ENGINE=InnoDB AUTO_INCREMENT=0 DEFAULT CHARSET=latin1
+     PARTITION BY LIST (`f4`)
+     (PARTITION p0 VALUES IN (0) TABLESPACE ts1 ENGINE = InnoDB,
+      PARTITION p1 VALUES IN (1) TABLESPACE ts2 ENGINE = InnoDB);
+
+SHOW CREATE TABLE t1;
+OPTIMIZE TABLE t1;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+DROP TABLESPACE ts1;
+DROP TABLESPACE ts2;
+
+#Create partitions to use differeent avaliable tablespace options
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+eval CREATE TABLESPACE ts1 ADD DATAFILE '$MYSQL_TMP_DIR/ts1.ibd' ENGINE=Innodb;
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+eval CREATE TABLE `t1` (
+       `f1` INT(10) UNSIGNED NOT NULL AUTO_INCREMENT,
+       `f4` TINYINT(1) unsigned NOT NULL,
+       PRIMARY KEY (`f1`,`f4`)
+     )  ENGINE=InnoDB AUTO_INCREMENT=0 DEFAULT CHARSET=latin1
+     PARTITION BY LIST (`f4`)
+     (PARTITION p0 VALUES IN (0) TABLESPACE ts1 ENGINE = InnoDB,
+      PARTITION p1 VALUES IN (1) TABLESPACE innodb_file_per_table DATA DIRECTORY='$MYSQL_TMP_DIR/temp_dir' ENGINE = InnoDB,
+      PARTITION p2 VALUES IN (2) TABLESPACE innodb_file_per_table ENGINE = InnoDB,
+      PARTITION p3 VALUES IN (3) TABLESPACE innodb_system ENGINE = InnoDB);
+
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+SHOW CREATE TABLE t1;
+
+OPTIMIZE TABLE t1;
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+SHOW CREATE TABLE t1;
+
+DROP TABLE t1;
+DROP TABLESPACE ts1;
+
+--rmdir $MYSQL_TMP_DIR/temp_dir/test
+--rmdir $MYSQL_TMP_DIR/temp_dir
+
+--echo
+--echo Bug #25942592    INNODB: FAILING ASSERTION: INDEX->PAGE != 0XFFFFFFFF
+--echo                   IN BTR0CUR.CC LINE 816
+--echo
+call mtr.add_suppression("Missing .ibd file for table");
+
+#Unnamed Partitioins
+CREATE TABLE t1(c1 INT,c2 CHAR (1),c3 DATE) ENGINE=InnoDB PARTITION BY HASH
+(TO_DAYS(c3)) PARTITIONS 12;
+ALTER TABLE t1 ADD INDEX(c1);
+ALTER TABLE t1 DISCARD PARTITION p2 TABLESPACE;
+--error ER_TABLESPACE_DISCARDED
+SELECT COUNT(*)FROM t1,t1 AS b WHERE t1.c1=''AND t1.c2=b.c1;
+
+#Named partitions
+CREATE TABLE t2 (c1 int,c2 CHAR (1),c3 date,key(c1)) ENGINE=InnoDB
+PARTITION BY RANGE (TO_DAYS(c3))
+(
+PARTITION p0 VALUES LESS THAN (TO_DAYS('1979-01-01')),
+PARTITION p1 VALUES LESS THAN (TO_DAYS('1989-01-01')),
+PARTITION p2 VALUES LESS THAN (TO_DAYS('1999-01-01'))
+);
+
+ALTER TABLE t2 DISCARD PARTITION p2 TABLESPACE;
+--error ER_TABLESPACE_DISCARDED
+SELECT COUNT(*)FROM t2,t2 AS b WHERE t2.c1=''AND t2.c2=b.c1;
+DROP TABLE t1,t2;
+
+--echo
+--echo Bug #26034430	ASSERTION `PART_REC_BUF_PTR' FAILED.
+--echo
+--echo
+
+CREATE TABLE t1 ( a INT NOT NULL, b INT NOT NULL, c INT NOT NULL, PRIMARY KEY(a,b)) PARTITION BY RANGE (a)(PARTITION x1 VALUES LESS THAN (1));
+
+SELECT * FROM t1 WHERE (a = 1 and b = 1 and c = 'b') OR (a > 2) ORDER BY a DESC;
+
+CREATE TABLE t(id INT(11) UNSIGNED NOT NULL AUTO_INCREMENT, dttm DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, msg TEXT,PRIMARY KEY (id,dttm))ENGINE=INNODB DEFAULT CHARSET=UTF8MB4 ROW_FORMAT=DYNAMIC PARTITION BY RANGE COLUMNS(dttm) (PARTITION pf_201612 VALUES LESS THAN ('20170101') ENGINE = INNODB);
+
+SELECT * FROM t WHERE dttm > '2017-01-19' ORDER BY id DESC;
+
+DROP TABLE t,t1;
+
+
+--echo
+--echo Bug #26731025	INNODB PARTITION TABLE WILL LOCK INTO THE NEAR RECORD AS A CONDITION IN THE USE
+--echo
+--echo
+
+--connect (con1,localhost,root,,)
+--connect (con2,localhost,root,,)
+
+--connection default
+
+create table test12 (name varchar(30),age bigint,grade bigint,date datetime
+not null,partition_id int not null,
+  PRIMARY KEY (`name`,`PARTITION_ID`),
+  KEY `IDX_DATE` (`date`,`name`,`partition_id`),
+  KEY `IDX_AGE` (`age`,`partition_id`) ) PARTITION BY RANGE
+COLUMNS(PARTITION_ID)
+(PARTITION p0 VALUES LESS THAN (0) ENGINE = InnoDB,
+ PARTITION P1 VALUES LESS THAN (1) ENGINE = InnoDB,
+ PARTITION P2 VALUES LESS THAN (2) ENGINE = InnoDB,
+ PARTITION P3 VALUES LESS THAN (3) ENGINE = InnoDB,
+ PARTITION P4 VALUES LESS THAN (4) ENGINE = InnoDB,
+ PARTITION P5 VALUES LESS THAN (5) ENGINE = InnoDB,
+ PARTITION P6 VALUES LESS THAN (6) ENGINE = InnoDB,
+ PARTITION P7 VALUES LESS THAN (7) ENGINE = InnoDB,
+ PARTITION P8 VALUES LESS THAN (8) ENGINE = InnoDB,
+ PARTITION P9 VALUES LESS THAN (9) ENGINE = InnoDB);
+
+ insert into test12 values('Tom1',20,1,'2017-08-25
+12:12:12',1),('Tom2',21,1,'2017-08-25 12:12:12',1),('Tom3',23,1,'2017-08-25
+12:12:12',1);
+
+begin;update test12 set grade=3,date=now()  where age=23 and
+partition_id=1;
+
+--connection con1
+begin;update test12 set grade=1,date=now()  where age=21 and
+partition_id=1;
+
+--connection con2
+begin;update test12 set grade=0,date=now()  where age=20 and
+partition_id=1;
+
+--disconnect con1
+--disconnect con2
+
+--connection default
+drop table test12;
+
+--echo
+--echo
+--echo Bug #26390658   RENAMING A PARTITIONED TABLE DOES NOT UPDATE
+--echo			MYSQL.INNODB_TABLE_STATS.
+--echo
+
+CREATE DATABASE test_jfg;
+
+CREATE TABLE test_jfg.test_jfg1 (id int(10) unsigned NOT NULL,PRIMARY
+KEY (id)) ENGINE=InnoDB DEFAULT CHARSET=latin1 ROW_FORMAT=DYNAMIC;
+CREATE TABLE test_jfg.test_jfg2 (id int(10) unsigned NOT NULL,PRIMARY
+KEY (id)) ENGINE=InnoDB DEFAULT CHARSET=latin1 ROW_FORMAT=DYNAMIC
+PARTITION BY RANGE ( id ) (PARTITION p1000 VALUES LESS THAN (1000)
+ENGINE = InnoDB,PARTITION pmax VALUES LESS THAN MAXVALUE ENGINE =
+InnoDB);
+
+--replace_result #p# #P#
+SELECT database_name, table_name FROM mysql.innodb_table_stats WHERE
+database_name = 'test_jfg';
+
+RENAME TABLE test_jfg.test_jfg1 TO test_jfg.test_jfg11;
+RENAME TABLE test_jfg.test_jfg2 TO test_jfg.test_jfg12;
+
+--replace_result #p# #P#
+SELECT database_name, table_name FROM mysql.innodb_table_stats WHERE
+database_name = 'test_jfg';
+
+DROP DATABASE test_jfg;
+
+
+--echo #
+--echo # Bug#27073100: PARTITION UPDATE_TIME NOT CORRECT AFTER RESTART/REBUILD
+--echo #
+
+--echo # Set up.
+
+CREATE TABLE t1 (fld1 INT(11) NOT NULL, fld2 INT(11) NOT NULL,
+fld3 DATE NOT NULL,  fld4 DATE NOT NULL,
+PRIMARY KEY (fld1, fld3),  KEY(fld1)) PARTITION
+BY RANGE (YEAR(fld3))
+(PARTITION p01 VALUES LESS THAN (1985) ENGINE = InnoDB,
+PARTITION p02 VALUES LESS THAN (1986) ENGINE = InnoDB,
+PARTITION p03 VALUES LESS THAN MAXVALUE ENGINE = InnoDB);
+INSERT INTO t1 VALUES('11', '11111', '1984-11-16',
+'2008-11-16'), ('12', '11112', '1985-11-16', '2008-11-16'),
+('13', '11113', '1986-11-16', '2008-11-16');
+
+--echo # Fetch the count of 'update_time' which is not null.
+SELECT TABLE_NAME, COUNT(UPDATE_TIME) FROM INFORMATION_SCHEMA.PARTITIONS
+WHERE TABLE_SCHEMA = 'test' AND TABLE_NAME = 't1' ORDER BY
+PARTITION_ORDINAL_POSITION;
+
+--echo # Rebuild the table.
+ALTER TABLE t1 ENGINE=INNODB;
+
+--echo # After table rebuild, the 'update_time' will be set to NULL.
+--echo # Hence the count would return 0.
+SELECT TABLE_NAME, COUNT(UPDATE_TIME) FROM INFORMATION_SCHEMA.PARTITIONS
+WHERE TABLE_SCHEMA = 'test' AND TABLE_NAME = 't1' ORDER BY
+PARTITION_ORDINAL_POSITION;
+
+--echo # Update the table where partition p02 is updated.
+UPDATE t1 SET fld2 = 71000 WHERE fld1 = 12 AND fld3 = '1985-11-16';
+
+--echo # Without fix, the count for 'update_time' will be 2. After fix,
+--echo # it will be 1 since only partition 'p02' is updated.
+SELECT TABLE_NAME, COUNT(UPDATE_TIME)
+FROM INFORMATION_SCHEMA.PARTITIONS WHERE TABLE_SCHEMA = 'test' AND
+TABLE_NAME = 't1' ORDER BY PARTITION_ORDINAL_POSITION;
+
+DROP TABLE t1;
+
+
+--echo
+--echo BUG#26553164 - INNODB PARTITION TABLE HAS UNEXPECTED ROW LOCK
+--echo
+
+--connect (conn1,localhost,root,,)
+
+--connection default
+
+CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `dt` datetime NOT NULL,
+  `data` varchar(10) DEFAULT NULL,
+  PRIMARY KEY (`id`,`dt`),
+  KEY `idx_dt` (`dt`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1
+/*!50100 PARTITION BY RANGE (to_days(dt))
+(PARTITION p20170218 VALUES LESS THAN (736744) ENGINE = InnoDB,
+ PARTITION p20170219 VALUES LESS THAN (736745) ENGINE = InnoDB,
+ PARTITION pMax VALUES LESS THAN MAXVALUE ENGINE = InnoDB) */;
+
+INSERT INTO t1 VALUES (1, '2018-04-25 10:18:00', '1');
+INSERT INTO t1 VALUES (2, '2018-04-25 10:18:01', '2');
+INSERT INTO t1 VALUES (3, '2018-04-25 10:18:02', '3');
+
+SELECT * FROM t1;
+
+begin;
+UPDATE t1 SET data = '11' WHERE id = 1;
+
+--connection conn1
+begin;
+UPDATE t1 SET data = '22' WHERE id = 2;
+commit;
+
+--disconnect conn1
+
+--connection default
+SELECT * FROM t1;
+
+DROP TABLE t1;

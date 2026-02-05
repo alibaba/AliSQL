@@ -1,13 +1,20 @@
-/* Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -66,12 +73,12 @@ int mi_extra(MI_INFO *info, enum ha_extra_function function, void *extra_arg)
 	(share->options & HA_OPTION_PACK_RECORD))
     {
       error=1;			/* Not possibly if not locked */
-      my_errno=EACCES;
+      set_my_errno(EACCES);
       break;
     }
     if (info->s->file_map) /* Don't use cache if mmap */
       break;
-#if defined(HAVE_MMAP) && defined(HAVE_MADVISE)
+#if defined(HAVE_MADVISE)
     if ((share->options & HA_OPTION_COMPRESS_RECORD))
     {
       mysql_mutex_lock(&share->intern_lock);
@@ -149,6 +156,7 @@ int mi_extra(MI_INFO *info, enum ha_extra_function function, void *extra_arg)
     if (info->s->data_file_type != DYNAMIC_RECORD)
       break;
     /* Remove read/write cache if dynamic rows */
+    // Fall through.
   case HA_EXTRA_NO_CACHE:
     if (info->opt_flag & (READ_CACHE_USED | WRITE_CACHE_USED))
     {
@@ -156,7 +164,7 @@ int mi_extra(MI_INFO *info, enum ha_extra_function function, void *extra_arg)
       error=end_io_cache(&info->rec_cache);
       /* Sergei will insert full text index caching here */
     }
-#if defined(HAVE_MMAP) && defined(HAVE_MADVISE)
+#if defined(HAVE_MADVISE)
     if (info->opt_flag & MEMMAP_USED)
       madvise((char*) share->file_map, share->state.state.data_file_length,
               MADV_RANDOM);
@@ -181,8 +189,8 @@ int mi_extra(MI_INFO *info, enum ha_extra_function function, void *extra_arg)
   case HA_EXTRA_KEYREAD:			/* Read only keys to record */
   case HA_EXTRA_REMEMBER_POS:
     info->opt_flag |= REMEMBER_OLD_POS;
-    bmove((uchar*) info->lastkey+share->base.max_key_length*2,
-	  (uchar*) info->lastkey,info->lastkey_length);
+    memmove((uchar*) info->lastkey + share->base.max_key_length * 2,
+            (uchar*) info->lastkey, info->lastkey_length);
     info->save_update=	info->update;
     info->save_lastinx= info->lastinx;
     info->save_lastpos= info->lastpos;
@@ -198,9 +206,9 @@ int mi_extra(MI_INFO *info, enum ha_extra_function function, void *extra_arg)
   case HA_EXTRA_RESTORE_POS:
     if (info->opt_flag & REMEMBER_OLD_POS)
     {
-      bmove((uchar*) info->lastkey,
-	    (uchar*) info->lastkey+share->base.max_key_length*2,
-	    info->save_lastkey_length);
+      memmove((uchar*) info->lastkey,
+              (uchar*) info->lastkey + share->base.max_key_length * 2,
+              info->save_lastkey_length);
       info->update=	info->save_update | HA_STATE_WRITTEN;
       info->lastinx=	info->save_lastinx;
       info->lastpos=	info->save_lastpos;
@@ -259,67 +267,22 @@ int mi_extra(MI_INFO *info, enum ha_extra_function function, void *extra_arg)
   case HA_EXTRA_PREPARE_FOR_DROP:
     mysql_mutex_lock(&THR_LOCK_myisam);
     share->last_version= 0L;			/* Impossible version */
-#ifdef __WIN__REMOVE_OBSOLETE_WORKAROUND
-    /* Close the isam and data files as Win32 can't drop an open table */
-    mysql_mutex_lock(&share->intern_lock);
-    if (flush_key_blocks(share->key_cache, share->kfile,
-			 (function == HA_EXTRA_FORCE_REOPEN ?
-			  FLUSH_RELEASE : FLUSH_IGNORE_CHANGED)))
-    {
-      error=my_errno;
-      share->changed=1;
-      mi_print_error(info->s, HA_ERR_CRASHED);
-      mi_mark_crashed(info);			/* Fatal error found */
-    }
-    if (info->opt_flag & (READ_CACHE_USED | WRITE_CACHE_USED))
-    {
-      info->opt_flag&= ~(READ_CACHE_USED | WRITE_CACHE_USED);
-      error=end_io_cache(&info->rec_cache);
-    }
-    if (info->lock_type != F_UNLCK && ! info->was_locked)
-    {
-      info->was_locked=info->lock_type;
-      if (mi_lock_database(info,F_UNLCK))
-	error=my_errno;
-      info->lock_type = F_UNLCK;
-    }
-    if (share->kfile >= 0)
-      _mi_decrement_open_count(info);
-    if (share->kfile >= 0 && mysql_file_close(share->kfile, MYF(0)))
-      error=my_errno;
-    {
-      LIST *list_element ;
-      for (list_element=myisam_open_list ;
-	   list_element ;
-	   list_element=list_element->next)
-      {
-	MI_INFO *tmpinfo=(MI_INFO*) list_element->data;
-	if (tmpinfo->s == info->s)
-	{
-          if (tmpinfo->dfile >= 0 && mysql_file_close(tmpinfo->dfile, MYF(0)))
-	    error = my_errno;
-	  tmpinfo->dfile= -1;
-	}
-      }
-    }
-    share->kfile= -1;				/* Files aren't open anymore */
-    mysql_mutex_unlock(&share->intern_lock);
-#endif
     mysql_mutex_unlock(&THR_LOCK_myisam);
     break;
   case HA_EXTRA_FLUSH:
     if (!share->temporary)
-      flush_key_blocks(share->key_cache, share->kfile, FLUSH_KEEP);
-#ifdef HAVE_PWRITE
+      flush_key_blocks(share->key_cache, keycache_thread_var(),
+                       share->kfile, FLUSH_KEEP);
+#ifndef _WIN32
     _mi_decrement_open_count(info);
 #endif
     if (share->not_flushed)
     {
       share->not_flushed=0;
       if (mysql_file_sync(share->kfile, MYF(0)))
-	error= my_errno;
+	error= my_errno();
       if (mysql_file_sync(info->dfile, MYF(0)))
-	error= my_errno;
+	error= my_errno();
       if (error)
       {
 	share->changed=1;
@@ -348,7 +311,6 @@ int mi_extra(MI_INFO *info, enum ha_extra_function function, void *extra_arg)
     mi_extra_keyflag(info, function);
     break;
   case HA_EXTRA_MMAP:
-#ifdef HAVE_MMAP
     mysql_mutex_lock(&share->intern_lock);
     /*
       Memory map the data file if it is not already mapped. It is safe
@@ -362,11 +324,11 @@ int mi_extra(MI_INFO *info, enum ha_extra_function function, void *extra_arg)
       if (mi_dynmap_file(info, share->state.state.data_file_length))
       {
         DBUG_PRINT("warning",("mmap failed: errno: %d",errno));
-        error= my_errno= errno;
+        error= errno;
+        set_my_errno(error);
       }
     }
     mysql_mutex_unlock(&share->intern_lock);
-#endif
     break;
   case HA_EXTRA_MARK_AS_LOG_TABLE:
     mysql_mutex_lock(&share->intern_lock);
@@ -436,7 +398,7 @@ int mi_reset(MI_INFO *info)
   }
   if (share->base.blobs)
     mi_alloc_rec_buff(info, -1, &info->rec_buff);
-#if defined(HAVE_MMAP) && defined(HAVE_MADVISE)
+#if defined(HAVE_MADVISE)
   if (info->opt_flag & MEMMAP_USED)
     madvise((char*) share->file_map, share->state.state.data_file_length,
             MADV_RANDOM);

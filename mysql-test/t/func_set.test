@@ -1,3 +1,4 @@
+
 #
 # Testing if SET and similar functions
 #
@@ -80,7 +81,7 @@ SELECT INTERVAL(0.0, CAST(DATE(NULL) AS DECIMAL), CAST(DATE(NULL) AS DECIMAL),
 drop table if exists t1;
 --enable_warnings
 create table t1 (f1 set('test1','test2','test3') character set utf8 default null)
-engine=myisam default charset=latin1;
+default charset=latin1;
 insert into t1 values (''),(null),(null),(''),(''),('');
 select find_in_set(f1,f1) as a from t1,(select find_in_set(f1,f1) as b from t1) a;
 drop table t1;
@@ -90,7 +91,7 @@ drop table t1;
 CREATE TABLE t1( a SET('a', 'b', 'c') );
 CREATE TABLE t2( a SET('a', 'b', 'c') );
 
-INSERT INTO t1 VALUES ('d');
+INSERT IGNORE INTO t1 VALUES ('d');
 INSERT INTO t2 VALUES ('');
 
 SELECT CONVERT( a USING latin1 ) FROM t1;
@@ -161,3 +162,9 @@ trim( both(-8388607)
           )
     )
 ;
+
+--echo # Bug#21547779 Assertion failed: select_lex->leaf_table_count == 0
+
+CREATE TABLE t(a INTEGER) engine=innodb;
+SELECT 1 IN (SELECT MAKE_SET(-1, 1, (SELECT 1 FROM t)) FROM t);
+DROP TABLE t;

@@ -1,15 +1,22 @@
 /*
-   Copyright (C) 2005, 2006, 2008 MySQL AB, 2009 Sun Microsystems, Inc.
+   Copyright (c) 2005, 2021, Oracle and/or its affiliates.
     All rights reserved. Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -104,7 +111,16 @@ public:
     HaveSysTables = 4244, // create error if all sys tables exist
     NoSysEvents = 4710,
     BadSysEvents = BadSysTables,
-    HaveSysEvents = 746
+    HaveSysEvents = 746,
+    /*
+     * Following are for mysqld.  Most are consumed by mysqld itself
+     * and should therefore not be seen by clients.
+     */
+    MyNotAllow = 4721,    // stats thread not open for requests
+    MyNotFound = 4722,    // stats entry unexpectedly not found
+    MyHasError = 4723,    // request ignored due to recent error
+    MyAbortReq = 4724,    // request aborted by stats thread
+    AlienUpdate = 4725    // somebody else messed with stats
   };
 
   /*
@@ -180,6 +196,7 @@ public:
     Uint32 m_totalBytes;  // total bytes memory used
     Uint64 m_save_time;   // microseconds to read stats into cache
     Uint64 m_sort_time;   // microseconds to sort the cache
+    Uint32 m_ref_count;   // in use by query_stat
     // end v4 fields
   };
 

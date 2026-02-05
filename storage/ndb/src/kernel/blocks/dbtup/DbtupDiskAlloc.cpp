@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2005, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -18,14 +25,28 @@
 #define DBTUP_C
 #define DBTUP_DISK_ALLOC_CPP
 #include "Dbtup.hpp"
+#include <signaldata/LgmanContinueB.hpp>
+
+#define JAM_FILE_ID 426
+
 
 static
 NdbOut&
 operator<<(NdbOut& out, const Ptr<Dbtup::Page> & ptr)
 {
   out << "[ Page: ptr.i: " << ptr.i 
-      << " [ m_file_no: " << ptr.p->m_file_no
-      << " m_page_no: " << ptr.p->m_page_no << "]"
+      << " ["
+      << " m_m_page_lsn_hi: " << ptr.p->m_page_header.m_page_lsn_hi
+      << " m_m_page_lsn_lo: " << ptr.p->m_page_header.m_page_lsn_lo
+      << " m_page_type: " << ptr.p->m_page_header.m_page_type
+      << " m_file_no: " << ptr.p->m_file_no
+      << " m_page_no: " << ptr.p->m_page_no
+      << " m_table_id: " << ptr.p->m_table_id
+      << " m_fragment_id: " << ptr.p->m_fragment_id
+      << " m_extent_no: " << ptr.p->m_extent_no
+      << " m_extent_info_ptr: " << ptr.p->m_extent_info_ptr
+      << " m_restart_seq: " << ptr.p->m_restart_seq
+      << "]"
       << " list_index: " << ptr.p->list_index 
       << " free_space: " << ptr.p->free_space
       << " uncommitted_used_space: " << ptr.p->uncommitted_used_space
@@ -57,6 +78,12 @@ operator<<(NdbOut& out, const Ptr<Dbtup::Extent_info> & ptr)
   out << "[ Extent_info: ptr.i " << ptr.i
       << " " << ptr.p->m_key
       << " m_first_page_no: " << ptr.p->m_first_page_no
+      << " m_empty_page_no: " << ptr.p->m_empty_page_no
+      << " m_key: ["
+      << " m_file_no=" << ptr.p->m_key.m_file_no
+      << " m_page_no=" << ptr.p->m_key.m_page_no
+      << " m_page_idx=" << ptr.p->m_key.m_page_idx
+      << " ]"
       << " m_free_space: " << ptr.p->m_free_space
       << " m_free_matrix_pos: " << ptr.p->m_free_matrix_pos
       << " m_free_page_count: [";
@@ -262,20 +289,21 @@ Dbtup::Disk_alloc_info::calc_extent_pos(const Extent_info* extP) const
 }
 
 void
-Dbtup::update_extent_pos(Disk_alloc_info& alloc, 
+Dbtup::update_extent_pos(EmulatedJamBuffer* jamBuf,
+                         Disk_alloc_info& alloc, 
                          Ptr<Extent_info> extentPtr,
                          Int32 delta)
 {
   if (delta < 0)
   {
-    jam();
+    thrjam(jamBuf);
     Uint32 sub = Uint32(- delta);
     ddassert(extentPtr.p->m_free_space >= sub);
     extentPtr.p->m_free_space -= sub;
   }
   else
   {
-    jam();
+    thrjam(jamBuf);
     extentPtr.p->m_free_space += delta;
     ndbassert(Uint32(delta) <= alloc.calc_page_free_space(0));
   }
@@ -306,11 +334,11 @@ Dbtup::update_extent_pos(Disk_alloc_info& alloc,
     Uint32 pos = alloc.calc_extent_pos(extentPtr.p);
     if (old != pos)
     {
-      jam();
+      thrjam(jamBuf);
       Local_extent_info_list old_list(c_extent_pool, alloc.m_free_extents[old]);
       Local_extent_info_list new_list(c_extent_pool, alloc.m_free_extents[pos]);
       old_list.remove(extentPtr);
-      new_list.add(extentPtr);
+      new_list.addFirst(extentPtr);
       extentPtr.p->m_free_matrix_pos= pos;
     }
   }
@@ -394,7 +422,7 @@ Dbtup::restart_setup_page(Disk_alloc_info& alloc, PagePtr pagePtr,
   {
     jam();
     Uint32 delta = (real_free-estimated);
-    update_extent_pos(alloc, extentPtr, delta);
+    update_extent_pos(jamBuffer(), alloc, extentPtr, delta);
   }
 }
 
@@ -436,7 +464,7 @@ Dbtup::disk_page_prealloc(Signal* signal,
   {
     if (!alloc.m_dirty_pages[i].isEmpty())
     {
-      ptrI= alloc.m_dirty_pages[i].firstItem;
+      ptrI= alloc.m_dirty_pages[i].getFirst();
       Ptr<GlobalPage> gpage;
       m_global_page_pool.getPtr(gpage, ptrI);
       
@@ -462,7 +490,7 @@ Dbtup::disk_page_prealloc(Signal* signal,
   {
     if (!alloc.m_page_requests[i].isEmpty())
     {
-      ptrI= alloc.m_page_requests[i].firstItem;
+      ptrI= alloc.m_page_requests[i].getFirst();
       Ptr<Page_request> req;
       c_page_request_pool.getPtr(req, ptrI);
 
@@ -520,7 +548,7 @@ Dbtup::disk_page_prealloc(Signal* signal,
       Uint32 pos= alloc.calc_extent_pos(ext.p);
       ext.p->m_free_matrix_pos = pos;
       Local_extent_info_list list(c_extent_pool, alloc.m_free_extents[pos]);
-      list.add(ext);
+      list.addFirst(ext);
     }
   }
   
@@ -544,7 +572,8 @@ Dbtup::disk_page_prealloc(Signal* signal,
       Uint32 logfile_group_id = fragPtr.p->m_logfile_group_id;
 
       err = c_lgman->alloc_log_space(logfile_group_id,
-				     sizeof(Disk_undo::AllocExtent)>>2);
+				     sizeof(Disk_undo::AllocExtent)>>2,
+                                     jamBuffer());
       jamEntry();
       if(unlikely(err))
       {
@@ -559,7 +588,8 @@ Dbtup::disk_page_prealloc(Signal* signal,
 	err= 2;
 #if NOT_YET_UNDO_ALLOC_EXTENT
 	c_lgman->free_log_space(logfile_group_id, 
-				sizeof(Disk_undo::AllocExtent)>>2);
+				sizeof(Disk_undo::AllocExtent)>>2,
+                                jamBuffer());
 #endif
 	c_page_request_pool.release(req);
 	ndbout_c("no free extent info");
@@ -571,7 +601,8 @@ Dbtup::disk_page_prealloc(Signal* signal,
 	jamEntry();
 #if NOT_YET_UNDO_ALLOC_EXTENT
 	c_lgman->free_log_space(logfile_group_id, 
-				sizeof(Disk_undo::AllocExtent)>>2);
+				sizeof(Disk_undo::AllocExtent)>>2,
+                                jamBuffer());
 #endif
 	c_extent_pool.release(ext);
 	c_page_request_pool.release(req);
@@ -598,6 +629,9 @@ Dbtup::disk_page_prealloc(Signal* signal,
 	  case 0:
 	    break;
 	  case -1:
+            g_eventLogger->warning("Out of space in RG_DISK_OPERATIONS"
+                                   " resource, increase config parameter"
+                                   " GlobalSharedMemory");
 	    ndbrequire("NOT YET IMPLEMENTED" == 0);
 	    break;
 	  default:
@@ -620,7 +654,7 @@ Dbtup::disk_page_prealloc(Signal* signal,
       c_extent_hash.add(ext);
 
       Local_fragment_extent_list list1(c_extent_pool, alloc.m_extent_list);
-      list1.add(ext);
+      list1.addFirst(ext);
     }      
     
     alloc.m_curr_extent_info_ptr_i= ext.i;
@@ -657,7 +691,7 @@ Dbtup::disk_page_prealloc(Signal* signal,
     ext.p->m_free_page_count[pageBits]--;
     ext.p->m_free_page_count[newPageBits]++;
   }
-  update_extent_pos(alloc, ext, -Int32(sz));
+  update_extent_pos(jamBuffer(), alloc, ext, -Int32(sz));
 
   // And put page request in correct free list
   idx= alloc.calc_page_free_bits(new_size);
@@ -665,7 +699,7 @@ Dbtup::disk_page_prealloc(Signal* signal,
     Local_page_request_list list(c_page_request_pool, 
 				 alloc.m_page_requests[idx]);
     
-    list.add(req);
+    list.addLast(req);
   }
   req.p->m_list_index= idx;
   req.p->m_extent_info_ptr= ext.i;
@@ -695,7 +729,6 @@ Dbtup::disk_page_prealloc(Signal* signal,
   
   Page_cache_client pgman(this, c_pgman);
   int res= pgman.get_page(signal, preq, flags);
-  m_pgman_ptr = pgman.m_ptr;
   jamEntry();
   switch(res)
   {
@@ -738,7 +771,7 @@ Dbtup::disk_page_prealloc_dirty_page(Disk_alloc_info & alloc,
   }
 
   pagePtr.p->uncommitted_used_space = used;
-  update_extent_pos(alloc, extentPtr, -Int32(sz));
+  update_extent_pos(jamBuffer(), alloc, extentPtr, -Int32(sz));
 }
 
 
@@ -767,7 +800,7 @@ Dbtup::disk_page_prealloc_transit_page(Disk_alloc_info& alloc,
   }
 
   req.p->m_uncommitted_used_space = used;
-  update_extent_pos(alloc, extentPtr, -Int32(sz));
+  update_extent_pos(jamBuffer(), alloc, extentPtr, -Int32(sz));
 }
 
 void
@@ -815,7 +848,7 @@ Dbtup::disk_page_prealloc_callback(Signal* signal,
     ddassert(extentPtr.p->m_free_page_count[idx]);
     extentPtr.p->m_free_page_count[idx]--;
     extentPtr.p->m_free_page_count[real_idx]++;
-    update_extent_pos(alloc, extentPtr, 0);
+    update_extent_pos(jamBuffer(), alloc, extentPtr, 0);
   }
 
   {
@@ -825,7 +858,7 @@ Dbtup::disk_page_prealloc_callback(Signal* signal,
     pagePtr.p->list_index = real_idx;
     ArrayPool<Page> *cheat_pool= (ArrayPool<Page>*)&m_global_page_pool;
     LocalDLList<Page> list(* cheat_pool, alloc.m_dirty_pages[real_idx]);
-    list.add(pagePtr);
+    list.addFirst(pagePtr);
   }
 
   {
@@ -845,6 +878,16 @@ Dbtup::disk_page_move_dirty_page(Disk_alloc_info& alloc,
                                  Uint32 old_idx,
                                  Uint32 new_idx)
 {
+  if (extentPtr.p->m_free_page_count[old_idx] == 0)
+  {
+    // Additional printouts when following ddassert fails.
+    // The ddassert prints the alloc argument.
+    ndbout << "Dbtup::disk_page_move_dirty_page" << endl;
+    ndbout << "  extentPtr: " << extentPtr << endl;
+    ndbout << "  pagePtr: " << pagePtr << endl;
+    ndbout << "  old_idx: " << old_idx << endl;
+    ndbout << "  new_idx: " << new_idx << endl;
+  }
   ddassert(extentPtr.p->m_free_page_count[old_idx]);
   extentPtr.p->m_free_page_count[old_idx]--;
   extentPtr.p->m_free_page_count[new_idx]++;
@@ -853,7 +896,7 @@ Dbtup::disk_page_move_dirty_page(Disk_alloc_info& alloc,
   LocalDLList<Page> new_list(*pool, alloc.m_dirty_pages[new_idx]);
   LocalDLList<Page> old_list(*pool, alloc.m_dirty_pages[old_idx]);
   old_list.remove(pagePtr);
-  new_list.add(pagePtr);
+  new_list.addFirst(pagePtr);
   pagePtr.p->list_index = new_idx;
 }
 
@@ -867,7 +910,7 @@ Dbtup::disk_page_move_page_request(Disk_alloc_info& alloc,
   Local_page_request_list old_list(c_page_request_pool, lists[old_idx]);
   Local_page_request_list new_list(c_page_request_pool, lists[new_idx]);
   old_list.remove(req);
-  new_list.add(req);
+  new_list.addLast(req);
 
   ddassert(extentPtr.p->m_free_page_count[old_idx]);
   extentPtr.p->m_free_page_count[old_idx]--;
@@ -909,14 +952,8 @@ Dbtup::disk_page_prealloc_initial_callback(Signal*signal,
   Ptr<Extent_info> extentPtr;
   c_extent_pool.getPtr(extentPtr, req.p->m_extent_info_ptr);
 
-  if (tabPtr.p->m_attributes[DD].m_no_of_varsize == 0)
-  {
-    convertThPage((Fix_page*)pagePtr.p, tabPtr.p, DD);
-  }
-  else
-  {
-    abort();
-  }
+  ndbrequire(tabPtr.p->m_attributes[DD].m_no_of_varsize == 0);
+  convertThPage((Fix_page*)pagePtr.p, tabPtr.p, DD);
 
   pagePtr.p->m_page_no= req.p->m_key.m_page_no;
   pagePtr.p->m_file_no= req.p->m_key.m_file_no;
@@ -944,7 +981,7 @@ Dbtup::disk_page_prealloc_initial_callback(Signal*signal,
      */
     ArrayPool<Page> *cheat_pool= (ArrayPool<Page>*)&m_global_page_pool;
     LocalDLList<Page> list(* cheat_pool, alloc.m_dirty_pages[idx]);
-    list.add(pagePtr);
+    list.addFirst(pagePtr);
   }
 
   {
@@ -1019,7 +1056,7 @@ Dbtup::disk_page_set_dirty(PagePtr pagePtr)
   pagePtr.p->list_index = idx;
   ArrayPool<Page> *pool= (ArrayPool<Page>*)&m_global_page_pool;
   LocalDLList<Page> list(*pool, alloc.m_dirty_pages[idx]);
-  list.add(pagePtr);
+  list.addFirst(pagePtr);
   
   // Make sure no one will allocate it...
   tsman.unmap_page(&key, MAX_FREE_LIST - 1);
@@ -1080,7 +1117,7 @@ Dbtup::disk_page_unmap_callback(Uint32 when,
     LocalDLList<Page> list(*pool, alloc.m_dirty_pages[idx]);
     LocalDLList<Page> list2(*pool, alloc.m_unmap_pages);
     list.remove(pagePtr);
-    list2.add(pagePtr);
+    list2.addFirst(pagePtr);
 
     if (dirty_count == 0)
     {
@@ -1235,7 +1272,7 @@ Dbtup::disk_page_free(Signal *signal,
     disk_page_move_dirty_page(alloc, extentPtr, pagePtr, old_idx, new_idx);
   }
   
-  update_extent_pos(alloc, extentPtr, sz);
+  update_extent_pos(jamBuffer(), alloc, extentPtr, sz);
 #if NOT_YET_FREE_EXTENT
   if (check_free(extentPtr.p) == 0)
   {
@@ -1260,7 +1297,6 @@ Dbtup::disk_page_abort_prealloc(Signal *signal, Fragrecord* fragPtrP,
 
   Page_cache_client pgman(this, c_pgman);
   int res= pgman.get_page(signal, req, flags);
-  m_pgman_ptr = pgman.m_ptr;
   jamEntry();
   switch(res)
   {
@@ -1337,7 +1373,7 @@ Dbtup::disk_page_abort_prealloc_callback_1(Signal* signal,
     disk_page_move_dirty_page(alloc, extentPtr, pagePtr, idx, new_idx);
   }
   
-  update_extent_pos(alloc, extentPtr, sz);
+  update_extent_pos(jamBuffer(), alloc, extentPtr, sz);
 #if NOT_YET_FREE_EXTENT
   if (check_free(extentPtr.p) == 0)
   {
@@ -1475,8 +1511,6 @@ Dbtup::disk_page_undo_free(Page* page, const Local_key* key,
   return lsn;
 }
   
-#include <signaldata/LgmanContinueB.hpp>
-
 #define DBG_UNDO 0
 
 void
@@ -1546,7 +1580,7 @@ Dbtup::disk_restart_undo(Signal* signal, Uint64 lsn,
     Ptr<Tablerec> tabPtr;
     tabPtr.i= rec->m_table;
     ptrCheckGuard(tabPtr, cnoOfTablerec, tablerec);
-    for(Uint32 i = 0; i<MAX_FRAG_PER_NODE; i++)
+    for(Uint32 i = 0; i<NDB_ARRAY_SIZE(tabPtr.p->fragrec); i++)
       if (tabPtr.p->fragrec[i] != RNIL)
 	disk_restart_undo_lcp(tabPtr.i, tabPtr.p->fragid[i], 
 			      Fragrecord::UC_CREATE, 0);
@@ -1566,7 +1600,7 @@ Dbtup::disk_restart_undo(Signal* signal, Uint64 lsn,
     Ptr<Tablerec> tabPtr;
     tabPtr.i= rec->m_table;
     ptrCheckGuard(tabPtr, cnoOfTablerec, tablerec);
-    for(Uint32 i = 0; i<MAX_FRAG_PER_NODE; i++)
+    for(Uint32 i = 0; i<NDB_ARRAY_SIZE(tabPtr.p->fragrec); i++)
       if (tabPtr.p->fragrec[i] != RNIL)
 	disk_restart_undo_lcp(tabPtr.i, tabPtr.p->fragid[i], 
 			      Fragrecord::UC_CREATE, 0);
@@ -1601,7 +1635,6 @@ Dbtup::disk_restart_undo(Signal* signal, Uint64 lsn,
   int flags = 0;
   Page_cache_client pgman(this, c_pgman);
   int res= pgman.get_page(signal, preq, flags);
-  m_pgman_ptr = pgman.m_ptr;
   jamEntry();
   switch(res)
   {
@@ -1616,10 +1649,12 @@ Dbtup::disk_restart_undo(Signal* signal, Uint64 lsn,
 }
 
 void
-Dbtup::disk_restart_undo_next(Signal* signal)
+Dbtup::disk_restart_undo_next(Signal* signal, Uint32 applied)
 {
   signal->theData[0] = LgmanContinueB::EXECUTE_UNDO_RECORD;
-  sendSignal(LGMAN_REF, GSN_CONTINUEB, signal, 1, JBB);
+  /* Flag indicating whether UNDO log was applied. */
+  signal->theData[1] = applied;
+  sendSignal(LGMAN_REF, GSN_CONTINUEB, signal, 2, JBB);
 }
 
 void
@@ -1770,7 +1805,9 @@ Dbtup::disk_restart_undo_callback(Signal* signal,
 //  key.m_file_no = pagePtr.p->m_file_no;
   
   Uint64 lsn = 0;
-  lsn += pagePtr.p->m_page_header.m_page_lsn_hi; lsn <<= 32;
+  Uint32 applied = 0;
+  lsn += pagePtr.p->m_page_header.m_page_lsn_hi;
+  lsn <<= 32;
   lsn += pagePtr.p->m_page_header.m_page_lsn_lo;
 
   undo->m_page_ptr = pagePtr;
@@ -1785,6 +1822,7 @@ Dbtup::disk_restart_undo_callback(Signal* signal,
     }
     
     update = true;
+    applied = 1;
     if (DBG_UNDO)
       ndbout_c("applying %lld", undo->m_lsn);
     /**
@@ -1827,7 +1865,7 @@ Dbtup::disk_restart_undo_callback(Signal* signal,
 	   << " tab: " << tableId << endl;
   }
 
-  disk_restart_undo_next(signal);
+  disk_restart_undo_next(signal, applied);
 }
 
 void
@@ -1879,8 +1917,17 @@ Dbtup::disk_restart_undo_free(Apply_undo* undo)
   {
     abort();
   }  
-  
-  ndbrequire(idx == undo->m_key.m_page_idx);
+
+  if (idx != undo->m_key.m_page_idx)
+  {
+    Uint64 lsn = undo->m_lsn;
+    jam();
+    jamLine(lsn & 0xFFFF);
+    jamLine((lsn >> 16) & 0xFFFF);
+    jamLine((lsn >> 32) & 0xFFFF);
+    jamLine((lsn >> 48) & 0xFFFF);
+    ndbrequire(false);
+  }
   const Disk_undo::Free *free = (const Disk_undo::Free*)undo->m_ptr;
   const Uint32* src= free->m_data;
   memcpy(ptr, src, 4 * len);
@@ -1912,7 +1959,8 @@ Dbtup::disk_restart_undo_page_bits(Signal* signal, Apply_undo* undo)
 }
 
 int
-Dbtup::disk_restart_alloc_extent(Uint32 tableId, Uint32 fragId, 
+Dbtup::disk_restart_alloc_extent(EmulatedJamBuffer* jamBuf, 
+                                 Uint32 tableId, Uint32 fragId, 
 				 const Local_key* key, Uint32 pages)
 {
   TablerecPtr tabPtr;
@@ -1925,11 +1973,11 @@ Dbtup::disk_restart_alloc_extent(Uint32 tableId, Uint32 fragId,
 
     if (!fragPtr.isNull())
     {
-      jam();
+      thrjam(jamBuf);
 
       if (fragPtr.p->m_undo_complete & Fragrecord::UC_CREATE)
       {
-        jam();
+        thrjam(jamBuf);
         return -1;
       }
 
@@ -1949,13 +1997,13 @@ Dbtup::disk_restart_alloc_extent(Uint32 tableId, Uint32 fragId,
       
       if (alloc.m_curr_extent_info_ptr_i != RNIL)
       {
-	jam();
+	thrjam(jamBuf);
 	Ptr<Extent_info> old;
 	c_extent_pool.getPtr(old, alloc.m_curr_extent_info_ptr_i);
 	ndbassert(old.p->m_free_matrix_pos == RNIL);
 	Uint32 pos= alloc.calc_extent_pos(old.p);
 	Local_extent_info_list new_list(c_extent_pool, alloc.m_free_extents[pos]);
-	new_list.add(old);
+        new_list.addFirst(old);
 	old.p->m_free_matrix_pos= pos;
       }
       
@@ -1964,7 +2012,7 @@ Dbtup::disk_restart_alloc_extent(Uint32 tableId, Uint32 fragId,
       c_extent_hash.add(ext);
 
       Local_fragment_extent_list list1(c_extent_pool, alloc.m_extent_list);
-      list1.add(ext);
+      list1.addFirst(ext);
       return 0;
     }
   }
@@ -1973,17 +2021,18 @@ Dbtup::disk_restart_alloc_extent(Uint32 tableId, Uint32 fragId,
 }
 
 void
-Dbtup::disk_restart_page_bits(Uint32 tableId, Uint32 fragId,
+Dbtup::disk_restart_page_bits(EmulatedJamBuffer* jamBuf, 
+                              Uint32 tableId, Uint32 fragId,
 			      const Local_key* key, Uint32 bits)
 {
-  jam();
+  thrjam(jamBuf);
   TablerecPtr tabPtr;
   FragrecordPtr fragPtr;
   tabPtr.i = tableId;
   ptrCheckGuard(tabPtr, cnoOfTablerec, tablerec);
   if (tabPtr.p->tableStatus == DEFINED && tabPtr.p->m_no_of_disk_attributes)
   {
-    jam();
+    thrjam(jamBuf);
     getFragmentrec(fragPtr, fragId, tabPtr.p);
     Disk_alloc_info& alloc= fragPtr.p->m_disk_alloc_info;
     
@@ -1993,7 +2042,8 @@ Dbtup::disk_restart_page_bits(Uint32 tableId, Uint32 fragId,
     Uint32 size= alloc.calc_page_free_space(bits);  
     
     ext.p->m_free_page_count[bits]++;
-    update_extent_pos(alloc, ext, size); // actually only to update free_space
+    // actually only to update free_space
+    update_extent_pos(jamBuf, alloc, ext, size);
     ndbassert(ext.p->m_free_matrix_pos == RNIL);
   }
 }

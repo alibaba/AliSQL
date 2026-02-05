@@ -1,13 +1,20 @@
-/* Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2012, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -63,7 +70,8 @@ bool Table_cache::init()
   if (my_hash_init(&m_cache, &my_charset_bin,
                    table_cache_size_per_instance, 0, 0,
                    table_cache_key, (my_hash_free_key) table_cache_free_entry,
-                   0))
+                   0,
+                   PSI_INSTRUMENT_ME))
   {
     mysql_mutex_destroy(&m_lock);
     return true;
@@ -123,9 +131,9 @@ void Table_cache::check_unused()
     while ((entry= it++))
     {
       /* We must not have TABLEs in the free list that have their file closed. */
-      DBUG_ASSERT(entry->db_stat && entry->file);
+      assert(entry->db_stat && entry->file);
       /* Merge children should be detached from a merge parent */
-      DBUG_ASSERT(! entry->file->extra(HA_EXTRA_IS_ATTACHED_CHILDREN));
+      assert(! entry->file->extra(HA_EXTRA_IS_ATTACHED_CHILDREN));
 
       if (entry->in_use)
         DBUG_PRINT("error",("Used table is in share's list of unused tables"));
@@ -161,7 +169,7 @@ void Table_cache::free_all_unused_tables()
 }
 
 
-#ifndef DBUG_OFF
+#ifndef NDEBUG
 /**
   Print debug information for the contents of the table cache.
 */
@@ -182,9 +190,9 @@ void Table_cache::print_tables()
     TABLE *entry;
     while ((entry= it++))
     {
-      printf("%-14.14s %-32s%6ld%8ld%6d  %s\n",
+      printf("%-14.14s %-32s%6ld%8u%6d  %s\n",
              entry->s->db.str, entry->s->table_name.str, entry->s->version,
-             entry->in_use->thread_id, entry->db_stat ? 1 : 0,
+             entry->in_use->thread_id(), entry->db_stat ? 1 : 0,
              lock_descriptions[(int)entry->reginfo.lock_type]);
     }
     it.init(el->free_tables);
@@ -359,9 +367,9 @@ void Table_cache_manager::free_table(THD *thd,
       Table_cache_element::TABLE_list::Iterator it(cache_el[i]->free_tables);
       TABLE *table;
 
-#ifndef DBUG_OFF
+#ifndef NDEBUG
       if (remove_type == TDC_RT_REMOVE_ALL)
-        DBUG_ASSERT(cache_el[i]->used_tables.is_empty());
+        assert(cache_el[i]->used_tables.is_empty());
       else if (remove_type == TDC_RT_REMOVE_NOT_OWN ||
                remove_type == TDC_RT_REMOVE_NOT_OWN_KEEP_SHARE)
       {
@@ -369,7 +377,7 @@ void Table_cache_manager::free_table(THD *thd,
         while ((table= it2++))
         {
           if (table->in_use != thd)
-            DBUG_ASSERT(0);
+            assert(0);
         }
       }
 #endif
@@ -395,7 +403,7 @@ void Table_cache_manager::free_all_unused_tables()
 }
 
 
-#ifndef DBUG_OFF
+#ifndef NDEBUG
 /**
   Print debug information for the contents of all table cache instances.
 */

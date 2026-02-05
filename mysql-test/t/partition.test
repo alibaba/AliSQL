@@ -9,6 +9,10 @@
 #                    - Minor cleanup
 #
 --source include/have_partition.inc
+--source include/no_valgrind_without_big.inc
+
+# This test contains various subtests for MyISAM
+--source include/have_myisam.inc
 
 --disable_warnings
 drop table if exists t1, t2;
@@ -91,9 +95,9 @@ DROP TABLE t1;
 --echo # Bug#59503: explain extended crash in get_mm_leaf
 --echo #
 CREATE TABLE t1 (a VARCHAR(51) CHARACTER SET latin1)
-ENGINE=MyISAM
 PARTITION BY KEY (a) PARTITIONS 1;
 INSERT INTO t1 VALUES ('a'),('b'),('c');
+analyze table t1;
 EXPLAIN EXTENDED SELECT 1 FROM t1 WHERE a > 1;
 DROP TABLE t1;
 
@@ -237,6 +241,7 @@ INSERT INTO t1 VALUES ('2009-09-21 17:31:42', 'pmax');
 
 SELECT * FROM t1;
 SELECT * FROM t1 where a between '2007-01-01' and '2007-08-01';
+analyze table t1;
 EXPLAIN PARTITIONS SELECT * FROM t1 where a between '2007-01-01' and '2007-08-01';
 EXPLAIN PARTITIONS SELECT * FROM t1 where a = '2007-07-30 17:35:48';
 ALTER TABLE t1 REORGANIZE PARTITION pmax INTO (
@@ -244,6 +249,7 @@ ALTER TABLE t1 REORGANIZE PARTITION pmax INTO (
  PARTITION pmax VALUES LESS THAN MAXVALUE);
 SELECT * FROM t1;
 SELECT * FROM t1 where a between '2007-01-01' and '2007-08-01';
+analyze table t1;
 EXPLAIN PARTITIONS SELECT * FROM t1 where a between '2007-01-01' and '2007-08-01';
 EXPLAIN PARTITIONS SELECT * FROM t1 where a = '2007-07-30 17:35:48';
 SHOW CREATE TABLE t1;
@@ -268,6 +274,7 @@ partition by list (a)
 ( partition p0 values in (1),
   partition p1 values in (2));
 insert into t1 values (1,1),(2,1),(2,2),(2,3);
+analyze table t1;
 show indexes from t1;
 analyze table t1;
 show indexes from t1;
@@ -291,7 +298,6 @@ drop table t1;
 #
 --error ER_FOREIGN_KEY_ON_PARTITIONED
 CREATE TABLE t1 (a INT, FOREIGN KEY (a) REFERENCES t0 (a))
-ENGINE=MyISAM
 PARTITION BY HASH (a);
 
 #
@@ -394,7 +400,7 @@ CREATE TABLE t1 (
   b MEDIUMINT NOT NULL,   
   c INT NOT NULL,
   KEY b (b)
-) ENGINE=MyISAM
+)
 PARTITION BY LIST (a) (
   PARTITION p0 VALUES IN (1) 
 );
@@ -459,16 +465,17 @@ DROP TABLE t1;
 CREATE TABLE `t1` (
   `c1` int(11) DEFAULT NULL,
   KEY `c1` (`c1`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) DEFAULT CHARSET=latin1;
 
 CREATE TABLE `t2` (
   `c1` int(11) DEFAULT NULL,
   KEY `c1` (`c1`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1 /*!50100 PARTITION BY RANGE (c1) (PARTITION a VALUES LESS THAN (100) ENGINE = MyISAM, PARTITION b VALUES LESS THAN MAXVALUE ENGINE = MyISAM) */;
+) DEFAULT CHARSET=latin1 /*!50100 PARTITION BY RANGE (c1) (PARTITION a VALUES LESS THAN (100) , PARTITION b VALUES LESS THAN MAXVALUE ) */;
 
 INSERT INTO `t1` VALUES (1),(2),(3),(4),(5),(6),(7),(8),(9),(10),(11),(12),(13),(14),(15),(16),(17),(18),(19),(20);
 INSERT INTO `t2` VALUES (1),(2),(3),(4),(5),(6),(7),(8),(9),(10),(11),(12),(13),(14),(15),(16),(17),(18),(19),(20);
 
+analyze table t1;
 EXPLAIN PARTITIONS SELECT c1 FROM t1 WHERE (c1 > 10 AND c1 < 13) OR (c1 > 17 AND c1 < 20);
 
 FLUSH STATUS;
@@ -487,19 +494,20 @@ DROP TABLE t1,t2;
 CREATE TABLE `t1` (
   `c1` int(11) DEFAULT NULL,
   KEY `c1` (`c1`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) DEFAULT CHARSET=latin1;
 
 CREATE TABLE `t2` (
   `c1` int(11) DEFAULT NULL,
   KEY `c1` (`c1`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) DEFAULT CHARSET=latin1
 /*!50100 PARTITION BY RANGE (c1)
-(PARTITION a VALUES LESS THAN (100) ENGINE = MyISAM,
- PARTITION b VALUES LESS THAN MAXVALUE ENGINE = MyISAM) */;
+(PARTITION a VALUES LESS THAN (100) ,
+ PARTITION b VALUES LESS THAN MAXVALUE ) */;
 
 INSERT INTO `t1` VALUES (1),(2),(3),(4),(5),(6),(7),(8),(9),(10),(11),(12),(13),(14),(15),(16),(17),(18),(19),(20);
 INSERT INTO `t2` VALUES (1),(2),(3),(4),(5),(6),(7),(8),(9),(10),(11),(12),(13),(14),(15),(16),(17),(18),(19),(20);
 
+analyze table t1;
 EXPLAIN PARTITIONS SELECT c1 FROM t1 WHERE (c1 > 2 AND c1 < 5);
 
 FLUSH STATUS;
@@ -602,7 +610,7 @@ partition by list (a)
 (partition p0 values in (1));
 
 create procedure pz()
-alter table t1 engine = myisam;
+alter table t1;
 
 call pz();
 call pz();
@@ -737,6 +745,9 @@ drop table t1;
 #
 # Partition by key specifying tablespace
 #
+CREATE TABLESPACE ts1 ADD DATAFILE 'ts1.ibd';
+CREATE TABLESPACE ts2 ADD DATAFILE 'ts2.ibd';
+CREATE TABLESPACE ts3 ADD DATAFILE 'ts3.ibd';
 CREATE TABLE t1 (
 a int not null,
 b int not null,
@@ -750,6 +761,8 @@ partitions 3
 
 CREATE TABLE t2 LIKE t1;
 
+SHOW CREATE TABLE t1;
+SHOW CREATE TABLE t2;
 drop table t2;
 drop table t1;
 
@@ -767,6 +780,7 @@ partitions 3
  partition x2 values in (3, 11, 5, 7) tablespace ts2,
  partition x3 values in (16, 8, 5+19, 70-43) tablespace ts3);
 
+SHOW CREATE TABLE t1;
 drop table t1;
 #
 # Partition by key list, list function
@@ -782,6 +796,7 @@ partitions 3
  partition x2 values in (3, 11, 5, 7) tablespace ts2,
  partition x3 values in (16, 8, 5+19, 70-43) tablespace ts3);
 
+SHOW CREATE TABLE t1;
 drop table t1;
 
 #
@@ -797,6 +812,7 @@ partition by list (b*a)
  partition x2 values in (3, 11, 5, 7) tablespace ts2,
  partition x3 values in (16, 8, 5+19, 70-43) tablespace ts3);
 
+SHOW CREATE TABLE t1;
 drop table t1;
 
 #
@@ -1233,7 +1249,11 @@ insert into t1 values (12, 1, 1);
 
 select partition_name, partition_description, table_rows
 from information_schema.partitions where table_schema ='test';
+SHOW CREATE TABLE t1;
 drop table t1;
+DROP TABLESPACE ts1 ENGINE = InnoDB;
+DROP TABLESPACE ts2 ENGINE = InnoDB;
+DROP TABLESPACE ts3 ENGINE = InnoDB;
 
 # NULL for LIST partition
 --error ER_MULTIPLE_DEF_CONST_IN_LIST_PART_ERROR
@@ -1514,6 +1534,7 @@ create table t1 (f1 integer) partition by range(f1)
 (partition p1 values less than (0), partition p2 values less than (10));
 insert into t1 set f1 = null;
 select * from t1 where f1 is null;
+analyze table t1;
 explain partitions select * from t1 where f1 is null;
 drop table t1;
 
@@ -1553,6 +1574,7 @@ create table t1 (f1 integer) partition by list(f1)
 
 insert into t1 values (1),(2),(3),(4),(null);
 select * from t1 where f1 < 3;
+analyze table t1;
 explain partitions select * from t1 where f1 < 3;
 select * from t1 where f1 is null;
 explain partitions select * from t1 where f1 is null;
@@ -1569,6 +1591,7 @@ create table t1 (f1 int) partition by list(f1 div 2)
 
 insert into t1 values (2),(4),(6),(8),(null);
 select * from t1 where f1 < 3;
+analyze table t1;
 explain partitions select * from t1 where f1 < 3;
 select * from t1 where f1 is null;
 explain partitions select * from t1 where f1 is null;
@@ -1582,6 +1605,7 @@ create table t1 (a int) partition by LIST(a) (
 );
 insert into t1 values (NULL),(0),(1),(2);
 select * from t1 where a is null or a < 2;
+analyze table t1;
 explain partitions select * from t1 where a is null or a < 2;
 select * from t1 where a is null or a < 0 or a > 1;
 explain partitions select * from t1 where a is null or a < 0 or a > 1;
@@ -1712,7 +1736,7 @@ drop table t1;
 #
 # BUG 19501 Partitions: SHOW TABLE STATUS shows wrong Data_free
 #
-CREATE TABLE t1 (a int) ENGINE = MYISAM PARTITION BY KEY(a);
+CREATE TABLE t1 (a int) PARTITION BY KEY(a);
 INSERT into t1 values (1), (2);
 --replace_column 9 0 12 NULL 13 NULL 14 NULL
 SHOW TABLE STATUS;
@@ -1789,7 +1813,6 @@ drop table t1;
 # Bug 21388: Bigint fails to find record
 #
 create table t1 (a bigint unsigned not null, primary key(a))
-engine = myisam
 partition by key (a)
 partitions 10;
 
@@ -1963,7 +1986,7 @@ DROP TABLE t1;
 # Bug #30484: Partitions: crash with self-referencing trigger
 #
 
-create table t (s1 int) engine=myisam partition by key (s1);
+create table t (s1 int) partition by key (s1);
 create trigger t_ad after delete on t for each row insert into t values (old.s1);
 insert into t values (1);
 drop table t;
@@ -2020,7 +2043,7 @@ create table t1 (
   c2 set('sweet'),
   key (c2,c1,c0), 
   key(c0)
-) engine=myisam partition by hash (c0) partitions 5;
+) partition by hash (c0) partitions 5;
 
 --disable_warnings
 insert ignore into t1 set c0 = -6502262, c1 = 3992917, c2 = 35019;
@@ -2244,6 +2267,7 @@ CREATE TABLE t1 (a int) PARTITION BY RANGE (a)
    PARTITION p2 VALUES LESS THAN (300),
    PARTITION p3 VALUES LESS THAN MAXVALUE);
 INSERT INTO t1 VALUES (10), (100), (200), (300), (400);
+analyze table t1;
 EXPLAIN PARTITIONS SELECT * FROM t1 WHERE a>=200;
 DROP TABLE t1;
 
@@ -2282,7 +2306,7 @@ INSERT INTO t1 VALUES
 ;
 
 SELECT b, c FROM t1 WHERE b = 1 GROUP BY b, c;
-
+analyze table t1;
 EXPLAIN
 SELECT b, c FROM t1 WHERE b = 1 GROUP BY b, c;
 
@@ -2296,7 +2320,7 @@ DROP TABLE t1;
 --echo #
 
 SET SESSION SQL_MODE='ONLY_FULL_GROUP_BY';
-CREATE TABLE t1(id INT,KEY(id)) ENGINE=MYISAM 
+CREATE TABLE t1(id INT,KEY(id))
   PARTITION BY HASH(id) PARTITIONS 2;
 SELECT COUNT(*) FROM t1;
 DROP TABLE t1;
@@ -2474,10 +2498,11 @@ CREATE TABLE t1 (
 
 INSERT INTO t1 VALUES (1,1,'a',1), (2,2,'a',1);
 
+--error ER_WRONG_ARGUMENTS
 SELECT 1 FROM t1 WHERE 1 IN
 (SELECT  group_concat(b)
  FROM t1
- WHERE c > geomfromtext('point(1 1)')
+ WHERE c > ST_geomfromtext('point(1 1)')
  GROUP BY b
 );
 
@@ -2501,3 +2526,76 @@ let $query=SELECT c1 FROM t1 WHERE (c1 > 2 AND c1 < 15);
 --eval EXPLAIN FORMAT=JSON $query
 
 DROP TABLE t1;
+
+--echo #
+--echo # Bug#19584181: CRASH AFTER DDL RETURNS WARNINGS - CORRUPT ERROR_HANDLER
+--echo #
+
+SET sql_mode= 'STRICT_TRANS_TABLES';
+--error ER_WRONG_TYPE_COLUMN_VALUE_ERROR
+CREATE TABLE t1 (d TIME)
+  PARTITION BY RANGE COLUMNS (d)
+    (PARTITION p0 VALUES LESS THAN ('2000-01-01'),
+     PARTITION p1 VALUES LESS THAN ('2040-01-01'));
+
+# Before this fix, sql_mode would have been reset to 0.
+SELECT @@sql_mode;
+SET sql_mode= DEFAULT;
+
+--echo #
+--echo # ASSERTION FAILED: !THD->IS_ERROR() PARTITIONS + OUT OF RANGE VALUES
+--echo #
+CREATE TABLE t1 (a int PRIMARY KEY)
+PARTITION BY LINEAR KEY(a) PARTITIONS 2;
+--error ER_DATA_OUT_OF_RANGE
+SELECT 1 FROM t1 WHERE EXP(10000);
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#28573894 ALTER PARTITIONED TABLE ADD AUTO_INCREMENT DIFF RESULT
+--echo #
+CREATE TABLE t (a VARCHAR(10) NOT NULL,b INT,PRIMARY KEY (b)) ENGINE=INNODB
+PARTITION BY RANGE (b)
+(PARTITION pa VALUES LESS THAN (2),
+ PARTITION pb VALUES LESS THAN (20),
+ PARTITION pc VALUES LESS THAN (30),
+ PARTITION pd VALUES LESS THAN (40));
+
+INSERT INTO t
+VALUES('A',0),('B',1),('C',2),('D',3),('E',4),('F',5),('G',25),('H',35);
+
+ALTER TABLE t ADD COLUMN r INT UNSIGNED NOT NULL AUTO_INCREMENT, ADD UNIQUE
+KEY (r,b), ALGORITHM=INPLACE, LOCK=SHARED;
+SELECT * FROM t;
+DROP TABLE t;
+
+--echo #
+--echo # Bug #25207522: INCORRECT ORDER-BY BEHAVIOR ON A PARTITIONED TABLE
+--echo # WITH A COMPOSITE PREFIX INDEX
+--echo #
+CREATE TABLE t(  id int unsigned NOT NULL,
+        data varchar(2) DEFAULT NULL,
+        KEY data_idx (data(1),id)
+        ) DEFAULT CHARSET=utf8
+        /*!50100 PARTITION BY RANGE (id)
+        (PARTITION p10 VALUES LESS THAN (10) ,
+         PARTITION p20 VALUES LESS THAN (20) ) */;
+
+INSERT INTO t VALUES (6, 'ab'), (4, 'ab'), (5, 'ab'), (16, 'ab'), (14, 'ab'), (15, 'ab'), (5, 'ac'), (15, 'aa') ;
+SELECT id FROM t WHERE data = 'ab' ORDER BY id ASC;
+DROP TABLE t;
+
+--echo #
+--echo # Bug#29268656: BOGUS CONSTANT, RANDOM OR TIMEZONE-DEPENDENT
+--echo #               EXPRESSIONS IN (SUB)PARTITIONING FU
+--echo #
+
+# Create table with generated column containing non-deterministic expression
+CREATE TABLE t1 (c1 INT, c2 CHAR(32) GENERATED ALWAYS AS (RANDOM_BYTES(32))) ENGINE=INNODB PARTITION BY HASH(c1);
+CREATE TABLE t2 (c1 INT, c2 CHAR(32) GENERATED ALWAYS AS (RANDOM_BYTES(32))) ENGINE=INNODB PARTITION BY RANGE(c1) (PARTITION p1 VALUES LESS THAN(100));
+
+# Alter table with generated column containing non-deterministic expression
+CREATE TABLE t (c1 INT, c2 INT) ENGINE=INNODB PARTITION BY RANGE(c1) (PARTITION p1 VALUES LESS THAN(100));
+ALTER TABLE t MODIFY COLUMN c2 CHAR(32) GENERATED ALWAYS AS (RANDOM_BYTES(32)) STORED;
+ALTER TABLE t ADD COLUMN c3 CHAR(32) GENERATED ALWAYS AS (RANDOM_BYTES(32));
+DROP TABLE t, t1, t2;

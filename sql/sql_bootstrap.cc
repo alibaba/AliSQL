@@ -1,13 +1,20 @@
-/* Copyright (c) 2010, 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
@@ -20,13 +27,13 @@
 #include <string.h>
 #include "sql_bootstrap.h"
 
-int read_bootstrap_query(char *query, int *query_length,
+int read_bootstrap_query(char *query, size_t *query_length,
                          fgets_input_t input, fgets_fn_t fgets_fn, int *error)
 {
   char line_buffer[MAX_BOOTSTRAP_LINE_SIZE];
   const char *line;
-  int len;
-  int query_len= 0;
+  size_t len;
+  size_t query_len= 0;
   int fgets_error= 0;
   *error= 0;
 
@@ -83,7 +90,7 @@ int read_bootstrap_query(char *query, int *query_length,
     */
     if (query_len + len + 1 >= MAX_BOOTSTRAP_QUERY_SIZE)
     {
-      int new_len= MAX_BOOTSTRAP_QUERY_SIZE - query_len - 1;
+      size_t new_len= MAX_BOOTSTRAP_QUERY_SIZE - query_len - 1;
       if ((new_len > 0) && (query_len < MAX_BOOTSTRAP_QUERY_SIZE))
       {
         memcpy(query + query_len, line, new_len);

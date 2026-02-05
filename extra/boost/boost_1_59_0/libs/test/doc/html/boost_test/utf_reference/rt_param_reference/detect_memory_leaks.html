@@ -1,0 +1,96 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=US-ASCII">
+<title>detect_memory_leaks</title>
+<link rel="stylesheet" href="../../../boostbook.css" type="text/css">
+<meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
+<link rel="home" href="../../../index.html" title="Boost.Test">
+<link rel="up" href="../rt_param_reference.html" title="Runtime parameters reference">
+<link rel="prev" href="random.html" title="random">
+<link rel="next" href="use_alt_stack.html" title="use_alt_stack">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table cellpadding="2" width="100%"><tr>
+<td valign="top"><img alt="Boost C++ Libraries" width="277" height="86" src="../../../../../../../boost.png"></td>
+<td align="center"><a href="../../../../../../../index.html">Home</a></td>
+<td align="center"><a href="../../../../../../../libs/libraries.htm">Libraries</a></td>
+<td align="center"><a href="http://www.boost.org/users/people.html">People</a></td>
+<td align="center"><a href="http://www.boost.org/users/faq.html">FAQ</a></td>
+<td align="center"><a href="../../../../../../../more/index.htm">More</a></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="random.html"><img src="../../../../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../rt_param_reference.html"><img src="../../../../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../../index.html"><img src="../../../../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="use_alt_stack.html"><img src="../../../../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h4 class="title">
+<a name="boost_test.utf_reference.rt_param_reference.detect_memory_leaks"></a><a class="link" href="detect_memory_leaks.html" title="detect_memory_leaks"><code class="computeroutput"><span class="identifier">detect_memory_leaks</span></code></a>
+</h4></div></div></div>
+<p>
+          Detect memory leaks.
+        </p>
+<p>
+          Positive value tells the framework to detect the memory leaks (if any).
+          In addition any value greater than 1 is treated as leak allocation number
+          and setups runtime breakpoint. In other words setting this parameter to
+          the positive value N greater than 1 causes the framework to set a breakpoint
+          at Nth memory allocation (don't do that from the command line - only when
+          you are under debugger).
+        </p>
+<div class="note"><table border="0" summary="Note">
+<tr>
+<td rowspan="2" align="center" valign="top" width="25"><img alt="[Note]" src="../../../../../../../doc/src/images/note.png"></td>
+<th align="left">Note</th>
+</tr>
+<tr><td align="left" valign="top"><p>
+            If your test program produces memory leaks notifications, they are combined
+            with allocation number values you could use to set a breakpoint.
+          </p></td></tr>
+</table></div>
+<div class="caution"><table border="0" summary="Caution">
+<tr>
+<td rowspan="2" align="center" valign="top" width="25"><img alt="[Caution]" src="../../../../../../../doc/src/images/caution.png"></td>
+<th align="left">Caution</th>
+</tr>
+<tr><td align="left" valign="top"><p>
+            Currently only applies to MS family of compilers in debug builds.
+          </p></td></tr>
+</table></div>
+<h5>
+<a name="boost_test.utf_reference.rt_param_reference.detect_memory_leaks.h0"></a>
+          <span class="phrase"><a name="boost_test.utf_reference.rt_param_reference.detect_memory_leaks.acceptable_values"></a></span><a class="link" href="detect_memory_leaks.html#boost_test.utf_reference.rt_param_reference.detect_memory_leaks.acceptable_values">Acceptable
+          values</a>
+        </h5>
+<div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; ">
+<li class="listitem">
+              0
+            </li>
+<li class="listitem">
+              <span class="bold"><strong>1</strong></span> (default)
+            </li>
+<li class="listitem">
+              integer value &gt; 1
+            </li>
+</ul></div>
+<h5>
+<a name="boost_test.utf_reference.rt_param_reference.detect_memory_leaks.h1"></a>
+          <span class="phrase"><a name="boost_test.utf_reference.rt_param_reference.detect_memory_leaks.environment_variable"></a></span><a class="link" href="detect_memory_leaks.html#boost_test.utf_reference.rt_param_reference.detect_memory_leaks.environment_variable">Environment
+          variable</a>
+        </h5>
+<pre class="programlisting"><span class="identifier">BOOST_TEST_DETECT_MEMORY_LEAK</span>
+</pre>
+</div>
+<table xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" width="100%"><tr>
+<td align="left"></td>
+<td align="right"><div class="copyright-footer">Copyright &#169; 2001-2015 Boost.Test team<p>
+        Distributed under the Boost Software License, Version 1.0. (See accompanying
+        file LICENSE_1_0.txt or copy at <a href="http://www.boost.org/LICENSE_1_0.txt" target="_top">http://www.boost.org/LICENSE_1_0.txt</a>)
+      </p>
+</div></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="random.html"><img src="../../../../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../rt_param_reference.html"><img src="../../../../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../../index.html"><img src="../../../../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="use_alt_stack.html"><img src="../../../../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+</body>
+</html>

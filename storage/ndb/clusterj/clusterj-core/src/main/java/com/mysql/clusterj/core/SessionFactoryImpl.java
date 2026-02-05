@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2010, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -29,6 +36,8 @@ import com.mysql.clusterj.SessionFactory;
 
 import com.mysql.clusterj.core.spi.DomainTypeHandler;
 import com.mysql.clusterj.core.spi.DomainTypeHandlerFactory;
+import com.mysql.clusterj.core.spi.ValueHandlerFactory;
+
 import com.mysql.clusterj.core.metadata.DomainTypeHandlerFactoryImpl;
 
 import com.mysql.clusterj.core.store.Db;
@@ -42,6 +51,7 @@ import com.mysql.clusterj.core.util.Logger;
 import com.mysql.clusterj.core.util.LoggerFactoryService;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -60,6 +70,7 @@ public class SessionFactoryImpl implements SessionFactory, Constants {
     /** NdbCluster connect properties */
     String CLUSTER_CONNECTION_SERVICE;
     String CLUSTER_CONNECT_STRING;
+    int CLUSTER_CONNECT_TIMEOUT_MGM;
     int CLUSTER_CONNECT_RETRIES;
     int CLUSTER_CONNECT_DELAY;
     int CLUSTER_CONNECT_VERBOSE;
@@ -67,6 +78,11 @@ public class SessionFactoryImpl implements SessionFactory, Constants {
     int CLUSTER_CONNECT_TIMEOUT_AFTER;
     String CLUSTER_DATABASE;
     int CLUSTER_MAX_TRANSACTIONS;
+    int CLUSTER_CONNECT_AUTO_INCREMENT_BATCH_SIZE;
+    long CLUSTER_CONNECT_AUTO_INCREMENT_STEP;
+    long CLUSTER_CONNECT_AUTO_INCREMENT_START;
+    int[] CLUSTER_BYTE_BUFFER_POOL_SIZES;
+
 
     /** Node ids obtained from the property PROPERTY_CONNECTION_POOL_NODEIDS */
     List<Integer> nodeIds = new ArrayList<Integer>();
@@ -86,10 +102,6 @@ public class SessionFactoryImpl implements SessionFactory, Constants {
     /** DomainTypeHandlerFactory for this session factory. */
     DomainTypeHandlerFactory domainTypeHandlerFactory = new DomainTypeHandlerFactoryImpl();
 
-    /** The tables. */
-    // TODO make this non-static
-//    static final protected Map<String,Table> Tables = new HashMap<String,Table>();
-
     /** The session factories. */
     static final protected Map<String, SessionFactoryImpl> sessionFactoryMap =
             new HashMap<String, SessionFactoryImpl>();
@@ -107,6 +119,9 @@ public class SessionFactoryImpl implements SessionFactory, Constants {
         return ClusterJHelper.getServiceInstance(ClusterConnectionService.class,
                     CLUSTER_CONNECTION_SERVICE);
     }
+
+    /** The smart value handler factory */
+    protected ValueHandlerFactory smartValueHandlerFactory;
 
     /** Get a session factory. If using connection pooling and there is already a session factory
      * with the same connect string and database, return it, regardless of whether other
@@ -157,6 +172,8 @@ public class SessionFactoryImpl implements SessionFactory, Constants {
         CLUSTER_CONNECT_STRING = getRequiredStringProperty(props, PROPERTY_CLUSTER_CONNECTSTRING);
         CLUSTER_CONNECT_RETRIES = getIntProperty(props, PROPERTY_CLUSTER_CONNECT_RETRIES,
                 Constants.DEFAULT_PROPERTY_CLUSTER_CONNECT_RETRIES);
+        CLUSTER_CONNECT_TIMEOUT_MGM = getIntProperty(props, PROPERTY_CLUSTER_CONNECT_TIMEOUT_MGM,
+                Constants.DEFAULT_PROPERTY_CLUSTER_CONNECT_TIMEOUT_MGM);
         CLUSTER_CONNECT_DELAY = getIntProperty(props, PROPERTY_CLUSTER_CONNECT_DELAY,
                 Constants.DEFAULT_PROPERTY_CLUSTER_CONNECT_DELAY);
         CLUSTER_CONNECT_VERBOSE = getIntProperty(props, PROPERTY_CLUSTER_CONNECT_VERBOSE,
@@ -169,7 +186,14 @@ public class SessionFactoryImpl implements SessionFactory, Constants {
                 Constants.DEFAULT_PROPERTY_CLUSTER_DATABASE);
         CLUSTER_MAX_TRANSACTIONS = getIntProperty(props, PROPERTY_CLUSTER_MAX_TRANSACTIONS,
                 Constants.DEFAULT_PROPERTY_CLUSTER_MAX_TRANSACTIONS);
+        CLUSTER_CONNECT_AUTO_INCREMENT_BATCH_SIZE = getIntProperty(props, PROPERTY_CLUSTER_CONNECT_AUTO_INCREMENT_BATCH_SIZE,
+                Constants.DEFAULT_PROPERTY_CLUSTER_CONNECT_AUTO_INCREMENT_BATCH_SIZE);
+        CLUSTER_CONNECT_AUTO_INCREMENT_STEP = getLongProperty(props, PROPERTY_CLUSTER_CONNECT_AUTO_INCREMENT_STEP,
+                Constants.DEFAULT_PROPERTY_CLUSTER_CONNECT_AUTO_INCREMENT_STEP);
+        CLUSTER_CONNECT_AUTO_INCREMENT_START = getLongProperty(props, PROPERTY_CLUSTER_CONNECT_AUTO_INCREMENT_START,
+                Constants.DEFAULT_PROPERTY_CLUSTER_CONNECT_AUTO_INCREMENT_START);
         CLUSTER_CONNECTION_SERVICE = getStringProperty(props, PROPERTY_CLUSTER_CONNECTION_SERVICE);
+        CLUSTER_BYTE_BUFFER_POOL_SIZES = getByteBufferPoolSizes(props);
         createClusterConnectionPool();
         // now get a Session and complete a transaction to make sure that the cluster is ready
         try {
@@ -229,13 +253,19 @@ public class SessionFactoryImpl implements SessionFactory, Constants {
                 createClusterConnection(service, props, nodeIds.get(i));
             }
         }
+        // get the smart value handler factory for this connection; it will be the same for all connections
+        if (pooledConnections.size() != 0) {
+            smartValueHandlerFactory = pooledConnections.get(0).getSmartValueHandlerFactory();
+        }
     }
 
     protected ClusterConnection createClusterConnection(
             ClusterConnectionService service, Map<?, ?> props, int nodeId) {
+        int[] byteBufferPoolSizes = getByteBufferPoolSizes(props);
         ClusterConnection result = null;
         try {
-            result = service.create(CLUSTER_CONNECT_STRING, nodeId);
+            result = service.create(CLUSTER_CONNECT_STRING, nodeId, CLUSTER_CONNECT_TIMEOUT_MGM);
+            result.setByteBufferPoolSizes(CLUSTER_BYTE_BUFFER_POOL_SIZES);
             result.connect(CLUSTER_CONNECT_RETRIES, CLUSTER_CONNECT_DELAY,true);
             result.waitUntilReady(CLUSTER_CONNECT_TIMEOUT_BEFORE,CLUSTER_CONNECT_TIMEOUT_AFTER);
         } catch (Exception ex) {
@@ -248,6 +278,31 @@ public class SessionFactoryImpl implements SessionFactory, Constants {
                     local.message("ERR_Connecting", props), ex);
         }
         this.pooledConnections.add(result);
+        result.initializeAutoIncrement(new long[] {
+                CLUSTER_CONNECT_AUTO_INCREMENT_BATCH_SIZE,
+                CLUSTER_CONNECT_AUTO_INCREMENT_STEP,
+                CLUSTER_CONNECT_AUTO_INCREMENT_START
+        });
+        return result;
+    }
+
+    /** Get the byteBufferPoolSizes from properties */
+    int[] getByteBufferPoolSizes(Map<?, ?> props) {
+        int[] result;
+        String byteBufferPoolSizesProperty = getStringProperty(props, PROPERTY_CLUSTER_BYTE_BUFFER_POOL_SIZES,
+                DEFAULT_PROPERTY_CLUSTER_BYTE_BUFFER_POOL_SIZES);
+        // separators are any combination of white space, commas, and semicolons
+        String[] byteBufferPoolSizesList = byteBufferPoolSizesProperty.split("[,; \t\n\r]+", 48);
+        int count = byteBufferPoolSizesList.length;
+        result = new int[count];
+        for (int i = 0; i < count; ++i) {
+            try {
+                result[i] = Integer.parseInt(byteBufferPoolSizesList[i]);
+            } catch (NumberFormatException ex) {
+                throw new ClusterJFatalUserException(local.message(
+                        "ERR_Byte_Buffer_Pool_Sizes_Format", byteBufferPoolSizesProperty), ex);
+            }
+        }
         return result;
     }
 
@@ -329,8 +384,7 @@ public class SessionFactoryImpl implements SessionFactory, Constants {
      * @return the type handler
      */
     
-    public <T> DomainTypeHandler<T> getDomainTypeHandler(Class<T> cls,
-            Dictionary dictionary) {
+    public <T> DomainTypeHandler<T> getDomainTypeHandler(Class<T> cls, Dictionary dictionary) {
         // synchronize here because the map is not synchronized
         synchronized(typeToHandlerMap) {
             @SuppressWarnings("unchecked")
@@ -340,7 +394,7 @@ public class SessionFactoryImpl implements SessionFactory, Constants {
                     + ") returned " + domainTypeHandler);
             if (domainTypeHandler == null) {
                 domainTypeHandler = domainTypeHandlerFactory.createDomainTypeHandler(cls,
-                        dictionary);
+                        dictionary, smartValueHandlerFactory);
                 if (logger.isDetailEnabled()) logger.detail("createDomainTypeHandler for "
                         + cls.getName() + "(" + cls
                         + ") returned " + domainTypeHandler);
@@ -373,15 +427,15 @@ public class SessionFactoryImpl implements SessionFactory, Constants {
     @SuppressWarnings("unchecked")
     protected static <T> Class<T> getClassForProxy(T object) {
         Class cls = object.getClass();
-        if (cls.getName().startsWith("$Proxy")) {
+        if (java.lang.reflect.Proxy.isProxyClass(cls)) {
             cls = proxyClassToDomainClass.get(cls);
         }
         return cls;        
     }
 
-    public <T> T newInstance(Class<T> cls, Dictionary dictionary) {
+    public <T> T newInstance(Class<T> cls, Dictionary dictionary, Db db) {
         DomainTypeHandler<T> domainTypeHandler = getDomainTypeHandler(cls, dictionary);
-        return domainTypeHandler.newInstance();
+        return domainTypeHandler.newInstance(db);
     }
 
     public Table getTable(String tableName, Dictionary dictionary) {
@@ -461,6 +515,33 @@ public class SessionFactoryImpl implements SessionFactory, Constants {
         throw new ClusterJUserException(local.message("ERR_NumericFormat", propertyName, property));
     }
 
+    /** Get the property from the properties map as a long. If the user has not
+     * provided a value in the props, use the supplied default value.
+     * @param props the properties
+     * @param propertyName the name of the property
+     * @param defaultValue the value to return if there is no property by that name
+     * @return the value from the properties or the default value
+     */
+    protected static long getLongProperty(Map<?, ?> props, String propertyName, long defaultValue) {
+        Object property = props.get(propertyName);
+        if (property == null) {
+            return defaultValue;
+        }
+        if (Number.class.isAssignableFrom(property.getClass())) {
+            return ((Number)property).longValue();
+        }
+        if (property instanceof String) {
+            try {
+                long result = Long.parseLong((String)property);
+                return result;
+            } catch (NumberFormatException ex) {
+                throw new ClusterJFatalUserException(
+                        local.message("ERR_NumericFormat", propertyName, property));
+            }
+        }
+        throw new ClusterJUserException(local.message("ERR_NumericFormat", propertyName, property));
+    }
+
     public synchronized void close() {
         // we have to close all of the cluster connections
         for (ClusterConnection clusterConnection: pooledConnections) {
@@ -487,6 +568,26 @@ public class SessionFactoryImpl implements SessionFactory, Constants {
             result.add(connection.dbCount());
         }
         return result;
+    }
+
+    public String unloadSchema(Class<?> cls, Dictionary dictionary) {
+        synchronized(typeToHandlerMap) {
+            String tableName = null;
+            DomainTypeHandler<?> domainTypeHandler = typeToHandlerMap.remove(cls);
+            if (domainTypeHandler != null) {
+                // remove the ndb dictionary cached table definition
+                tableName = domainTypeHandler.getTableName();
+                if (tableName != null) {
+                    if (logger.isDebugEnabled())logger.debug("Removing dictionary entry for table " + tableName
+                            + " for class " + cls.getName());
+                    dictionary.removeCachedTable(tableName);
+                }
+            }
+            for (ClusterConnection clusterConnection: pooledConnections) {
+                clusterConnection.unloadSchema(tableName);
+            }
+            return tableName;
+        }
     }
 
 }

@@ -1,13 +1,25 @@
-/* Copyright (c) 2003, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2003, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -29,7 +41,7 @@
 /*****************************************************************************
   General functions to handle SAFE_HASH objects.
 
-  A SAFE_HASH object is used to store the hash, the mutex and default value
+  A SAFE_HASH object is used to store the hash, the lock and default value
   needed by the rest of the key cache code.
   This is a separate struct to make it easy to later reuse the code for other
   purposes
@@ -53,7 +65,7 @@ typedef struct st_safe_hash_entry
 
 typedef struct st_safe_hash_with_default
 {
-  rw_lock_t mutex;
+  mysql_rwlock_t lock;
   HASH hash;
   uchar *default_value;
   SAFE_HASH_ENTRY *root;
@@ -108,12 +120,13 @@ static my_bool safe_hash_init(SAFE_HASH *hash, uint elements,
   DBUG_ENTER("safe_hash");
   if (my_hash_init(&hash->hash, &my_charset_bin, elements,
                    0, 0, (my_hash_get_key) safe_hash_entry_get,
-                   (void (*)(void*)) safe_hash_entry_free, 0))
+                   (void (*)(void*)) safe_hash_entry_free, 0,
+                   key_memory_SAFE_HASH_ENTRY))
   {
     hash->default_value= 0;
     DBUG_RETURN(1);
   }
-  my_rwlock_init(&hash->mutex, 0);
+  mysql_rwlock_init(key_SAFE_HASH_lock, &hash->lock);
   hash->default_value= default_value;
   hash->root= 0;
   DBUG_RETURN(0);
@@ -136,7 +149,7 @@ static void safe_hash_free(SAFE_HASH *hash)
   if (hash->default_value)
   {
     my_hash_free(&hash->hash);
-    rwlock_destroy(&hash->mutex);
+    mysql_rwlock_destroy(&hash->lock);
     hash->default_value=0;
   }
 }
@@ -149,9 +162,9 @@ static uchar *safe_hash_search(SAFE_HASH *hash, const uchar *key, uint length)
 {
   uchar *result;
   DBUG_ENTER("safe_hash_search");
-  rw_rdlock(&hash->mutex);
+  mysql_rwlock_rdlock(&hash->lock);
   result= my_hash_search(&hash->hash, key, length);
-  rw_unlock(&hash->mutex);
+  mysql_rwlock_unlock(&hash->lock);
   if (!result)
     result= hash->default_value;
   else
@@ -189,7 +202,7 @@ static my_bool safe_hash_set(SAFE_HASH *hash, const uchar *key, uint length,
   DBUG_ENTER("safe_hash_set");
   DBUG_PRINT("enter",("key: %.*s  data: 0x%lx", length, key, (long) data));
 
-  rw_wrlock(&hash->mutex);
+  mysql_rwlock_wrlock(&hash->lock);
   entry= (SAFE_HASH_ENTRY*) my_hash_search(&hash->hash, key, length);
 
   if (data == hash->default_value)
@@ -214,7 +227,8 @@ static my_bool safe_hash_set(SAFE_HASH *hash, const uchar *key, uint length,
   }
   else
   {
-    if (!(entry= (SAFE_HASH_ENTRY *) my_malloc(sizeof(*entry) + length,
+    if (!(entry= (SAFE_HASH_ENTRY *) my_malloc(key_memory_SAFE_HASH_ENTRY,
+                                               sizeof(*entry) + length,
 					       MYF(MY_WME))))
     {
       error= 1;
@@ -239,7 +253,7 @@ static my_bool safe_hash_set(SAFE_HASH *hash, const uchar *key, uint length,
   }
 
 end:
-  rw_unlock(&hash->mutex);
+  mysql_rwlock_unlock(&hash->lock);
   DBUG_RETURN(error);
 }
 
@@ -264,7 +278,7 @@ static void safe_hash_change(SAFE_HASH *hash, uchar *old_data, uchar *new_data)
   SAFE_HASH_ENTRY *entry, *next;
   DBUG_ENTER("safe_hash_set");
 
-  rw_wrlock(&hash->mutex);
+  mysql_rwlock_wrlock(&hash->lock);
 
   for (entry= hash->root ; entry ; entry= next)
   {
@@ -282,7 +296,7 @@ static void safe_hash_change(SAFE_HASH *hash, uchar *old_data, uchar *new_data)
     }
   }
 
-  rw_unlock(&hash->mutex);
+  mysql_rwlock_unlock(&hash->lock);
   DBUG_VOID_RETURN;
 }
 

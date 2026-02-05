@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -24,7 +31,7 @@
  *
  * When adding a new signal, remember to update MAX_GSN and SignalNames.cpp
  */
-const GlobalSignalNumber MAX_GSN = 768;
+const GlobalSignalNumber MAX_GSN = 782;
 
 struct GsnName {
   GlobalSignalNumber gsn;
@@ -243,13 +250,13 @@ extern const GlobalSignalNumber NO_OF_SIGNAL_NAMES;
 #define GSN_COPY_FRAGREQ                171
 #define GSN_COPY_GCICONF                172
 #define GSN_COPY_GCIREQ                 173
-#define GSN_COPY_STATECONF              174
-#define GSN_COPY_STATEREQ               175
+/* 174 used to be COPY_STATECONF, no longer used */
+/* 175 used to be COPY_STATEREQ, no longer used */
 #define GSN_COPY_TABCONF                176
 #define GSN_COPY_TABREQ                 177
-#define GSN_CREATE_FRAGCONF             178
-#define GSN_CREATE_FRAGREF              179
-#define GSN_CREATE_FRAGREQ              180
+#define GSN_UPDATE_FRAG_STATECONF       178
+#define GSN_UPDATE_FRAG_STATEREF        179
+#define GSN_UPDATE_FRAG_STATEREQ        180
 #define GSN_DEBUG_SIG                   181
 #define GSN_DIH_SCAN_TAB_REQ            182
 #define GSN_DIH_SCAN_TAB_REF            183
@@ -348,9 +355,7 @@ extern const GlobalSignalNumber NO_OF_SIGNAL_NAMES;
 #define GSN_DIVERIFYREQ                 241
 #define GSN_ENABLE_COMREQ               242 /* local */
 #define GSN_END_LCPCONF                 243
-#define GSN_END_LCP_CONF                243
 #define GSN_END_LCPREQ                  244
-#define GSN_END_LCP_REQ                 244
 #define GSN_END_TOCONF                  245
 #define GSN_END_TOREQ                   246
 #define GSN_END_TOREF                   286
@@ -454,9 +459,8 @@ extern const GlobalSignalNumber NO_OF_SIGNAL_NAMES;
 #define GSN_COPY_DATA_REF               337
 #define GSN_COPY_DATA_CONF              338
 
-#define GSN_OPEN_COMCONF                339
-#define GSN_OPEN_COMREF                 340
-#define GSN_OPEN_COMREQ                 341
+#define GSN_EXPAND_CLNT                 340
+#define GSN_OPEN_COMORD                 341
 #define GSN_PACKED_SIGNAL               342
 #define GSN_PREP_FAILCONF               343
 #define GSN_PREP_FAILREF                344
@@ -475,8 +479,8 @@ extern const GlobalSignalNumber NO_OF_SIGNAL_NAMES;
 #define GSN_SEND_PACKED                 357
 #define GSN_SET_LOGLEVELORD             358
 
-#define GSN_LQH_ALLOCREQ                359
-#define GSN_TUP_ALLOCREQ                360
+/* 359 used to be LQH_ALLOCREQ, no longer used */
+/* 360 used to be TUP_ALLOCREQ, no longer used */
 #define GSN_TUP_DEALLOCREQ              361
 
 /* 362 not unused */
@@ -592,7 +596,7 @@ extern const GlobalSignalNumber NO_OF_SIGNAL_NAMES;
 #define GSN_NODE_PING_REQ               461 /* distr. */
 #define GSN_NODE_PING_CONF              462 /* distr. */
 
-/* 463 unused */
+#define GSN_CANCEL_SUBSCRIPTION_REQ     463
 /* 464 unused */
 
 #define GSN_DUMP_STATE_ORD              465
@@ -832,35 +836,43 @@ extern const GlobalSignalNumber NO_OF_SIGNAL_NAMES;
 
 #define GSN_SYNC_PATH_REQ               613
 #define GSN_SYNC_PATH_CONF              614
-#define GSN_615
-#define GSN_616
-#define GSN_617
 
-#define GSN_618
-#define GSN_619
-#define GSN_620
+#define GSN_LCP_STATUS_REQ              615
+#define GSN_LCP_STATUS_CONF             616
+#define GSN_LCP_STATUS_REF              617
+
+#define GSN_CHECK_NODE_RESTARTREQ       618
+#define GSN_CHECK_NODE_RESTARTCONF      619
+
+#define GSN_GET_CPU_USAGE_REQ           620
 #define GSN_621
 #define GSN_622
 #define GSN_623
 
-#define GSN_627
-#define GSN_628
-#define GSN_629
-#define GSN_630
-#define GSN_631
-#define GSN_632
-#define GSN_633
-#define GSN_634
-#define GSN_635
-#define GSN_636
-#define GSN_637
-#define GSN_638
-#define GSN_639
-#define GSN_640
-#define GSN_641
-#define GSN_642
-#define GSN_643
-#define GSN_644
+#define GSN_CREATE_FK_REQ               627
+#define GSN_CREATE_FK_REF               628
+#define GSN_CREATE_FK_CONF              629
+
+#define GSN_DROP_FK_REQ                 630
+#define GSN_DROP_FK_REF                 631
+#define GSN_DROP_FK_CONF                632
+
+#define GSN_CREATE_FK_IMPL_REQ          633
+#define GSN_CREATE_FK_IMPL_REF          634
+#define GSN_CREATE_FK_IMPL_CONF         635
+
+#define GSN_DROP_FK_IMPL_REQ            636
+#define GSN_DROP_FK_IMPL_REF            637
+#define GSN_DROP_FK_IMPL_CONF           638
+
+#define GSN_BUILD_FK_REQ                639
+#define GSN_BUILD_FK_REF                640
+#define GSN_BUILD_FK_CONF               641
+
+#define GSN_BUILD_FK_IMPL_REQ           642
+#define GSN_BUILD_FK_IMPL_REF           643
+#define GSN_BUILD_FK_IMPL_CONF          644
+
 #define GSN_645
 #define GSN_646
 #define GSN_647
@@ -1079,4 +1091,22 @@ extern const GlobalSignalNumber NO_OF_SIGNAL_NAMES;
 #define GSN_INDEX_STAT_IMPL_REF         655
 #define GSN_INDEX_STAT_REP              656
 
+#define GSN_NODE_STARTED_REP            769
+
+#define GSN_PAUSE_LCP_REQ               770
+#define GSN_PAUSE_LCP_CONF              771
+#define GSN_FLUSH_LCP_REP_REQ           772
+#define GSN_FLUSH_LCP_REP_CONF          773
+
+#define GSN_ISOLATE_ORD                 774
+
+/* 775 free, never used in released version */
+
+#define GSN_ALLOC_NODEID_REP            776
+#define GSN_INCL_NODE_HB_PROTOCOL_REP   777
+#define GSN_NDBCNTR_START_WAIT_REP      778
+#define GSN_NDBCNTR_STARTED_REP         779
+#define GSN_SUMA_HANDOVER_COMPLETE_REP  780
+#define GSN_END_TOREP                   781
+#define GSN_LOCAL_RECOVERY_COMP_REP     782
 #endif

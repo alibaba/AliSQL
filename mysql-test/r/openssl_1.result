@@ -1,17 +1,31 @@
+set @orig_sql_mode= @@sql_mode;
+set sql_mode= (select replace(@@sql_mode,'NO_AUTO_CREATE_USER',''));
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 drop table if exists t1;
 create table t1(f1 int);
 insert into t1 values (5);
-grant select on test.* to ssl_user1@localhost require SSL;;
-grant select on test.* to ssl_user2@localhost require cipher "DHE-RSA-AES128-GCM-SHA256";;
-grant select on test.* to ssl_user3@localhost require cipher "DHE-RSA-AES128-GCM-SHA256" AND SUBJECT "/C=SE/ST=Stockholm/L=Stockholm/O=Oracle/OU=MySQL/CN=Client";;
-grant select on test.* to ssl_user4@localhost require cipher "DHE-RSA-AES128-GCM-SHA256" AND SUBJECT "/C=SE/ST=Stockholm/L=Stockholm/O=Oracle/OU=MySQL/CN=Client" ISSUER "/C=SE/ST=Stockholm/L=Stockholm/O=Oracle/OU=MySQL/CN=CA";;
-grant select on test.* to ssl_user5@localhost require cipher "DHE-RSA-AES128-GCM-SHA256" AND SUBJECT "xxx";;
+grant select on test.* to ssl_user1@localhost require SSL;
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
+grant select on test.* to ssl_user2@localhost require cipher "SSL_CIPHER";
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
+grant select on test.* to ssl_user3@localhost require cipher "SSL_CIPHER" AND SUBJECT "/C=SE/ST=Stockholm/L=Stockholm/O=Oracle/OU=MySQL/CN=Client";
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
+grant select on test.* to ssl_user4@localhost require cipher "SSL_CIPHER" AND SUBJECT "/C=SE/ST=Stockholm/L=Stockholm/O=Oracle/OU=MySQL/CN=Client" ISSUER "/C=SE/ST=Stockholm/L=Stockholm/O=Oracle/OU=MySQL/CN=CA";
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
+grant select on test.* to ssl_user5@localhost require cipher "SSL_CIPHER" AND SUBJECT "xxx";
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
 flush privileges;
 connect(localhost,ssl_user5,,test,MASTER_PORT,MASTER_SOCKET);
 ERROR 28000: Access denied for user 'ssl_user5'@'localhost' (using password: NO)
 SHOW STATUS LIKE 'Ssl_cipher';
 Variable_name	Value
-Ssl_cipher	DHE-RSA-AES128-GCM-SHA256
+Ssl_cipher	SSL_CIPHER
 select * from t1;
 f1
 5
@@ -19,7 +33,7 @@ delete from t1;
 ERROR 42000: DELETE command denied to user 'ssl_user1'@'localhost' for table 't1'
 SHOW STATUS LIKE 'Ssl_cipher';
 Variable_name	Value
-Ssl_cipher	DHE-RSA-AES128-GCM-SHA256
+Ssl_cipher	SSL_CIPHER
 select * from t1;
 f1
 5
@@ -27,7 +41,7 @@ delete from t1;
 ERROR 42000: DELETE command denied to user 'ssl_user2'@'localhost' for table 't1'
 SHOW STATUS LIKE 'Ssl_cipher';
 Variable_name	Value
-Ssl_cipher	DHE-RSA-AES128-GCM-SHA256
+Ssl_cipher	SSL_CIPHER
 select * from t1;
 f1
 5
@@ -35,7 +49,7 @@ delete from t1;
 ERROR 42000: DELETE command denied to user 'ssl_user3'@'localhost' for table 't1'
 SHOW STATUS LIKE 'Ssl_cipher';
 Variable_name	Value
-Ssl_cipher	DHE-RSA-AES128-GCM-SHA256
+Ssl_cipher	SSL_CIPHER
 select * from t1;
 f1
 5
@@ -47,15 +61,15 @@ drop table t1;
 mysqltest: Could not open connection 'default': 2026 SSL connection error: xxxx
 mysqltest: Could not open connection 'default': 2026 SSL connection error: xxxx
 mysqltest: Could not open connection 'default': 2026 SSL connection error: xxxx
-SSL error: Unable to get private key from ''
+mysqltest: [ERROR] SSL error: Unable to get private key from ''
 mysqltest: Could not open connection 'default': 2026 SSL connection error: Unable to get private key
-SSL error: Unable to get certificate from ''
+mysqltest: [ERROR] SSL error: Unable to get certificate from ''
 mysqltest: Could not open connection 'default': 2026 SSL connection error: Unable to get certificate
 SHOW STATUS LIKE 'Ssl_cipher';
 Variable_name	Value
 Ssl_cipher	DHE-RSA-AES256-SHA
 Variable_name	Value
-Ssl_cipher	DHE-RSA-AES128-GCM-SHA256
+Ssl_cipher	SSL_CIPHER
 End of 5.0 tests
 DROP TABLE IF EXISTS thread_status;
 DROP EVENT IF EXISTS event_status;
@@ -188,32 +202,37 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
-SSL error: Unable to get private key from 'MYSQL_TEST_DIR/std_data/client-cert.pem'
+mysqldump: [ERROR] SSL error: Unable to get private key from 'MYSQL_TEST_DIR/std_data/client-cert.pem'
 mysqldump: Got error: 2026: SSL connection error: Unable to get private key when trying to connect
 DROP TABLE t1;
 Variable_name	Value
 Ssl_cipher	DHE-RSA-AES256-SHA
 Variable_name	Value
-Ssl_version	TLSv1.2
-Variable_name	Value
 Ssl_cipher	DHE-RSA-AES128-SHA
-Variable_name	Value
-Ssl_version	TLSv1.2
 Variable_name	Value
 Ssl_cipher	AES256-SHA
-Variable_name	Value
-Ssl_version	TLSv1.2
-Variable_name	Value
-Ssl_cipher	DHE-RSA-AES128-SHA
-Variable_name	Value
-Ssl_version	TLSv1.2
 select 'is still running; no cipher request crashed the server' as result from dual;
 result
 is still running; no cipher request crashed the server
 GRANT SELECT ON test.* TO bug42158@localhost REQUIRE X509;
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
 FLUSH PRIVILEGES;
 SHOW STATUS LIKE 'Ssl_cipher';
 Variable_name	Value
-Ssl_cipher	DHE-RSA-AES128-GCM-SHA256
+Ssl_cipher	SSL_CIPHER
 DROP USER bug42158@localhost;
+set sql_mode= @orig_sql_mode;
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 End of 5.1 tests
+#
+# Bug #20648276: SSL-RELATED GLOBAL STATUS INFORMATION ONLY AVAILABLE
+#  WHEN CONNECTED USING --SSL
+#
+# Must return empty
+# Must return values for the certificate data
+Variable_name	Value
+Ssl_server_not_after	Dec  1 04:48:40 2029 GMT
+Ssl_server_not_before	Dec  5 04:48:40 2014 GMT
+End of 5.7 tests

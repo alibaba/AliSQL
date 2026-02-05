@@ -1,3 +1,13 @@
+# The include statement below is a temp one for tests that are yet to
+#be ported to run with InnoDB,
+#but needs to be kept for tests that would need MyISAM in future.
+--source include/force_myisam_default.inc
+
+# Store the time of password_last_changed column from mysql.user table
+# to restore it back later for the different users.
+let $date_to_restore_root=`SELECT password_last_changed from mysql.user where user='root'`;
+let $date_to_restore_sys=`SELECT password_last_changed from mysql.user where user='mysql.sys'`;
+let $date_to_restore_session_user=`SELECT password_last_changed from mysql.user where user='mysql.session'`;
 # Test of GRANT commands
 
 # Grant tests not performed with embedded server
@@ -9,17 +19,23 @@
 SET @old_log_bin_trust_function_creators= @@global.log_bin_trust_function_creators;
 SET GLOBAL log_bin_trust_function_creators = 1;
 
+#
+# Remove NO_AUTO_CREATE_USER sql mode (default from 5.7)
+#
+set @orig_sql_mode_session= @@SESSION.sql_mode;
+set @orig_sql_mode_global= @@GLOBAL.sql_mode;
+set GLOBAL sql_mode= (select replace(@@GLOBAL.sql_mode,'NO_AUTO_CREATE_USER',''));
+set SESSION sql_mode= (select replace(@@SESSION.sql_mode,'NO_AUTO_CREATE_USER',''));
+
 # Cleanup
 --disable_warnings
 drop table if exists t1;
 drop database if exists mysqltest;
 --enable_warnings
 
-call mtr.add_suppression("Did not write failed .* ");
 connect (master,localhost,root,,);
 connection master;
 SET NAMES binary;
-
 #
 # Test that SSL options works properly
 #
@@ -30,6 +46,7 @@ flush privileges;
 grant select on mysqltest.* to mysqltest_1@localhost require cipher "EDH-RSA-DES-CBC3-SHA";
 show grants for mysqltest_1@localhost;
 grant delete on mysqltest.* to mysqltest_1@localhost;
+--replace_regex /[0-9]*-[0-9]*-[0-9]* [0-9]*:[0-9]*:[0-9]*/DTVALUE/
 query_vertical select * from mysql.user where user="mysqltest_1";
 show grants for mysqltest_1@localhost;
 revoke delete on mysqltest.* from mysqltest_1@localhost;
@@ -49,9 +66,11 @@ flush privileges;
 delete from mysql.user where user='mysqltest_1';
 flush privileges;
 grant usage on *.* to mysqltest_1@localhost with max_queries_per_hour 10;
+--replace_regex /[0-9]*-[0-9]*-[0-9]* [0-9]*:[0-9]*:[0-9]*/DTVALUE/
 query_vertical select * from mysql.user where user="mysqltest_1";
 show grants for mysqltest_1@localhost;
 grant usage on *.* to mysqltest_1@localhost with max_updates_per_hour 20 max_connections_per_hour 30;
+--replace_regex /[0-9]*-[0-9]*-[0-9]* [0-9]*:[0-9]*:[0-9]*/DTVALUE/
 query_vertical select * from mysql.user where user="mysqltest_1";
 show grants for mysqltest_1@localhost;
 # This is just to double check that one won't ignore results of selects
@@ -130,7 +149,7 @@ select 1;     # To test that the previous command didn't cause problems
 #
 # Bug#4898 User privileges depending on ORDER BY Settings of table db
 #
-insert into mysql.user (host, user) values ('localhost', 'test11');
+insert ignore into mysql.user (host, user) values ('localhost', 'test11');
 insert into mysql.db (host, db, user, select_priv) values
 ('localhost', 'a%', 'test11', 'Y'), ('localhost', 'ab%', 'test11', 'Y');
 alter table mysql.db order by db asc;
@@ -349,9 +368,9 @@ SELECT * from INFORMATION_SCHEMA.USER_PRIVILEGES
 update mysqltest_1.t1, mysqltest_1.t2 set q=10 where b=1;
 --error ER_COLUMNACCESS_DENIED_ERROR
 update mysqltest_1.t2, mysqltest_2.t2 set d=20 where d=1;
---error ER_TABLEACCESS_DENIED_ERROR
+--error ER_COLUMNACCESS_DENIED_ERROR
 update mysqltest_1.t1, mysqltest_2.t2 set d=20 where d=1;
---error ER_TABLEACCESS_DENIED_ERROR
+--error ER_COLUMNACCESS_DENIED_ERROR
 update mysqltest_2.t1, mysqltest_1.t2 set c=20 where b=1;
 --error ER_COLUMNACCESS_DENIED_ERROR
 update mysqltest_2.t1, mysqltest_2.t2 set d=10 where s=2;
@@ -378,15 +397,15 @@ connection conn2;
 use mysqltest_1;
 update mysqltest_2.t1, mysqltest_2.t2 set c=500,d=600;
 # the following failed before, should fail now.
---error ER_TABLEACCESS_DENIED_ERROR
+--error ER_COLUMNACCESS_DENIED_ERROR
 update mysqltest_1.t1, mysqltest_1.t2 set a=100,b=200;
 use mysqltest_2;
 # the following used to succeed, it must fail now.
---error ER_TABLEACCESS_DENIED_ERROR
+--error ER_COLUMNACCESS_DENIED_ERROR
 update mysqltest_1.t1, mysqltest_1.t2 set a=100,b=200;
---error ER_TABLEACCESS_DENIED_ERROR
+--error ER_COLUMNACCESS_DENIED_ERROR
 update mysqltest_2.t1, mysqltest_1.t2 set c=100,b=200;
---error ER_TABLEACCESS_DENIED_ERROR
+--error ER_COLUMNACCESS_DENIED_ERROR
 update mysqltest_1.t1, mysqltest_2.t2 set a=100,d=200;
 # lets see the result
 connection master;
@@ -438,12 +457,14 @@ CREATE TABLE mysqltest.dummytable (dummyfield INT);
 CREATE VIEW mysqltest.dummyview AS SELECT dummyfield FROM mysqltest.dummytable;
 GRANT ALL PRIVILEGES ON mysqltest.dummytable TO dummy@localhost;
 GRANT ALL PRIVILEGES ON mysqltest.dummyview TO dummy@localhost;
+--sorted_result
 SHOW GRANTS FOR dummy@localhost;
 use INFORMATION_SCHEMA;
 SELECT TABLE_SCHEMA, TABLE_NAME, GROUP_CONCAT(PRIVILEGE_TYPE ORDER BY
 PRIVILEGE_TYPE SEPARATOR ', ') AS PRIVILEGES FROM TABLE_PRIVILEGES WHERE GRANTEE
 = '\'dummy\'@\'localhost\'' GROUP BY TABLE_SCHEMA, TABLE_NAME;
 FLUSH PRIVILEGES;
+--sorted_result
 SHOW GRANTS FOR dummy@localhost;
 SELECT TABLE_SCHEMA, TABLE_NAME, GROUP_CONCAT(PRIVILEGE_TYPE ORDER BY
 PRIVILEGE_TYPE SEPARATOR ', ') AS PRIVILEGES FROM TABLE_PRIVILEGES WHERE GRANTEE
@@ -460,12 +481,14 @@ CREATE TABLE mysqltest.dummytable (dummyfield INT);
 CREATE VIEW mysqltest.dummyview AS SELECT dummyfield FROM mysqltest.dummytable;
 GRANT CREATE VIEW ON mysqltest.dummytable TO dummy@localhost;
 GRANT CREATE VIEW ON mysqltest.dummyview TO dummy@localhost;
+--sorted_result
 SHOW GRANTS FOR dummy@localhost;
 use INFORMATION_SCHEMA;
 SELECT TABLE_SCHEMA, TABLE_NAME, GROUP_CONCAT(PRIVILEGE_TYPE ORDER BY
 PRIVILEGE_TYPE SEPARATOR ', ') AS PRIVILEGES FROM TABLE_PRIVILEGES WHERE GRANTEE
 = '\'dummy\'@\'localhost\'' GROUP BY TABLE_SCHEMA, TABLE_NAME;
 FLUSH PRIVILEGES;
+--sorted_result
 SHOW GRANTS FOR dummy@localhost;
 SELECT TABLE_SCHEMA, TABLE_NAME, GROUP_CONCAT(PRIVILEGE_TYPE ORDER BY
 PRIVILEGE_TYPE SEPARATOR ', ') AS PRIVILEGES FROM TABLE_PRIVILEGES WHERE GRANTEE
@@ -480,12 +503,14 @@ CREATE TABLE mysqltest.dummytable (dummyfield INT);
 CREATE VIEW mysqltest.dummyview AS SELECT dummyfield FROM mysqltest.dummytable;
 GRANT SHOW VIEW ON mysqltest.dummytable TO dummy@localhost;
 GRANT SHOW VIEW ON mysqltest.dummyview TO dummy@localhost;
+--sorted_result
 SHOW GRANTS FOR dummy@localhost;
 use INFORMATION_SCHEMA;
 SELECT TABLE_SCHEMA, TABLE_NAME, GROUP_CONCAT(PRIVILEGE_TYPE ORDER BY
 PRIVILEGE_TYPE SEPARATOR ', ') AS PRIVILEGES FROM TABLE_PRIVILEGES WHERE GRANTEE
 = '\'dummy\'@\'localhost\'' GROUP BY TABLE_SCHEMA, TABLE_NAME;
 FLUSH PRIVILEGES;
+--sorted_result
 SHOW GRANTS FOR dummy@localhost;
 SELECT TABLE_SCHEMA, TABLE_NAME, GROUP_CONCAT(PRIVILEGE_TYPE ORDER BY
 PRIVILEGE_TYPE SEPARATOR ', ') AS PRIVILEGES FROM TABLE_PRIVILEGES WHERE GRANTEE
@@ -529,7 +554,7 @@ set names latin1;
 # - Caused by a user with host ''
 #
 create user mysqltest_7@;
-set password for mysqltest_7@ = password('systpass');
+alter user mysqltest_7@ identified by 'systpass';
 show grants for mysqltest_7@;
 drop user mysqltest_7@;
 --error ER_NONEXISTING_GRANT
@@ -608,6 +633,7 @@ grant select on mysqltest.* to mysqltest_8@;
 show grants for mysqltest_8@;
 grant select on mysqltest.* to mysqltest_8;
 show grants for mysqltest_8;
+--sorted_result
 select * from  information_schema.schema_privileges
 where grantee like "'mysqltest_8'%";
 connect (conn3,localhost,mysqltest_8,,);
@@ -618,6 +644,7 @@ revoke select on mysqltest.* from mysqltest_8@'';
 revoke select on mysqltest.* from mysqltest_8;
 show grants for mysqltest_8@'';
 show grants for mysqltest_8;
+--sorted_result
 select * from  information_schema.schema_privileges
 where grantee like "'mysqltest_8'%";
 flush privileges;
@@ -637,6 +664,7 @@ show grants for mysqltest_8;
 flush privileges;
 show grants for mysqltest_8@'';
 show grants for mysqltest_8;
+--sorted_result
 select * from  information_schema.column_privileges;
 connect (conn4,localhost,mysqltest_8,,);
 select * from t1;
@@ -646,6 +674,7 @@ revoke update (a) on t1 from mysqltest_8@'';
 revoke update (a) on t1 from mysqltest_8;
 show grants for mysqltest_8@'';
 show grants for mysqltest_8;
+--sorted_result
 select * from  information_schema.column_privileges;
 flush privileges;
 show grants for mysqltest_8@'';
@@ -659,7 +688,8 @@ show grants for mysqltest_8;
 flush privileges;
 show grants for mysqltest_8@'';
 show grants for mysqltest_8;
-select * from  information_schema.table_privileges;
+--sorted_result
+select * from  information_schema.table_privileges where table_schema NOT IN ('sys','mysql');
 connect (conn5,localhost,mysqltest_8,,);
 select * from t1;
 disconnect conn5;
@@ -668,7 +698,8 @@ revoke update on t1 from mysqltest_8@'';
 revoke update on t1 from mysqltest_8;
 show grants for mysqltest_8@'';
 show grants for mysqltest_8;
-select * from  information_schema.table_privileges;
+--sorted_result
+select * from  information_schema.table_privileges where table_schema NOT IN ('sys','mysql');
 flush privileges;
 show grants for mysqltest_8@'';
 show grants for mysqltest_8;
@@ -681,6 +712,7 @@ grant update (a) on t1 to mysqltest_8@'';
 grant all privileges on mysqltest.* to mysqltest_8;
 show grants for mysqltest_8@'';
 show grants for mysqltest_8;
+--sorted_result
 select * from  information_schema.user_privileges
 where grantee like "'mysqltest_8'%";
 connect (conn5,localhost,mysqltest_8,,);
@@ -694,6 +726,7 @@ drop user mysqltest_8@'';
 --error ER_NONEXISTING_GRANT
 show grants for mysqltest_8@'';
 show grants for mysqltest_8;
+--sorted_result
 select * from  information_schema.user_privileges
 where grantee like "'mysqltest_8'%";
 drop user mysqltest_8;
@@ -824,7 +857,7 @@ disconnect master;
 # Bug#10668 CREATE USER does not enforce username length limit
 #
 --error ER_WRONG_STRING_LENGTH
-create user mysqltest1_thisisreallytoolong;
+create user mysqltest1_thisisreallyreallyreallyreallyreallyireallyreallytoolong;
 
 #
 # Test for Bug#16899 Possible buffer overflow in handling of DEFINER-clause.
@@ -914,13 +947,13 @@ USE test;
 # Working with database-level privileges.
 
 --error ER_WRONG_STRING_LENGTH
-GRANT CREATE ON mysqltest.* TO 1234567890abcdefGHIKL@localhost;
+GRANT CREATE ON mysqltest.* TO 1234567890abcdefGHIKL1234567890abcdefGHIKL@localhost;
 
 --error ER_WRONG_STRING_LENGTH
 GRANT CREATE ON mysqltest.* TO some_user_name@1234567890abcdefghij1234567890abcdefghij1234567890abcdefghijQWERTY;
 
 --error ER_WRONG_STRING_LENGTH
-REVOKE CREATE ON mysqltest.* FROM 1234567890abcdefGHIKL@localhost;
+REVOKE CREATE ON mysqltest.* FROM 1234567890abcdefGHIKL1234567890abcdefGHIKL@localhost;
 
 --error ER_WRONG_STRING_LENGTH
 REVOKE CREATE ON mysqltest.* FROM some_user_name@1234567890abcdefghij1234567890abcdefghij1234567890abcdefghijQWERTY;
@@ -928,13 +961,13 @@ REVOKE CREATE ON mysqltest.* FROM some_user_name@1234567890abcdefghij1234567890a
 # Working with table-level privileges.
 
 --error ER_WRONG_STRING_LENGTH
-GRANT CREATE ON t1 TO 1234567890abcdefGHIKL@localhost;
+GRANT CREATE ON t1 TO 1234567890abcdefGHIKL1234567890abcdefGHIKL@localhost;
 
 --error ER_WRONG_STRING_LENGTH
 GRANT CREATE ON t1 TO some_user_name@1234567890abcdefghij1234567890abcdefghij1234567890abcdefghijQWERTY;
 
 --error ER_WRONG_STRING_LENGTH
-REVOKE CREATE ON t1 FROM 1234567890abcdefGHIKL@localhost;
+REVOKE CREATE ON t1 FROM 1234567890abcdefGHIKL1234567890abcdefGHIKL@localhost;
 
 --error ER_WRONG_STRING_LENGTH
 REVOKE CREATE ON t1 FROM some_user_name@1234567890abcdefghij1234567890abcdefghij1234567890abcdefghijQWERTY;
@@ -942,13 +975,13 @@ REVOKE CREATE ON t1 FROM some_user_name@1234567890abcdefghij1234567890abcdefghij
 # Working with routine-level privileges.
 
 --error ER_WRONG_STRING_LENGTH
-GRANT EXECUTE ON PROCEDURE p1 TO 1234567890abcdefGHIKL@localhost;
+GRANT EXECUTE ON PROCEDURE p1 TO 1234567890abcdefGHIKL1234567890abcdefGHIKL@localhost;
 
 --error ER_WRONG_STRING_LENGTH
 GRANT EXECUTE ON PROCEDURE p1 TO some_user_name@1234567890abcdefghij1234567890abcdefghij1234567890abcdefghijQWERTY;
 
 --error ER_WRONG_STRING_LENGTH
-REVOKE EXECUTE ON PROCEDURE p1 FROM 1234567890abcdefGHIKL@localhost;
+REVOKE EXECUTE ON PROCEDURE p1 FROM 1234567890abcdefGHIKL1234567890abcdefGHIKL@localhost;
 
 --error ER_WRONG_STRING_LENGTH
 REVOKE EXECUTE ON PROCEDURE t1 FROM some_user_name@1234567890abcdefghij1234567890abcdefghij1234567890abcdefghijQWERTY;
@@ -1246,8 +1279,10 @@ CREATE SQL SECURITY INVOKER VIEW db27878.v1 AS SELECT * FROM test.t1;
 connect (user1,localhost,mysqltest_1,,test);
 connection user1;
 USE db27878;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 --error 1356
 UPDATE v1 SET f2 = 4;
+SET sql_mode = default;
 SELECT * FROM test.t1;
 disconnect user1;
 connection default;
@@ -1293,8 +1328,8 @@ drop function test_function;
 # Bug#41456 SET PASSWORD hates CURRENT_USER()
 #
 SELECT CURRENT_USER();
-SET PASSWORD FOR CURRENT_USER() = PASSWORD("admin");
-SET PASSWORD FOR CURRENT_USER() = PASSWORD("");
+SET PASSWORD FOR CURRENT_USER() = "admin";
+SET PASSWORD FOR CURRENT_USER() = "";
 
 #
 # Bug#57952: privilege change is not taken into account by EXECUTE.
@@ -1586,7 +1621,7 @@ grant select on test.* to юзер_юзер@localhost;
 revoke all on test.* from юзер_юзер@localhost;
 drop user юзер_юзер@localhost;
 --error ER_WRONG_STRING_LENGTH
-grant select on test.* to очень_длинный_юзер@localhost;
+grant select on test.* to очень_длинный_юзер_very_long_user@localhost;
 set names default;
 
 #
@@ -2028,16 +2063,6 @@ GRANT REFERENCES ON mysqltest_db1.* TO mysqltest_u1@localhost;
 
 --echo
 --echo # -- 
---echo # -- Check that global GRANT OPTION allows SHOW CREATE TABLE.
---echo # -- 
-
---echo
-GRANT GRANT OPTION ON mysqltest_db1.* TO mysqltest_u1@localhost;
-
---source include/bug38347.inc
-
---echo
---echo # -- 
 --echo # -- Check that global CREATE VIEW allows SHOW CREATE TABLE.
 --echo # -- 
 
@@ -2143,16 +2168,6 @@ GRANT INDEX ON mysqltest_db1.t1 TO mysqltest_u1@localhost;
 
 --echo
 GRANT REFERENCES ON mysqltest_db1.t1 TO mysqltest_u1@localhost;
-
---source include/bug38347.inc
-
---echo
---echo # -- 
---echo # -- Check that table-level GRANT OPTION allows SHOW CREATE TABLE.
---echo # -- 
-
---echo
-GRANT GRANT OPTION ON mysqltest_db1.t1 TO mysqltest_u1@localhost;
 
 --source include/bug38347.inc
 
@@ -2283,6 +2298,442 @@ DROP USER foo@'127.0.0.1';
 
 --echo # End of Bug#12766319
 
+
+--echo #
+--echo # WL#7131: Add timestamp in mysql.user on the last time the
+--echo #          password was changed and implement password rotation.
+--echo #
+
+SET @saved_value = @@global.default_password_lifetime;
+SET GLOBAL default_password_lifetime = 2;
+SHOW VARIABLES LIKE 'default_password_lifetime';
+
+CREATE USER 'wl7131' IDENTIFIED BY 'wl7131';
+--echo # This should report 1.
+# The difference should be but less than a threshold (2 seconds).
+SELECT (SELECT now()-(SELECT password_last_changed from mysql.user where user='wl7131')) <= 2;
+# Update password_last_changed manually so that user
+# is forced to use SET PASSWORD.
+UPDATE mysql.user SET password_last_changed = (now() - INTERVAL 3 DAY) where user='wl7131';
+FLUSH PRIVILEGES;
+--echo # Attempt to execute query should fail
+--error 1
+--exec $MYSQL -uwl7131 -pwl7131 -e "EXIT" 2>&1
+
+connect(con1,localhost,wl7131,wl7131,,);
+--echo # Doing something should fail
+--error 1820
+SELECT 1;
+--echo # Setting password should work
+ALTER USER wl7131 IDENTIFIED BY 'new_wl7131';
+--echo # Doing something should pass
+SELECT 1;
+disconnect con1;
+
+--echo # Reconnecting with same user should pass now
+connect(con1,localhost,wl7131,new_wl7131,,);
+SELECT 1;
+disconnect con1;
+
+connection default;
+DROP USER 'wl7131';
+
+CREATE USER 'wl7131' IDENTIFIED BY 'wl7131';
+--echo # Issue alter user and check the value of
+--echo # password_lifetime column
+ALTER USER 'wl7131' PASSWORD EXPIRE NEVER;
+--echo # This should report 0
+SELECT password_lifetime FROM mysql.user where user='wl7131';
+UPDATE mysql.user SET password_last_changed = (now() - INTERVAL 5 DAY) where user='wl7131';
+FLUSH PRIVILEGES;
+
+--echo # This should pass as password is never expired.
+--exec $MYSQL -uwl7131 -pwl7131 -e "EXIT" 2>&1
+
+ALTER USER 'wl7131' PASSWORD EXPIRE DEFAULT;
+--echo # This should report NULL
+SELECT password_lifetime FROM mysql.user where user='wl7131';
+
+--echo # This should not pass as default_password_lifetime
+--echo # (which is 2 now) is being used.
+--error 1
+--exec $MYSQL -uwl7131 -pwl7131 -e "EXIT" 2>&1
+
+SET GLOBAL default_password_lifetime = 0;
+
+ALTER USER 'wl7131' PASSWORD EXPIRE INTERVAL 4 DAY;
+--echo # Should report 4
+SELECT password_lifetime FROM mysql.user where user='wl7131';
+--echo # This should not pass.
+--error 1
+--exec $MYSQL -uwl7131 -pwl7131 -e "EXIT" 2>&1
+
+SET GLOBAL default_password_lifetime = @saved_value;
+
+ALTER USER 'wl7131' PASSWORD EXPIRE INTERVAL 6 DAY;
+--echo # Should report 6
+select password_lifetime from mysql.user where user='wl7131';
+--echo # This should pass.
+--exec $MYSQL -uwl7131 -pwl7131 -e "EXIT" 2>&1
+DROP USER 'wl7131';
+
+CREATE USER 'wl7131';
+let $password_change_time_1=`SELECT password_last_changed FROM mysql.user where user='wl7131'`;
+--echo # This should not report NULL
+--replace_regex /[0-9]*-[0-9]*-[0-9]* [0-9]*:[0-9]*:[0-9]*/DTVALUE/
+--disable_query_log ONCE
+--eval SELECT '$password_change_time_1' IS NOT NULL
+--sleep 1
+GRANT USAGE ON *.* TO 'wl7131' REQUIRE SSL;
+let $password_change_time_2=`SELECT password_last_changed FROM mysql.user where user='wl7131'`;
+--echo # This should report 0 as it must have the same value as above
+--replace_regex /[0-9]*-[0-9]*-[0-9]* [0-9]*:[0-9]*:[0-9]*/DTVALUE/
+--disable_query_log ONCE
+--eval SELECT TIMESTAMPDIFF(SECOND,'$password_change_time_1','$password_change_time_2') <> 0
+
+--echo # Should report errors
+--error 1064
+ALTER USER 'wl7131' PASSWORD EXPIRE INTERVAL -2 DAY;
+--error 1525
+ALTER USER 'wl7131' PASSWORD EXPIRE INTERVAL 0 DAY;
+--error 1525
+ALTER USER 'wl7131' PASSWORD EXPIRE INTERVAL 65536 DAY;
+
+--echo # Setting an empty password. It should update the timestamp column.
+ALTER USER 'wl7131' IDENTIFIED BY '';
+--echo # This should report 1.
+# The difference should be but less than a threshold (2 seconds).
+SELECT (SELECT now()-(SELECT password_last_changed from mysql.user where user='wl7131')) <= 2;
+DROP USER 'wl7131';
+
+GRANT USAGE ON *.* TO 'wl7131'@'localhost' IDENTIFIED BY 'wl7131';
+
+--echo # Must report 1
+SELECT (SELECT password_last_changed FROM mysql.user where user='wl7131') IS NOT NULL;
+
+DROP USER 'wl7131'@'localhost';
+
+--disable_query_log
+--eval UPDATE mysql.user SET password_last_changed= '$date_to_restore_root'
+--eval UPDATE mysql.user SET password_last_changed= '$date_to_restore_sys' WHERE USER= 'mysql.sys'
+--eval UPDATE mysql.user SET password_last_changed= '$date_to_restore_session_user' WHERE USER= 'mysql.session'
+--enable_query_log
+--echo # mysql.user table restored to original values.
+
+set GLOBAL sql_mode= @orig_sql_mode_global;
+set SESSION sql_mode= @orig_sql_mode_session;
+
 # Wait till we reached the initial number of concurrent sessions
 --source include/wait_until_count_sessions.inc
 
+--echo #
+--echo # WL#2284: Increase the length of a user name
+--echo #
+
+CREATE TABLE t1 (
+  int_field INTEGER UNSIGNED NOT NULL,
+  char_field CHAR(10),
+  INDEX(`int_field`)
+);
+
+CREATE PROCEDURE p1() SELECT b FROM t1;
+
+CREATE USER user_name_len_16@localhost;
+CREATE USER user_name_len_22_01234@localhost;
+CREATE USER user_name_len_32_012345678901234@localhost;
+
+--error ER_WRONG_STRING_LENGTH
+CREATE USER user_name_len_33_0123456789012345@localhost;
+
+--error ER_WRONG_STRING_LENGTH
+CREATE USER user_name_len_40_01234567890123456789012@localhost;
+
+# Working with database-level privileges.
+
+GRANT CREATE ON mysqltest.* TO user_name_len_16@localhost;
+GRANT CREATE ON mysqltest.* TO user_name_len_22_01234@localhost;
+GRANT CREATE ON mysqltest.* TO user_name_len_32_012345678901234@localhost;
+
+--error ER_WRONG_STRING_LENGTH
+GRANT CREATE ON mysqltest.* TO user_name_len_33_0123456789012345@localhost;
+
+--error ER_WRONG_STRING_LENGTH
+GRANT CREATE ON mysqltest.* TO user_name_len_40_01234567890123456789012@localhost;
+
+REVOKE CREATE ON mysqltest.* FROM user_name_len_16@localhost;
+REVOKE CREATE ON mysqltest.* FROM user_name_len_22_01234@localhost;
+REVOKE CREATE ON mysqltest.* FROM user_name_len_32_012345678901234@localhost;
+
+--error ER_WRONG_STRING_LENGTH
+REVOKE CREATE ON mysqltest.* FROM user_name_len_33_0123456789012345@localhost;
+
+--error ER_WRONG_STRING_LENGTH
+REVOKE CREATE ON mysqltest.* FROM user_name_len_40_01234567890123456789012@localhost;
+
+# Working with table-level privileges.
+
+GRANT CREATE ON t1 TO user_name_len_16@localhost;
+GRANT CREATE ON t1 TO user_name_len_22_01234@localhost;
+GRANT CREATE ON t1 TO user_name_len_32_012345678901234@localhost;
+
+--error ER_WRONG_STRING_LENGTH
+GRANT CREATE ON t1 TO user_name_len_33_0123456789012345@localhost;
+
+--error ER_WRONG_STRING_LENGTH
+GRANT CREATE ON t1 TO user_name_len_40_01234567890123456789012@localhost;
+
+REVOKE CREATE ON t1 FROM user_name_len_16@localhost;
+REVOKE CREATE ON t1 FROM user_name_len_22_01234@localhost;
+REVOKE CREATE ON t1 FROM user_name_len_32_012345678901234@localhost;
+
+--error ER_WRONG_STRING_LENGTH
+REVOKE CREATE ON t1 FROM user_name_len_33_0123456789012345@localhost;
+
+--error ER_WRONG_STRING_LENGTH
+REVOKE CREATE ON t1 FROM user_name_len_40_01234567890123456789012@localhost;
+
+GRANT SELECT ON t1 TO user_name_len_16@localhost;
+GRANT SELECT ON t1 TO user_name_len_22_01234@localhost;
+GRANT SELECT ON t1 TO user_name_len_32_012345678901234@localhost;
+
+--error ER_WRONG_STRING_LENGTH
+GRANT SELECT ON t1 TO user_name_len_33_0123456789012345@localhost;
+
+--error ER_WRONG_STRING_LENGTH
+GRANT SELECT ON t1 TO user_name_len_40_01234567890123456789012@localhost;
+
+REVOKE SELECT ON t1 FROM user_name_len_16@localhost;
+REVOKE SELECT ON t1 FROM user_name_len_22_01234@localhost;
+REVOKE SELECT ON t1 FROM user_name_len_32_012345678901234@localhost;
+
+--error ER_WRONG_STRING_LENGTH
+REVOKE SELECT ON t1 FROM user_name_len_33_0123456789012345@localhost;
+
+--error ER_WRONG_STRING_LENGTH
+REVOKE SELECT ON t1 FROM user_name_len_40_01234567890123456789012@localhost;
+
+# Working with routine-level privileges.
+
+GRANT EXECUTE ON PROCEDURE p1 TO user_name_len_16@localhost;
+GRANT EXECUTE ON PROCEDURE p1 TO user_name_len_22_01234@localhost;
+GRANT EXECUTE ON PROCEDURE p1 TO user_name_len_32_012345678901234@localhost;
+
+--error ER_WRONG_STRING_LENGTH
+GRANT EXECUTE ON PROCEDURE p1 TO user_name_len_33_0123456789012345@localhost;
+
+--error ER_WRONG_STRING_LENGTH
+GRANT EXECUTE ON PROCEDURE p1 TO user_name_len_40_01234567890123456789012@localhost;
+
+REVOKE EXECUTE ON PROCEDURE p1 FROM user_name_len_16@localhost;
+REVOKE EXECUTE ON PROCEDURE p1 FROM user_name_len_22_01234@localhost;
+REVOKE EXECUTE ON PROCEDURE p1 FROM user_name_len_32_012345678901234@localhost;
+
+--error ER_WRONG_STRING_LENGTH
+REVOKE EXECUTE ON PROCEDURE p1 FROM user_name_len_33_0123456789012345@localhost;
+
+--error ER_WRONG_STRING_LENGTH
+REVOKE EXECUTE ON PROCEDURE p1 FROM user_name_len_40_01234567890123456789012@localhost;
+
+--error ER_WRONG_STRING_LENGTH
+DROP USER user_name_len_40_01234567890123456789012@localhost;
+
+--character_set utf8
+set names utf8;
+
+# 16 characters user name
+CREATE USER очень_длинный_юз@localhost;
+# 24 characters user name
+CREATE USER очень_очень_длинный_юзер@localhost;
+# 32 characters user name
+CREATE USER очень_очень_очень_длинный_юзер__@localhost;
+# 36 characters user name
+--error ER_WRONG_STRING_LENGTH
+CREATE USER очень_очень_очень_очень_длинный_юзер@localhost;
+
+GRANT CREATE ON mysqltest.* TO очень_длинный_юз@localhost;
+GRANT CREATE ON mysqltest.* TO очень_очень_длинный_юзер@localhost;
+GRANT CREATE ON mysqltest.* TO очень_очень_очень_длинный_юзер__@localhost;
+
+--error ER_WRONG_STRING_LENGTH
+GRANT CREATE ON mysqltest.* TO очень_очень_очень_очень_длинный_юзер@localhost;
+
+REVOKE CREATE ON mysqltest.* FROM очень_длинный_юз@localhost;
+REVOKE CREATE ON mysqltest.* FROM очень_очень_длинный_юзер@localhost;
+REVOKE CREATE ON mysqltest.* FROM очень_очень_очень_длинный_юзер__@localhost;
+
+--error ER_WRONG_STRING_LENGTH
+REVOKE CREATE ON mysqltest.* FROM очень_очень_очень_очень_длинный_юзер@localhost;
+
+GRANT CREATE ON t1 TO очень_длинный_юз@localhost;
+GRANT CREATE ON t1 TO очень_очень_длинный_юзер@localhost;
+GRANT CREATE ON t1 TO очень_очень_очень_длинный_юзер__@localhost;
+
+--error ER_WRONG_STRING_LENGTH
+GRANT CREATE ON t1 TO очень_очень_очень_очень_длинный_юзер@localhost;
+
+REVOKE CREATE ON t1 FROM очень_длинный_юз@localhost;
+REVOKE CREATE ON t1 FROM очень_очень_длинный_юзер@localhost;
+REVOKE CREATE ON t1 FROM очень_очень_очень_длинный_юзер__@localhost;
+
+--error ER_WRONG_STRING_LENGTH
+REVOKE CREATE ON t1 FROM очень_очень_очень_очень_длинный_юзер@localhost;
+
+GRANT SELECT ON t1 TO очень_длинный_юз@localhost;
+GRANT SELECT ON t1 TO очень_очень_длинный_юзер@localhost;
+GRANT SELECT ON t1 TO очень_очень_очень_длинный_юзер__@localhost;
+
+--error ER_WRONG_STRING_LENGTH
+GRANT SELECT ON t1 TO очень_очень_очень_очень_длинный_юзер@localhost;
+
+REVOKE SELECT ON t1 FROM очень_длинный_юз@localhost;
+REVOKE SELECT ON t1 FROM очень_очень_длинный_юзер@localhost;
+REVOKE SELECT ON t1 FROM очень_очень_очень_длинный_юзер__@localhost;
+
+--error ER_WRONG_STRING_LENGTH
+REVOKE SELECT ON t1 FROM очень_очень_очень_очень_длинный_юзер@localhost;
+
+GRANT EXECUTE ON PROCEDURE p1 TO очень_длинный_юз@localhost;
+GRANT EXECUTE ON PROCEDURE p1 TO очень_очень_длинный_юзер@localhost;
+GRANT EXECUTE ON PROCEDURE p1 TO очень_очень_очень_длинный_юзер__@localhost;
+
+--error ER_WRONG_STRING_LENGTH
+GRANT EXECUTE ON PROCEDURE p1 TO очень_очень_очень_очень_длинный_юзер@localhost;
+
+REVOKE EXECUTE ON PROCEDURE p1 FROM очень_длинный_юз@localhost;
+REVOKE EXECUTE ON PROCEDURE p1 FROM очень_очень_длинный_юзер@localhost;
+REVOKE EXECUTE ON PROCEDURE p1 FROM очень_очень_очень_длинный_юзер__@localhost;
+
+--error ER_WRONG_STRING_LENGTH
+REVOKE EXECUTE ON PROCEDURE p1 FROM очень_очень_очень_очень_длинный_юзер@localhost;
+
+
+--echo # Create a user, assign privileges, try to connect and use the granted
+--echo # privileges. Trying out different connections (socket/TCP/SSL).
+
+
+CREATE USER user_name_len_25_01234567@localhost;
+GRANT CREATE ON * . * TO user_name_len_25_01234567@localhost;
+
+--echo # Connecting via socket
+connect (con_grant,localhost,user_name_len_25_01234567,,);
+
+CREATE DATABASE db_1;
+
+CREATE TABLE db_1.test_table (name varchar(15) not null, surname varchar(20) not null, 
+email varchar(50) null, street varchar(50) null, city varchar(50) null, 
+is_active int default 1 );
+
+connection con_grant;
+--error ER_TABLEACCESS_DENIED_ERROR
+INSERT INTO db_1.test_table values('rob', 'g', 'robg@oracle.com', 'couldbeworse_street',
+'couldbeworse_city', 1);
+
+connection default;
+GRANT INSERT ON db_1.test_table TO user_name_len_25_01234567@localhost;
+
+disconnect con_grant;
+--echo # Connecting via TCP/IP
+connect (con_grant,127.0.0.1,user_name_len_25_01234567,,db_1,$MASTER_MYPORT);
+INSERT INTO db_1.test_table values('rob', 'g', 'robg@oracle.com', 'couldbeworse_street',
+'couldbeworse_city', 1);
+
+INSERT INTO db_1.test_table values('kam', 'g', 'kamg@oracle.com', 'couldbeworse_street',
+'couldbeworse_city', 1);
+
+--error ER_TABLEACCESS_DENIED_ERROR
+SELECT * FROM db_1.test_table;
+
+connection default;
+GRANT SELECT ON db_1.test_table TO user_name_len_25_01234567@localhost;
+
+disconnect con_grant;
+--echo # Connecting via socket/SSL
+connect (con_grant,localhost,user_name_len_25_01234567,,,,,SSL);
+SELECT * FROM db_1.test_table;
+
+--error ER_TABLEACCESS_DENIED_ERROR
+UPDATE db_1.test_table SET street='couldbemuchworse_street' WHERE name='rob'; 
+
+connection default;
+GRANT UPDATE ON db_1.test_table TO user_name_len_25_01234567@localhost;
+
+connection con_grant;
+UPDATE db_1.test_table SET street='couldbemuchworse_street' WHERE name='rob'; 
+--error ER_TABLEACCESS_DENIED_ERROR
+DELETE FROM db_1.test_table WHERE name='rob';
+
+connection default;
+GRANT DELETE ON db_1.test_table TO user_name_len_25_01234567@localhost;
+
+connection con_grant;
+DELETE FROM db_1.test_table WHERE name='rob';
+--error ER_TABLEACCESS_DENIED_ERROR
+DROP TABLE db_1.test_table;
+
+connection default;
+GRANT DROP ON db_1.* TO user_name_len_25_01234567@localhost;
+
+disconnect con_grant;
+--echo # Connecting via TCP/IP/SSL
+connect (con_grant,127.0.0.1,user_name_len_25_01234567,,db_1,$MASTER_MYPORT,,SSL);
+
+DROP TABLE db_1.test_table;
+DROP DATABASE db_1;
+
+connection default;
+disconnect con_grant;
+
+# cleanup
+
+DROP USER очень_длинный_юз@localhost;
+DROP USER очень_очень_длинный_юзер@localhost;
+DROP USER очень_очень_очень_длинный_юзер__@localhost;
+--error ER_WRONG_STRING_LENGTH
+DROP USER очень_очень_очень_очень_длинный_юзер@localhost;
+
+set names default;
+
+DROP USER user_name_len_16@localhost;
+DROP USER user_name_len_22_01234@localhost;
+DROP USER user_name_len_32_012345678901234@localhost;
+DROP USER user_name_len_25_01234567@localhost;
+
+DROP TABLE t1;
+DROP PROCEDURE p1;
+
+#
+# Bug#21762656 AFTER RUNNING MYSQL_UPGRADE PROXIES_PRIV USER COLUMNS ARE NOT UPDATED TO 32
+#
+
+CREATE USER user_name_len_22_01234@localhost;
+GRANT ALL PRIVILEGES ON *.* TO user_name_len_22_01234@localhost WITH GRANT OPTION;
+GRANT PROXY ON ''@'' TO user_name_len_22_01234@localhost WITH GRANT OPTION;
+CONNECT (conn_su,localhost,user_name_len_22_01234,,);
+
+CREATE USER user_name_len_32_012345678901234@localhost;
+GRANT SELECT ON *.* TO user_name_len_32_012345678901234@localhost;
+--echo ** Creating new proxy user **
+CREATE USER proxy_native_0123456789@localhost IDENTIFIED WITH mysql_native_password;
+GRANT PROXY ON user_name_len_32_012345678901234@localhost TO proxy_native_0123456789@localhost;
+SELECT USER, PROXIED_USER, GRANTOR FROM mysql.proxies_priv WHERE Proxied_host='localhost';
+
+connection default;
+disconnect conn_su;
+DROP USER user_name_len_22_01234@localhost;
+DROP USER user_name_len_32_012345678901234@localhost;
+DROP USER proxy_native_0123456789@localhost;
+
+--echo #
+--echo # Bug#33578113: DROP privilege on performance_schema.* can't be revoked
+--echo #
+
+connection default;
+CREATE USER bug33578113;
+
+GRANT DROP ON performance_schema.* TO bug33578113;
+REVOKE DROP ON performance_schema.* FROM bug33578113;
+
+DROP USER bug33578113;
+
+# Wait till we reached the initial number of concurrent sessions
+--source include/wait_until_count_sessions.inc

@@ -1,13 +1,20 @@
-/* Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -16,9 +23,9 @@
 #ifndef RPL_INFO_FILE_H
 #define RPL_INFO_FILE_H
 
-#include <my_global.h>
-#include <sql_priv.h>
-#include "rpl_info_handler.h"
+#include "my_global.h"
+#include "my_sys.h"              // IO_CACHE
+#include "rpl_info_handler.h"    // Rpl_info_handler
 
 class Rpl_info_factory;
 
@@ -73,7 +80,7 @@ private:
   int do_clean_info();
   /**
     Returns the number of files that corresponds to param_info_fname.
-    If param_info_fname is a regular expression, @code expression is
+    If param_info_fname is a regular expression, @c expression is
     set.
 
     @param[in]  nparam              Number of fields in the file.
@@ -99,7 +106,7 @@ private:
   bool do_set_info(const int pos, const int value);
   bool do_set_info(const int pos, const ulong value);
   bool do_set_info(const int pos, const float value);
-  bool do_set_info(const int pos, const Dynamic_ids *value);
+  bool do_set_info(const int pos, const Server_ids *value);
   bool do_get_info(const int pos, char *value, const size_t size,
                    const char *default_value);
   bool do_get_info(const int pos, uchar *value, const size_t size,
@@ -110,8 +117,8 @@ private:
                    const ulong default_value);
   bool do_get_info(const int pos, float *value,
                    const float default_value);
-  bool do_get_info(const int pos, Dynamic_ids *value,
-                   const Dynamic_ids *default_value);
+  bool do_get_info(const int pos, Server_ids *value,
+                   const Server_ids *default_value);
   char* do_get_description_info();
   uint do_get_rpl_info_type();
 

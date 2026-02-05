@@ -1,13 +1,20 @@
-/* Copyright (c) 2011, 2013, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -22,6 +29,7 @@ extern "C" {
 #endif
 
 #include "m_ctype.h"                            /* CHARSET_INFO */
+#include "my_icp.h"                             /* ICP_RESULT */
 
 /*
   There is a hard limit for the maximum number of keys as there are only
@@ -108,8 +116,8 @@ typedef struct st_HA_KEYSEG		/* Key-portion */
 
 extern int ha_compare_text(const CHARSET_INFO *, uchar *, uint, uchar *, uint ,
 			   my_bool, my_bool);
-extern int ha_key_cmp(register HA_KEYSEG *keyseg, register uchar *a,
-		      register uchar *b, uint key_length, uint nextflag,
+extern int ha_key_cmp(HA_KEYSEG *keyseg, uchar *a,
+		      uchar *b, uint key_length, uint nextflag,
 		      uint *diff_pos);
 
 /*
@@ -118,27 +126,6 @@ extern int ha_key_cmp(register HA_KEYSEG *keyseg, register uchar *a,
   this amount of bytes.
 */
 #define portable_sizeof_char_ptr 8
-
-
-/**
-  Return values of index_cond_func_xxx functions.
-
-  0=ICP_NO_MATCH  - index tuple doesn't satisfy the pushed index condition (the
-                engine should discard the tuple and go to the next one)
-  1=ICP_MATCH     - index tuple satisfies the pushed index condition (the engine
-                should fetch and return the record)
-  2=ICP_OUT_OF_RANGE - index tuple is out range that we're scanning, e.g. this
-                   if we're scanning "t.key BETWEEN 10 AND 20" and got a
-                   "t.key=21" tuple (the engine should stop scanning and return
-                   HA_ERR_END_OF_FILE right away).
-*/
-
-typedef enum icp_result {
-  ICP_NO_MATCH,
-  ICP_MATCH,
-  ICP_OUT_OF_RANGE
-} ICP_RESULT;
-
 
 #ifdef	__cplusplus
 }

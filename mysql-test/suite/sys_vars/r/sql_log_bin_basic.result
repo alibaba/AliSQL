@@ -60,11 +60,15 @@ ERROR 42000: Variable 'sql_log_bin' can't be set to the value of 'NO'
 SELECT @@global.sql_log_bin;
 @@global.sql_log_bin
 1
+Warnings:
+Warning	1287	'@@global.sql_log_bin' is deprecated and will be removed in a future release. Please use the constant 1 (since @@global.sql_log_bin is always equal to 1) instead
 SET @@global.sql_log_bin = 0;
 ERROR 42000: Variable 'sql_log_bin' can't be set to the value of '0'
 SELECT @@global.sql_log_bin;
 @@global.sql_log_bin
 1
+Warnings:
+Warning	1287	'@@global.sql_log_bin' is deprecated and will be removed in a future release. Please use the constant 1 (since @@global.sql_log_bin is always equal to 1) instead
 SET @@global.sql_log_bin = 1;
 ERROR 42000: Variable 'sql_log_bin' can't be set to the value of '1'
 '#----------------------FN_DYNVARS_156_06------------------------#'

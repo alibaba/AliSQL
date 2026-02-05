@@ -87,3 +87,44 @@ Level	Code	Message
 Error	1038	Out of sort memory, consider increasing server sort buffer size
 Error	1028	Sort aborted: Out of sort memory, consider increasing server sort buffer size
 DROP TABLE t1;
+#
+# Bug#17372396: PLEASE REMOVE SORT ABORTED ERRORS FROM THE ERROR LOG
+#
+CREATE TABLE t1 (a INT,b INT) ENGINE=myisam;
+INSERT INTO t1 VALUES (2,4),(7,8);
+SELECT GROUP_CONCAT(DISTINCT t1.a) a FROM t1 WHERE t1.a =
+(SELECT a FROM t1) GROUP BY b;
+ERROR 21000: Subquery returns more than 1 row
+DROP TABLE t1;
+DATE_TIME [Note] Sort aborted, host: localhost, user: root, thread: #, error: Out of memory (Needed N bytes), query: SELECT * FROM t1 ORDER BY f1 ASC, f0 LIMIT 1
+DATE_TIME [Note] Sort aborted, host: localhost, user: root, thread: #, error: Out of sort memory, consider increasing server sort buffer size, query: SELECT * FROM t1 ORDER BY f1 ASC, f0
+DATE_TIME [Note] Sort aborted, host: localhost, user: root, thread: #, error: Out of sort memory, consider increasing server sort buffer size, query: DELETE IGNORE FROM t1 ORDER BY c26,c7,c23,c4,c25,c5,c20,
+DATE_TIME [Note] Sort aborted, host: localhost, user: root, thread: #, error: Out of sort memory, consider increasing server sort buffer size, query: DELETE FROM t1 ORDER BY c26,c7,c23,c4,c25,c5,c20,
+#
+# Bug#21611270 ASSERTION IN FILESORT::MAKE_SORTORDER()
+#
+CREATE TABLE g(b INT NOT NULL, UNIQUE(b)) ENGINE=INNODB;
+CREATE TABLE t(a int, c int) ENGINE=INNODB;
+INSERT INTO t VALUES(1,1);
+SELECT 1
+FROM t
+GROUP BY a
+HAVING (SELECT a
+FROM g
+GROUP BY b, a);
+1
+DROP TABLE t, g;
+#
+# Bug #22200984 ASSERTION IN FILESORT::MAKE_SORTORDER()
+#
+SET sql_mode="";
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+CREATE TABLE t1(a_t1 INT, c INT, d INT) ENGINE=INNODB;
+CREATE TABLE t2(a_t2 INT NOT NULL, UNIQUE KEY (a_t2)) ENGINE=INNODB;
+INSERT INTO t1 VALUES();
+SELECT (SELECT 1 FROM t2 GROUP BY d, a_t2 HAVING c) FROM t1 GROUP BY (1=2);
+(SELECT 1 FROM t2 GROUP BY d, a_t2 HAVING c)
+NULL
+DROP TABLE t1, t2;
+SET sql_mode=default;

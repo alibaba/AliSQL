@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -36,15 +43,18 @@
 #include <EventLogger.hpp>
 extern EventLogger * g_eventLogger;
 
+#if defined VM_TRACE || defined ERROR_INSERT
+extern int g_errorInsert;
+#endif
 
 const char *load_default_groups[]= { "mysql_cluster","ndb_mgmd",0 };
 
 // copied from mysql.cc to get readline
 extern "C" {
-#if defined( __WIN__)
+#if defined(_WIN32)
 #include <conio.h>
 #elif !defined(__NETWARE__)
-#include <readline/readline.h>
+#include <readline.h>
 extern "C" int add_history(const char *command); /* From readline directory */
 #define HAVE_READLINE
 #endif
@@ -155,6 +165,12 @@ static struct my_option my_long_options[] =
     "Nodes that will not be waited for during start",
     (uchar**) &opt_nowait_nodes, (uchar**) &opt_nowait_nodes, 0,
     GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
+#if defined VM_TRACE || defined ERROR_INSERT
+  { "error-insert", NDB_OPT_NOSHORT,
+    "Start with error insert variable set",
+    (uchar**) &g_errorInsert, (uchar**) &g_errorInsert, 0,
+    GET_INT, REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
+#endif
   { 0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0}
 };
 
@@ -176,7 +192,7 @@ static void mgmd_exit(int result)
   g_eventLogger->close();
 
   /* Free memory allocated by 'load_defaults' */
-  free_defaults(defaults_argv);
+  ndb_free_defaults(defaults_argv);
 
   ndb_end(opt_ndb_endinfo ? MY_CHECK_ERROR | MY_GIVE_INFO : 0);
 
@@ -193,11 +209,11 @@ static int mgmd_main(int argc, char** argv)
 
   ndb_opt_set_usage_funcs(short_usage_sub, usage);
 
-  load_defaults("my",load_default_groups,&argc,&argv);
+  ndb_load_defaults(NULL, load_default_groups,&argc,&argv);
   defaults_argv= argv; /* Must be freed by 'free_defaults' */
 
   int ho_error;
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   opt_debug= IF_WIN("d:t:i:F:o,c:\\ndb_mgmd.trace",
                     "d:t:i:F:o,/tmp/ndb_mgmd.trace");
 #endif

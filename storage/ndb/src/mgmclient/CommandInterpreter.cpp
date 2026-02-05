@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -536,6 +543,8 @@ static const char* helpTextReport =
 "        node, or for all data nodes using ALL\n"
 ;
 static void helpTextReportFn();
+static void helpTextReportTypeOptionFn();
+
 
 static const char* helpTextQuit =
 "---------------------------------------------------------------------------\n"
@@ -1035,9 +1044,11 @@ CommandInterpreter::execute(const char *_line, int try_reconnect,
 }
 
 static void
-invalid_command(const char *cmd)
+invalid_command(const char *cmd, const char *msg=0)
 {
   ndbout << "Invalid command: " << cmd << endl;
+  if(msg)
+      ndbout << msg << endl;
   ndbout << "Type HELP for help." << endl << endl;
 }
 
@@ -1092,7 +1103,10 @@ public:
     {
       if (m_status->node_states[i].node_id == nodeid &&
           m_status->node_states[i].node_type == NDB_MGM_NODE_TYPE_NDB)
+      {
         found = true;
+        break;
+      }
     }
 
     if (!found)
@@ -1128,8 +1142,10 @@ CommandInterpreter::execute_impl(const char *_line, bool interactive)
   DBUG_PRINT("enter",("line='%s'", _line));
   m_error= 0;
 
-  if(_line == NULL) {
-    ndbout_c("ERROR: Internal error at %s:%d.", __FILE__, __LINE__);
+  if(_line == NULL)
+  {
+    // Pressing Ctrl-C on some platforms will cause 'readline' to
+    // to return NULL, handle it as graceful exit of ndb_mgm 
     m_error = -1;
     DBUG_RETURN(false); // Terminate gracefully
   }
@@ -1154,7 +1170,7 @@ CommandInterpreter::execute_impl(const char *_line, bool interactive)
     }
     // for mysql client compatability remove trailing ';'
     {
-      unsigned last= strlen(line)-1;
+      unsigned last= (unsigned)(strlen(line)-1);
       if (line[last] == ';')
       {
 	line[last]= 0;
@@ -1170,23 +1186,23 @@ CommandInterpreter::execute_impl(const char *_line, bool interactive)
   char* firstToken = strtok(line, " ");
   char* allAfterFirstToken = strtok(NULL, "");
 
-  if (strcasecmp(firstToken, "HELP") == 0 ||
-      strcasecmp(firstToken, "?") == 0) {
+  if (native_strcasecmp(firstToken, "HELP") == 0 ||
+      native_strcasecmp(firstToken, "?") == 0) {
     m_error = executeHelp(allAfterFirstToken);
     DBUG_RETURN(true);
   }
-  else if (strcasecmp(firstToken, "CONNECT") == 0) {
+  else if (native_strcasecmp(firstToken, "CONNECT") == 0) {
     m_error = executeConnect(allAfterFirstToken, interactive);
     DBUG_RETURN(true);
   }
-  else if (strcasecmp(firstToken, "SLEEP") == 0) {
+  else if (native_strcasecmp(firstToken, "SLEEP") == 0) {
     if (allAfterFirstToken)
       NdbSleep_SecSleep(atoi(allAfterFirstToken));
     DBUG_RETURN(true);
   }
-  else if((strcasecmp(firstToken, "QUIT") == 0 ||
-	  strcasecmp(firstToken, "EXIT") == 0 ||
-	  strcasecmp(firstToken, "BYE") == 0) && 
+  else if((native_strcasecmp(firstToken, "QUIT") == 0 ||
+	  native_strcasecmp(firstToken, "EXIT") == 0 ||
+	  native_strcasecmp(firstToken, "BYE") == 0) && 
 	  allAfterFirstToken == NULL){
     DBUG_RETURN(false);
   }
@@ -1202,65 +1218,65 @@ CommandInterpreter::execute_impl(const char *_line, bool interactive)
     connect(interactive);
   }
 
-  if (strcasecmp(firstToken, "SHOW") == 0) {
+  if (native_strcasecmp(firstToken, "SHOW") == 0) {
     Guard g(m_print_mutex);
     m_error = executeShow(allAfterFirstToken);
     DBUG_RETURN(true);
   }
-  else if (strcasecmp(firstToken, "SHUTDOWN") == 0) {
+  else if (native_strcasecmp(firstToken, "SHUTDOWN") == 0) {
     m_error= executeShutdown(allAfterFirstToken);
     DBUG_RETURN(true);
   }
-  else if (strcasecmp(firstToken, "CLUSTERLOG") == 0){
+  else if (native_strcasecmp(firstToken, "CLUSTERLOG") == 0){
     executeClusterLog(allAfterFirstToken);
     DBUG_RETURN(true);
   }
-  else if(strcasecmp(firstToken, "START") == 0 &&
+  else if(native_strcasecmp(firstToken, "START") == 0 &&
 	  allAfterFirstToken != NULL &&
-	  strncasecmp(allAfterFirstToken, "BACKUP", sizeof("BACKUP") - 1) == 0){
+	  native_strncasecmp(allAfterFirstToken, "BACKUP", sizeof("BACKUP") - 1) == 0){
     m_error= executeStartBackup(allAfterFirstToken, interactive);
     DBUG_RETURN(true);
   }
-  else if(strcasecmp(firstToken, "ABORT") == 0 &&
+  else if(native_strcasecmp(firstToken, "ABORT") == 0 &&
 	  allAfterFirstToken != NULL &&
-	  strncasecmp(allAfterFirstToken, "BACKUP", sizeof("BACKUP") - 1) == 0){
+	  native_strncasecmp(allAfterFirstToken, "BACKUP", sizeof("BACKUP") - 1) == 0){
     m_error = executeAbortBackup(allAfterFirstToken);
     DBUG_RETURN(true);
   }
-  else if (strcasecmp(firstToken, "PURGE") == 0) {
+  else if (native_strcasecmp(firstToken, "PURGE") == 0) {
     m_error = executePurge(allAfterFirstToken);
     DBUG_RETURN(true);
   }                
-  else if(strcasecmp(firstToken, "ENTER") == 0 &&
+  else if(native_strcasecmp(firstToken, "ENTER") == 0 &&
 	  allAfterFirstToken != NULL &&
 	  allAfterFirstToken != NULL &&
-	  strncasecmp(allAfterFirstToken, "SINGLE USER MODE ", 
+	  native_strncasecmp(allAfterFirstToken, "SINGLE USER MODE ", 
 		  sizeof("SINGLE USER MODE") - 1) == 0){
     m_error = executeEnterSingleUser(allAfterFirstToken);
     DBUG_RETURN(true);
   }
-  else if(strcasecmp(firstToken, "EXIT") == 0 &&
+  else if(native_strcasecmp(firstToken, "EXIT") == 0 &&
 	  allAfterFirstToken != NULL &&
-	  strncasecmp(allAfterFirstToken, "SINGLE USER MODE ", 
+	  native_strncasecmp(allAfterFirstToken, "SINGLE USER MODE ", 
 		  sizeof("SINGLE USER MODE") - 1) == 0){
     m_error = executeExitSingleUser(allAfterFirstToken);
     DBUG_RETURN(true);
   }
-  else if(strcasecmp(firstToken, "CREATE") == 0 &&
+  else if(native_strcasecmp(firstToken, "CREATE") == 0 &&
 	  allAfterFirstToken != NULL &&
-	  strncasecmp(allAfterFirstToken, "NODEGROUP",
+	  native_strncasecmp(allAfterFirstToken, "NODEGROUP",
                       sizeof("NODEGROUP") - 1) == 0){
     m_error = executeCreateNodeGroup(allAfterFirstToken);
     DBUG_RETURN(true);
   }
-  else if(strcasecmp(firstToken, "DROP") == 0 &&
+  else if(native_strcasecmp(firstToken, "DROP") == 0 &&
 	  allAfterFirstToken != NULL &&
-	  strncasecmp(allAfterFirstToken, "NODEGROUP",
+	  native_strncasecmp(allAfterFirstToken, "NODEGROUP",
                       sizeof("NODEGROUP") - 1) == 0){
     m_error = executeDropNodeGroup(allAfterFirstToken);
     DBUG_RETURN(true);
   }
-  else if (strcasecmp(firstToken, "ALL") == 0) {
+  else if (native_strcasecmp(firstToken, "ALL") == 0) {
     m_error = analyseAfterFirstToken(-1, allAfterFirstToken);
   } else {
     /**
@@ -1351,7 +1367,7 @@ CommandInterpreter::analyseAfterFirstToken(int processId,
   ExecuteFunction fun = 0;
   const char * command = 0;
   for(int i = 0; i<tmpSize; i++){
-    if(strcasecmp(secondToken, commands[i].command) == 0){
+    if(native_strcasecmp(secondToken, commands[i].command) == 0){
       fun = commands[i].executeFunction;
       command = commands[i].command;
       break;
@@ -1380,17 +1396,17 @@ CommandInterpreter::executeCommand(Vector<BaseString> &command_list,
   const char *cmd= command_list[command_pos].c_str();
   int retval = 0;
 
-  if (strcasecmp("STOP", cmd) == 0)
+  if (native_strcasecmp("STOP", cmd) == 0)
   {
     retval = executeStop(command_list, command_pos+1, node_ids, no_of_nodes);
     return retval;
   }
-  if (strcasecmp("RESTART", cmd) == 0)
+  if (native_strcasecmp("RESTART", cmd) == 0)
   {
     retval = executeRestart(command_list, command_pos+1, node_ids, no_of_nodes);
     return retval;
   }
-  if (strcasecmp("START", cmd) == 0)
+  if (native_strcasecmp("START", cmd) == 0)
   {
     retval = executeStart(command_list, command_pos+1, node_ids, no_of_nodes);
     return retval;
@@ -1445,14 +1461,14 @@ CommandInterpreter::executeForAll(const char * cmd, ExecuteFunction fun,
   int nodeId = 0;
   int retval = 0;
 
-  if(strcasecmp(cmd, "STOP") == 0) {
+  if(native_strcasecmp(cmd, "STOP") == 0) {
     ndbout_c("Executing STOP on all nodes.");
     retval = (this->*fun)(nodeId, allAfterSecondToken, true);
-  } else if(strcasecmp(cmd, "RESTART") == 0) {
+  } else if(native_strcasecmp(cmd, "RESTART") == 0) {
     retval = (this->*fun)(nodeId, allAfterSecondToken, true);
-  } else if (strcasecmp(cmd, "STATUS") == 0) {
+  } else if (native_strcasecmp(cmd, "STATUS") == 0) {
     (this->*fun)(nodeId, allAfterSecondToken, true);
-  } else if (strcasecmp(cmd, "REPORT") == 0) {
+  } else if (native_strcasecmp(cmd, "REPORT") == 0) {
     Guard g(m_print_mutex);
     retval = executeReport(nodeId, allAfterSecondToken, true);
   } else {
@@ -1496,7 +1512,7 @@ CommandInterpreter::parseBlockSpecification(const char* allAfterLog,
     firstTokenAfterLog[i] = toupper(firstTokenAfterLog[i]);
   }
   
-  if (strcasecmp(firstTokenAfterLog, "BLOCK") != 0) {
+  if (native_strcasecmp(firstTokenAfterLog, "BLOCK") != 0) {
     ndbout << "Unexpected value: " << firstTokenAfterLog 
 	   << ". Expected BLOCK." << endl;
     return false;
@@ -1509,7 +1525,7 @@ CommandInterpreter::parseBlockSpecification(const char* allAfterLog,
   }
 
   char* secondTokenAfterLog = strtok(allAfterFirstToken, " ");
-  if (strcasecmp(secondTokenAfterLog, "=") != 0) {
+  if (native_strcasecmp(secondTokenAfterLog, "=") != 0) {
     ndbout << "Unexpected value: " << secondTokenAfterLog 
 	   << ". Expected =." << endl;
     return false;
@@ -1517,7 +1533,7 @@ CommandInterpreter::parseBlockSpecification(const char* allAfterLog,
 
   char* blockName = strtok(NULL, " ");
   bool all = false;
-  if (blockName != NULL && (strcasecmp(blockName, "ALL") == 0)) {
+  if (blockName != NULL && (native_strcasecmp(blockName, "ALL") == 0)) {
     all = true;
   }
   while (blockName != NULL) {
@@ -1565,6 +1581,8 @@ CommandInterpreter::executeHelp(char* parameters)
     }
     ndbout << endl;
 
+    helpTextReportTypeOptionFn();
+
     ndbout << "<level>    = " << "0 - 15" << endl;
     ndbout << "<id>       = " << "ALL | Any database node id" << endl;
     ndbout << endl;
@@ -1573,7 +1591,7 @@ CommandInterpreter::executeHelp(char* parameters)
     int i = 0;
     for (i = 0; help_items[i].cmd != NULL; i++) 
     {
-      if (strcasecmp(parameters, help_items[i].cmd) == 0)
+      if (native_strcasecmp(parameters, help_items[i].cmd) == 0)
       {
         if (help_items[i].help)
           ndbout << help_items[i].help;
@@ -1671,7 +1689,7 @@ print_nodes(ndb_mgm_cluster_state *state, ndb_mgm_configuration_iterator *it,
 	const char *hostname= node_state->connect_address;
 	if (hostname == 0
 	    || strlen(hostname) == 0
-	    || strcasecmp(hostname,"0.0.0.0") == 0)
+	    || native_strcasecmp(hostname,"0.0.0.0") == 0)
 	  ndbout << " ";
 	else
 	  ndbout << "\t@" << hostname;
@@ -1694,7 +1712,7 @@ print_nodes(ndb_mgm_cluster_state *state, ndb_mgm_configuration_iterator *it,
           }
           if (node_state->node_group >= 0 || node_state->node_group == (int)RNIL)
 	    if (master_id && node_state->dynamic_id == master_id)
-	      ndbout << ", Master";
+	      ndbout << ", *";
         }
 	ndbout << ")" << endl;
       } else {
@@ -1726,9 +1744,9 @@ CommandInterpreter::executePurge(char* parameters)
       break;
     char* firstToken = strtok(parameters, " ");
     char* nextToken = strtok(NULL, " \0");
-    if (strcasecmp(firstToken,"STALE") == 0 &&
+    if (native_strcasecmp(firstToken,"STALE") == 0 &&
 	nextToken &&
-	strcasecmp(nextToken, "SESSIONS") == 0) {
+	native_strcasecmp(nextToken, "SESSIONS") == 0) {
       command_ok= 1;
       break;
     }
@@ -1881,7 +1899,7 @@ CommandInterpreter::executeClusterLog(char* parameters)
 
   NdbAutoPtr<char> ap1(tmpString);
   char * tmpPtr = 0;
-  char * item = strtok_r(tmpString, " ", &tmpPtr);
+  char * item = my_strtok_r(tmpString, " ", &tmpPtr);
   int enable;
 
   ndb_mgm_severity enabled[NDB_MGM_EVENT_SEVERITY_ALL] = 
@@ -1892,8 +1910,10 @@ CommandInterpreter::executeClusterLog(char* parameters)
      {NDB_MGM_EVENT_SEVERITY_ERROR,0},
      {NDB_MGM_EVENT_SEVERITY_CRITICAL,0},
      {NDB_MGM_EVENT_SEVERITY_ALERT,0}};
-  ndb_mgm_get_clusterlog_severity_filter(m_mgmsrv, &enabled[0], NDB_MGM_EVENT_SEVERITY_ALL);
-  if(enabled == NULL) {
+  int returned = ndb_mgm_get_clusterlog_severity_filter(m_mgmsrv,
+                                                  &enabled[0],
+                                                  NDB_MGM_EVENT_SEVERITY_ALL);
+  if(returned != NDB_MGM_EVENT_SEVERITY_ALL) {
     ndbout << "Couldn't get status" << endl;
     printError();
     m_error = -1;
@@ -1903,7 +1923,7 @@ CommandInterpreter::executeClusterLog(char* parameters)
   /********************
    * CLUSTERLOG INFO
    ********************/
-  if (strcasecmp(item, "INFO") == 0) {
+  if (native_strcasecmp(item, "INFO") == 0) {
     DBUG_PRINT("info",("INFO"));
     if(enabled[0].value == 0)
     {
@@ -1920,7 +1940,7 @@ CommandInterpreter::executeClusterLog(char* parameters)
       const char *str= ndb_mgm_get_event_severity_string(enabled[i].category);
       if (str == 0)
       {
-	DBUG_ASSERT(false);
+	assert(false);
 	continue;
       }
       if(enabled[i].value)
@@ -1931,17 +1951,17 @@ CommandInterpreter::executeClusterLog(char* parameters)
     DBUG_VOID_RETURN;
 
   } 
-  else if (strcasecmp(item, "FILTER") == 0 ||
-	   strcasecmp(item, "TOGGLE") == 0)
+  else if (native_strcasecmp(item, "FILTER") == 0 ||
+	   native_strcasecmp(item, "TOGGLE") == 0)
   {
     DBUG_PRINT("info",("TOGGLE"));
     enable= -1;
   } 
-  else if (strcasecmp(item, "OFF") == 0) 
+  else if (native_strcasecmp(item, "OFF") == 0) 
   {
     DBUG_PRINT("info",("OFF"));
     enable= 0;
-  } else if (strcasecmp(item, "ON") == 0) {
+  } else if (native_strcasecmp(item, "ON") == 0) {
     DBUG_PRINT("info",("ON"));
     enable= 1;
   } else {
@@ -1951,7 +1971,7 @@ CommandInterpreter::executeClusterLog(char* parameters)
   }
 
   int res_enable;
-  item = strtok_r(NULL, " ", &tmpPtr);
+  item = my_strtok_r(NULL, " ", &tmpPtr);
   if (item == NULL) {
     res_enable=
       ndb_mgm_set_clusterlog_severity_filter(m_mgmsrv,
@@ -1971,22 +1991,22 @@ CommandInterpreter::executeClusterLog(char* parameters)
 
   do {
     severity= NDB_MGM_ILLEGAL_EVENT_SEVERITY;
-    if (strcasecmp(item, "ALL") == 0) {
+    if (native_strcasecmp(item, "ALL") == 0) {
       severity = NDB_MGM_EVENT_SEVERITY_ALL;	
-    } else if (strcasecmp(item, "ALERT") == 0) {
+    } else if (native_strcasecmp(item, "ALERT") == 0) {
       severity = NDB_MGM_EVENT_SEVERITY_ALERT;
-    } else if (strcasecmp(item, "CRITICAL") == 0) { 
+    } else if (native_strcasecmp(item, "CRITICAL") == 0) { 
       severity = NDB_MGM_EVENT_SEVERITY_CRITICAL;
-    } else if (strcasecmp(item, "ERROR") == 0) {
+    } else if (native_strcasecmp(item, "ERROR") == 0) {
       severity = NDB_MGM_EVENT_SEVERITY_ERROR;
-    } else if (strcasecmp(item, "WARNING") == 0) {
+    } else if (native_strcasecmp(item, "WARNING") == 0) {
       severity = NDB_MGM_EVENT_SEVERITY_WARNING;
-    } else if (strcasecmp(item, "INFO") == 0) {
+    } else if (native_strcasecmp(item, "INFO") == 0) {
       severity = NDB_MGM_EVENT_SEVERITY_INFO;
-    } else if (strcasecmp(item, "DEBUG") == 0) {
+    } else if (native_strcasecmp(item, "DEBUG") == 0) {
       severity = NDB_MGM_EVENT_SEVERITY_DEBUG;
-    } else if (strcasecmp(item, "OFF") == 0 ||
-	       strcasecmp(item, "ON") == 0) {
+    } else if (native_strcasecmp(item, "OFF") == 0 ||
+	       native_strcasecmp(item, "ON") == 0) {
       if (enable < 0) // only makes sense with toggle
 	severity = NDB_MGM_EVENT_SEVERITY_ON;
     }
@@ -2007,7 +2027,7 @@ CommandInterpreter::executeClusterLog(char* parameters)
     }
     ndbout << BaseString(item).ndb_toupper().c_str() << " " << (res_enable ? "enabled":"disabled") << endl;
 
-    item = strtok_r(NULL, " ", &tmpPtr);	
+    item = my_strtok_r(NULL, " ", &tmpPtr);	
   } while(item != NULL);
   
   m_error = 0;
@@ -2047,12 +2067,12 @@ CommandInterpreter::executeStop(Vector<BaseString> &command_list,
   for (; command_pos < command_list.size(); command_pos++)
   {
     const char *item= command_list[command_pos].c_str();
-    if (strcasecmp(item, "-A") == 0)
+    if (native_strcasecmp(item, "-A") == 0)
     {
       abort= 1;
       continue;
     }
-    if (strcasecmp(item, "-F") == 0)
+    if (native_strcasecmp(item, "-F") == 0)
     {
       force = 1;
       continue;
@@ -2216,22 +2236,22 @@ CommandInterpreter::executeRestart(Vector<BaseString> &command_list,
   for (; command_pos < command_list.size(); command_pos++)
   {
     const char *item= command_list[command_pos].c_str();
-    if (strcasecmp(item, "-N") == 0)
+    if (native_strcasecmp(item, "-N") == 0)
     {
       nostart= 1;
       continue;
     }
-    if (strcasecmp(item, "-I") == 0)
+    if (native_strcasecmp(item, "-I") == 0)
     {
       initialstart= 1;
       continue;
     }
-    if (strcasecmp(item, "-A") == 0)
+    if (native_strcasecmp(item, "-A") == 0)
     {
       abort= 1;
       continue;
     }
-    if (strcasecmp(item, "-F") == 0)
+    if (native_strcasecmp(item, "-F") == 0)
     {
       force = 1;
       continue;
@@ -2431,19 +2451,19 @@ CommandInterpreter::executeDumpState(int processId, const char* parameters,
     return -1;
   }
 
-  for (size_t i = 0; i < args.size(); i++)
+  for (unsigned i = 0; i < args.size(); i++)
   {
     const char* arg = args[i].c_str();
 
-    if (strtoll(arg, NULL, 0) < 0 ||
-        strtoll(arg, NULL, 0) > 0xffffffff)
+    if (my_strtoll(arg, NULL, 0) < 0 ||
+        my_strtoll(arg, NULL, 0) > 0xffffffff)
     {
       ndbout_c("ERROR: Illegal value '%s' in argument to signal.\n"
                "(Value must be between 0 and 0xffffffff.)", arg);
       return -1;
     }
     assert(num_params < (int)max_params);
-    params[num_params] = (int)strtoll(arg, NULL, 0);
+    params[num_params] = (int)my_strtoll(arg, NULL, 0);
     num_params++;
   }
 
@@ -2525,16 +2545,10 @@ report_events(const ndb_logevent& event)
   }
   textF(out+pos, sizeof(out)-pos, event.SavedEvent.data, event.SavedEvent.len);
 
-  time_t t = event.SavedEvent.time;
-  struct tm * tm_now = localtime(&t);
-  ndbout_c("%d-%.2d-%.2d %.2d:%.2d:%.2d %s",
-           tm_now->tm_year + 1900,
-           tm_now->tm_mon + 1, //month is [0,11]. +1 -> [1,12]
-           tm_now->tm_mday,
-           tm_now->tm_hour,
-           tm_now->tm_min,
-           tm_now->tm_sec,
-           out);
+  char timestamp_str[64];
+  Logger::format_timestamp(event.SavedEvent.time, timestamp_str, sizeof(timestamp_str));
+
+  ndbout_c("%s %s", timestamp_str, out);
 }
 
 static int
@@ -2605,7 +2619,7 @@ CommandInterpreter::executeReport(int nodeid, const char* parameters,
   const st_report_cmd* report_cmd = report_cmds;
   for (; report_cmd->name; report_cmd++)
   {
-    if (strncasecmp(report_cmd->name, args[0].c_str(),
+    if (native_strncasecmp(report_cmd->name, args[0].c_str(),
                     args[0].length()) == 0)
       break;
   }
@@ -2666,6 +2680,18 @@ helpTextReportFn()
     ndbout_c("    %s\t- %s", report_cmd->name, report_cmd->help);
 }
 
+static void 
+helpTextReportTypeOptionFn()
+{
+  ndbout << "<report-type> = ";
+  const st_report_cmd* report_cmd = report_cmds;
+  for (; report_cmd->name; report_cmd++){
+    if (report_cmd != report_cmds)
+      ndbout << " | ";
+    ndbout << BaseString(report_cmd->name).ndb_toupper().c_str();
+  }
+  ndbout << endl;
+}
 
 //*****************************************************************************
 //*****************************************************************************
@@ -2901,6 +2927,7 @@ CommandInterpreter::executeStartBackup(char* parameters, bool interactive)
   struct ndb_mgm_reply reply;
   unsigned int backupId;
   unsigned int input_backupId = 0;
+  unsigned long long int tmp_backupId = 0;
 
   Vector<BaseString> args;
   if (parameters)
@@ -2930,11 +2957,17 @@ CommandInterpreter::executeStartBackup(char* parameters, bool interactive)
   */
   for (int i= 1; i < sz; i++)
   {
-    if (i == 1 && sscanf(args[1].c_str(), "%u", &input_backupId) == 1) {
-      if (input_backupId > 0 && input_backupId < MAX_BACKUPS)
+    if (i == 1 && sscanf(args[1].c_str(), "%llu", &tmp_backupId) == 1) {
+      char out[1024];
+      BaseString::snprintf(out, sizeof(out), "%u: ", MAX_BACKUPS);
+      // to detect wraparound due to overflow, check if number of digits in 
+      // input backup ID <= number of digits in max backup ID
+      if (tmp_backupId > 0 && tmp_backupId < MAX_BACKUPS && args[1].length() <= strlen(out)) {
+        input_backupId = static_cast<unsigned>(tmp_backupId);
         continue;
-      else {
-        invalid_command(parameters);
+      } else {
+        BaseString::snprintf(out, sizeof(out), "Backup ID out of range [1 - %u]", MAX_BACKUPS-1);
+        invalid_command(parameters, out);
         return -1;
       }
     }
@@ -3066,6 +3099,12 @@ CommandInterpreter::executeStartBackup(char* parameters, bool interactive)
           Guard g(m_print_mutex);
           printLogEvent(&log_event);
           count++;
+          // for WAIT STARTED, exit after printing "Backup started" logevent
+          if(flags == 1 && log_event.type == NDB_LE_BackupStarted) 
+          {
+            ndb_mgm_destroy_logevent_handle(&log_handle);
+            return 0;
+          }
         }
       }
       else
@@ -3086,7 +3125,8 @@ CommandInterpreter::executeStartBackup(char* parameters, bool interactive)
 int
 CommandInterpreter::executeAbortBackup(char* parameters) 
 {
-  int bid = -1;
+  unsigned int bid = 0;
+  unsigned long long int tmp_bid = 0;
   struct ndb_mgm_reply reply;
   if (emptyString(parameters))
     goto executeAbortBackupError1;
@@ -3094,8 +3134,17 @@ CommandInterpreter::executeAbortBackup(char* parameters)
   {
     strtok(parameters, " ");
     char* id = strtok(NULL, "\0");
-    if(id == 0 || sscanf(id, "%d", &bid) != 1)
+    if(id == 0 || sscanf(id, "%llu", &tmp_bid) != 1) 
       goto executeAbortBackupError1;
+
+    // to detect wraparound due to overflow, check if number of digits in 
+    // input backup ID > number of digits in max backup ID
+    char out[1024];
+    BaseString::snprintf(out, sizeof(out), "%u", MAX_BACKUPS);
+    if(tmp_bid <= 0 || tmp_bid >= MAX_BACKUPS || strlen(id) > strlen(out))
+      goto executeAbortBackupError2;
+    else 
+      bid = static_cast<unsigned>(tmp_bid);
   }
   {
     int result= ndb_mgm_abort_backup(m_mgmsrv, bid, &reply);
@@ -3111,14 +3160,14 @@ CommandInterpreter::executeAbortBackup(char* parameters)
  executeAbortBackupError1:
   ndbout << "Invalid arguments: expected <BackupId>" << endl;
   return -1;
+ executeAbortBackupError2:
+  ndbout << "Invalid arguments: <BackupId> out of range [1-" << MAX_BACKUPS-1 << "]" << endl;
+  return -1;
 }
 
 int
 CommandInterpreter::executeCreateNodeGroup(char* parameters)
 {
-  int result;
-  int ng;
-  struct ndb_mgm_reply reply;
   char *id= strchr(parameters, ' ');
   if (emptyString(id))
     goto err;
@@ -3135,8 +3184,10 @@ CommandInterpreter::executeCreateNodeGroup(char* parameters)
     }
     nodes.push_back(0);
 
-    result= ndb_mgm_create_nodegroup(m_mgmsrv, nodes.getBase(), &ng, &reply);
-
+    int ng;
+    struct ndb_mgm_reply reply;
+    const int result= ndb_mgm_create_nodegroup(m_mgmsrv, nodes.getBase(),
+                                               &ng, &reply);
     if (result != 0) {
       printError();
       return -1;
@@ -3156,7 +3207,6 @@ int
 CommandInterpreter::executeDropNodeGroup(char* parameters)
 {
   int ng = -1;
-  struct ndb_mgm_reply reply;
   if (emptyString(parameters))
     goto err;
 
@@ -3167,7 +3217,8 @@ CommandInterpreter::executeDropNodeGroup(char* parameters)
   }
 
   {
-    int result= ndb_mgm_drop_nodegroup(m_mgmsrv, ng, &reply);
+    struct ndb_mgm_reply reply;
+    const int result= ndb_mgm_drop_nodegroup(m_mgmsrv, ng, &reply);
     if (result != 0) {
       printError();
       return -1;

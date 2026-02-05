@@ -1,17 +1,18 @@
-show databases;
-Database
+select schema_name from information_schema.schemata where schema_name not in ('sys', 'performance_schema');
+schema_name
 information_schema
 mtr
 mysql
-performance_schema
 test
 show tables in mysql;
 Tables_in_mysql
 columns_priv
 db
+engine_cost
 event
 func
 general_log
+gtid_executed
 help_category
 help_keyword
 help_relation
@@ -23,6 +24,7 @@ plugin
 proc
 procs_priv
 proxies_priv
+server_cost
 servers
 slave_master_info
 slave_relay_log_info

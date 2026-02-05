@@ -1,14 +1,20 @@
-/* Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
 
-   This program is free software; you can redistribute it and/or
-   modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; version 2 of the
-   License.
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
 
-   This program is distributed in the hope that it will be useful, but
-   WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-   General Public License for more details.
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -17,14 +23,12 @@
 
 #include "rpl_gtid.h"
 
-#include "mysqld_error.h"
-#include "hash.h"
+#include "mysqld_error.h"      // ER_*
 
 
 Owned_gtids::Owned_gtids(Checkable_rwlock *_sid_lock)
-  : sid_lock(_sid_lock)
+  : sid_lock(_sid_lock), sidno_to_hash(key_memory_Owned_gtids_sidno_to_hash)
 {
-  my_init_dynamic_array(&sidno_to_hash, sizeof(HASH *), 0, 8);
   /*
   my_hash_init(&gtid_to_owner, &my_charset_bin, 20,
                offsetof(Node, group), sizeof(Group), NULL,
@@ -46,7 +50,6 @@ Owned_gtids::~Owned_gtids()
     my_hash_free(hash);
     my_free(hash);
   }
-  delete_dynamic(&sidno_to_hash);
   sid_lock->unlock();
   //sid_lock->assert_no_lock();
 }
@@ -59,17 +62,17 @@ enum_return_status Owned_gtids::ensure_sidno(rpl_sidno sidno)
   rpl_sidno max_sidno= get_max_sidno();
   if (sidno > max_sidno || get_hash(sidno) == NULL)
   {
-    if (allocate_dynamic(&sidno_to_hash, sidno))
-      goto error;
     for (int i= max_sidno; i < sidno; i++)
     {
-      HASH *hash= (HASH *)my_malloc(sizeof(HASH), MYF(MY_WME));
+      HASH *hash= (HASH *)my_malloc(key_memory_Owned_gtids_sidno_to_hash,
+                                    sizeof(HASH), MYF(MY_WME));
       if (hash == NULL)
         goto error;
       my_hash_init(hash, &my_charset_bin, 20,
                    offsetof(Node, gno), sizeof(rpl_gno), NULL,
-                   my_free, 0);
-      set_dynamic(&sidno_to_hash, &hash, i);
+                   my_free, 0,
+                   key_memory_Owned_gtids_sidno_to_hash);
+      sidno_to_hash.push_back(hash);
     }
   }
   RETURN_OK;
@@ -83,9 +86,11 @@ enum_return_status Owned_gtids::add_gtid_owner(const Gtid &gtid,
                                                my_thread_id owner)
 {
   DBUG_ENTER("Owned_gtids::add_gtid_owner(Gtid, my_thread_id)");
-  DBUG_ASSERT(!contains_gtid(gtid));
-  DBUG_ASSERT(gtid.sidno <= get_max_sidno());
-  Node *n= (Node *)my_malloc(sizeof(Node), MYF(MY_WME));
+  assert(gtid.sidno <= get_max_sidno());
+  assert(gtid.gno > 0);
+  assert(gtid.gno < GNO_END);
+  Node *n= (Node *)my_malloc(key_memory_Sid_map_Node,
+                             sizeof(Node), MYF(MY_WME));
   if (n == NULL)
     RETURN_REPORTED_ERROR;
   n->gno= gtid.gno;
@@ -104,33 +109,31 @@ enum_return_status Owned_gtids::add_gtid_owner(const Gtid &gtid,
 }
 
 
-void Owned_gtids::remove_gtid(const Gtid &gtid)
+void Owned_gtids::remove_gtid(const Gtid &gtid, const my_thread_id owner)
 {
   DBUG_ENTER("Owned_gtids::remove_gtid(Gtid)");
   //printf("Owned_gtids::remove(sidno=%d gno=%lld)\n", sidno, gno);
-  //DBUG_ASSERT(contains_gtid(sidno, gno)); // allow group not owned
+  //assert(contains_gtid(sidno, gno)); // allow group not owned
+  HASH_SEARCH_STATE state;
   HASH *hash= get_hash(gtid.sidno);
-  DBUG_ASSERT(hash != NULL);
-  Node *node= get_node(hash, gtid.gno);
-  if (node != NULL)
+  assert(hash != NULL);
+
+  for (Node *node= (Node *)my_hash_search(hash, (const uchar *)&gtid.gno, sizeof(rpl_gno));
+       node != NULL;
+       node= (Node*) my_hash_next(hash, (const uchar *)&gtid.gno, sizeof(rpl_gno), &state))
   {
-#ifdef DBUG_OFF
-    my_hash_delete(hash, (uchar *)node);
+    if (node->owner == owner)
+    {
+#ifdef NDEBUG
+      my_hash_delete(hash, (uchar *)node);
 #else
-    // my_hash_delete returns nonzero if the element does not exist
-    DBUG_ASSERT(my_hash_delete(hash, (uchar *)node) == 0);
+      // my_hash_delete returns nonzero if the element does not exist
+      assert(my_hash_delete(hash, (uchar *)node) == 0);
 #endif
+      break;
+    }
   }
   DBUG_VOID_RETURN;
-}
-
-
-my_thread_id Owned_gtids::get_owner(const Gtid &gtid) const
-{
-  Node *n= get_node(gtid);
-  if (n != NULL)
-    return n->owner;
-  return 0;
 }
 
 
@@ -149,4 +152,50 @@ bool Owned_gtids::is_intersection_nonempty(const Gtid_set *other) const
     g= git.get();
   }
   DBUG_RETURN(false);
+}
+
+void Owned_gtids::get_gtids(Gtid_set &gtid_set) const
+{
+  DBUG_ENTER("Owned_gtids::get_gtids");
+
+  if (sid_lock != NULL)
+    sid_lock->assert_some_wrlock();
+
+  Gtid_iterator git(this);
+  Gtid g= git.get();
+  while (g.sidno != 0)
+  {
+    gtid_set._add_gtid(g);
+    git.next();
+    g= git.get();
+  }
+  DBUG_VOID_RETURN;
+}
+
+bool Owned_gtids::contains_gtid(const Gtid &gtid) const
+{
+  HASH *hash= get_hash(gtid.sidno);
+  assert(hash != NULL);
+  sid_lock->assert_some_lock();
+
+  return my_hash_search(hash, (const uchar *)&gtid.gno, sizeof(rpl_gno)) != NULL;
+}
+
+bool Owned_gtids::is_owned_by(const Gtid &gtid, const my_thread_id thd_id) const
+{
+  HASH_SEARCH_STATE state;
+  HASH *hash= get_hash(gtid.sidno);
+  assert(hash != NULL);
+  Node *node= (Node*) my_hash_first(hash, (const uchar *)&gtid.gno,
+                                    sizeof(rpl_gno), &state);
+  if (thd_id == 0)
+    return node == NULL;
+  while (node)
+  {
+    if (node->owner == thd_id)
+      return true;
+    node= (Node*) my_hash_next(hash, (const uchar *)&gtid.gno,
+                               sizeof(rpl_gno), &state);
+  }
+  return false;
 }

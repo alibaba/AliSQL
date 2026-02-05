@@ -1,13 +1,25 @@
-/* Copyright (c) 2004, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2004, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -17,6 +29,7 @@
 /* if there are many available, any non-zero one can be used */
 
 #include "mysys_priv.h"
+#include "my_sys.h"
 #include <m_string.h>
 
 #ifndef MAIN
@@ -108,7 +121,7 @@ my_bool my_gethwaddr(uchar *to)
     {
       /* Reset struct, copy interface name */
       memset(&ifr, 0, sizeof(ifr));
-      strncpy(ifr.ifr_name, ifri->ifr_name, sizeof(ifr.ifr_name));
+      memcpy(ifr.ifr_name, ifri->ifr_name, sizeof(ifr.ifr_name));
 
       /* Get HW address, break if not 0 */
       if (ioctl(fd, SIOCGIFHWADDR, &ifr) >= 0)
@@ -126,7 +139,7 @@ my_bool my_gethwaddr(uchar *to)
   return res;
 }
 
-#elif defined(__WIN__)
+#elif defined(_WIN32)
 
 /*
   Workaround for BUG#32082 (Definition of VOID in my_global.h conflicts with
@@ -186,7 +199,8 @@ my_bool my_gethwaddr(uchar *to)
   if (fnGetAdaptersAddresses(AF_UNSPEC, 0, 0, &adapterAddresses, &address_len)
       == ERROR_BUFFER_OVERFLOW)
   {
-    pAdapterAddresses= my_malloc(address_len, 0);
+    pAdapterAddresses= my_malloc(key_memory_win_IP_ADAPTER_ADDRESSES,
+                                 address_len, 0);
     if (!pAdapterAddresses)
       return 1;                                   /* error, alloc failed */
   }
@@ -226,7 +240,7 @@ my_bool my_gethwaddr(uchar *to)
   return return_val;
 }
 
-#else /* __FreeBSD__ || __linux__ || __WIN__ */
+#else /* __FreeBSD__ || __linux__ || _WIN32 */
 /* just fail */
 my_bool my_gethwaddr(uchar *to MY_ATTRIBUTE((unused)))
 {

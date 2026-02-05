@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2009, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2009, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -96,7 +103,7 @@ scan_table(NdbInfo& ndbinfo, const NdbInfo::Table* table, int &rows)
   while (scanOp->getValue(columnId))
     columnId++;
   // At least one column
-  assert(columnId >= 1);
+  require(columnId >= 1);
   int ret;
   if((ret = scanOp->execute()) != 0)
   {
@@ -176,7 +183,7 @@ int runScanAll(NDBT_Context* ctx, NDBT_Step* step)
   }
 
   // Should never come here
-  assert(false);
+  require(false);
   return NDBT_FAILED;
 }
 
@@ -240,7 +247,7 @@ int runScanStop(NDBT_Context* ctx, NDBT_Step* step)
       while (scanOp->getValue(columnId))
         columnId++;
       // At least one column
-      assert(columnId >= 1);
+      require(columnId >= 1);
 
       if(scanOp->execute() != 0)
       {
@@ -266,7 +273,7 @@ int runScanStop(NDBT_Context* ctx, NDBT_Step* step)
   }
 
   // Should never come here
-  assert(false);
+  require(false);
   return NDBT_FAILED;
 }
 
@@ -331,7 +338,7 @@ int runRatelimit(NDBT_Context* ctx, NDBT_Step* step)
       while (scanOp->getValue(columnId))
         columnId++;
       // At least one column
-      assert(columnId >= 1);
+      require(columnId >= 1);
 
       if(scanOp->execute() != 0)
       {
@@ -363,7 +370,7 @@ int runRatelimit(NDBT_Context* ctx, NDBT_Step* step)
   }
 
   // Should never come here
-  assert(false);
+  require(false);
   return NDBT_FAILED;
 }
 
@@ -533,15 +540,10 @@ int runRestarter(NDBT_Context* ctx, NDBT_Step* step){
 
 
 NDBT_TESTSUITE(testNdbinfo);
-#ifndef NDB_WIN
-/**
- * TODO NdbRestarter does not work on windoze
- */
 TESTCASE("NodeRestart", "Scan NdbInfo tables while restarting nodes"){
   STEP(runRestarter);
   STEPS(runTestTableUntilStopped, 1);
 }
-#endif
 TESTCASE("Ndbinfo",
          "Test ndbapi interface to NDB$INFO"){
   INITIALIZER(runTestNdbInfo);

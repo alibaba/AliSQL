@@ -1,3 +1,20 @@
+# We use a separate test wrapper for engines not supporting native partitioning
+# since the test results will be different due to deprecation warnings. This test
+# expects to either be executed directly with InnoDB as default engine, or to be
+# executed indirectly by being included in a test wrapper  setting the ENGINE
+# variable.
+--disable_warnings
+if (!$ENGINE)
+{
+  let $ENGINE=`SELECT variable_value FROM performance_schema.global_variables
+               WHERE variable_name = 'DEFAULT_STORAGE_ENGINE'`;
+  if ($ENGINE != "InnoDB")
+  {
+    skip Engines not supporting native partitioning are tested using a test wrapper;
+  }
+}
+--enable_warnings
+
 --disable_warnings
 DROP TABLE IF EXISTS t1;
 --enable_warnings
@@ -11,12 +28,10 @@ DROP TABLE IF EXISTS t1;
 SHOW TABLES; 
 INSERT INTO t1 VALUES(0,'abc'),(100,'abc'),(200,'abc'),(300,'abc'),(400,'abc');
 SELECT * FROM t1 ORDER BY c1;
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 --replace_result $ENGINE ENGINE 
  SHOW CREATE TABLE t1;
 ALTER TABLE t1 REBUILD PARTITION p1,p2;
 SELECT * FROM t1 ORDER BY c1;
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 --replace_result $ENGINE ENGINE 
  SHOW CREATE TABLE t1;
  DROP TABLE t1; SHOW TABLES;

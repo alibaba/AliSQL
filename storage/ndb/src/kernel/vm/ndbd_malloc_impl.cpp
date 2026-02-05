@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2006, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2006, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -288,6 +295,17 @@ Ndbd_mem_manager::get_resource_limit(Uint32 id, Resource_limit& rl) const
   return false;
 }
 
+bool
+Ndbd_mem_manager::get_resource_limit_nolock(Uint32 id, Resource_limit& rl) const
+{
+  if (id < XX_RL_COUNT)
+  {
+    rl = m_resource_limit[id];
+    return true;
+  }
+  return false;
+}
+
 static
 inline
 void
@@ -517,9 +535,15 @@ Ndbd_mem_manager::map(Uint32 * watchCounter, bool memlock, Uint32 resources[])
       chunk = &m_unmapped_chunks[idx];
     }
 
+    g_eventLogger->info("Touch Memory Starting, %u pages, page size = %d",
+                        chunk->m_cnt,
+                        (int)sizeof(Alloc_page));
+
     ndbd_alloc_touch_mem(chunk->m_ptr,
                          chunk->m_cnt * sizeof(Alloc_page),
                          watchCounter);
+
+    g_eventLogger->info("Touch Memory Completed");
 
     if (memlock)
     {
@@ -535,6 +559,10 @@ Ndbd_mem_manager::map(Uint32 * watchCounter, bool memlock, Uint32 resources[])
        */
       const Alloc_page * start = chunk->m_ptr;
       Uint32 cnt = chunk->m_cnt;
+      g_eventLogger->info("Lock Memory Starting, %u pages, page size = %d",
+                          chunk->m_cnt,
+                          (int)sizeof(Alloc_page));
+
       while (cnt > 32768) // 1G
       {
         if (watchCounter)
@@ -548,6 +576,8 @@ Ndbd_mem_manager::map(Uint32 * watchCounter, bool memlock, Uint32 resources[])
         *watchCounter = 9;
 
       NdbMem_MemLock(start, cnt * sizeof(Alloc_page));
+
+      g_eventLogger->info("Lock memory Completed");
     }
 
     grow(chunk->m_start, chunk->m_cnt);
@@ -633,13 +663,19 @@ found:
     if (start >= ZONE_LO_BOUND)
     {
       Uint64 mbytes = ((Uint64(cnt) * 32) + 1023) / 1024;
-      ndbout_c("Adding %uMb to ZONE_HI (%u,%u)", (Uint32)mbytes, start, cnt);
+      g_eventLogger->info("Adding %uMb to ZONE_HI (%u,%u)",
+                          (Uint32)mbytes,
+                          start,
+                          cnt);
       release(start, cnt);
     }
     else if (start + cnt <= ZONE_LO_BOUND)
     {
       Uint64 mbytes = ((Uint64(cnt)*32) + 1023) / 1024;
-      ndbout_c("Adding %uMb to ZONE_LO (%u,%u)", (Uint32)mbytes, start, cnt);
+      g_eventLogger->info("Adding %uMb to ZONE_LO (%u,%u)",
+                          (Uint32)mbytes,
+                          start,
+                          cnt);
       release(start, cnt);      
     }
     else
@@ -648,10 +684,14 @@ found:
       Uint32 cnt1 = start + cnt - ZONE_LO_BOUND;
       Uint64 mbytes0 = ((Uint64(cnt0)*32) + 1023) / 1024;
       Uint64 mbytes1 = ((Uint64(cnt1)*32) + 1023) / 1024;
-      ndbout_c("Adding %uMb to ZONE_LO (split %u,%u)", (Uint32)mbytes0,
-               start, cnt0);
-      ndbout_c("Adding %uMb to ZONE_HI (split %u,%u)", (Uint32)mbytes1,
-               ZONE_LO_BOUND, cnt1);
+      g_eventLogger->info("Adding %uMb to ZONE_LO (split %u,%u)",
+                          (Uint32)mbytes0,
+                          start,
+                          cnt0);
+      g_eventLogger->info("Adding %uMb to ZONE_HI (split %u,%u)",
+                          (Uint32)mbytes1,
+                          ZONE_LO_BOUND,
+                          cnt1);
       release(start, cnt0);
       release(ZONE_LO_BOUND, cnt1);
     }
@@ -994,7 +1034,7 @@ Ndbd_mem_manager::alloc_pages(Uint32 type, Uint32* i, Uint32 *cnt, Uint32 min)
     // Hi order allocations can always use any zone
     alloc(NDB_ZONE_ANY, i, &req, min); 
     * cnt = req;
-    if (unlikely(req < res0)) // Got min than what was reserved :-(
+    if (unlikely(req < res0)) // Got less than what was reserved :-(
     {
       res0 = req;
     }
@@ -1012,7 +1052,7 @@ Ndbd_mem_manager::alloc_pages(Uint32 type, Uint32* i, Uint32 *cnt, Uint32 min)
     return ;
   }
   mt_mem_manager_unlock();
-  * cnt = req;
+  *cnt = req;
 #ifdef NDBD_RANDOM_START_PAGE
   *i += g_random_start_page_id;
 #endif
@@ -1055,7 +1095,6 @@ Ndbd_mem_manager::release_pages(Uint32 type, Uint32 i, Uint32 cnt)
 #ifdef UNIT_TEST
 
 #include <Vector.hpp>
-#include <NdbTick.h>
 
 struct Chunk {
   Uint32 pageId;
@@ -1174,7 +1213,6 @@ main(int argc, char** argv)
       Chunk chunk = chunks[ch];
       chunks.erase(ch);
       timer[0].start();
-      Uint64 start = NdbTick_CurrentMillisecond();      
       mem.release(chunk.pageId, chunk.pageCount);
       timer[0].stop();
       if(DEBUG)
@@ -1245,5 +1283,8 @@ main(int argc, char** argv)
 template class Vector<Chunk>;
 
 #endif
+
+#define JAM_FILE_ID 296
+
 
 template class Vector<InitChunk>;

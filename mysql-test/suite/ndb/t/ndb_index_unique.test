@@ -1,3 +1,8 @@
+# The include statement below is a temp one for tests that are yet to
+#be ported to run with InnoDB,
+#but needs to be kept for tests that would need MyISAM in future.
+--source include/force_myisam_default.inc
+
 -- source include/have_ndb.inc
 
 --disable_warnings
@@ -113,6 +118,7 @@ select * from t2 where b = 3 AND c IS NULL order by a;
 select * from t2 where (b = 3 OR b = 5) AND c IS NULL order by a;
 set @old_os = @@session.optimizer_switch;
 set optimizer_switch = 'engine_condition_pushdown=on';
+--replace_column 10 # 11 #
 explain select * from t2 where (b = 3 OR b = 5) AND c IS NULL AND a < 9 order by a;
 select * from t2 where (b = 3 OR b = 5) AND c IS NULL AND a < 9 order by a;
 set optimizer_switch = @old_os;
@@ -547,6 +553,72 @@ SELECT STRAIGHT_JOIN count(*) FROM
    t1 JOIN t2 ON t2.a=t1.a where t2.uq IS NULL;
 SELECT STRAIGHT_JOIN count(*) FROM 
    t1 JOIN t2 ON t2.a=t1.a where t2.uq IS NULL;
+
+drop table t1,t2;
+
+#
+# Bug #16678033 IN-SUBQUERY WITH TRUE/FALSE/UNKNOWN TEST 
+#               MAY RETURN INCORRECT RESULT OR ASSERT
+#
+CREATE TABLE t1 (
+  i int
+) ENGINE=ndbcluster;
+
+INSERT INTO t1 VALUES (1);
+
+CREATE TABLE t2 (
+  col_int_unique int,
+  UNIQUE KEY ix1 (col_int_unique) USING HASH
+) ENGINE=ndbcluster;
+
+INSERT INTO t2 VALUES (42);
+
+EXPLAIN SELECT * FROM t1 WHERE i IN
+ (SELECT t2.col_int_unique FROM t2) IS TRUE;
+
+# Remember 'row' conter when test started.
+--disable_warnings
+create temporary table row_counts_at_startup 
+       select * 
+       from information_schema.session_status
+       WHERE variable_name LIKE 'NDB_API_READ_ROW_COUNT';
+--enable_warnings
+
+SELECT * FROM t1 WHERE i IN
+ (SELECT t2.col_int_unique FROM t2) IS TRUE;
+
+SELECT * FROM t1 WHERE i IN
+ (SELECT t2.col_int_unique FROM t2) IS FALSE;
+
+SELECT * FROM t1 WHERE i IN
+ (SELECT t2.col_int_unique FROM t2) IS UNKNOWN;
+
+SELECT * FROM t1 WHERE i IN
+ (SELECT t2.col_int_unique FROM t2) IS NOT TRUE;
+
+SELECT * FROM t1 WHERE i IN
+ (SELECT t2.col_int_unique FROM t2) IS NOT FALSE;
+
+SELECT * FROM t1 WHERE i IN
+ (SELECT t2.col_int_unique FROM t2) IS NOT UNKNOWN;
+
+# Verify row counter at end:
+# Used to verify that correct hi/low limits was set for
+# the EQ_RANGE checking for col_int_unique NULL values
+--disable_warnings
+create temporary table row_counts_at_end
+       select * 
+       from information_schema.session_status
+       WHERE variable_name LIKE 'NDB_API_READ_ROW_COUNT';
+--enable_warnings
+
+select row_counts_at_end.VARIABLE_NAME,
+       row_counts_at_end.VARIABLE_VALUE - row_counts_at_startup.VARIABLE_VALUE 
+       from row_counts_at_end, row_counts_at_startup 
+       where row_counts_at_end.VARIABLE_NAME = row_counts_at_startup.VARIABLE_NAME;
+
+drop table row_counts_at_end;
+drop table row_counts_at_startup;
 
 drop table t1,t2;
 

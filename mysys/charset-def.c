@@ -1,19 +1,32 @@
-/* Copyright (c) 2000, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "mysys_priv.h"
+#include "my_sys.h"
 
 /*
   Include all compiled character sets into the client
@@ -23,7 +36,7 @@
 
 #ifdef HAVE_UCA_COLLATIONS
 
-#ifdef HAVE_CHARSET_ucs2
+# ifdef HAVE_CHARSET_ucs2
 extern CHARSET_INFO my_charset_ucs2_german2_uca_ci;
 extern CHARSET_INFO my_charset_ucs2_icelandic_uca_ci;
 extern CHARSET_INFO my_charset_ucs2_latvian_uca_ci;
@@ -47,10 +60,10 @@ extern CHARSET_INFO my_charset_ucs2_croatian_uca_ci;
 extern CHARSET_INFO my_charset_ucs2_sinhala_uca_ci;
 extern CHARSET_INFO my_charset_ucs2_unicode_520_ci;
 extern CHARSET_INFO my_charset_ucs2_vietnamese_ci;
-#endif /* HAVE_CHARSET_ucs2 */
+# endif /* HAVE_CHARSET_ucs2 */
 
 
-#ifdef HAVE_CHARSET_utf32
+# ifdef HAVE_CHARSET_utf32
 extern CHARSET_INFO my_charset_utf32_german2_uca_ci;
 extern CHARSET_INFO my_charset_utf32_icelandic_uca_ci;
 extern CHARSET_INFO my_charset_utf32_latvian_uca_ci;
@@ -74,10 +87,10 @@ extern CHARSET_INFO my_charset_utf32_croatian_uca_ci;
 extern CHARSET_INFO my_charset_utf32_sinhala_uca_ci;
 extern CHARSET_INFO my_charset_utf32_unicode_520_ci;
 extern CHARSET_INFO my_charset_utf32_vietnamese_ci;
-#endif /* HAVE_CHARSET_utf32 */
+# endif /* HAVE_CHARSET_utf32 */
 
 
-#ifdef HAVE_CHARSET_utf16
+# ifdef HAVE_CHARSET_utf16
 extern CHARSET_INFO my_charset_utf16_german2_uca_ci;
 extern CHARSET_INFO my_charset_utf16_icelandic_uca_ci;
 extern CHARSET_INFO my_charset_utf16_latvian_uca_ci;
@@ -101,10 +114,10 @@ extern CHARSET_INFO my_charset_utf16_croatian_uca_ci;
 extern CHARSET_INFO my_charset_utf16_sinhala_uca_ci;
 extern CHARSET_INFO my_charset_utf16_unicode_520_ci;
 extern CHARSET_INFO my_charset_utf16_vietnamese_ci;
-#endif  /* HAVE_CHARSET_utf16 */
+# endif  /* HAVE_CHARSET_utf16 */
 
 
-#ifdef HAVE_CHARSET_utf8
+# ifdef HAVE_CHARSET_utf8
 extern CHARSET_INFO my_charset_utf8_german2_uca_ci;
 extern CHARSET_INFO my_charset_utf8_icelandic_uca_ci;
 extern CHARSET_INFO my_charset_utf8_latvian_uca_ci;
@@ -128,12 +141,12 @@ extern CHARSET_INFO my_charset_utf8_croatian_uca_ci;
 extern CHARSET_INFO my_charset_utf8_sinhala_uca_ci;
 extern CHARSET_INFO my_charset_utf8_unicode_520_ci;
 extern CHARSET_INFO my_charset_utf8_vietnamese_ci;
-#ifdef HAVE_UTF8_GENERAL_CS
+#  ifdef HAVE_UTF8_GENERAL_CS
 extern CHARSET_INFO my_charset_utf8_general_cs;
-#endif
-#endif
+#  endif
+# endif
 
-#ifdef HAVE_CHARSET_utf8mb4
+# ifdef HAVE_CHARSET_utf8mb4
 extern CHARSET_INFO my_charset_utf8mb4_german2_uca_ci;
 extern CHARSET_INFO my_charset_utf8mb4_icelandic_uca_ci;
 extern CHARSET_INFO my_charset_utf8mb4_latvian_uca_ci;
@@ -157,8 +170,11 @@ extern CHARSET_INFO my_charset_utf8mb4_croatian_uca_ci;
 extern CHARSET_INFO my_charset_utf8mb4_sinhala_uca_ci;
 extern CHARSET_INFO my_charset_utf8mb4_unicode_520_ci;
 extern CHARSET_INFO my_charset_utf8mb4_vietnamese_ci;
-#endif /* HAVE_CHARSET_utf8mb4 */
+# endif /* HAVE_CHARSET_utf8mb4 */
 
+# ifdef HAVE_CHARSET_gb18030
+extern CHARSET_INFO my_charset_gb18030_unicode_520_ci;
+# endif /* HAVE_CHARSET_gb18030 */
 #endif /* HAVE_UCA_COLLATIONS */
 
 my_bool init_compiled_charsets(myf flags MY_ATTRIBUTE((unused)))
@@ -166,7 +182,6 @@ my_bool init_compiled_charsets(myf flags MY_ATTRIBUTE((unused)))
   CHARSET_INFO *cs;
 
   add_compiled_collation(&my_charset_bin);
-  add_compiled_collation(&my_charset_filename);
   
   add_compiled_collation(&my_charset_latin1);
   add_compiled_collation(&my_charset_latin1_bin);
@@ -209,6 +224,14 @@ my_bool init_compiled_charsets(myf flags MY_ATTRIBUTE((unused)))
   add_compiled_collation(&my_charset_gbk_chinese_ci);
   add_compiled_collation(&my_charset_gbk_bin);
 #endif
+
+#ifdef HAVE_CHARSET_gb18030
+# ifdef HAVE_UCA_COLLATIONS
+  add_compiled_collation(&my_charset_gb18030_unicode_520_ci);
+# endif /* HAVE_UCA_COLLATIONS  */
+  add_compiled_collation(&my_charset_gb18030_chinese_ci);
+  add_compiled_collation(&my_charset_gb18030_bin);
+#endif /* HAVE_CHARSET_gb18030 */
 
 #ifdef HAVE_CHARSET_sjis
   add_compiled_collation(&my_charset_sjis_japanese_ci);

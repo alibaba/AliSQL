@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -271,6 +278,23 @@ SignalDataPrintFunctions[] = {
   ,{ GSN_GET_CONFIG_REQ, printGET_CONFIG_REQ }
   ,{ GSN_GET_CONFIG_REF, printGET_CONFIG_REF }
   ,{ GSN_GET_CONFIG_CONF, printGET_CONFIG_CONF }
+
+  ,{ GSN_ALLOC_NODEID_REQ, printALLOC_NODEID_REQ }
+  ,{ GSN_ALLOC_NODEID_CONF, printALLOC_NODEID_CONF }
+  ,{ GSN_ALLOC_NODEID_REF, printALLOC_NODEID_REF }
+
+  ,{ GSN_LCP_STATUS_REQ, printLCP_STATUS_REQ }
+  ,{ GSN_LCP_STATUS_CONF, printLCP_STATUS_CONF }
+  ,{ GSN_LCP_STATUS_REF, printLCP_STATUS_REF }
+
+  ,{ GSN_ISOLATE_ORD, printISOLATE_ORD }
+
+  ,{ GSN_CREATE_FK_REQ, printCREATE_FK_REQ }
+  ,{ GSN_CREATE_FK_REF, printCREATE_FK_REF }
+  ,{ GSN_CREATE_FK_CONF, printCREATE_FK_CONF }
+  ,{ GSN_DROP_FK_REQ, printDROP_FK_REQ }
+  ,{ GSN_DROP_FK_REF, printDROP_FK_REF }
+  ,{ GSN_DROP_FK_CONF, printDROP_FK_CONF }
 
   ,{ 0, 0 }
 };

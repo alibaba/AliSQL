@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -38,13 +45,14 @@ static char base64_table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 /* *************************************************************
  * HugoCalculator
  *
- *  Comon class for the Hugo test suite, provides the functions 
+ *  Common class for the Hugo test suite, provides the functions 
  *  that is used for calculating values to load in to table and 
  *  also knows how to verify a row that's been read from db 
  *
  * ************************************************************/
-HugoCalculator::HugoCalculator(const NdbDictionary::Table& tab) : m_tab(tab) {
-
+HugoCalculator::HugoCalculator(const NdbDictionary::Table& tab)
+  : m_tab(tab), m_idCol(-1), m_updatesCol(-1)
+{
   // The "id" column of this table is found in the first integer column
   int i;
   for (i=0; i<m_tab.getNoOfColumns(); i++){ 
@@ -69,7 +77,9 @@ HugoCalculator::HugoCalculator(const NdbDictionary::Table& tab) : m_tab(tab) {
   ndbout << "updatesCol = " << m_updatesCol << endl;
 #endif
   // Check that idCol is not conflicting with updatesCol
-  assert(m_idCol != m_updatesCol && m_idCol != -1 && m_updatesCol != -1);
+  require(m_idCol != -1);
+  require(m_updatesCol != -1);
+  require(m_idCol != m_updatesCol);
 }
 
 Int32
@@ -201,9 +211,6 @@ HugoCalculator::calcValue(int record,
   case NdbDictionary::Column::Decimal:
   case NdbDictionary::Column::Decimalunsigned:
   case NdbDictionary::Column::Binary:
-  case NdbDictionary::Column::Datetime:
-  case NdbDictionary::Column::Time:
-  case NdbDictionary::Column::Date:
   case NdbDictionary::Column::Bit:
     while (len > 4)
     {
@@ -244,7 +251,7 @@ HugoCalculator::calcValue(int record,
   case NdbDictionary::Column::Varbinary:
   case NdbDictionary::Column::Varchar:
     len = calc_len(myRand(&seed), len - 1);
-    assert(len < 256);
+    require(len < 256);
     * outlen = len + 1;
     * buf = len;
     dst++;
@@ -252,7 +259,7 @@ HugoCalculator::calcValue(int record,
   case NdbDictionary::Column::Longvarchar:
   case NdbDictionary::Column::Longvarbinary:
     len = calc_len(myRand(&seed), len - 2);
-    assert(len < 65536);
+    require(len < 65536);
     * outlen = len + 2;
     int2store(buf, len);
     dst += 2;
@@ -276,14 +283,34 @@ write_char:
     pos--;
     break;
   }
+  /*
+   * Date and time types.  Compared as binary data so valid values
+   * are not required, but they can be nice for manual testing e.g.
+   * to avoid garbage in ndb_select_all output.  -todo
+   */
+  case NdbDictionary::Column::Year:
+  case NdbDictionary::Column::Date:
+  case NdbDictionary::Column::Time:
+  case NdbDictionary::Column::Datetime:
+  case NdbDictionary::Column::Time2:
+  case NdbDictionary::Column::Datetime2:
+  case NdbDictionary::Column::Timestamp:
+  case NdbDictionary::Column::Timestamp2:
+    while (len > 4)
+    {
+      memcpy(buf+pos, &val, 4);
+      pos += 4;
+      len -= 4;
+      val= myRand(&seed);
+    }
+    memcpy(buf+pos, &val, len);
+    break;
   case NdbDictionary::Column::Blob:
     * outlen = calc_blobLen(myRand(&seed), len);
     // Don't set any actual data...
     break;
   case NdbDictionary::Column::Undefined:
   case NdbDictionary::Column::Text:
-  case NdbDictionary::Column::Year:
-  case NdbDictionary::Column::Timestamp:
     abort();
     break;
   }
@@ -293,17 +320,16 @@ write_char:
 
 int
 HugoCalculator::verifyRowValues(NDBT_ResultRow* const  pRow) const{
-  int id, updates;
-
-  id = pRow->attributeStore(m_idCol)->u_32_value();
-  updates = pRow->attributeStore(m_updatesCol)->u_32_value();
-  int result = 0;	  
+  const int id = getIdValue(pRow);
+  const int updates = pRow->attributeStore(m_updatesCol)->u_32_value();
+  int result = 0;
   
   // Check the values of each column
   for (int i = 0; i<m_tab.getNoOfColumns(); i++){
-    if (i != m_updatesCol && id != m_idCol) {
+    if (i != m_updatesCol && i != m_idCol) {
       const NdbDictionary::Column* attr = m_tab.getColumn(i);      
-      Uint32 len = attr->getSizeInBytes(), real_len;
+      const Uint32 len = attr->getSizeInBytes();
+      Uint32 real_len;
       char buf[NDB_MAX_TUPLE_SIZE];
       const char* res = calcValue(id, i, updates, buf, len, &real_len);
       if (res == NULL){
@@ -476,7 +502,7 @@ HugoCalculator::equalForRow(Uint8 * pRow,
       Uint32 real_len;
       const char * value = calcValue(rowId, attrId, 0, buf,
                                      len, &real_len);
-      assert(value != 0); // NULLable PK not supported...
+      require(value != 0); // NULLable PK not supported...
       Uint32 off = 0;
       bool ret = NdbDictionary::getOffset(pRecord, attrId, off);
       if (!ret)
@@ -523,7 +549,7 @@ HugoCalculator::setValues(Uint8 * pRow,
       }
       else
       {
-        assert(attr->getNullable());
+        require(attr->getNullable());
         NdbDictionary::setNull(pRecord, (char*)pRow, attrId, true);
       }
     }

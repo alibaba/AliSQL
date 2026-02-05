@@ -1,13 +1,20 @@
-/* Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -19,7 +26,7 @@
 
 	/* Fetch a key-page in memory */
 
-uchar *_mi_fetch_keypage(register MI_INFO *info, MI_KEYDEF *keyinfo,
+uchar *_mi_fetch_keypage(MI_INFO *info, MI_KEYDEF *keyinfo,
 			 my_off_t page, int level, 
                          uchar *buff, int return_buffer)
 {
@@ -29,6 +36,7 @@ uchar *_mi_fetch_keypage(register MI_INFO *info, MI_KEYDEF *keyinfo,
   DBUG_PRINT("enter",("page: %ld", (long) page));
 
   tmp=(uchar*) key_cache_read(info->s->key_cache,
+                              keycache_thread_var(),
                              info->s->kfile, page, level, (uchar*) buff,
 			     (uint) keyinfo->block_length,
 			     (uint) keyinfo->block_length,
@@ -37,10 +45,10 @@ uchar *_mi_fetch_keypage(register MI_INFO *info, MI_KEYDEF *keyinfo,
     info->buff_used=1;
   else if (!tmp)
   {
-    DBUG_PRINT("error",("Got errno: %d from key_cache_read",my_errno));
+    DBUG_PRINT("error",("Got errno: %d from key_cache_read",my_errno()));
     info->last_keypage=HA_OFFSET_ERROR;
     mi_print_error(info->s, HA_ERR_CRASHED);
-    my_errno=HA_ERR_CRASHED;
+    set_my_errno(HA_ERR_CRASHED);
     DBUG_RETURN(0);
   }
   info->last_keypage=page;
@@ -52,7 +60,7 @@ uchar *_mi_fetch_keypage(register MI_INFO *info, MI_KEYDEF *keyinfo,
     DBUG_DUMP("page", tmp, keyinfo->block_length);
     info->last_keypage = HA_OFFSET_ERROR;
     mi_print_error(info->s, HA_ERR_CRASHED);
-    my_errno = HA_ERR_CRASHED;
+    set_my_errno(HA_ERR_CRASHED);
     tmp = 0;
   }
   DBUG_RETURN(tmp);
@@ -61,13 +69,12 @@ uchar *_mi_fetch_keypage(register MI_INFO *info, MI_KEYDEF *keyinfo,
 
 	/* Write a key-page on disk */
 
-int _mi_write_keypage(register MI_INFO *info, register MI_KEYDEF *keyinfo,
+int _mi_write_keypage(MI_INFO *info, MI_KEYDEF *keyinfo,
 		      my_off_t page, int level, uchar *buff)
 {
-  reg3 uint length;
+  uint length;
   DBUG_ENTER("_mi_write_keypage");
 
-#ifndef FAST					/* Safety check */
   if (page < info->s->base.keystart ||
       page+keyinfo->block_length > info->state->key_file_length ||
       (page & (MI_MIN_KEY_BLOCK_LENGTH-1)))
@@ -76,17 +83,17 @@ int _mi_write_keypage(register MI_INFO *info, register MI_KEYDEF *keyinfo,
 			(long) info->s->base.keystart,
 			(long) info->state->key_file_length,
 			(long) page));
-    my_errno=EINVAL;
+    set_my_errno(EINVAL);
     DBUG_RETURN((-1));
   }
   DBUG_PRINT("page",("write page at: %lu",(long) page));
   DBUG_DUMP("buff",(uchar*) buff,mi_getint(buff));
-#endif
 
   if ((length=keyinfo->block_length) > IO_SIZE*2 &&
       info->state->key_file_length != page+length)
     length= ((mi_getint(buff)+IO_SIZE-1) & (uint) ~(IO_SIZE-1));
   DBUG_RETURN((key_cache_write(info->s->key_cache,
+                               keycache_thread_var(),
                          info->s->kfile,page, level, (uchar*) buff,length,
 			 (uint) keyinfo->block_length,
 			 (int) ((info->lock_type != F_UNLCK) ||
@@ -96,7 +103,7 @@ int _mi_write_keypage(register MI_INFO *info, register MI_KEYDEF *keyinfo,
 
 	/* Remove page from disk */
 
-int _mi_dispose(register MI_INFO *info, MI_KEYDEF *keyinfo, my_off_t pos,
+int _mi_dispose(MI_INFO *info, MI_KEYDEF *keyinfo, my_off_t pos,
                 int level)
 {
   my_off_t old_link;
@@ -109,6 +116,7 @@ int _mi_dispose(register MI_INFO *info, MI_KEYDEF *keyinfo, my_off_t pos,
   mi_sizestore(buff,old_link);
   info->s->state.changed|= STATE_NOT_SORTED_PAGES;
   DBUG_RETURN(key_cache_write(info->s->key_cache,
+                              keycache_thread_var(),
                               info->s->kfile, pos , level, buff,
 			      sizeof(buff),
 			      (uint) keyinfo->block_length,
@@ -118,7 +126,7 @@ int _mi_dispose(register MI_INFO *info, MI_KEYDEF *keyinfo, my_off_t pos,
 
 	/* Make new page on disk */
 
-my_off_t _mi_new(register MI_INFO *info, MI_KEYDEF *keyinfo, int level)
+my_off_t _mi_new(MI_INFO *info, MI_KEYDEF *keyinfo, int level)
 {
   my_off_t pos;
   uchar buff[8];
@@ -130,7 +138,7 @@ my_off_t _mi_new(register MI_INFO *info, MI_KEYDEF *keyinfo, int level)
     if (info->state->key_file_length >=
 	info->s->base.max_key_file_length - keyinfo->block_length)
     {
-      my_errno=HA_ERR_INDEX_FILE_FULL;
+      set_my_errno(HA_ERR_INDEX_FILE_FULL);
       DBUG_RETURN(HA_OFFSET_ERROR);
     }
     pos=info->state->key_file_length;
@@ -139,6 +147,7 @@ my_off_t _mi_new(register MI_INFO *info, MI_KEYDEF *keyinfo, int level)
   else
   {
     if (!key_cache_read(info->s->key_cache,
+                        keycache_thread_var(),
                         info->s->kfile, pos, level,
 			buff,
 			(uint) sizeof(buff),

@@ -1,4 +1,4 @@
-/* Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2007, 2023, Oracle and/or its affiliates.
 
    This library is free software; you can redistribute it and/or
    modify it under the terms of the GNU Library General Public
@@ -36,9 +36,12 @@
 
  ***************************************************************/
 
-#include <my_base.h> /* for EOVERFLOW on Windows */
 #include <my_global.h>
 #include <m_string.h>  /* for memcpy and NOT_FIXED_DEC */
+
+#ifndef EOVERFLOW
+#define EOVERFLOW 84
+#endif
 
 /**
    Appears to suffice to not call malloc() in most cases.
@@ -91,7 +94,7 @@ size_t my_fcvt(double x, int precision, char *to, my_bool *error)
   int decpt, sign, len, i;
   char *res, *src, *end, *dst= to;
   char buf[DTOA_BUFF_SIZE];
-  DBUG_ASSERT(precision >= 0 && precision < NOT_FIXED_DEC && to != NULL);
+  assert(precision >= 0 && precision < NOT_FIXED_DEC && to != NULL);
   
   res= dtoa(x, 5, precision, &decpt, &sign, &end, buf, sizeof(buf));
 
@@ -106,7 +109,7 @@ size_t my_fcvt(double x, int precision, char *to, my_bool *error)
   }
 
   src= res;
-  len= end - src;
+  len= (int)(end - src);
 
   if (sign)
     *dst++= '-';
@@ -216,7 +219,7 @@ size_t my_gcvt(double x, my_gcvt_arg_type type, int width, char *to,
   char *res, *src, *end, *dst= to, *dend= dst + width;
   char buf[DTOA_BUFF_SIZE];
   my_bool have_space, force_e_format;
-  DBUG_ASSERT(width > 0 && to != NULL);
+  assert(width > 0 && to != NULL);
   
   /* We want to remove '-' from equations early */
   if (x < 0.)
@@ -238,7 +241,7 @@ size_t my_gcvt(double x, my_gcvt_arg_type type, int width, char *to,
     *error= FALSE;
 
   src= res;
-  len= end - res;
+  len= (int)(end - res);
 
   /*
     Number of digits in the exponent from the 'e' conversion.
@@ -330,7 +333,7 @@ size_t my_gcvt(double x, my_gcvt_arg_type type, int width, char *to,
       dtoa_free(res, buf, sizeof(buf));
       res= dtoa(x, 5, width - decpt, &decpt, &sign, &end, buf, sizeof(buf));
       src= res;
-      len= end - res;
+      len= (int)(end - res);
     }
 
     if (len == 0)
@@ -396,7 +399,7 @@ size_t my_gcvt(double x, my_gcvt_arg_type type, int width, char *to,
       dtoa_free(res, buf, sizeof(buf));
       res= dtoa(x, 4, width, &decpt, &sign, &end, buf, sizeof(buf));
       src= res;
-      len= end - res;
+      len= (int)(end - res);
       if (--decpt < 0)
         decpt= -decpt;
     }
@@ -462,9 +465,9 @@ double my_strtod(const char *str, char **end, int *error)
 {
   char buf[DTOA_BUFF_SIZE];
   double res;
-  DBUG_ASSERT(end != NULL && ((str != NULL && *end != NULL) ||
-                              (str == NULL && *end == NULL)) &&
-              error != NULL);
+  assert(end != NULL && ((str != NULL && *end != NULL) ||
+                         (str == NULL && *end == NULL)) &&
+         error != NULL);
 
   res= my_strtod_int(str, end, error, buf, sizeof(buf));
   return (*error == 0) ? res : (res < 0 ? -DBL_MAX : DBL_MAX);
@@ -659,7 +662,7 @@ typedef struct Stack_alloc
 static Bigint *Balloc(int k, Stack_alloc *alloc)
 {
   Bigint *rv;
-  DBUG_ASSERT(k <= Kmax);
+  assert(k <= Kmax);
   if (k <= Kmax &&  alloc->freelist[k])
   {
     rv= alloc->freelist[k];
@@ -827,9 +830,9 @@ static Bigint *s2b(const char *s, int nd0, int nd, ULong y9, Stack_alloc *alloc)
 }
 
 
-static int hi0bits(register ULong x)
+static int hi0bits(ULong x)
 {
-  register int k= 0;
+  int k= 0;
 
   if (!(x & 0xffff0000))
   {
@@ -863,8 +866,8 @@ static int hi0bits(register ULong x)
 
 static int lo0bits(ULong *y)
 {
-  register int k;
-  register ULong x= *y;
+  int k;
+  ULong x= *y;
 
   if (x & 7)
   {
@@ -1182,7 +1185,7 @@ static Bigint *diff(Bigint *a, Bigint *b, Stack_alloc *alloc)
 
 static double ulp(U *x)
 {
-  register Long L;
+  Long L;
   U u;
 
   L= (word0(x) & Exp_mask) - (P - 1)*Exp_msk1;
@@ -1350,7 +1353,7 @@ static const double tinytens[]=
 static double my_strtod_int(const char *s00, char **se, int *error, char *buf, size_t buf_size)
 {
   int scale;
-  int bb2, bb5, bbe, bd2, bd5, bbbits, bs2, UNINIT_VAR(c), dsign,
+  int bb2, bb5, bbe, bd2, bd5, bbbits, bs2, c= 0, dsign,
      e, e1, esign, i, j, k, nd, nd0, nf, nz, nz0, sign;
   const char *s, *s0, *s1, *end = *se;
   double aadj, aadj1;
@@ -1358,9 +1361,6 @@ static double my_strtod_int(const char *s00, char **se, int *error, char *buf, s
   Long L;
   ULong y, z;
   Bigint *bb, *bb1, *bd, *bd0, *bs, *delta;
-#ifdef SET_INEXACT
-  int inexact, oldinexact;
-#endif
 #ifdef Honor_FLT_ROUNDS
   int rounding;
 #endif
@@ -1378,7 +1378,7 @@ static double my_strtod_int(const char *s00, char **se, int *error, char *buf, s
     switch (*s) {
     case '-':
       sign= 1;
-      /* no break */
+      // Fall through.
     case '+':
       s++;
       goto break2;
@@ -1475,8 +1475,10 @@ static double my_strtod_int(const char *s00, char **se, int *error, char *buf, s
       switch (c= *s) {
       case '-':
         esign= 1;
+        // Fall through.
       case '+':
-        c= *++s;
+        if (++s < end)
+          c= *s;
       }
     if (s < end && c >= '0' && c <= '9')
     {
@@ -1528,10 +1530,6 @@ static double my_strtod_int(const char *s00, char **se, int *error, char *buf, s
   dval(&rv)= y;
   if (k > 9)
   {
-#ifdef SET_INEXACT
-    if (k > DBL_DIG)
-      oldinexact = get_inexact();
-#endif
     dval(&rv)= tens[k - 9] * dval(&rv) + z;
   }
   bd0= 0;
@@ -1597,11 +1595,6 @@ static double my_strtod_int(const char *s00, char **se, int *error, char *buf, s
   }
   e1+= nd - k;
 
-#ifdef SET_INEXACT
-  inexact= 1;
-  if (k <= DBL_DIG)
-    oldinexact= get_inexact();
-#endif
   scale= 0;
 #ifdef Honor_FLT_ROUNDS
   if ((rounding= Flt_Rounds) >= 2)
@@ -1643,11 +1636,6 @@ static double my_strtod_int(const char *s00, char **se, int *error, char *buf, s
         word0(&rv)= Exp_mask;
         word1(&rv)= 0;
 #endif /*Honor_FLT_ROUNDS*/
-#ifdef SET_INEXACT
-        /* set overflow bit */
-        dval(&rv0)= 1e300;
-        dval(&rv0)*= dval(&rv0);
-#endif
         if (bd0)
           goto retfree;
         goto ret;
@@ -1788,9 +1776,6 @@ static double my_strtod_int(const char *s00, char **se, int *error, char *buf, s
         if (!delta->p.x[0] && delta->wds <= 1)
         {
           /* exact */
-#ifdef SET_INEXACT
-          inexact= 0;
-#endif
           break;
         }
         if (rounding)
@@ -1855,18 +1840,11 @@ static double my_strtod_int(const char *s00, char **se, int *error, char *buf, s
       if (dsign || word1(&rv) || word0(&rv) & Bndry_mask ||
           (word0(&rv) & Exp_mask) <= (2 * P + 1) * Exp_msk1)
       {
-#ifdef SET_INEXACT
-        if (!delta->x[0] && delta->wds <= 1)
-          inexact= 0;
-#endif
         break;
       }
       if (!delta->p.x[0] && delta->wds <= 1)
       {
         /* exact result */
-#ifdef SET_INEXACT
-        inexact= 0;
-#endif
         break;
       }
       delta= lshift(delta, Log2P, &alloc);
@@ -2013,7 +1991,6 @@ static double my_strtod_int(const char *s00, char **se, int *error, char *buf, s
       }
     }
     z= word0(&rv) & Exp_mask;
-#ifndef SET_INEXACT
     if (!scale)
       if (y == z)
       {
@@ -2029,40 +2006,18 @@ static double my_strtod_int(const char *s00, char **se, int *error, char *buf, s
         else if (aadj < .4999999 / FLT_RADIX)
           break;
       }
-#endif
  cont:
     Bfree(bb, &alloc);
     Bfree(bd, &alloc);
     Bfree(bs, &alloc);
     Bfree(delta, &alloc);
   }
-#ifdef SET_INEXACT
-  if (inexact)
-  {
-    if (!oldinexact)
-    {
-      word0(&rv0)= Exp_1 + (70 << Exp_shift);
-      word1(&rv0)= 0;
-      dval(&rv0)+= 1.;
-    }
-  }
-  else if (!oldinexact)
-    clear_inexact();
-#endif
   if (scale)
   {
     word0(&rv0)= Exp_1 - 2 * P * Exp_msk1;
     word1(&rv0)= 0;
     dval(&rv)*= dval(&rv0);
   }
-#ifdef SET_INEXACT
-  if (inexact && !(word0(&rv) & Exp_mask))
-  {
-    /* set underflow bit */
-    dval(&rv0)= 1e-300;
-    dval(&rv0)*= dval(&rv0);
-  }
-#endif
  retfree:
   Bfree(bb, &alloc);
   Bfree(bd, &alloc);
@@ -2212,8 +2167,8 @@ static char *dtoa(double dd, int mode, int ndigits, int *decpt, int *sign,
     to hold the suppressed trailing zeros.
   */
 
-  int bbits, b2, b5, be, dig, i, ieps, UNINIT_VAR(ilim), ilim0, 
-    UNINIT_VAR(ilim1), j, j1, k, k0, k_check, leftright, m2, m5, s2, s5,
+  int bbits, b2, b5, be, dig, i, ieps, ilim= 0, ilim0,
+    ilim1= 0, j, j1, k, k0, k_check, leftright, m2, m5, s2, s5,
     spec_case, try_quick;
   Long L;
   int denorm;
@@ -2368,7 +2323,7 @@ static char *dtoa(double dd, int mode, int ndigits, int *decpt, int *sign,
     break;
   case 2:
     leftright= 0;
-    /* no break */
+    // Fall through.
   case 4:
     if (ndigits <= 0)
       ndigits= 1;
@@ -2376,7 +2331,7 @@ static char *dtoa(double dd, int mode, int ndigits, int *decpt, int *sign,
     break;
   case 3:
     leftright= 0;
-    /* no break */
+    // Fall through.
   case 5:
     i= ndigits + k + 1;
     ilim= i;

@@ -35,6 +35,8 @@ f_charbig VARCHAR(1000) )
 ENGINE = MEMORY;
 SET AUTOCOMMIT= 1;
 SET @@session.sql_mode= '';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 # End of basic preparations needed for all tests
 #-----------------------------------------------
 
@@ -56,13 +58,21 @@ f_charbig VARCHAR(1000)
 
 )
 PARTITION BY HASH(f_int1 + f_int2) PARTITIONS 2;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1(f_int1,f_int2,f_char1,f_char2,f_charbig)
 SELECT f_int1,f_int2,f_char1,f_char2,f_charbig FROM t0_template
 WHERE f_int1 BETWEEN 1 AND @max_row_div2 - 1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 ALTER TABLE t1 ADD UNIQUE INDEX uidx1 (f_int1,f_int2);
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1(f_int1,f_int2,f_char1,f_char2,f_charbig)
 SELECT f_int1,f_int2,f_char1,f_char2,f_charbig FROM t0_template
 WHERE f_int1 BETWEEN @max_row_div2 AND @max_row;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # Start usability test (inc/partition_check.inc)
 create_command
 SHOW CREATE TABLE t1;
@@ -272,6 +282,8 @@ COMMIT;
 DELETE FROM t1 WHERE f_charbig = 'was inserted';
 COMMIT WORK;
 SET @@session.sql_mode = 'traditional';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SELECT @max_row_div2 + @max_row_div4 - @max_row_div4 + 1 INTO @exp_inserted_rows;
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT IF(f_int1 = @max_row_div2,f_int1 / 0,f_int1),f_int1,
@@ -284,6 +296,8 @@ COMMIT;
 # INFO: Storage engine used for t1 seems to be unable to revert
 #       changes made by the failing statement.
 SET @@session.sql_mode = '';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET AUTOCOMMIT= 1;
 DELETE FROM t1 WHERE f_charbig = 'was inserted';
 COMMIT WORK;
@@ -478,12 +492,16 @@ END|
 UPDATE t1
 SET f_int1 = f_int1 + @max_row, f_int2 = f_int2 - @max_row,
 f_charbig = '####updated per update statement itself####';
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check trigger-9 success: 	1
 DROP TRIGGER trg_2;
 UPDATE t1 SET f_int1 = CAST(f_char1 AS SIGNED INT),
 f_int2 = CAST(f_char1 AS SIGNED INT),
 f_charbig = CONCAT('===',f_char1,'===');
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = new.f_int1 + @max_row,
@@ -493,12 +511,16 @@ END|
 UPDATE t1
 SET f_int1 = f_int1 + @max_row, f_int2 = f_int2 - @max_row,
 f_charbig = '####updated per update statement itself####';
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check trigger-10 success: 	1
 DROP TRIGGER trg_2;
 UPDATE t1 SET f_int1 = CAST(f_char1 AS SIGNED INT),
 f_int2 = CAST(f_char1 AS SIGNED INT),
 f_charbig = CONCAT('===',f_char1,'===');
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CREATE TRIGGER trg_3 BEFORE INSERT ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = @my_max1 + @counter,
@@ -508,6 +530,8 @@ SET @counter = @counter + 1;
 END|
 SET @counter = 1;
 SELECT MAX(f_int1), MIN(f_int2) INTO @my_max1,@my_min2 FROM t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'just inserted' FROM t0_template
@@ -516,6 +540,8 @@ ORDER BY f_int1;
 DROP TRIGGER trg_3;
 	
 # check trigger-11 success: 	1
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 DELETE FROM t1
 WHERE f_int1 <> CAST(f_char1 AS SIGNED INT)
 AND f_int2 <> CAST(f_char1 AS SIGNED INT)
@@ -529,6 +555,8 @@ SET @counter = @counter + 1;
 END|
 SET @counter = 1;
 SELECT MAX(f_int1), MIN(f_int2) INTO @my_max1,@my_min2 FROM t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1 (f_char1, f_char2, f_charbig)
 SELECT CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'just inserted' FROM t0_template
@@ -537,6 +565,8 @@ ORDER BY f_int1;
 DROP TRIGGER trg_3;
 	
 # check trigger-12 success: 	1
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 DELETE FROM t1
 WHERE f_int1 <> CAST(f_char1 AS SIGNED INT)
 AND f_int2 <> CAST(f_char1 AS SIGNED INT)
@@ -544,21 +574,27 @@ AND f_charbig = '####updated per insert trigger####';
 ANALYZE  TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	analyze	status	OK
+test.t1	analyze	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CHECK    TABLE t1 EXTENDED;
 Table	Op	Msg_type	Msg_text
 test.t1	check	status	OK
+test.t1	check	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CHECKSUM TABLE t1 EXTENDED;
 Table	Checksum
 test.t1	<some_value>
 OPTIMIZE TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	optimize	status	OK
+test.t1	optimize	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # check layout success:    1
 REPAIR   TABLE t1 EXTENDED;
 Table	Op	Msg_type	Msg_text
 test.t1	repair	status	OK
+test.t1	repair	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # check layout success:    1
 TRUNCATE t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check TRUNCATE success: 	1
 # check layout success:    1
@@ -573,13 +609,21 @@ f_charbig VARCHAR(1000)
 
 )
 PARTITION BY KEY(f_int1,f_int2) PARTITIONS 5;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1(f_int1,f_int2,f_char1,f_char2,f_charbig)
 SELECT f_int1,f_int2,f_char1,f_char2,f_charbig FROM t0_template
 WHERE f_int1 BETWEEN 1 AND @max_row_div2 - 1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 ALTER TABLE t1 ADD UNIQUE INDEX uidx1 (f_int1,f_int2);
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1(f_int1,f_int2,f_char1,f_char2,f_charbig)
 SELECT f_int1,f_int2,f_char1,f_char2,f_charbig FROM t0_template
 WHERE f_int1 BETWEEN @max_row_div2 AND @max_row;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # Start usability test (inc/partition_check.inc)
 create_command
 SHOW CREATE TABLE t1;
@@ -795,6 +839,8 @@ COMMIT;
 DELETE FROM t1 WHERE f_charbig = 'was inserted';
 COMMIT WORK;
 SET @@session.sql_mode = 'traditional';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SELECT @max_row_div2 + @max_row_div4 - @max_row_div4 + 1 INTO @exp_inserted_rows;
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT IF(f_int1 = @max_row_div2,f_int1 / 0,f_int1),f_int1,
@@ -807,6 +853,8 @@ COMMIT;
 # INFO: Storage engine used for t1 seems to be unable to revert
 #       changes made by the failing statement.
 SET @@session.sql_mode = '';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET AUTOCOMMIT= 1;
 DELETE FROM t1 WHERE f_charbig = 'was inserted';
 COMMIT WORK;
@@ -1001,12 +1049,16 @@ END|
 UPDATE t1
 SET f_int1 = f_int1 + @max_row, f_int2 = f_int2 - @max_row,
 f_charbig = '####updated per update statement itself####';
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check trigger-9 success: 	1
 DROP TRIGGER trg_2;
 UPDATE t1 SET f_int1 = CAST(f_char1 AS SIGNED INT),
 f_int2 = CAST(f_char1 AS SIGNED INT),
 f_charbig = CONCAT('===',f_char1,'===');
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = new.f_int1 + @max_row,
@@ -1016,12 +1068,16 @@ END|
 UPDATE t1
 SET f_int1 = f_int1 + @max_row, f_int2 = f_int2 - @max_row,
 f_charbig = '####updated per update statement itself####';
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check trigger-10 success: 	1
 DROP TRIGGER trg_2;
 UPDATE t1 SET f_int1 = CAST(f_char1 AS SIGNED INT),
 f_int2 = CAST(f_char1 AS SIGNED INT),
 f_charbig = CONCAT('===',f_char1,'===');
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CREATE TRIGGER trg_3 BEFORE INSERT ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = @my_max1 + @counter,
@@ -1031,6 +1087,8 @@ SET @counter = @counter + 1;
 END|
 SET @counter = 1;
 SELECT MAX(f_int1), MIN(f_int2) INTO @my_max1,@my_min2 FROM t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'just inserted' FROM t0_template
@@ -1039,6 +1097,8 @@ ORDER BY f_int1;
 DROP TRIGGER trg_3;
 	
 # check trigger-11 success: 	1
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 DELETE FROM t1
 WHERE f_int1 <> CAST(f_char1 AS SIGNED INT)
 AND f_int2 <> CAST(f_char1 AS SIGNED INT)
@@ -1052,6 +1112,8 @@ SET @counter = @counter + 1;
 END|
 SET @counter = 1;
 SELECT MAX(f_int1), MIN(f_int2) INTO @my_max1,@my_min2 FROM t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1 (f_char1, f_char2, f_charbig)
 SELECT CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'just inserted' FROM t0_template
@@ -1060,6 +1122,8 @@ ORDER BY f_int1;
 DROP TRIGGER trg_3;
 	
 # check trigger-12 success: 	1
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 DELETE FROM t1
 WHERE f_int1 <> CAST(f_char1 AS SIGNED INT)
 AND f_int2 <> CAST(f_char1 AS SIGNED INT)
@@ -1067,21 +1131,27 @@ AND f_charbig = '####updated per insert trigger####';
 ANALYZE  TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	analyze	status	OK
+test.t1	analyze	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CHECK    TABLE t1 EXTENDED;
 Table	Op	Msg_type	Msg_text
 test.t1	check	status	OK
+test.t1	check	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CHECKSUM TABLE t1 EXTENDED;
 Table	Checksum
 test.t1	<some_value>
 OPTIMIZE TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	optimize	status	OK
+test.t1	optimize	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # check layout success:    1
 REPAIR   TABLE t1 EXTENDED;
 Table	Op	Msg_type	Msg_text
 test.t1	repair	status	OK
+test.t1	repair	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # check layout success:    1
 TRUNCATE t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check TRUNCATE success: 	1
 # check layout success:    1
@@ -1104,13 +1174,21 @@ PARTITION part0 VALUES IN (0),
 PARTITION part1 VALUES IN (1),
 PARTITION part2 VALUES IN (2),
 PARTITION part3 VALUES IN (3));
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1(f_int1,f_int2,f_char1,f_char2,f_charbig)
 SELECT f_int1,f_int2,f_char1,f_char2,f_charbig FROM t0_template
 WHERE f_int1 BETWEEN 1 AND @max_row_div2 - 1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 ALTER TABLE t1 ADD UNIQUE INDEX uidx1 (f_int1,f_int2);
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1(f_int1,f_int2,f_char1,f_char2,f_charbig)
 SELECT f_int1,f_int2,f_char1,f_char2,f_charbig FROM t0_template
 WHERE f_int1 BETWEEN @max_row_div2 AND @max_row;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # Start usability test (inc/partition_check.inc)
 create_command
 SHOW CREATE TABLE t1;
@@ -1339,6 +1417,8 @@ COMMIT;
 DELETE FROM t1 WHERE f_charbig = 'was inserted';
 COMMIT WORK;
 SET @@session.sql_mode = 'traditional';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SELECT @max_row_div2 + @max_row_div4 - @max_row_div4 + 1 INTO @exp_inserted_rows;
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT IF(f_int1 = @max_row_div2,f_int1 / 0,f_int1),f_int1,
@@ -1351,6 +1431,8 @@ COMMIT;
 # INFO: Storage engine used for t1 seems to be unable to revert
 #       changes made by the failing statement.
 SET @@session.sql_mode = '';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET AUTOCOMMIT= 1;
 DELETE FROM t1 WHERE f_charbig = 'was inserted';
 COMMIT WORK;
@@ -1545,12 +1627,16 @@ END|
 UPDATE t1
 SET f_int1 = f_int1 + @max_row, f_int2 = f_int2 - @max_row,
 f_charbig = '####updated per update statement itself####';
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check trigger-9 success: 	1
 DROP TRIGGER trg_2;
 UPDATE t1 SET f_int1 = CAST(f_char1 AS SIGNED INT),
 f_int2 = CAST(f_char1 AS SIGNED INT),
 f_charbig = CONCAT('===',f_char1,'===');
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = new.f_int1 + @max_row,
@@ -1560,12 +1646,16 @@ END|
 UPDATE t1
 SET f_int1 = f_int1 + @max_row, f_int2 = f_int2 - @max_row,
 f_charbig = '####updated per update statement itself####';
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check trigger-10 success: 	1
 DROP TRIGGER trg_2;
 UPDATE t1 SET f_int1 = CAST(f_char1 AS SIGNED INT),
 f_int2 = CAST(f_char1 AS SIGNED INT),
 f_charbig = CONCAT('===',f_char1,'===');
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CREATE TRIGGER trg_3 BEFORE INSERT ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = @my_max1 + @counter,
@@ -1575,6 +1665,8 @@ SET @counter = @counter + 1;
 END|
 SET @counter = 1;
 SELECT MAX(f_int1), MIN(f_int2) INTO @my_max1,@my_min2 FROM t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'just inserted' FROM t0_template
@@ -1583,6 +1675,8 @@ ORDER BY f_int1;
 DROP TRIGGER trg_3;
 	
 # check trigger-11 success: 	1
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 DELETE FROM t1
 WHERE f_int1 <> CAST(f_char1 AS SIGNED INT)
 AND f_int2 <> CAST(f_char1 AS SIGNED INT)
@@ -1596,6 +1690,8 @@ SET @counter = @counter + 1;
 END|
 SET @counter = 1;
 SELECT MAX(f_int1), MIN(f_int2) INTO @my_max1,@my_min2 FROM t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1 (f_char1, f_char2, f_charbig)
 SELECT CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'just inserted' FROM t0_template
@@ -1604,6 +1700,8 @@ ORDER BY f_int1;
 DROP TRIGGER trg_3;
 	
 # check trigger-12 success: 	1
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 DELETE FROM t1
 WHERE f_int1 <> CAST(f_char1 AS SIGNED INT)
 AND f_int2 <> CAST(f_char1 AS SIGNED INT)
@@ -1611,21 +1709,27 @@ AND f_charbig = '####updated per insert trigger####';
 ANALYZE  TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	analyze	status	OK
+test.t1	analyze	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CHECK    TABLE t1 EXTENDED;
 Table	Op	Msg_type	Msg_text
 test.t1	check	status	OK
+test.t1	check	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CHECKSUM TABLE t1 EXTENDED;
 Table	Checksum
 test.t1	<some_value>
 OPTIMIZE TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	optimize	status	OK
+test.t1	optimize	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # check layout success:    1
 REPAIR   TABLE t1 EXTENDED;
 Table	Op	Msg_type	Msg_text
 test.t1	repair	status	OK
+test.t1	repair	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # check layout success:    1
 TRUNCATE t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check TRUNCATE success: 	1
 # check layout success:    1
@@ -1646,13 +1750,21 @@ PARTITION partc VALUES LESS THAN (10),
 PARTITION partd VALUES LESS THAN (10 + 5),
 PARTITION parte VALUES LESS THAN (20),
 PARTITION partf VALUES LESS THAN (2147483646));
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1(f_int1,f_int2,f_char1,f_char2,f_charbig)
 SELECT f_int1,f_int2,f_char1,f_char2,f_charbig FROM t0_template
 WHERE f_int1 BETWEEN 1 AND @max_row_div2 - 1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 ALTER TABLE t1 ADD UNIQUE INDEX uidx1 (f_int1,f_int2);
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1(f_int1,f_int2,f_char1,f_char2,f_charbig)
 SELECT f_int1,f_int2,f_char1,f_char2,f_charbig FROM t0_template
 WHERE f_int1 BETWEEN @max_row_div2 AND @max_row;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # Start usability test (inc/partition_check.inc)
 create_command
 SHOW CREATE TABLE t1;
@@ -1873,6 +1985,8 @@ COMMIT;
 DELETE FROM t1 WHERE f_charbig = 'was inserted';
 COMMIT WORK;
 SET @@session.sql_mode = 'traditional';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SELECT @max_row_div2 + @max_row_div4 - @max_row_div4 + 1 INTO @exp_inserted_rows;
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT IF(f_int1 = @max_row_div2,f_int1 / 0,f_int1),f_int1,
@@ -1885,6 +1999,8 @@ COMMIT;
 # INFO: Storage engine used for t1 seems to be unable to revert
 #       changes made by the failing statement.
 SET @@session.sql_mode = '';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET AUTOCOMMIT= 1;
 DELETE FROM t1 WHERE f_charbig = 'was inserted';
 COMMIT WORK;
@@ -2079,12 +2195,16 @@ END|
 UPDATE t1
 SET f_int1 = f_int1 + @max_row, f_int2 = f_int2 - @max_row,
 f_charbig = '####updated per update statement itself####';
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check trigger-9 success: 	1
 DROP TRIGGER trg_2;
 UPDATE t1 SET f_int1 = CAST(f_char1 AS SIGNED INT),
 f_int2 = CAST(f_char1 AS SIGNED INT),
 f_charbig = CONCAT('===',f_char1,'===');
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = new.f_int1 + @max_row,
@@ -2094,12 +2214,16 @@ END|
 UPDATE t1
 SET f_int1 = f_int1 + @max_row, f_int2 = f_int2 - @max_row,
 f_charbig = '####updated per update statement itself####';
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check trigger-10 success: 	1
 DROP TRIGGER trg_2;
 UPDATE t1 SET f_int1 = CAST(f_char1 AS SIGNED INT),
 f_int2 = CAST(f_char1 AS SIGNED INT),
 f_charbig = CONCAT('===',f_char1,'===');
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CREATE TRIGGER trg_3 BEFORE INSERT ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = @my_max1 + @counter,
@@ -2109,6 +2233,8 @@ SET @counter = @counter + 1;
 END|
 SET @counter = 1;
 SELECT MAX(f_int1), MIN(f_int2) INTO @my_max1,@my_min2 FROM t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'just inserted' FROM t0_template
@@ -2117,6 +2243,8 @@ ORDER BY f_int1;
 DROP TRIGGER trg_3;
 	
 # check trigger-11 success: 	1
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 DELETE FROM t1
 WHERE f_int1 <> CAST(f_char1 AS SIGNED INT)
 AND f_int2 <> CAST(f_char1 AS SIGNED INT)
@@ -2130,6 +2258,8 @@ SET @counter = @counter + 1;
 END|
 SET @counter = 1;
 SELECT MAX(f_int1), MIN(f_int2) INTO @my_max1,@my_min2 FROM t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1 (f_char1, f_char2, f_charbig)
 SELECT CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'just inserted' FROM t0_template
@@ -2138,6 +2268,8 @@ ORDER BY f_int1;
 DROP TRIGGER trg_3;
 	
 # check trigger-12 success: 	1
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 DELETE FROM t1
 WHERE f_int1 <> CAST(f_char1 AS SIGNED INT)
 AND f_int2 <> CAST(f_char1 AS SIGNED INT)
@@ -2145,21 +2277,27 @@ AND f_charbig = '####updated per insert trigger####';
 ANALYZE  TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	analyze	status	OK
+test.t1	analyze	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CHECK    TABLE t1 EXTENDED;
 Table	Op	Msg_type	Msg_text
 test.t1	check	status	OK
+test.t1	check	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CHECKSUM TABLE t1 EXTENDED;
 Table	Checksum
 test.t1	<some_value>
 OPTIMIZE TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	optimize	status	OK
+test.t1	optimize	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # check layout success:    1
 REPAIR   TABLE t1 EXTENDED;
 Table	Op	Msg_type	Msg_text
 test.t1	repair	status	OK
+test.t1	repair	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # check layout success:    1
 TRUNCATE t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check TRUNCATE success: 	1
 # check layout success:    1
@@ -2178,13 +2316,21 @@ PARTITION BY RANGE(f_int1) SUBPARTITION BY HASH(f_int2) SUBPARTITIONS 2
 PARTITION partb VALUES LESS THAN (5),
 PARTITION partc VALUES LESS THAN (10),
 PARTITION partd VALUES LESS THAN (2147483646));
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1(f_int1,f_int2,f_char1,f_char2,f_charbig)
 SELECT f_int1,f_int2,f_char1,f_char2,f_charbig FROM t0_template
 WHERE f_int1 BETWEEN 1 AND @max_row_div2 - 1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 ALTER TABLE t1 ADD UNIQUE INDEX uidx1 (f_int1,f_int2);
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1(f_int1,f_int2,f_char1,f_char2,f_charbig)
 SELECT f_int1,f_int2,f_char1,f_char2,f_charbig FROM t0_template
 WHERE f_int1 BETWEEN @max_row_div2 AND @max_row;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # Start usability test (inc/partition_check.inc)
 create_command
 SHOW CREATE TABLE t1;
@@ -2409,6 +2555,8 @@ COMMIT;
 DELETE FROM t1 WHERE f_charbig = 'was inserted';
 COMMIT WORK;
 SET @@session.sql_mode = 'traditional';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SELECT @max_row_div2 + @max_row_div4 - @max_row_div4 + 1 INTO @exp_inserted_rows;
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT IF(f_int1 = @max_row_div2,f_int1 / 0,f_int1),f_int1,
@@ -2421,6 +2569,8 @@ COMMIT;
 # INFO: Storage engine used for t1 seems to be unable to revert
 #       changes made by the failing statement.
 SET @@session.sql_mode = '';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET AUTOCOMMIT= 1;
 DELETE FROM t1 WHERE f_charbig = 'was inserted';
 COMMIT WORK;
@@ -2615,12 +2765,16 @@ END|
 UPDATE t1
 SET f_int1 = f_int1 + @max_row, f_int2 = f_int2 - @max_row,
 f_charbig = '####updated per update statement itself####';
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check trigger-9 success: 	1
 DROP TRIGGER trg_2;
 UPDATE t1 SET f_int1 = CAST(f_char1 AS SIGNED INT),
 f_int2 = CAST(f_char1 AS SIGNED INT),
 f_charbig = CONCAT('===',f_char1,'===');
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = new.f_int1 + @max_row,
@@ -2630,12 +2784,16 @@ END|
 UPDATE t1
 SET f_int1 = f_int1 + @max_row, f_int2 = f_int2 - @max_row,
 f_charbig = '####updated per update statement itself####';
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check trigger-10 success: 	1
 DROP TRIGGER trg_2;
 UPDATE t1 SET f_int1 = CAST(f_char1 AS SIGNED INT),
 f_int2 = CAST(f_char1 AS SIGNED INT),
 f_charbig = CONCAT('===',f_char1,'===');
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CREATE TRIGGER trg_3 BEFORE INSERT ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = @my_max1 + @counter,
@@ -2645,6 +2803,8 @@ SET @counter = @counter + 1;
 END|
 SET @counter = 1;
 SELECT MAX(f_int1), MIN(f_int2) INTO @my_max1,@my_min2 FROM t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'just inserted' FROM t0_template
@@ -2653,6 +2813,8 @@ ORDER BY f_int1;
 DROP TRIGGER trg_3;
 	
 # check trigger-11 success: 	1
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 DELETE FROM t1
 WHERE f_int1 <> CAST(f_char1 AS SIGNED INT)
 AND f_int2 <> CAST(f_char1 AS SIGNED INT)
@@ -2666,6 +2828,8 @@ SET @counter = @counter + 1;
 END|
 SET @counter = 1;
 SELECT MAX(f_int1), MIN(f_int2) INTO @my_max1,@my_min2 FROM t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1 (f_char1, f_char2, f_charbig)
 SELECT CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'just inserted' FROM t0_template
@@ -2674,6 +2838,8 @@ ORDER BY f_int1;
 DROP TRIGGER trg_3;
 	
 # check trigger-12 success: 	1
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 DELETE FROM t1
 WHERE f_int1 <> CAST(f_char1 AS SIGNED INT)
 AND f_int2 <> CAST(f_char1 AS SIGNED INT)
@@ -2681,21 +2847,27 @@ AND f_charbig = '####updated per insert trigger####';
 ANALYZE  TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	analyze	status	OK
+test.t1	analyze	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CHECK    TABLE t1 EXTENDED;
 Table	Op	Msg_type	Msg_text
 test.t1	check	status	OK
+test.t1	check	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CHECKSUM TABLE t1 EXTENDED;
 Table	Checksum
 test.t1	<some_value>
 OPTIMIZE TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	optimize	status	OK
+test.t1	optimize	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # check layout success:    1
 REPAIR   TABLE t1 EXTENDED;
 Table	Op	Msg_type	Msg_text
 test.t1	repair	status	OK
+test.t1	repair	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # check layout success:    1
 TRUNCATE t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check TRUNCATE success: 	1
 # check layout success:    1
@@ -2718,13 +2890,21 @@ PARTITION part3 VALUES LESS THAN (10)
 (SUBPARTITION subpart31, SUBPARTITION subpart32),
 PARTITION part4 VALUES LESS THAN (2147483646)
 (SUBPARTITION subpart41, SUBPARTITION subpart42));
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1(f_int1,f_int2,f_char1,f_char2,f_charbig)
 SELECT f_int1,f_int2,f_char1,f_char2,f_charbig FROM t0_template
 WHERE f_int1 BETWEEN 1 AND @max_row_div2 - 1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 ALTER TABLE t1 ADD UNIQUE INDEX uidx1 (f_int1,f_int2);
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1(f_int1,f_int2,f_char1,f_char2,f_charbig)
 SELECT f_int1,f_int2,f_char1,f_char2,f_charbig FROM t0_template
 WHERE f_int1 BETWEEN @max_row_div2 AND @max_row;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # Start usability test (inc/partition_check.inc)
 create_command
 SHOW CREATE TABLE t1;
@@ -2956,6 +3136,8 @@ COMMIT;
 DELETE FROM t1 WHERE f_charbig = 'was inserted';
 COMMIT WORK;
 SET @@session.sql_mode = 'traditional';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SELECT @max_row_div2 + @max_row_div4 - @max_row_div4 + 1 INTO @exp_inserted_rows;
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT IF(f_int1 = @max_row_div2,f_int1 / 0,f_int1),f_int1,
@@ -2968,6 +3150,8 @@ COMMIT;
 # INFO: Storage engine used for t1 seems to be unable to revert
 #       changes made by the failing statement.
 SET @@session.sql_mode = '';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET AUTOCOMMIT= 1;
 DELETE FROM t1 WHERE f_charbig = 'was inserted';
 COMMIT WORK;
@@ -3162,12 +3346,16 @@ END|
 UPDATE t1
 SET f_int1 = f_int1 + @max_row, f_int2 = f_int2 - @max_row,
 f_charbig = '####updated per update statement itself####';
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check trigger-9 success: 	1
 DROP TRIGGER trg_2;
 UPDATE t1 SET f_int1 = CAST(f_char1 AS SIGNED INT),
 f_int2 = CAST(f_char1 AS SIGNED INT),
 f_charbig = CONCAT('===',f_char1,'===');
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = new.f_int1 + @max_row,
@@ -3177,12 +3365,16 @@ END|
 UPDATE t1
 SET f_int1 = f_int1 + @max_row, f_int2 = f_int2 - @max_row,
 f_charbig = '####updated per update statement itself####';
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check trigger-10 success: 	1
 DROP TRIGGER trg_2;
 UPDATE t1 SET f_int1 = CAST(f_char1 AS SIGNED INT),
 f_int2 = CAST(f_char1 AS SIGNED INT),
 f_charbig = CONCAT('===',f_char1,'===');
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CREATE TRIGGER trg_3 BEFORE INSERT ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = @my_max1 + @counter,
@@ -3192,6 +3384,8 @@ SET @counter = @counter + 1;
 END|
 SET @counter = 1;
 SELECT MAX(f_int1), MIN(f_int2) INTO @my_max1,@my_min2 FROM t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'just inserted' FROM t0_template
@@ -3200,6 +3394,8 @@ ORDER BY f_int1;
 DROP TRIGGER trg_3;
 	
 # check trigger-11 success: 	1
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 DELETE FROM t1
 WHERE f_int1 <> CAST(f_char1 AS SIGNED INT)
 AND f_int2 <> CAST(f_char1 AS SIGNED INT)
@@ -3213,6 +3409,8 @@ SET @counter = @counter + 1;
 END|
 SET @counter = 1;
 SELECT MAX(f_int1), MIN(f_int2) INTO @my_max1,@my_min2 FROM t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1 (f_char1, f_char2, f_charbig)
 SELECT CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'just inserted' FROM t0_template
@@ -3221,6 +3419,8 @@ ORDER BY f_int1;
 DROP TRIGGER trg_3;
 	
 # check trigger-12 success: 	1
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 DELETE FROM t1
 WHERE f_int1 <> CAST(f_char1 AS SIGNED INT)
 AND f_int2 <> CAST(f_char1 AS SIGNED INT)
@@ -3228,21 +3428,27 @@ AND f_charbig = '####updated per insert trigger####';
 ANALYZE  TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	analyze	status	OK
+test.t1	analyze	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CHECK    TABLE t1 EXTENDED;
 Table	Op	Msg_type	Msg_text
 test.t1	check	status	OK
+test.t1	check	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CHECKSUM TABLE t1 EXTENDED;
 Table	Checksum
 test.t1	<some_value>
 OPTIMIZE TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	optimize	status	OK
+test.t1	optimize	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # check layout success:    1
 REPAIR   TABLE t1 EXTENDED;
 Table	Op	Msg_type	Msg_text
 test.t1	repair	status	OK
+test.t1	repair	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # check layout success:    1
 TRUNCATE t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check TRUNCATE success: 	1
 # check layout success:    1
@@ -3265,13 +3471,21 @@ PARTITION part3 VALUES IN (2)
 (SUBPARTITION sp31, SUBPARTITION sp32),
 PARTITION part4 VALUES IN (NULL)
 (SUBPARTITION sp41, SUBPARTITION sp42));
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1(f_int1,f_int2,f_char1,f_char2,f_charbig)
 SELECT f_int1,f_int2,f_char1,f_char2,f_charbig FROM t0_template
 WHERE f_int1 BETWEEN 1 AND @max_row_div2 - 1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 ALTER TABLE t1 ADD UNIQUE INDEX uidx1 (f_int1,f_int2);
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1(f_int1,f_int2,f_char1,f_char2,f_charbig)
 SELECT f_int1,f_int2,f_char1,f_char2,f_charbig FROM t0_template
 WHERE f_int1 BETWEEN @max_row_div2 AND @max_row;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # Start usability test (inc/partition_check.inc)
 create_command
 SHOW CREATE TABLE t1;
@@ -3505,6 +3719,8 @@ COMMIT;
 DELETE FROM t1 WHERE f_charbig = 'was inserted';
 COMMIT WORK;
 SET @@session.sql_mode = 'traditional';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SELECT @max_row_div2 + @max_row_div4 - @max_row_div4 + 1 INTO @exp_inserted_rows;
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT IF(f_int1 = @max_row_div2,f_int1 / 0,f_int1),f_int1,
@@ -3517,6 +3733,8 @@ COMMIT;
 # INFO: Storage engine used for t1 seems to be unable to revert
 #       changes made by the failing statement.
 SET @@session.sql_mode = '';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET AUTOCOMMIT= 1;
 DELETE FROM t1 WHERE f_charbig = 'was inserted';
 COMMIT WORK;
@@ -3711,12 +3929,16 @@ END|
 UPDATE t1
 SET f_int1 = f_int1 + @max_row, f_int2 = f_int2 - @max_row,
 f_charbig = '####updated per update statement itself####';
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check trigger-9 success: 	1
 DROP TRIGGER trg_2;
 UPDATE t1 SET f_int1 = CAST(f_char1 AS SIGNED INT),
 f_int2 = CAST(f_char1 AS SIGNED INT),
 f_charbig = CONCAT('===',f_char1,'===');
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = new.f_int1 + @max_row,
@@ -3726,12 +3948,16 @@ END|
 UPDATE t1
 SET f_int1 = f_int1 + @max_row, f_int2 = f_int2 - @max_row,
 f_charbig = '####updated per update statement itself####';
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check trigger-10 success: 	1
 DROP TRIGGER trg_2;
 UPDATE t1 SET f_int1 = CAST(f_char1 AS SIGNED INT),
 f_int2 = CAST(f_char1 AS SIGNED INT),
 f_charbig = CONCAT('===',f_char1,'===');
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CREATE TRIGGER trg_3 BEFORE INSERT ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = @my_max1 + @counter,
@@ -3741,6 +3967,8 @@ SET @counter = @counter + 1;
 END|
 SET @counter = 1;
 SELECT MAX(f_int1), MIN(f_int2) INTO @my_max1,@my_min2 FROM t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'just inserted' FROM t0_template
@@ -3749,6 +3977,8 @@ ORDER BY f_int1;
 DROP TRIGGER trg_3;
 	
 # check trigger-11 success: 	1
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 DELETE FROM t1
 WHERE f_int1 <> CAST(f_char1 AS SIGNED INT)
 AND f_int2 <> CAST(f_char1 AS SIGNED INT)
@@ -3762,6 +3992,8 @@ SET @counter = @counter + 1;
 END|
 SET @counter = 1;
 SELECT MAX(f_int1), MIN(f_int2) INTO @my_max1,@my_min2 FROM t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1 (f_char1, f_char2, f_charbig)
 SELECT CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'just inserted' FROM t0_template
@@ -3770,6 +4002,8 @@ ORDER BY f_int1;
 DROP TRIGGER trg_3;
 	
 # check trigger-12 success: 	1
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 DELETE FROM t1
 WHERE f_int1 <> CAST(f_char1 AS SIGNED INT)
 AND f_int2 <> CAST(f_char1 AS SIGNED INT)
@@ -3777,21 +4011,27 @@ AND f_charbig = '####updated per insert trigger####';
 ANALYZE  TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	analyze	status	OK
+test.t1	analyze	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CHECK    TABLE t1 EXTENDED;
 Table	Op	Msg_type	Msg_text
 test.t1	check	status	OK
+test.t1	check	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CHECKSUM TABLE t1 EXTENDED;
 Table	Checksum
 test.t1	<some_value>
 OPTIMIZE TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	optimize	status	OK
+test.t1	optimize	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # check layout success:    1
 REPAIR   TABLE t1 EXTENDED;
 Table	Op	Msg_type	Msg_text
 test.t1	repair	status	OK
+test.t1	repair	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # check layout success:    1
 TRUNCATE t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check TRUNCATE success: 	1
 # check layout success:    1
@@ -3810,13 +4050,21 @@ SUBPARTITION BY KEY(f_int2)  SUBPARTITIONS 3
 (PARTITION part1 VALUES IN (0),
 PARTITION part2 VALUES IN (1),
 PARTITION part3 VALUES IN (NULL));
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1(f_int1,f_int2,f_char1,f_char2,f_charbig)
 SELECT f_int1,f_int2,f_char1,f_char2,f_charbig FROM t0_template
 WHERE f_int1 BETWEEN 1 AND @max_row_div2 - 1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 ALTER TABLE t1 ADD UNIQUE INDEX uidx1 (f_int1,f_int2);
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1(f_int1,f_int2,f_char1,f_char2,f_charbig)
 SELECT f_int1,f_int2,f_char1,f_char2,f_charbig FROM t0_template
 WHERE f_int1 BETWEEN @max_row_div2 AND @max_row;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # Start usability test (inc/partition_check.inc)
 create_command
 SHOW CREATE TABLE t1;
@@ -4044,6 +4292,8 @@ COMMIT;
 DELETE FROM t1 WHERE f_charbig = 'was inserted';
 COMMIT WORK;
 SET @@session.sql_mode = 'traditional';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SELECT @max_row_div2 + @max_row_div4 - @max_row_div4 + 1 INTO @exp_inserted_rows;
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT IF(f_int1 = @max_row_div2,f_int1 / 0,f_int1),f_int1,
@@ -4056,6 +4306,8 @@ COMMIT;
 # INFO: Storage engine used for t1 seems to be unable to revert
 #       changes made by the failing statement.
 SET @@session.sql_mode = '';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET AUTOCOMMIT= 1;
 DELETE FROM t1 WHERE f_charbig = 'was inserted';
 COMMIT WORK;
@@ -4250,12 +4502,16 @@ END|
 UPDATE t1
 SET f_int1 = f_int1 + @max_row, f_int2 = f_int2 - @max_row,
 f_charbig = '####updated per update statement itself####';
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check trigger-9 success: 	1
 DROP TRIGGER trg_2;
 UPDATE t1 SET f_int1 = CAST(f_char1 AS SIGNED INT),
 f_int2 = CAST(f_char1 AS SIGNED INT),
 f_charbig = CONCAT('===',f_char1,'===');
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = new.f_int1 + @max_row,
@@ -4265,12 +4521,16 @@ END|
 UPDATE t1
 SET f_int1 = f_int1 + @max_row, f_int2 = f_int2 - @max_row,
 f_charbig = '####updated per update statement itself####';
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check trigger-10 success: 	1
 DROP TRIGGER trg_2;
 UPDATE t1 SET f_int1 = CAST(f_char1 AS SIGNED INT),
 f_int2 = CAST(f_char1 AS SIGNED INT),
 f_charbig = CONCAT('===',f_char1,'===');
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CREATE TRIGGER trg_3 BEFORE INSERT ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = @my_max1 + @counter,
@@ -4280,6 +4540,8 @@ SET @counter = @counter + 1;
 END|
 SET @counter = 1;
 SELECT MAX(f_int1), MIN(f_int2) INTO @my_max1,@my_min2 FROM t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'just inserted' FROM t0_template
@@ -4288,6 +4550,8 @@ ORDER BY f_int1;
 DROP TRIGGER trg_3;
 	
 # check trigger-11 success: 	1
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 DELETE FROM t1
 WHERE f_int1 <> CAST(f_char1 AS SIGNED INT)
 AND f_int2 <> CAST(f_char1 AS SIGNED INT)
@@ -4301,6 +4565,8 @@ SET @counter = @counter + 1;
 END|
 SET @counter = 1;
 SELECT MAX(f_int1), MIN(f_int2) INTO @my_max1,@my_min2 FROM t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1 (f_char1, f_char2, f_charbig)
 SELECT CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'just inserted' FROM t0_template
@@ -4309,6 +4575,8 @@ ORDER BY f_int1;
 DROP TRIGGER trg_3;
 	
 # check trigger-12 success: 	1
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 DELETE FROM t1
 WHERE f_int1 <> CAST(f_char1 AS SIGNED INT)
 AND f_int2 <> CAST(f_char1 AS SIGNED INT)
@@ -4316,21 +4584,27 @@ AND f_charbig = '####updated per insert trigger####';
 ANALYZE  TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	analyze	status	OK
+test.t1	analyze	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CHECK    TABLE t1 EXTENDED;
 Table	Op	Msg_type	Msg_text
 test.t1	check	status	OK
+test.t1	check	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CHECKSUM TABLE t1 EXTENDED;
 Table	Checksum
 test.t1	<some_value>
 OPTIMIZE TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	optimize	status	OK
+test.t1	optimize	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # check layout success:    1
 REPAIR   TABLE t1 EXTENDED;
 Table	Op	Msg_type	Msg_text
 test.t1	repair	status	OK
+test.t1	repair	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # check layout success:    1
 TRUNCATE t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check TRUNCATE success: 	1
 # check layout success:    1
@@ -4346,13 +4620,21 @@ f_charbig VARCHAR(1000)
 
 )
 PARTITION BY HASH(f_int1 + f_int2) PARTITIONS 2;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1(f_int1,f_int2,f_char1,f_char2,f_charbig)
 SELECT f_int1,f_int2,f_char1,f_char2,f_charbig FROM t0_template
 WHERE f_int1 BETWEEN 1 AND @max_row_div2 - 1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 ALTER TABLE t1 ADD UNIQUE INDEX uidx1 (f_int2,f_int1);
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1(f_int1,f_int2,f_char1,f_char2,f_charbig)
 SELECT f_int1,f_int2,f_char1,f_char2,f_charbig FROM t0_template
 WHERE f_int1 BETWEEN @max_row_div2 AND @max_row;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # Start usability test (inc/partition_check.inc)
 create_command
 SHOW CREATE TABLE t1;
@@ -4562,6 +4844,8 @@ COMMIT;
 DELETE FROM t1 WHERE f_charbig = 'was inserted';
 COMMIT WORK;
 SET @@session.sql_mode = 'traditional';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SELECT @max_row_div2 + @max_row_div4 - @max_row_div4 + 1 INTO @exp_inserted_rows;
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT IF(f_int1 = @max_row_div2,f_int1 / 0,f_int1),f_int1,
@@ -4574,6 +4858,8 @@ COMMIT;
 # INFO: Storage engine used for t1 seems to be unable to revert
 #       changes made by the failing statement.
 SET @@session.sql_mode = '';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET AUTOCOMMIT= 1;
 DELETE FROM t1 WHERE f_charbig = 'was inserted';
 COMMIT WORK;
@@ -4768,12 +5054,16 @@ END|
 UPDATE t1
 SET f_int1 = f_int1 + @max_row, f_int2 = f_int2 - @max_row,
 f_charbig = '####updated per update statement itself####';
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check trigger-9 success: 	1
 DROP TRIGGER trg_2;
 UPDATE t1 SET f_int1 = CAST(f_char1 AS SIGNED INT),
 f_int2 = CAST(f_char1 AS SIGNED INT),
 f_charbig = CONCAT('===',f_char1,'===');
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = new.f_int1 + @max_row,
@@ -4783,12 +5073,16 @@ END|
 UPDATE t1
 SET f_int1 = f_int1 + @max_row, f_int2 = f_int2 - @max_row,
 f_charbig = '####updated per update statement itself####';
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check trigger-10 success: 	1
 DROP TRIGGER trg_2;
 UPDATE t1 SET f_int1 = CAST(f_char1 AS SIGNED INT),
 f_int2 = CAST(f_char1 AS SIGNED INT),
 f_charbig = CONCAT('===',f_char1,'===');
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CREATE TRIGGER trg_3 BEFORE INSERT ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = @my_max1 + @counter,
@@ -4798,6 +5092,8 @@ SET @counter = @counter + 1;
 END|
 SET @counter = 1;
 SELECT MAX(f_int1), MIN(f_int2) INTO @my_max1,@my_min2 FROM t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'just inserted' FROM t0_template
@@ -4806,6 +5102,8 @@ ORDER BY f_int1;
 DROP TRIGGER trg_3;
 	
 # check trigger-11 success: 	1
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 DELETE FROM t1
 WHERE f_int1 <> CAST(f_char1 AS SIGNED INT)
 AND f_int2 <> CAST(f_char1 AS SIGNED INT)
@@ -4819,6 +5117,8 @@ SET @counter = @counter + 1;
 END|
 SET @counter = 1;
 SELECT MAX(f_int1), MIN(f_int2) INTO @my_max1,@my_min2 FROM t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1 (f_char1, f_char2, f_charbig)
 SELECT CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'just inserted' FROM t0_template
@@ -4827,6 +5127,8 @@ ORDER BY f_int1;
 DROP TRIGGER trg_3;
 	
 # check trigger-12 success: 	1
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 DELETE FROM t1
 WHERE f_int1 <> CAST(f_char1 AS SIGNED INT)
 AND f_int2 <> CAST(f_char1 AS SIGNED INT)
@@ -4834,21 +5136,27 @@ AND f_charbig = '####updated per insert trigger####';
 ANALYZE  TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	analyze	status	OK
+test.t1	analyze	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CHECK    TABLE t1 EXTENDED;
 Table	Op	Msg_type	Msg_text
 test.t1	check	status	OK
+test.t1	check	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CHECKSUM TABLE t1 EXTENDED;
 Table	Checksum
 test.t1	<some_value>
 OPTIMIZE TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	optimize	status	OK
+test.t1	optimize	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # check layout success:    1
 REPAIR   TABLE t1 EXTENDED;
 Table	Op	Msg_type	Msg_text
 test.t1	repair	status	OK
+test.t1	repair	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # check layout success:    1
 TRUNCATE t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check TRUNCATE success: 	1
 # check layout success:    1
@@ -4863,13 +5171,21 @@ f_charbig VARCHAR(1000)
 
 )
 PARTITION BY KEY(f_int1,f_int2) PARTITIONS 5;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1(f_int1,f_int2,f_char1,f_char2,f_charbig)
 SELECT f_int1,f_int2,f_char1,f_char2,f_charbig FROM t0_template
 WHERE f_int1 BETWEEN 1 AND @max_row_div2 - 1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 ALTER TABLE t1 ADD UNIQUE INDEX uidx1 (f_int2,f_int1);
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1(f_int1,f_int2,f_char1,f_char2,f_charbig)
 SELECT f_int1,f_int2,f_char1,f_char2,f_charbig FROM t0_template
 WHERE f_int1 BETWEEN @max_row_div2 AND @max_row;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # Start usability test (inc/partition_check.inc)
 create_command
 SHOW CREATE TABLE t1;
@@ -5085,6 +5401,8 @@ COMMIT;
 DELETE FROM t1 WHERE f_charbig = 'was inserted';
 COMMIT WORK;
 SET @@session.sql_mode = 'traditional';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SELECT @max_row_div2 + @max_row_div4 - @max_row_div4 + 1 INTO @exp_inserted_rows;
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT IF(f_int1 = @max_row_div2,f_int1 / 0,f_int1),f_int1,
@@ -5097,6 +5415,8 @@ COMMIT;
 # INFO: Storage engine used for t1 seems to be unable to revert
 #       changes made by the failing statement.
 SET @@session.sql_mode = '';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET AUTOCOMMIT= 1;
 DELETE FROM t1 WHERE f_charbig = 'was inserted';
 COMMIT WORK;
@@ -5291,12 +5611,16 @@ END|
 UPDATE t1
 SET f_int1 = f_int1 + @max_row, f_int2 = f_int2 - @max_row,
 f_charbig = '####updated per update statement itself####';
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check trigger-9 success: 	1
 DROP TRIGGER trg_2;
 UPDATE t1 SET f_int1 = CAST(f_char1 AS SIGNED INT),
 f_int2 = CAST(f_char1 AS SIGNED INT),
 f_charbig = CONCAT('===',f_char1,'===');
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = new.f_int1 + @max_row,
@@ -5306,12 +5630,16 @@ END|
 UPDATE t1
 SET f_int1 = f_int1 + @max_row, f_int2 = f_int2 - @max_row,
 f_charbig = '####updated per update statement itself####';
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check trigger-10 success: 	1
 DROP TRIGGER trg_2;
 UPDATE t1 SET f_int1 = CAST(f_char1 AS SIGNED INT),
 f_int2 = CAST(f_char1 AS SIGNED INT),
 f_charbig = CONCAT('===',f_char1,'===');
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CREATE TRIGGER trg_3 BEFORE INSERT ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = @my_max1 + @counter,
@@ -5321,6 +5649,8 @@ SET @counter = @counter + 1;
 END|
 SET @counter = 1;
 SELECT MAX(f_int1), MIN(f_int2) INTO @my_max1,@my_min2 FROM t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'just inserted' FROM t0_template
@@ -5329,6 +5659,8 @@ ORDER BY f_int1;
 DROP TRIGGER trg_3;
 	
 # check trigger-11 success: 	1
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 DELETE FROM t1
 WHERE f_int1 <> CAST(f_char1 AS SIGNED INT)
 AND f_int2 <> CAST(f_char1 AS SIGNED INT)
@@ -5342,6 +5674,8 @@ SET @counter = @counter + 1;
 END|
 SET @counter = 1;
 SELECT MAX(f_int1), MIN(f_int2) INTO @my_max1,@my_min2 FROM t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1 (f_char1, f_char2, f_charbig)
 SELECT CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'just inserted' FROM t0_template
@@ -5350,6 +5684,8 @@ ORDER BY f_int1;
 DROP TRIGGER trg_3;
 	
 # check trigger-12 success: 	1
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 DELETE FROM t1
 WHERE f_int1 <> CAST(f_char1 AS SIGNED INT)
 AND f_int2 <> CAST(f_char1 AS SIGNED INT)
@@ -5357,21 +5693,27 @@ AND f_charbig = '####updated per insert trigger####';
 ANALYZE  TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	analyze	status	OK
+test.t1	analyze	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CHECK    TABLE t1 EXTENDED;
 Table	Op	Msg_type	Msg_text
 test.t1	check	status	OK
+test.t1	check	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CHECKSUM TABLE t1 EXTENDED;
 Table	Checksum
 test.t1	<some_value>
 OPTIMIZE TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	optimize	status	OK
+test.t1	optimize	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # check layout success:    1
 REPAIR   TABLE t1 EXTENDED;
 Table	Op	Msg_type	Msg_text
 test.t1	repair	status	OK
+test.t1	repair	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # check layout success:    1
 TRUNCATE t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check TRUNCATE success: 	1
 # check layout success:    1
@@ -5394,13 +5736,21 @@ PARTITION part0 VALUES IN (0),
 PARTITION part1 VALUES IN (1),
 PARTITION part2 VALUES IN (2),
 PARTITION part3 VALUES IN (3));
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1(f_int1,f_int2,f_char1,f_char2,f_charbig)
 SELECT f_int1,f_int2,f_char1,f_char2,f_charbig FROM t0_template
 WHERE f_int1 BETWEEN 1 AND @max_row_div2 - 1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 ALTER TABLE t1 ADD UNIQUE INDEX uidx1 (f_int2,f_int1);
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1(f_int1,f_int2,f_char1,f_char2,f_charbig)
 SELECT f_int1,f_int2,f_char1,f_char2,f_charbig FROM t0_template
 WHERE f_int1 BETWEEN @max_row_div2 AND @max_row;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # Start usability test (inc/partition_check.inc)
 create_command
 SHOW CREATE TABLE t1;
@@ -5629,6 +5979,8 @@ COMMIT;
 DELETE FROM t1 WHERE f_charbig = 'was inserted';
 COMMIT WORK;
 SET @@session.sql_mode = 'traditional';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SELECT @max_row_div2 + @max_row_div4 - @max_row_div4 + 1 INTO @exp_inserted_rows;
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT IF(f_int1 = @max_row_div2,f_int1 / 0,f_int1),f_int1,
@@ -5641,6 +5993,8 @@ COMMIT;
 # INFO: Storage engine used for t1 seems to be unable to revert
 #       changes made by the failing statement.
 SET @@session.sql_mode = '';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET AUTOCOMMIT= 1;
 DELETE FROM t1 WHERE f_charbig = 'was inserted';
 COMMIT WORK;
@@ -5835,12 +6189,16 @@ END|
 UPDATE t1
 SET f_int1 = f_int1 + @max_row, f_int2 = f_int2 - @max_row,
 f_charbig = '####updated per update statement itself####';
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check trigger-9 success: 	1
 DROP TRIGGER trg_2;
 UPDATE t1 SET f_int1 = CAST(f_char1 AS SIGNED INT),
 f_int2 = CAST(f_char1 AS SIGNED INT),
 f_charbig = CONCAT('===',f_char1,'===');
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = new.f_int1 + @max_row,
@@ -5850,12 +6208,16 @@ END|
 UPDATE t1
 SET f_int1 = f_int1 + @max_row, f_int2 = f_int2 - @max_row,
 f_charbig = '####updated per update statement itself####';
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check trigger-10 success: 	1
 DROP TRIGGER trg_2;
 UPDATE t1 SET f_int1 = CAST(f_char1 AS SIGNED INT),
 f_int2 = CAST(f_char1 AS SIGNED INT),
 f_charbig = CONCAT('===',f_char1,'===');
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CREATE TRIGGER trg_3 BEFORE INSERT ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = @my_max1 + @counter,
@@ -5865,6 +6227,8 @@ SET @counter = @counter + 1;
 END|
 SET @counter = 1;
 SELECT MAX(f_int1), MIN(f_int2) INTO @my_max1,@my_min2 FROM t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'just inserted' FROM t0_template
@@ -5873,6 +6237,8 @@ ORDER BY f_int1;
 DROP TRIGGER trg_3;
 	
 # check trigger-11 success: 	1
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 DELETE FROM t1
 WHERE f_int1 <> CAST(f_char1 AS SIGNED INT)
 AND f_int2 <> CAST(f_char1 AS SIGNED INT)
@@ -5886,6 +6252,8 @@ SET @counter = @counter + 1;
 END|
 SET @counter = 1;
 SELECT MAX(f_int1), MIN(f_int2) INTO @my_max1,@my_min2 FROM t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1 (f_char1, f_char2, f_charbig)
 SELECT CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'just inserted' FROM t0_template
@@ -5894,6 +6262,8 @@ ORDER BY f_int1;
 DROP TRIGGER trg_3;
 	
 # check trigger-12 success: 	1
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 DELETE FROM t1
 WHERE f_int1 <> CAST(f_char1 AS SIGNED INT)
 AND f_int2 <> CAST(f_char1 AS SIGNED INT)
@@ -5901,21 +6271,27 @@ AND f_charbig = '####updated per insert trigger####';
 ANALYZE  TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	analyze	status	OK
+test.t1	analyze	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CHECK    TABLE t1 EXTENDED;
 Table	Op	Msg_type	Msg_text
 test.t1	check	status	OK
+test.t1	check	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CHECKSUM TABLE t1 EXTENDED;
 Table	Checksum
 test.t1	<some_value>
 OPTIMIZE TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	optimize	status	OK
+test.t1	optimize	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # check layout success:    1
 REPAIR   TABLE t1 EXTENDED;
 Table	Op	Msg_type	Msg_text
 test.t1	repair	status	OK
+test.t1	repair	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # check layout success:    1
 TRUNCATE t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check TRUNCATE success: 	1
 # check layout success:    1
@@ -5936,13 +6312,21 @@ PARTITION partc VALUES LESS THAN (10),
 PARTITION partd VALUES LESS THAN (10 + 5),
 PARTITION parte VALUES LESS THAN (20),
 PARTITION partf VALUES LESS THAN (2147483646));
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1(f_int1,f_int2,f_char1,f_char2,f_charbig)
 SELECT f_int1,f_int2,f_char1,f_char2,f_charbig FROM t0_template
 WHERE f_int1 BETWEEN 1 AND @max_row_div2 - 1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 ALTER TABLE t1 ADD UNIQUE INDEX uidx1 (f_int2,f_int1);
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1(f_int1,f_int2,f_char1,f_char2,f_charbig)
 SELECT f_int1,f_int2,f_char1,f_char2,f_charbig FROM t0_template
 WHERE f_int1 BETWEEN @max_row_div2 AND @max_row;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # Start usability test (inc/partition_check.inc)
 create_command
 SHOW CREATE TABLE t1;
@@ -6163,6 +6547,8 @@ COMMIT;
 DELETE FROM t1 WHERE f_charbig = 'was inserted';
 COMMIT WORK;
 SET @@session.sql_mode = 'traditional';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SELECT @max_row_div2 + @max_row_div4 - @max_row_div4 + 1 INTO @exp_inserted_rows;
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT IF(f_int1 = @max_row_div2,f_int1 / 0,f_int1),f_int1,
@@ -6175,6 +6561,8 @@ COMMIT;
 # INFO: Storage engine used for t1 seems to be unable to revert
 #       changes made by the failing statement.
 SET @@session.sql_mode = '';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET AUTOCOMMIT= 1;
 DELETE FROM t1 WHERE f_charbig = 'was inserted';
 COMMIT WORK;
@@ -6369,12 +6757,16 @@ END|
 UPDATE t1
 SET f_int1 = f_int1 + @max_row, f_int2 = f_int2 - @max_row,
 f_charbig = '####updated per update statement itself####';
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check trigger-9 success: 	1
 DROP TRIGGER trg_2;
 UPDATE t1 SET f_int1 = CAST(f_char1 AS SIGNED INT),
 f_int2 = CAST(f_char1 AS SIGNED INT),
 f_charbig = CONCAT('===',f_char1,'===');
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = new.f_int1 + @max_row,
@@ -6384,12 +6776,16 @@ END|
 UPDATE t1
 SET f_int1 = f_int1 + @max_row, f_int2 = f_int2 - @max_row,
 f_charbig = '####updated per update statement itself####';
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check trigger-10 success: 	1
 DROP TRIGGER trg_2;
 UPDATE t1 SET f_int1 = CAST(f_char1 AS SIGNED INT),
 f_int2 = CAST(f_char1 AS SIGNED INT),
 f_charbig = CONCAT('===',f_char1,'===');
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CREATE TRIGGER trg_3 BEFORE INSERT ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = @my_max1 + @counter,
@@ -6399,6 +6795,8 @@ SET @counter = @counter + 1;
 END|
 SET @counter = 1;
 SELECT MAX(f_int1), MIN(f_int2) INTO @my_max1,@my_min2 FROM t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'just inserted' FROM t0_template
@@ -6407,6 +6805,8 @@ ORDER BY f_int1;
 DROP TRIGGER trg_3;
 	
 # check trigger-11 success: 	1
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 DELETE FROM t1
 WHERE f_int1 <> CAST(f_char1 AS SIGNED INT)
 AND f_int2 <> CAST(f_char1 AS SIGNED INT)
@@ -6420,6 +6820,8 @@ SET @counter = @counter + 1;
 END|
 SET @counter = 1;
 SELECT MAX(f_int1), MIN(f_int2) INTO @my_max1,@my_min2 FROM t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1 (f_char1, f_char2, f_charbig)
 SELECT CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'just inserted' FROM t0_template
@@ -6428,6 +6830,8 @@ ORDER BY f_int1;
 DROP TRIGGER trg_3;
 	
 # check trigger-12 success: 	1
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 DELETE FROM t1
 WHERE f_int1 <> CAST(f_char1 AS SIGNED INT)
 AND f_int2 <> CAST(f_char1 AS SIGNED INT)
@@ -6435,21 +6839,27 @@ AND f_charbig = '####updated per insert trigger####';
 ANALYZE  TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	analyze	status	OK
+test.t1	analyze	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CHECK    TABLE t1 EXTENDED;
 Table	Op	Msg_type	Msg_text
 test.t1	check	status	OK
+test.t1	check	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CHECKSUM TABLE t1 EXTENDED;
 Table	Checksum
 test.t1	<some_value>
 OPTIMIZE TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	optimize	status	OK
+test.t1	optimize	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # check layout success:    1
 REPAIR   TABLE t1 EXTENDED;
 Table	Op	Msg_type	Msg_text
 test.t1	repair	status	OK
+test.t1	repair	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # check layout success:    1
 TRUNCATE t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check TRUNCATE success: 	1
 # check layout success:    1
@@ -6468,13 +6878,21 @@ PARTITION BY RANGE(f_int1) SUBPARTITION BY HASH(f_int2) SUBPARTITIONS 2
 PARTITION partb VALUES LESS THAN (5),
 PARTITION partc VALUES LESS THAN (10),
 PARTITION partd VALUES LESS THAN (2147483646));
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1(f_int1,f_int2,f_char1,f_char2,f_charbig)
 SELECT f_int1,f_int2,f_char1,f_char2,f_charbig FROM t0_template
 WHERE f_int1 BETWEEN 1 AND @max_row_div2 - 1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 ALTER TABLE t1 ADD UNIQUE INDEX uidx1 (f_int2,f_int1);
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1(f_int1,f_int2,f_char1,f_char2,f_charbig)
 SELECT f_int1,f_int2,f_char1,f_char2,f_charbig FROM t0_template
 WHERE f_int1 BETWEEN @max_row_div2 AND @max_row;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # Start usability test (inc/partition_check.inc)
 create_command
 SHOW CREATE TABLE t1;
@@ -6699,6 +7117,8 @@ COMMIT;
 DELETE FROM t1 WHERE f_charbig = 'was inserted';
 COMMIT WORK;
 SET @@session.sql_mode = 'traditional';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SELECT @max_row_div2 + @max_row_div4 - @max_row_div4 + 1 INTO @exp_inserted_rows;
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT IF(f_int1 = @max_row_div2,f_int1 / 0,f_int1),f_int1,
@@ -6711,6 +7131,8 @@ COMMIT;
 # INFO: Storage engine used for t1 seems to be unable to revert
 #       changes made by the failing statement.
 SET @@session.sql_mode = '';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET AUTOCOMMIT= 1;
 DELETE FROM t1 WHERE f_charbig = 'was inserted';
 COMMIT WORK;
@@ -6905,12 +7327,16 @@ END|
 UPDATE t1
 SET f_int1 = f_int1 + @max_row, f_int2 = f_int2 - @max_row,
 f_charbig = '####updated per update statement itself####';
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check trigger-9 success: 	1
 DROP TRIGGER trg_2;
 UPDATE t1 SET f_int1 = CAST(f_char1 AS SIGNED INT),
 f_int2 = CAST(f_char1 AS SIGNED INT),
 f_charbig = CONCAT('===',f_char1,'===');
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = new.f_int1 + @max_row,
@@ -6920,12 +7346,16 @@ END|
 UPDATE t1
 SET f_int1 = f_int1 + @max_row, f_int2 = f_int2 - @max_row,
 f_charbig = '####updated per update statement itself####';
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check trigger-10 success: 	1
 DROP TRIGGER trg_2;
 UPDATE t1 SET f_int1 = CAST(f_char1 AS SIGNED INT),
 f_int2 = CAST(f_char1 AS SIGNED INT),
 f_charbig = CONCAT('===',f_char1,'===');
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CREATE TRIGGER trg_3 BEFORE INSERT ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = @my_max1 + @counter,
@@ -6935,6 +7365,8 @@ SET @counter = @counter + 1;
 END|
 SET @counter = 1;
 SELECT MAX(f_int1), MIN(f_int2) INTO @my_max1,@my_min2 FROM t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'just inserted' FROM t0_template
@@ -6943,6 +7375,8 @@ ORDER BY f_int1;
 DROP TRIGGER trg_3;
 	
 # check trigger-11 success: 	1
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 DELETE FROM t1
 WHERE f_int1 <> CAST(f_char1 AS SIGNED INT)
 AND f_int2 <> CAST(f_char1 AS SIGNED INT)
@@ -6956,6 +7390,8 @@ SET @counter = @counter + 1;
 END|
 SET @counter = 1;
 SELECT MAX(f_int1), MIN(f_int2) INTO @my_max1,@my_min2 FROM t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1 (f_char1, f_char2, f_charbig)
 SELECT CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'just inserted' FROM t0_template
@@ -6964,6 +7400,8 @@ ORDER BY f_int1;
 DROP TRIGGER trg_3;
 	
 # check trigger-12 success: 	1
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 DELETE FROM t1
 WHERE f_int1 <> CAST(f_char1 AS SIGNED INT)
 AND f_int2 <> CAST(f_char1 AS SIGNED INT)
@@ -6971,21 +7409,27 @@ AND f_charbig = '####updated per insert trigger####';
 ANALYZE  TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	analyze	status	OK
+test.t1	analyze	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CHECK    TABLE t1 EXTENDED;
 Table	Op	Msg_type	Msg_text
 test.t1	check	status	OK
+test.t1	check	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CHECKSUM TABLE t1 EXTENDED;
 Table	Checksum
 test.t1	<some_value>
 OPTIMIZE TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	optimize	status	OK
+test.t1	optimize	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # check layout success:    1
 REPAIR   TABLE t1 EXTENDED;
 Table	Op	Msg_type	Msg_text
 test.t1	repair	status	OK
+test.t1	repair	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # check layout success:    1
 TRUNCATE t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check TRUNCATE success: 	1
 # check layout success:    1
@@ -7008,13 +7452,21 @@ PARTITION part3 VALUES LESS THAN (10)
 (SUBPARTITION subpart31, SUBPARTITION subpart32),
 PARTITION part4 VALUES LESS THAN (2147483646)
 (SUBPARTITION subpart41, SUBPARTITION subpart42));
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1(f_int1,f_int2,f_char1,f_char2,f_charbig)
 SELECT f_int1,f_int2,f_char1,f_char2,f_charbig FROM t0_template
 WHERE f_int1 BETWEEN 1 AND @max_row_div2 - 1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 ALTER TABLE t1 ADD UNIQUE INDEX uidx1 (f_int2,f_int1);
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1(f_int1,f_int2,f_char1,f_char2,f_charbig)
 SELECT f_int1,f_int2,f_char1,f_char2,f_charbig FROM t0_template
 WHERE f_int1 BETWEEN @max_row_div2 AND @max_row;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # Start usability test (inc/partition_check.inc)
 create_command
 SHOW CREATE TABLE t1;
@@ -7246,6 +7698,8 @@ COMMIT;
 DELETE FROM t1 WHERE f_charbig = 'was inserted';
 COMMIT WORK;
 SET @@session.sql_mode = 'traditional';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SELECT @max_row_div2 + @max_row_div4 - @max_row_div4 + 1 INTO @exp_inserted_rows;
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT IF(f_int1 = @max_row_div2,f_int1 / 0,f_int1),f_int1,
@@ -7258,6 +7712,8 @@ COMMIT;
 # INFO: Storage engine used for t1 seems to be unable to revert
 #       changes made by the failing statement.
 SET @@session.sql_mode = '';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET AUTOCOMMIT= 1;
 DELETE FROM t1 WHERE f_charbig = 'was inserted';
 COMMIT WORK;
@@ -7452,12 +7908,16 @@ END|
 UPDATE t1
 SET f_int1 = f_int1 + @max_row, f_int2 = f_int2 - @max_row,
 f_charbig = '####updated per update statement itself####';
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check trigger-9 success: 	1
 DROP TRIGGER trg_2;
 UPDATE t1 SET f_int1 = CAST(f_char1 AS SIGNED INT),
 f_int2 = CAST(f_char1 AS SIGNED INT),
 f_charbig = CONCAT('===',f_char1,'===');
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = new.f_int1 + @max_row,
@@ -7467,12 +7927,16 @@ END|
 UPDATE t1
 SET f_int1 = f_int1 + @max_row, f_int2 = f_int2 - @max_row,
 f_charbig = '####updated per update statement itself####';
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check trigger-10 success: 	1
 DROP TRIGGER trg_2;
 UPDATE t1 SET f_int1 = CAST(f_char1 AS SIGNED INT),
 f_int2 = CAST(f_char1 AS SIGNED INT),
 f_charbig = CONCAT('===',f_char1,'===');
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CREATE TRIGGER trg_3 BEFORE INSERT ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = @my_max1 + @counter,
@@ -7482,6 +7946,8 @@ SET @counter = @counter + 1;
 END|
 SET @counter = 1;
 SELECT MAX(f_int1), MIN(f_int2) INTO @my_max1,@my_min2 FROM t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'just inserted' FROM t0_template
@@ -7490,6 +7956,8 @@ ORDER BY f_int1;
 DROP TRIGGER trg_3;
 	
 # check trigger-11 success: 	1
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 DELETE FROM t1
 WHERE f_int1 <> CAST(f_char1 AS SIGNED INT)
 AND f_int2 <> CAST(f_char1 AS SIGNED INT)
@@ -7503,6 +7971,8 @@ SET @counter = @counter + 1;
 END|
 SET @counter = 1;
 SELECT MAX(f_int1), MIN(f_int2) INTO @my_max1,@my_min2 FROM t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1 (f_char1, f_char2, f_charbig)
 SELECT CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'just inserted' FROM t0_template
@@ -7511,6 +7981,8 @@ ORDER BY f_int1;
 DROP TRIGGER trg_3;
 	
 # check trigger-12 success: 	1
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 DELETE FROM t1
 WHERE f_int1 <> CAST(f_char1 AS SIGNED INT)
 AND f_int2 <> CAST(f_char1 AS SIGNED INT)
@@ -7518,21 +7990,27 @@ AND f_charbig = '####updated per insert trigger####';
 ANALYZE  TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	analyze	status	OK
+test.t1	analyze	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CHECK    TABLE t1 EXTENDED;
 Table	Op	Msg_type	Msg_text
 test.t1	check	status	OK
+test.t1	check	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CHECKSUM TABLE t1 EXTENDED;
 Table	Checksum
 test.t1	<some_value>
 OPTIMIZE TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	optimize	status	OK
+test.t1	optimize	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # check layout success:    1
 REPAIR   TABLE t1 EXTENDED;
 Table	Op	Msg_type	Msg_text
 test.t1	repair	status	OK
+test.t1	repair	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # check layout success:    1
 TRUNCATE t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check TRUNCATE success: 	1
 # check layout success:    1
@@ -7555,13 +8033,21 @@ PARTITION part3 VALUES IN (2)
 (SUBPARTITION sp31, SUBPARTITION sp32),
 PARTITION part4 VALUES IN (NULL)
 (SUBPARTITION sp41, SUBPARTITION sp42));
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1(f_int1,f_int2,f_char1,f_char2,f_charbig)
 SELECT f_int1,f_int2,f_char1,f_char2,f_charbig FROM t0_template
 WHERE f_int1 BETWEEN 1 AND @max_row_div2 - 1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 ALTER TABLE t1 ADD UNIQUE INDEX uidx1 (f_int2,f_int1);
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1(f_int1,f_int2,f_char1,f_char2,f_charbig)
 SELECT f_int1,f_int2,f_char1,f_char2,f_charbig FROM t0_template
 WHERE f_int1 BETWEEN @max_row_div2 AND @max_row;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # Start usability test (inc/partition_check.inc)
 create_command
 SHOW CREATE TABLE t1;
@@ -7795,6 +8281,8 @@ COMMIT;
 DELETE FROM t1 WHERE f_charbig = 'was inserted';
 COMMIT WORK;
 SET @@session.sql_mode = 'traditional';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SELECT @max_row_div2 + @max_row_div4 - @max_row_div4 + 1 INTO @exp_inserted_rows;
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT IF(f_int1 = @max_row_div2,f_int1 / 0,f_int1),f_int1,
@@ -7807,6 +8295,8 @@ COMMIT;
 # INFO: Storage engine used for t1 seems to be unable to revert
 #       changes made by the failing statement.
 SET @@session.sql_mode = '';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET AUTOCOMMIT= 1;
 DELETE FROM t1 WHERE f_charbig = 'was inserted';
 COMMIT WORK;
@@ -8001,12 +8491,16 @@ END|
 UPDATE t1
 SET f_int1 = f_int1 + @max_row, f_int2 = f_int2 - @max_row,
 f_charbig = '####updated per update statement itself####';
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check trigger-9 success: 	1
 DROP TRIGGER trg_2;
 UPDATE t1 SET f_int1 = CAST(f_char1 AS SIGNED INT),
 f_int2 = CAST(f_char1 AS SIGNED INT),
 f_charbig = CONCAT('===',f_char1,'===');
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = new.f_int1 + @max_row,
@@ -8016,12 +8510,16 @@ END|
 UPDATE t1
 SET f_int1 = f_int1 + @max_row, f_int2 = f_int2 - @max_row,
 f_charbig = '####updated per update statement itself####';
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check trigger-10 success: 	1
 DROP TRIGGER trg_2;
 UPDATE t1 SET f_int1 = CAST(f_char1 AS SIGNED INT),
 f_int2 = CAST(f_char1 AS SIGNED INT),
 f_charbig = CONCAT('===',f_char1,'===');
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CREATE TRIGGER trg_3 BEFORE INSERT ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = @my_max1 + @counter,
@@ -8031,6 +8529,8 @@ SET @counter = @counter + 1;
 END|
 SET @counter = 1;
 SELECT MAX(f_int1), MIN(f_int2) INTO @my_max1,@my_min2 FROM t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'just inserted' FROM t0_template
@@ -8039,6 +8539,8 @@ ORDER BY f_int1;
 DROP TRIGGER trg_3;
 	
 # check trigger-11 success: 	1
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 DELETE FROM t1
 WHERE f_int1 <> CAST(f_char1 AS SIGNED INT)
 AND f_int2 <> CAST(f_char1 AS SIGNED INT)
@@ -8052,6 +8554,8 @@ SET @counter = @counter + 1;
 END|
 SET @counter = 1;
 SELECT MAX(f_int1), MIN(f_int2) INTO @my_max1,@my_min2 FROM t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1 (f_char1, f_char2, f_charbig)
 SELECT CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'just inserted' FROM t0_template
@@ -8060,6 +8564,8 @@ ORDER BY f_int1;
 DROP TRIGGER trg_3;
 	
 # check trigger-12 success: 	1
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 DELETE FROM t1
 WHERE f_int1 <> CAST(f_char1 AS SIGNED INT)
 AND f_int2 <> CAST(f_char1 AS SIGNED INT)
@@ -8067,21 +8573,27 @@ AND f_charbig = '####updated per insert trigger####';
 ANALYZE  TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	analyze	status	OK
+test.t1	analyze	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CHECK    TABLE t1 EXTENDED;
 Table	Op	Msg_type	Msg_text
 test.t1	check	status	OK
+test.t1	check	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CHECKSUM TABLE t1 EXTENDED;
 Table	Checksum
 test.t1	<some_value>
 OPTIMIZE TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	optimize	status	OK
+test.t1	optimize	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # check layout success:    1
 REPAIR   TABLE t1 EXTENDED;
 Table	Op	Msg_type	Msg_text
 test.t1	repair	status	OK
+test.t1	repair	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # check layout success:    1
 TRUNCATE t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check TRUNCATE success: 	1
 # check layout success:    1
@@ -8100,13 +8612,21 @@ SUBPARTITION BY KEY(f_int2)  SUBPARTITIONS 3
 (PARTITION part1 VALUES IN (0),
 PARTITION part2 VALUES IN (1),
 PARTITION part3 VALUES IN (NULL));
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1(f_int1,f_int2,f_char1,f_char2,f_charbig)
 SELECT f_int1,f_int2,f_char1,f_char2,f_charbig FROM t0_template
 WHERE f_int1 BETWEEN 1 AND @max_row_div2 - 1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 ALTER TABLE t1 ADD UNIQUE INDEX uidx1 (f_int2,f_int1);
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1(f_int1,f_int2,f_char1,f_char2,f_charbig)
 SELECT f_int1,f_int2,f_char1,f_char2,f_charbig FROM t0_template
 WHERE f_int1 BETWEEN @max_row_div2 AND @max_row;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # Start usability test (inc/partition_check.inc)
 create_command
 SHOW CREATE TABLE t1;
@@ -8334,6 +8854,8 @@ COMMIT;
 DELETE FROM t1 WHERE f_charbig = 'was inserted';
 COMMIT WORK;
 SET @@session.sql_mode = 'traditional';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SELECT @max_row_div2 + @max_row_div4 - @max_row_div4 + 1 INTO @exp_inserted_rows;
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT IF(f_int1 = @max_row_div2,f_int1 / 0,f_int1),f_int1,
@@ -8346,6 +8868,8 @@ COMMIT;
 # INFO: Storage engine used for t1 seems to be unable to revert
 #       changes made by the failing statement.
 SET @@session.sql_mode = '';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET AUTOCOMMIT= 1;
 DELETE FROM t1 WHERE f_charbig = 'was inserted';
 COMMIT WORK;
@@ -8540,12 +9064,16 @@ END|
 UPDATE t1
 SET f_int1 = f_int1 + @max_row, f_int2 = f_int2 - @max_row,
 f_charbig = '####updated per update statement itself####';
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check trigger-9 success: 	1
 DROP TRIGGER trg_2;
 UPDATE t1 SET f_int1 = CAST(f_char1 AS SIGNED INT),
 f_int2 = CAST(f_char1 AS SIGNED INT),
 f_charbig = CONCAT('===',f_char1,'===');
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CREATE TRIGGER trg_2 BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = new.f_int1 + @max_row,
@@ -8555,12 +9083,16 @@ END|
 UPDATE t1
 SET f_int1 = f_int1 + @max_row, f_int2 = f_int2 - @max_row,
 f_charbig = '####updated per update statement itself####';
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check trigger-10 success: 	1
 DROP TRIGGER trg_2;
 UPDATE t1 SET f_int1 = CAST(f_char1 AS SIGNED INT),
 f_int2 = CAST(f_char1 AS SIGNED INT),
 f_charbig = CONCAT('===',f_char1,'===');
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CREATE TRIGGER trg_3 BEFORE INSERT ON t1 FOR EACH ROW
 BEGIN
 SET new.f_int1 = @my_max1 + @counter,
@@ -8570,6 +9102,8 @@ SET @counter = @counter + 1;
 END|
 SET @counter = 1;
 SELECT MAX(f_int1), MIN(f_int2) INTO @my_max1,@my_min2 FROM t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1 (f_int1, f_int2, f_char1, f_char2, f_charbig)
 SELECT f_int1, f_int1, CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'just inserted' FROM t0_template
@@ -8578,6 +9112,8 @@ ORDER BY f_int1;
 DROP TRIGGER trg_3;
 	
 # check trigger-11 success: 	1
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 DELETE FROM t1
 WHERE f_int1 <> CAST(f_char1 AS SIGNED INT)
 AND f_int2 <> CAST(f_char1 AS SIGNED INT)
@@ -8591,6 +9127,8 @@ SET @counter = @counter + 1;
 END|
 SET @counter = 1;
 SELECT MAX(f_int1), MIN(f_int2) INTO @my_max1,@my_min2 FROM t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1 (f_char1, f_char2, f_charbig)
 SELECT CAST(f_int1 AS CHAR),
 CAST(f_int1 AS CHAR), 'just inserted' FROM t0_template
@@ -8599,6 +9137,8 @@ ORDER BY f_int1;
 DROP TRIGGER trg_3;
 	
 # check trigger-12 success: 	1
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 DELETE FROM t1
 WHERE f_int1 <> CAST(f_char1 AS SIGNED INT)
 AND f_int2 <> CAST(f_char1 AS SIGNED INT)
@@ -8606,21 +9146,27 @@ AND f_charbig = '####updated per insert trigger####';
 ANALYZE  TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	analyze	status	OK
+test.t1	analyze	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CHECK    TABLE t1 EXTENDED;
 Table	Op	Msg_type	Msg_text
 test.t1	check	status	OK
+test.t1	check	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 CHECKSUM TABLE t1 EXTENDED;
 Table	Checksum
 test.t1	<some_value>
 OPTIMIZE TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	optimize	status	OK
+test.t1	optimize	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # check layout success:    1
 REPAIR   TABLE t1 EXTENDED;
 Table	Op	Msg_type	Msg_text
 test.t1	repair	status	OK
+test.t1	repair	warning	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # check layout success:    1
 TRUNCATE t1;
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 	
 # check TRUNCATE success: 	1
 # check layout success:    1

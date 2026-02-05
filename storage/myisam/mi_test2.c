@@ -1,13 +1,20 @@
-/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -18,8 +25,8 @@
 #ifndef USE_MY_FUNC		/* We want to be able to dbug this !! */
 #define USE_MY_FUNC
 #endif
-#ifdef DBUG_OFF
-#undef DBUG_OFF
+#ifdef NDEBUG
+#undef NDEBUG
 #endif
 #include "myisamdef.h"
 #include <m_ctype.h>
@@ -76,8 +83,6 @@ int main(int argc, char *argv[])
 
   filename= "test2";
   get_options(argc,argv);
-  if (! async_io)
-    my_disable_async_io=1;
 
   reclength=STANDARD_LENGTH+60+(use_blob ? 8 : 0);
   blob_pos=STANDARD_LENGTH+60;
@@ -333,7 +338,7 @@ int main(int argc, char *argv[])
 	if (i & 1)
 	  put_blob_in_record(record+blob_pos,&blob_buffer);
 	else
-	  bmove(record+blob_pos,read_record+blob_pos,8);
+	  memmove(record + blob_pos, read_record + blob_pos, 8);
       }
       if (mi_update(file,read_record,record2))
       {
@@ -494,25 +499,6 @@ int main(int argc, char *argv[])
       goto err;
   if (memcmp(read_record2,read_record3,reclength))
      printf("Can't find last record\n");
-#ifdef NOT_ANYMORE
-  if (!silent)
-    puts("- Test read key-part");
-  strmov(key2,key);
-  for(i=strlen(key2) ; i-- > 1 ;)
-  {
-    key2[i]=0;
-
-    /* The following row is just to catch some bugs in the key code */
-    memset(file->lastkey, 0, file->s->base.max_key_length*2);
-    if (mi_rkey(file,read_record,0,key2,(uint) i,HA_READ_PREFIX))
-      goto err;
-    if (memcmp(read_record+start,key,(uint) i))
-    {
-      puts("Didn't find right record");
-      goto end;
-    }
-  }
-#endif
   if (dupp_keys > 2)
   {
     if (!silent)
@@ -597,7 +583,7 @@ int main(int argc, char *argv[])
   if (i == write_count)
     goto err;
 
-  bmove(read_record2,read_record,reclength);
+  memmove(read_record2, read_record, reclength);
   for (i=min(2,keys) ; i-- > 0 ;)
   {
     if (mi_rsame(file,read_record2,(int) i)) goto err;
@@ -1004,9 +990,9 @@ static uint rnd(uint max_value)
 
 static void fix_length(uchar *rec, uint length)
 {
-  bmove(rec+STANDARD_LENGTH,
-	"0123456789012345678901234567890123456789012345678901234567890",
-	length-STANDARD_LENGTH);
+  memmove(rec + STANDARD_LENGTH,
+          "0123456789012345678901234567890123456789012345678901234567890",
+          length - STANDARD_LENGTH);
   strfill((char*) rec+length,STANDARD_LENGTH+60-length,' ');
 } /* fix_length */
 

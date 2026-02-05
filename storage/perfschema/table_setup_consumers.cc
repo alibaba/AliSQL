@@ -1,13 +1,20 @@
-/* Copyright (c) 2008, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation; version 2 of the License.
+  it under the terms of the GNU General Public License, version 2.0,
+  as published by the Free Software Foundation.
+
+  This program is also distributed with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an additional
+  permission to link the program and your derivative works with the
+  separately licensed software that they have included with MySQL.
 
   This program is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
+  GNU General Public License, version 2.0, for more details.
 
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software Foundation,
@@ -19,73 +26,105 @@
 */
 
 #include "my_global.h"
-#include "my_pthread.h"
+#include "my_thread.h"
 #include "table_setup_consumers.h"
 #include "pfs_instr.h"
 #include "pfs_events_waits.h"
 #include "pfs_digest.h"
+#include "field.h"
 
-#define COUNT_SETUP_CONSUMERS 12
+#define COUNT_SETUP_CONSUMERS 15
+
 static row_setup_consumers all_setup_consumers_data[COUNT_SETUP_CONSUMERS]=
 {
   {
     { C_STRING_WITH_LEN("events_stages_current") },
     &flag_events_stages_current,
+    false,
     false
   },
   {
     { C_STRING_WITH_LEN("events_stages_history") },
     &flag_events_stages_history,
-    false
+    false,
+    true
   },
   {
     { C_STRING_WITH_LEN("events_stages_history_long") },
     &flag_events_stages_history_long,
-    false
+    false,
+    true
   },
   {
     { C_STRING_WITH_LEN("events_statements_current") },
     &flag_events_statements_current,
+    false,
     false
   },
   {
     { C_STRING_WITH_LEN("events_statements_history") },
     &flag_events_statements_history,
-    false
+    false,
+    true
   },
   {
     { C_STRING_WITH_LEN("events_statements_history_long") },
     &flag_events_statements_history_long,
+    false,
+    true
+  },
+  {
+    { C_STRING_WITH_LEN("events_transactions_current") },
+    &flag_events_transactions_current,
+    false,
     false
+  },
+  {
+    { C_STRING_WITH_LEN("events_transactions_history") },
+    &flag_events_transactions_history,
+    false,
+    true
+  },
+  {
+    { C_STRING_WITH_LEN("events_transactions_history_long") },
+    &flag_events_transactions_history_long,
+    false,
+    true
   },
   {
     { C_STRING_WITH_LEN("events_waits_current") },
     &flag_events_waits_current,
+    false,
     false
   },
   {
     { C_STRING_WITH_LEN("events_waits_history") },
     &flag_events_waits_history,
-    false
+    false,
+    true
   },
   {
     { C_STRING_WITH_LEN("events_waits_history_long") },
     &flag_events_waits_history_long,
-    false
+    false,
+    true
   },
   {
     { C_STRING_WITH_LEN("global_instrumentation") },
     &flag_global_instrumentation,
+    true,
     true
   },
   {
     { C_STRING_WITH_LEN("thread_instrumentation") },
     &flag_thread_instrumentation,
-    false
+    false,
+    true
   },
   {
     { C_STRING_WITH_LEN("statements_digest") },
     &flag_statements_digest,
+    false,
     false
   }
 };
@@ -110,25 +149,37 @@ TABLE_FIELD_DEF
 table_setup_consumers::m_field_def=
 { 2, field_types };
 
+PFS_engine_table_share_state
+table_setup_consumers::m_share_state = {
+  false /* m_checked */
+};
+
 PFS_engine_table_share
 table_setup_consumers::m_share=
 {
   { C_STRING_WITH_LEN("setup_consumers") },
   &pfs_updatable_acl,
-  &table_setup_consumers::create,
+  table_setup_consumers::create,
   NULL, /* write_row */
   NULL, /* delete_all_rows */
-  NULL, /* get_row_count */
-  COUNT_SETUP_CONSUMERS, /* records */
+  table_setup_consumers::get_row_count,
   sizeof(PFS_simple_index), /* ref length */
   &m_table_lock,
   &m_field_def,
-  false /* checked */
+  false, /* m_perpetual */
+  false, /* m_optional */
+  &m_share_state
 };
 
 PFS_engine_table* table_setup_consumers::create(void)
 {
   return new table_setup_consumers();
+}
+
+ha_rows
+table_setup_consumers::get_row_count(void)
+{
+  return COUNT_SETUP_CONSUMERS;
 }
 
 table_setup_consumers::table_setup_consumers()
@@ -166,7 +217,7 @@ int table_setup_consumers::rnd_next(void)
 int table_setup_consumers::rnd_pos(const void *pos)
 {
   set_position(pos);
-  DBUG_ASSERT(m_pos.m_index < COUNT_SETUP_CONSUMERS);
+  assert(m_pos.m_index < COUNT_SETUP_CONSUMERS);
   m_row= &all_setup_consumers_data[m_pos.m_index];
   return 0;
 }
@@ -178,11 +229,11 @@ int table_setup_consumers::read_row_values(TABLE *table,
 {
   Field *f;
 
-  DBUG_ASSERT(m_row);
+  assert(m_row);
 
 
   /* Set the null bits */
-  DBUG_ASSERT(table->s->null_bytes == 0);
+  assert(table->s->null_bytes == 0);
 
   for (; (f= *fields) ; fields++)
   {
@@ -197,7 +248,7 @@ int table_setup_consumers::read_row_values(TABLE *table,
         set_field_enum(f, (*m_row->m_enabled_ptr) ? ENUM_YES : ENUM_NO);
         break;
       default:
-        DBUG_ASSERT(false);
+        assert(false);
       }
     }
   }
@@ -213,7 +264,7 @@ int table_setup_consumers::update_row_values(TABLE *table,
   Field *f;
   enum_yes_no value;
 
-  DBUG_ASSERT(m_row);
+  assert(m_row);
 
   for (; (f= *fields) ; fields++)
   {
@@ -230,13 +281,16 @@ int table_setup_consumers::update_row_values(TABLE *table,
         break;
       }
       default:
-        DBUG_ASSERT(false);
+        assert(false);
       }
     }
   }
 
-  if (m_row->m_refresh)
+  if (m_row->m_instrument_refresh)
     update_instruments_derived_flags();
+
+  if (m_row->m_thread_refresh)
+    update_thread_derived_flags();
 
   return 0;
 }

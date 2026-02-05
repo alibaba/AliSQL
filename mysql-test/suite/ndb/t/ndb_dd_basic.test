@@ -1,16 +1,7 @@
-#################################
-# Author: JO
-# Org Date: ?
-# Purpose: To test basic Cluster Disk Data 
-#################################
-# Change Author: JBM
-# Change Date: 2006-01-11
-# Change: Cleanup and test rename
-#################################
-# Change Author: Guangbao Ni
-# Change Date: 2007-03-20
-# Change: Test insert data when no datafile in spacetable
-#################################
+# The include statement below is a temp one for tests that are yet to
+#be ported to run with InnoDB,
+#but needs to be kept for tests that would need MyISAM in future.
+--source include/force_myisam_default.inc
 
 -- source include/have_ndb.inc
 
@@ -20,28 +11,34 @@
 --replace_column 1 #
 select count(*) from information_schema.columns;
 
---disable_warnings
-DROP TABLE IF EXISTS t1;
---enable_warnings
-
+#
 # some negative tests
+# - (which assumes that MyISAM does not support
+#    tablespace or logfile group)
+#
+
+--error ER_ILLEGAL_HA_CREATE_OPTION
 CREATE LOGFILE GROUP lg1
 ADD UNDOFILE 'undofile.dat'
 INITIAL_SIZE 16M
 UNDO_BUFFER_SIZE = 1M
 ENGINE=MYISAM;
 
+--error ER_UNKNOWN_STORAGE_ENGINE
 ALTER LOGFILE GROUP lg1
 ADD UNDOFILE 'undofile02.dat'
 INITIAL_SIZE = 4M 
 ENGINE=XYZ;
 
+--error ER_ILLEGAL_HA_CREATE_OPTION
 CREATE TABLESPACE ts1
 ADD DATAFILE 'datafile.dat'
 USE LOGFILE GROUP lg1
 INITIAL_SIZE 12M;
 
+#
 # bug#29574
+#
 --error ER_CREATE_FILEGROUP_FAILED
 CREATE LOGFILE GROUP lg1
 ADD UNDOFILE 'undofile.dat'
@@ -54,7 +51,7 @@ ENGINE=NDB;
 # Start by creating a logfile group
 ##################################
 
-set storage_engine=ndb;
+set default_storage_engine=ndb;
 CREATE LOGFILE GROUP lg1
 ADD UNDOFILE 'undofile.dat'
 INITIAL_SIZE 16M
@@ -69,7 +66,7 @@ ENGINE=NDB;
 # Create a tablespace connected to the logfile group
 ###################################################
 
-set storage_engine=myisam;
+set default_storage_engine=myisam;
 CREATE TABLESPACE ts1
 ADD DATAFILE 'datafile.dat'
 USE LOGFILE GROUP lg1
@@ -83,12 +80,16 @@ ENGINE=NDB;
 
 ########################################
 # Create a table using this tablespace
+# Specify number of partitions in order to make
+# output from INFORMATION_SCHEMA.PARTITIONS
+# independent of ndbd/ndbmtd and ThreadConfig.
 ########################################
 
 CREATE TABLE t1
 (pk1 INT NOT NULL PRIMARY KEY, b INT NOT NULL, c INT NOT NULL)
 TABLESPACE ts1 STORAGE DISK
-ENGINE=NDB;
+ENGINE=NDB
+PARTITION BY KEY() PARTITIONS 8;
 
 SHOW CREATE TABLE t1;
 
@@ -578,7 +579,7 @@ engine ndb;
 
 select distinct tablespace_name, file_type, file_name
 from information_schema.files
-where tablespace_name is not null
+where engine = 'ndbcluster' and tablespace_name is not null
 order by file_type, file_name;
 
 alter tablespace ts1
@@ -587,7 +588,7 @@ engine ndb;
 
 select distinct tablespace_name, file_type, file_name
 from information_schema.files
-where tablespace_name is not null
+where engine = 'ndbcluster' and tablespace_name is not null
 order by file_type, file_name;
 
 drop tablespace ts1
@@ -648,7 +649,7 @@ order by file_name;
 # check tablespace
 select tablespace_name, logfile_group_name, extent_size
 from information_schema.files
-where file_type = 'TABLESPACE';
+where engine = 'ndbcluster' and file_type = 'TABLESPACE';
 
 # check datafiles
 select distinct file_name, initial_size, extent_size, total_extents, free_extents
@@ -670,4 +671,28 @@ engine ndb;
 drop logfile group lg1
 engine ndb;
 
+# Bug 13116514: parser does not accept suffix 'M', etc for sizes
+set character_set_client=utf8;
+create logfile group lg1
+add undofile 'undo1.log'
+undo_buffer_size 2M
+engine=ndb;
+
+drop logfile group lg1
+engine ndb;
+
 #End 5.1 test case
+
+#
+# BUG#11762867
+# - create logfile group with too large undo_buffer_size
+#   in order to show the improved ndb error message indicating
+#   "too large undo_buffer_size or too small GlobalSharedMemory"
+#
+--error ER_CREATE_FILEGROUP_FAILED
+CREATE LOGFILE GROUP lg1
+ADD UNDOFILE 'undofile.dat'
+INITIAL_SIZE 16M
+UNDO_BUFFER_SIZE = 128M
+ENGINE=NDB;
+SHOW WARNINGS;

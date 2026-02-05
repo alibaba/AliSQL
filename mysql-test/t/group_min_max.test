@@ -1,3 +1,8 @@
+# The include statement below is a temp one for tests that are yet to
+#be ported to run with InnoDB,
+#but needs to be kept for tests that would need MyISAM in future.
+--source include/force_myisam_default.inc
+
 #
 # Test file for WL#1724 (Min/Max Optimization for Queries with Group By Clause).
 # The queries in this file test query execution via QUICK_GROUP_MIN_MAX_SELECT.
@@ -174,7 +179,7 @@ explain select a1, max(a2) from t1 group by a1;
 explain select a1, min(a2), max(a2) from t1 group by a1;
 explain select a1, a2, b, min(c), max(c) from t1 group by a1,a2,b;
 explain select a1,a2,b,max(c),min(c) from t1 group by a1,a2,b;
---replace_column 7 # 9 #
+--replace_column 8 # 10 #
 explain select a1,a2,b,max(c),min(c) from t2 group by a1,a2,b;
 # Select fields in different order
 explain select min(a2), a1, max(a2), min(a2), a1 from t1 group by a1;
@@ -213,29 +218,29 @@ explain select a1,a2,b,min(c),max(c) from t1 where (a1 = 'b' or a1 = 'd' or a1 =
 explain select a1,min(c),max(c)      from t1 where a1 >= 'b' group by a1,a2,b;
 explain select a1,  max(c)           from t1 where a1 in ('a','b','d') group by a1,a2,b;
 
---replace_column 9 #
+--replace_column 10 #
 explain select a1,a2,b,       max(c) from t2 where a1 < 'd' group by a1,a2,b;
---replace_column 9 #
+--replace_column 10 #
 explain select a1,a2,b,min(c),max(c) from t2 where a1 < 'd' group by a1,a2,b;
---replace_column 9 #
+--replace_column 10 #
 explain select a1,a2,b,min(c),max(c) from t2 where a1 >= 'b' group by a1,a2,b;
---replace_column 9 #
+--replace_column 10 #
 explain select a1,a2,b,       max(c) from t2 where a1 >= 'c' or a1 < 'b' group by a1,a2,b;
---replace_column 9 #
+--replace_column 10 #
 explain select a1, max(c)            from t2 where a1 >= 'c' or a1 < 'b' group by a1,a2,b;
---replace_column 9 #
+--replace_column 10 #
 explain select a1,a2,b,min(c),max(c) from t2 where a1 >= 'c' or a2 < 'b' group by a1,a2,b;
---replace_column 9 #
+--replace_column 10 #
 explain select a1,a2,b,       max(c) from t2 where a1 = 'z' or a1 = 'b' or a1 = 'd' group by a1,a2,b;
---replace_column 9 #
+--replace_column 10 #
 explain select a1,a2,b,min(c),max(c) from t2 where a1 = 'z' or a1 = 'b' or a1 = 'd' group by a1,a2,b;
---replace_column 9 #
+--replace_column 10 #
 explain select a1,a2,b,       max(c) from t2 where (a1 = 'b' or a1 = 'd' or a1 = 'a' or a1 = 'c') and (a2 > 'a') group by a1,a2,b;
---replace_column 9 #
+--replace_column 10 #
 explain select a1,a2,b,min(c),max(c) from t2 where (a1 = 'b' or a1 = 'd' or a1 = 'a' or a1 = 'c') and (a2 > 'a') group by a1,a2,b;
---replace_column 9 #
+--replace_column 10 #
 explain select a1,min(c),max(c)      from t2 where a1 >= 'b' group by a1,a2,b;
---replace_column 9 #
+--replace_column 10 #
 explain select a1,  max(c)           from t2 where a1 in ('a','b','d') group by a1,a2,b;
 
 # queries
@@ -266,6 +271,7 @@ select a1,  max(c)           from t2 where a1 in ('a','b','d') group by a1,a2,b;
 
 # B) Equalities only over the non-group 'B' attributes
 # plans
+
 explain select a1,a2,b,max(c),min(c) from t1 where (a2 = 'a') and (b = 'b') group by a1;
 explain select a1,max(c),min(c)      from t1 where (a2 = 'a') and (b = 'b') group by a1;
 explain select a1,a2,b,       max(c) from t1 where (b = 'b') group by a1,a2;
@@ -302,6 +308,13 @@ select a1,max(c),min(c)      from t3 where (a2 = 'a') and (b = 'b') group by a1;
 
 # IS NULL (makes sense for t2 only)
 # plans
+
+# SQL standard does not impose recognition of 'b IS NULL' as
+# a functional dependency of {b} on {}.
+# These queries are home-grown.
+
+--source include/turn_off_only_full_group_by.inc
+
 explain select a1,a2,b,min(c) from t2 where (a2 = 'a') and b is NULL group by a1;
 explain select a1,a2,b,max(c) from t2 where (a2 = 'a') and b is NULL group by a1;
 explain select a1,a2,b,min(c) from t2 where b is NULL group by a1,a2;
@@ -316,9 +329,11 @@ select a1,a2,b,max(c) from t2 where b is NULL group by a1,a2;
 select a1,a2,b,min(c),max(c) from t2 where b is NULL group by a1,a2;
 select a1,a2,b,min(c),max(c) from t2 where b is NULL group by a1,a2;
 
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
+
 # C) Range predicates for the MIN/MAX attribute
 # plans
---replace_column 9 #
+--replace_column 10 #
 explain select a1,a2,b,       max(c) from t1 where (c > 'b1') group by a1,a2,b;
 explain select a1,a2,b,min(c),max(c) from t1 where (c > 'b1') group by a1,a2,b;
 explain select a1,a2,b,       max(c) from t1 where (c > 'f123') group by a1,a2,b;
@@ -336,35 +351,35 @@ explain select a1,a2,b,min(c),max(c) from t1 where (c < 'c5') or (c = 'g412') or
 explain select a1,a2,b,min(c),max(c) from t1 where ((c > 'b111') and (c <= 'g112')) or ((c > 'd000') and (c <= 'i110')) group by a1,a2,b;
 explain select a1,a2,b,min(c),max(c) from t1 where (c between 'b111' and 'g112') or (c between 'd000' and 'i110') group by a1,a2,b;
 
---replace_column 9 #
+--replace_column 10 #
 explain select a1,a2,b,       max(c) from t2 where (c > 'b1') group by a1,a2,b;
---replace_column 9 #
+--replace_column 10 #
 explain select a1,a2,b,min(c),max(c) from t2 where (c > 'b1') group by a1,a2,b;
---replace_column 9 #
+--replace_column 10 #
 explain select a1,a2,b,       max(c) from t2 where (c > 'f123') group by a1,a2,b;
---replace_column 9 #
+--replace_column 10 #
 explain select a1,a2,b,min(c),max(c) from t2 where (c > 'f123') group by a1,a2,b;
---replace_column 9 #
+--replace_column 10 #
 explain select a1,a2,b,       max(c) from t2 where (c < 'a0') group by a1,a2,b;
---replace_column 9 #
+--replace_column 10 #
 explain select a1,a2,b,min(c),max(c) from t2 where (c < 'a0') group by a1,a2,b;
---replace_column 9 #
+--replace_column 10 #
 explain select a1,a2,b,       max(c) from t2 where (c < 'k321') group by a1,a2,b;
---replace_column 9 #
+--replace_column 10 #
 explain select a1,a2,b,min(c),max(c) from t2 where (c < 'k321') group by a1,a2,b;
---replace_column 9 #
+--replace_column 10 #
 explain select a1,a2,b,       max(c) from t2 where (c < 'a0') or (c > 'b1') group by a1,a2,b;
---replace_column 9 #
+--replace_column 10 #
 explain select a1,a2,b,min(c),max(c) from t2 where (c < 'a0') or (c > 'b1') group by a1,a2,b;
---replace_column 9 #
+--replace_column 10 #
 explain select a1,a2,b,       max(c) from t2 where (c > 'b1') or (c <= 'g1') group by a1,a2,b;
---replace_column 9 #
+--replace_column 10 #
 explain select a1,a2,b,min(c),max(c) from t2 where (c > 'b1') or (c <= 'g1') group by a1,a2,b;
---replace_column 9 #
+--replace_column 10 #
 explain select a1,a2,b,min(c),max(c) from t2 where (c > 'b111') and (c <= 'g112') group by a1,a2,b;
---replace_column 9 #
+--replace_column 10 #
 explain select a1,a2,b,min(c),max(c) from t2 where (c < 'c5') or (c = 'g412') or (c = 'k421') group by a1,a2,b;
---replace_column 9 #
+--replace_column 10 #
 explain select a1,a2,b,min(c),max(c) from t2 where ((c > 'b111') and (c <= 'g112')) or ((c > 'd000') and (c <= 'i110')) group by a1,a2,b;
 
 # queries
@@ -422,17 +437,17 @@ explain select a1,a2,b,min(c) from t1 where ((a1 > 'a') or (a1 < '9'))  and ((a2
 explain select a1,a2,b,min(c) from t1 where (a1 > 'a') and (a2 > 'a') and (b = 'c') group by a1,a2,b;
 explain select a1,a2,b,min(c) from t1 where (ord(a1) > 97) and (ord(a2) + ord(a1) > 194) and (b = 'c') group by a1,a2,b;
 
---replace_column 9 #
+--replace_column 10 #
 explain select a1,a2,b,min(c),max(c) from t2 where (a1 >= 'c' or a2 < 'b') and (b > 'a') group by a1,a2,b;
---replace_column 9 #
+--replace_column 10 #
 explain select a1,a2,b,min(c),max(c) from t2 where (a1 >= 'c' or a2 < 'b') and (c > 'b111') group by a1,a2,b;
---replace_column 9 #
+--replace_column 10 #
 explain select a1,a2,b,min(c),max(c) from t2 where (a2 >= 'b') and (b = 'a') and (c > 'b111') group by a1,a2,b;
---replace_column 9 #
+--replace_column 10 #
 explain select a1,a2,b,min(c) from t2 where ((a1 > 'a') or (a1 < '9'))  and ((a2 >= 'b') and (a2 < 'z')) and (b = 'a') and ((c < 'h112') or (c = 'j121') or (c > 'k121' and c < 'm122') or (c > 'o122')) group by a1,a2,b;
---replace_column 9 #
+--replace_column 10 #
 explain select a1,a2,b,min(c) from t2 where ((a1 > 'a') or (a1 < '9'))  and ((a2 >= 'b') and (a2 < 'z')) and (b = 'a') and ((c = 'j121') or (c > 'k121' and c < 'm122') or (c > 'o122') or (c < 'h112') or (c = 'c111')) group by a1,a2,b;
---replace_column 9 #
+--replace_column 10 #
 explain select a1,a2,b,min(c) from t2 where (a1 > 'a') and (a2 > 'a') and (b = 'c') group by a1,a2,b;
 
 # queries
@@ -459,16 +474,17 @@ select a1,a2,b,min(c) from t2 where (a1 > 'a') and (a2 > 'a') and (b = 'c') grou
 # plans
 explain select a1,a2,b from t1 where (a1 >= 'c' or a2 < 'b') and (b > 'a') group by a1,a2,b;
 explain select a1,a2,b from t1 where (a2 >= 'b') and (b = 'a') group by a1,a2,b;
+
 explain select a1,a2,b,c from t1 where (a2 >= 'b') and (b = 'a') and (c = 'i121') group by a1,a2,b;
 explain select a1,a2,b from t1 where (a1 > 'a') and (a2 > 'a') and (b = 'c') group by a1,a2,b;
 
---replace_column 9 #
+--replace_column 10 #
 explain select a1,a2,b from t2 where (a1 >= 'c' or a2 < 'b') and (b > 'a') group by a1,a2,b;
---replace_column 9 #
+--replace_column 10 #
 explain select a1,a2,b from t2 where (a2 >= 'b') and (b = 'a') group by a1,a2,b;
---replace_column 9 #
+--replace_column 10 #
 explain select a1,a2,b,c from t2 where (a2 >= 'b') and (b = 'a') and (c = 'i121') group by a1,a2,b;
---replace_column 9 #
+--replace_column 10 #
 explain select a1,a2,b from t2 where (a1 > 'a') and (a2 > 'a') and (b = 'c') group by a1,a2,b;
 
 # queries
@@ -493,12 +509,12 @@ explain extended select distinct a1,a2,b,c from t1 where (a2 >= 'b') and (b = 'a
 explain select distinct a1,a2,b from t1 where (a1 > 'a') and (a2 > 'a') and (b = 'c');
 explain select distinct b from t1 where (a2 >= 'b') and (b = 'a');
 
---replace_column 9 #
+--replace_column 10 #
 explain select distinct a1,a2,b from t2;
---replace_column 9 #
+--replace_column 10 #
 explain select distinct a1,a2,b from t2 where (a2 >= 'b') and (b = 'a');
 explain extended select distinct a1,a2,b,c from t2 where (a2 >= 'b') and (b = 'a') and (c = 'i121');
---replace_column 9 #
+--replace_column 10 #
 explain select distinct a1,a2,b from t2 where (a1 > 'a') and (a2 > 'a') and (b = 'c');
 explain select distinct b from t2 where (a2 >= 'b') and (b = 'a');
 
@@ -531,21 +547,24 @@ select distinct t1.a1,t2.a1 from t1,t2;
 #
 
 # plans
+
+#--source include/turn_off_only_full_group_by.inc
+
 explain select distinct a1,a2,b from t1;
 explain select distinct a1,a2,b from t1 where (a2 >= 'b') and (b = 'a') group by a1,a2,b;
 explain select distinct a1,a2,b,c from t1 where (a2 >= 'b') and (b = 'a') and (c = 'i121') group by a1,a2,b;
 explain select distinct a1,a2,b from t1 where (a1 > 'a') and (a2 > 'a') and (b = 'c') group by a1,a2,b;
 explain select distinct b from t1 where (a2 >= 'b') and (b = 'a') group by a1,a2,b;
 
---replace_column 9 #
+--replace_column 10 #
 explain select distinct a1,a2,b from t2;
---replace_column 9 #
+--replace_column 10 #
 explain select distinct a1,a2,b from t2 where (a2 >= 'b') and (b = 'a') group by a1,a2,b;
---replace_column 9 #
+--replace_column 10 #
 explain select distinct a1,a2,b,c from t2 where (a2 >= 'b') and (b = 'a') and (c = 'i121') group by a1,a2,b;
---replace_column 9 #
+--replace_column 10 #
 explain select distinct a1,a2,b from t2 where (a1 > 'a') and (a2 > 'a') and (b = 'c') group by a1,a2,b;
---replace_column 9 #
+--replace_column 10 #
 explain select distinct b from t2 where (a2 >= 'b') and (b = 'a') group by a1,a2,b;
 
 # queries
@@ -561,6 +580,7 @@ select distinct a1,a2,b,c from t2 where (a2 >= 'b') and (b = 'a') and (c = 'i121
 select distinct a1,a2,b from t2 where (a1 > 'a') and (a2 > 'a') and (b = 'c') group by a1,a2,b;
 select distinct b from t2 where (a2 >= 'b') and (b = 'a') group by a1,a2,b;
 
+#--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 
 #
 # COUNT (DISTINCT cols) queries
@@ -601,6 +621,9 @@ select concat(ord(min(b)),ord(max(b))),min(b),max(b) from t1 group by a1,a2;
 #
 
 # select a non-indexed attribute
+
+--source include/turn_off_only_full_group_by.inc
+
 explain select a1,a2,b,d,min(c),max(c) from t1 group by a1,a2,b;
 
 explain select a1,a2,b,d from t1 group by a1,a2,b;
@@ -628,6 +651,8 @@ select a1,a2,min(b),c from t2 where (a2 = 'a') and (c = 'a111') group by a1;
 
 # disjunction for a non-group select attribute
 explain select a1,a2,b,max(c),min(c) from t2 where (a2 = 'a') and (b = 'b') or (b = 'a') group by a1;
+
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 
 # non-range predicate for the MIN/MAX attribute
 explain select a1,a2,b,min(c),max(c) from t2
@@ -825,12 +850,16 @@ DROP TABLE t1,t2,t3,t4,t5,t6;
 #
 CREATE TABLE t1 (a int, b int, PRIMARY KEY (a,b), KEY b (b));
 INSERT INTO t1 VALUES (1,1),(1,2),(1,0),(1,3);
+INSERT INTO t1 VALUES (2,1),(2,2),(2,0),(2,3);
+INSERT INTO t1 VALUES (3,1),(3,2),(3,0),(3,3);
+ANALYZE TABLE t1;
 
 explain SELECT MAX(b), a FROM t1 WHERE b < 2 AND a = 1 GROUP BY a;
 SELECT MAX(b), a FROM t1 WHERE b < 2 AND a = 1 GROUP BY a;
 SELECT MIN(b), a FROM t1 WHERE b > 1 AND a = 1 GROUP BY a;
 CREATE TABLE t2 (a int, b int, c int, PRIMARY KEY (a,b,c));
 INSERT INTO t2 SELECT a,b,b FROM t1;
+ANALYZE TABLE t2;
 explain SELECT MIN(c) FROM t2 WHERE b = 2 and a = 1 and c > 1 GROUP BY a;
 SELECT MIN(c) FROM t2 WHERE b = 2 and a = 1 and c > 1 GROUP BY a;
 
@@ -842,7 +871,8 @@ DROP TABLE t1,t2;
 
 CREATE TABLE t1 (a INT, b INT, INDEX (a,b));
 INSERT INTO t1 (a, b) VALUES (1,1), (1,2), (1,3), (1,4), (1,5),
-       (2,2), (2,3), (2,1), (3,1), (4,1), (4,2), (4,3), (4,4), (4,5), (4,6);
+       (2,2), (2,3), (2,1), (3,1), (4,1), (4,2), (4,3), (4,4), (4,5), (4,6),
+       (5,1), (5,2), (5,3), (5,4), (5,5);
 EXPLAIN SELECT max(b), a FROM t1 GROUP BY a;
 FLUSH STATUS;
 SELECT max(b), a FROM t1 GROUP BY a;
@@ -905,10 +935,16 @@ DROP TABLE t1,t2,t3;
 CREATE TABLE t1 (a int, INDEX idx(a));
 INSERT INTO t1 VALUES
   (4), (2), (1), (2), (4), (2), (1), (4),
+  (4), (2), (1), (2), (2), (4), (1), (4),
   (4), (2), (1), (2), (2), (4), (1), (4);
 
+# On 32 bit platform the rows estimate is 10 vs 11 on 64 bit platforms.
+--replace_result 11 10
 EXPLAIN SELECT DISTINCT(a) FROM t1;
 SELECT DISTINCT(a) FROM t1;
+
+# On 32 bit platform the rows estimate is 10 vs 11 on 64 bit platforms.
+--replace_result 11 10
 EXPLAIN SELECT SQL_BIG_RESULT DISTINCT(a) FROM t1;
 SELECT SQL_BIG_RESULT DISTINCT(a) FROM t1;
 
@@ -922,6 +958,7 @@ CREATE TABLE t1 (a INT, b INT);
 INSERT INTO t1 (a, b) VALUES (1,1), (1,2), (1,3);
 INSERT INTO t1 SELECT a + 1, b FROM t1;
 INSERT INTO t1 SELECT a + 2, b FROM t1;
+INSERT INTO t1 SELECT a + 4, b FROM t1;
 
 EXPLAIN
 SELECT a, MIN(b), MAX(b) FROM t1 GROUP BY a ORDER BY a DESC;
@@ -929,10 +966,14 @@ SELECT a, MIN(b), MAX(b) FROM t1 GROUP BY a ORDER BY a DESC;
 
 CREATE INDEX break_it ON t1 (a, b);
 
+# On 32 bit platform the rows estimate is 10 vs 11 on 64 bit platforms.
+--replace_result 11 10
 EXPLAIN
 SELECT a, MIN(b), MAX(b) FROM t1 GROUP BY a ORDER BY a;
 SELECT a, MIN(b), MAX(b) FROM t1 GROUP BY a ORDER BY a;
 
+# On 32 bit platform the rows estimate is 10 vs 11 on 64 bit platforms.
+--replace_result 11 10
 EXPLAIN
 SELECT a, MIN(b), MAX(b) FROM t1 GROUP BY a ORDER BY a DESC;
 SELECT a, MIN(b), MAX(b) FROM t1 GROUP BY a ORDER BY a DESC;
@@ -977,6 +1018,8 @@ INSERT INTO t1 SELECT * FROM t1;
 INSERT INTO t1 SELECT a,b,c+1,d FROM t1;
 
 #Should be non-empty
+# On 32 bit platform the rows estimate is 10 vs 11 on 64 bit platforms.
+--replace_result 11 10
 EXPLAIN SELECT DISTINCT c FROM t1 WHERE d=4;
 SELECT DISTINCT c FROM t1 WHERE d=4;
 
@@ -991,9 +1034,12 @@ CREATE TABLE t (a INT, b INT, INDEX (a,b));
 INSERT INTO t VALUES (2,0), (2,0), (2,1), (2,1);
 INSERT INTO t SELECT * FROM t;
 INSERT INTO t SELECT * FROM t;
+INSERT INTO t SELECT * FROM t;
 
 --echo # test MIN
 --echo #should use range with index for group by
+# On 32 bit platform the rows estimate is 10 vs 11 on 64 bit platforms.
+--replace_result 11 10
 EXPLAIN
 SELECT a, MIN(b) FROM t WHERE b <> 0 GROUP BY a;
 --echo #should return 1 row
@@ -1001,6 +1047,8 @@ SELECT a, MIN(b) FROM t WHERE b <> 0 GROUP BY a;
 
 --echo # test MAX
 --echo #should use range with index for group by
+# On 32 bit platform the rows estimate is 10 vs 11 on 64 bit platforms.
+--replace_result 11 10
 EXPLAIN
 SELECT a, MAX(b) FROM t WHERE b <> 1 GROUP BY a;
 --echo #should return 1 row
@@ -1010,6 +1058,8 @@ SELECT a, MAX(b) FROM t WHERE b <> 1 GROUP BY a;
 INSERT INTO t SELECT a, 2 FROM t;
 
 --echo #should use range with index for group by
+# On 32 bit platform the rows estimate is 10 vs 11 on 64 bit platforms.
+--replace_result 11 10
 EXPLAIN
 SELECT a, MAX(b) FROM t WHERE b > 0 AND b < 2 GROUP BY a;
 --echo #should return 1 row
@@ -1112,66 +1162,93 @@ CREATE TABLE t1 (a INT, b INT, c INT, KEY (a,b));
 INSERT INTO t1 VALUES (1,1,1), (1,2,1), (1,3,1), (1,4,1);
 INSERT INTO t1 SELECT a, b + 4, 1 FROM t1;
 INSERT INTO t1 SELECT a + 1, b, 1 FROM t1;
+INSERT INTO t1 SELECT a + 2, b + 8, 1 FROM t1;
+
 CREATE TABLE t2 (a INT, b INT, c INT, d INT, e INT, f INT, KEY (a,b,c));
 INSERT INTO t2 VALUES (1,1,1,1,1,1), (1,2,1,1,1,1), (1,3,1,1,1,1), 
        (1,4,1,1,1,1);
 INSERT INTO t2 SELECT a, b + 4, c,d,e,f FROM t2;
 INSERT INTO t2 SELECT a + 1, b, c,d,e,f FROM t2;
+INSERT INTO t2 SELECT a + 2, b + 8, c,d,e,f FROM t2;
 
+# On 32 bit platform the rows estimate is 10 vs 11 on 64 bit platforms.
+--replace_result 11 10
 EXPLAIN SELECT COUNT(DISTINCT a) FROM t1;
 SELECT COUNT(DISTINCT a) FROM t1;
 
+# On 32 bit platform the rows estimate is 10 vs 11 on 64 bit platforms.
+--replace_result 11 10
 EXPLAIN SELECT COUNT(DISTINCT a,b) FROM t1;
 SELECT COUNT(DISTINCT a,b) FROM t1;
 
+# On 32 bit platform the rows estimate is 10 vs 11 on 64 bit platforms.
+--replace_result 11 10
 EXPLAIN SELECT COUNT(DISTINCT b,a) FROM t1;
 SELECT COUNT(DISTINCT b,a) FROM t1;
 
 EXPLAIN SELECT COUNT(DISTINCT b) FROM t1;
 SELECT COUNT(DISTINCT b) FROM t1;
 
+# On 32 bit platform the rows estimate is 10 vs 11 on 64 bit platforms.
+--replace_result 11 10
 EXPLAIN SELECT COUNT(DISTINCT a) FROM t1 GROUP BY a;
 SELECT COUNT(DISTINCT a) FROM t1 GROUP BY a;
 
+# On 32 bit platform the rows estimate is 10 vs 11 on 64 bit platforms.
+--replace_result 11 10
 EXPLAIN SELECT COUNT(DISTINCT b) FROM t1 GROUP BY a;
 SELECT COUNT(DISTINCT b) FROM t1 GROUP BY a;
 
 EXPLAIN SELECT COUNT(DISTINCT a) FROM t1 GROUP BY b;
 SELECT COUNT(DISTINCT a) FROM t1 GROUP BY b;
 
+# On 32 bit platform the rows estimate is 10 vs 11 on 64 bit platforms.
+--replace_result 11 10
 EXPLAIN SELECT DISTINCT COUNT(DISTINCT a) FROM t1;
 SELECT DISTINCT COUNT(DISTINCT a) FROM t1;
 
 EXPLAIN SELECT COUNT(DISTINCT a, b + 0) FROM t1;
 SELECT COUNT(DISTINCT a, b + 0) FROM t1;
 
-EXPLAIN SELECT COUNT(DISTINCT a) FROM t1 HAVING COUNT(DISTINCT b) < 10;
-SELECT COUNT(DISTINCT a) FROM t1 HAVING COUNT(DISTINCT b) < 10;
+EXPLAIN SELECT COUNT(DISTINCT a) FROM t1 HAVING COUNT(DISTINCT b) < 20;
+SELECT COUNT(DISTINCT a) FROM t1 HAVING COUNT(DISTINCT b) < 20;
 
 EXPLAIN SELECT COUNT(DISTINCT a) FROM t1 HAVING COUNT(DISTINCT c) < 10;
 SELECT COUNT(DISTINCT a) FROM t1 HAVING COUNT(DISTINCT c) < 10;
 
+# On 32 bit platform the rows estimate is 10 vs 11 on 64 bit platforms.
+--replace_result 11 10
 EXPLAIN SELECT 1 FROM t1 HAVING COUNT(DISTINCT a) < 10;
 SELECT 1 FROM t1 HAVING COUNT(DISTINCT a) < 10;
 
+# On 32 bit platform the rows estimate is 10 vs 11 on 64 bit platforms.
+--replace_result 11 10
 EXPLAIN SELECT 1 FROM t1 GROUP BY a HAVING COUNT(DISTINCT b) > 1;
 SELECT 1 FROM t1 GROUP BY a HAVING COUNT(DISTINCT b) > 1;
 
 EXPLAIN SELECT COUNT(DISTINCT t1_1.a) FROM t1 t1_1, t1 t1_2 GROUP BY t1_1.a;
 SELECT COUNT(DISTINCT t1_1.a) FROM t1 t1_1, t1 t1_2 GROUP BY t1_1.a;
 
+# On 32 bit platform the rows estimate is 10 vs 11 on 64 bit platforms.
+--replace_result 11 10
 EXPLAIN SELECT COUNT(DISTINCT a), 12 FROM t1;
 SELECT COUNT(DISTINCT a), 12 FROM t1;
 
+# On 32 bit platform the rows estimate is 10 vs 11 on 64 bit platforms.
+--replace_result 11 10
 EXPLAIN SELECT COUNT(DISTINCT a, b, c) FROM t2;
 SELECT COUNT(DISTINCT a, b, c) FROM t2;
 
+# On 32 bit platform the rows estimate is 10 vs 11 on 64 bit platforms.
+--replace_result 11 10
 EXPLAIN SELECT COUNT(DISTINCT a), SUM(DISTINCT a), AVG(DISTINCT a) FROM t2;
 SELECT COUNT(DISTINCT a), SUM(DISTINCT a), AVG(DISTINCT a) FROM t2;
 
 EXPLAIN SELECT COUNT(DISTINCT a), SUM(DISTINCT a), AVG(DISTINCT f) FROM t2;
 SELECT COUNT(DISTINCT a), SUM(DISTINCT a), AVG(DISTINCT f) FROM t2;
 
+# On 32 bit platform the rows estimate is 10 vs 11 on 64 bit platforms.
+--replace_result 11 10
 EXPLAIN SELECT COUNT(DISTINCT a, b), COUNT(DISTINCT b, a) FROM t2;
 SELECT COUNT(DISTINCT a, b), COUNT(DISTINCT b, a) FROM t2;
 
@@ -1181,6 +1258,8 @@ SELECT COUNT(DISTINCT a, b), COUNT(DISTINCT b, f) FROM t2;
 EXPLAIN SELECT COUNT(DISTINCT a, b), COUNT(DISTINCT b, d) FROM t2;
 SELECT COUNT(DISTINCT a, b), COUNT(DISTINCT b, d) FROM t2;
 
+# On 32 bit platform the rows estimate is 10 vs 11 on 64 bit platforms.
+--replace_result 11 10
 EXPLAIN SELECT a, c, COUNT(DISTINCT c, a, b) FROM t2 GROUP BY a, b, c;
 SELECT a, c, COUNT(DISTINCT c, a, b) FROM t2 GROUP BY a, b, c;
 
@@ -1194,15 +1273,21 @@ EXPLAIN SELECT COUNT(DISTINCT b), SUM(DISTINCT b) FROM t2 WHERE a = 5
 SELECT COUNT(DISTINCT b), SUM(DISTINCT b) FROM t2 WHERE a = 5
   GROUP BY b;
 
+# On 32 bit platform the rows estimate is 10 vs 11 on 64 bit platforms.
+--replace_result 11 10
 EXPLAIN SELECT a, COUNT(DISTINCT b), SUM(DISTINCT b) FROM t2 GROUP BY a;
 SELECT a, COUNT(DISTINCT b), SUM(DISTINCT b) FROM t2 GROUP BY a;
 
+# On 32 bit platform the rows estimate is 10 vs 11 on 64 bit platforms.
+--replace_result 11 10
 EXPLAIN SELECT COUNT(DISTINCT b), SUM(DISTINCT b) FROM t2 GROUP BY a;
 SELECT COUNT(DISTINCT b), SUM(DISTINCT b) FROM t2 GROUP BY a;
 
 EXPLAIN SELECT COUNT(DISTINCT a, b) FROM t2 WHERE c = 13 AND d = 42;
 SELECT COUNT(DISTINCT a, b) FROM t2 WHERE c = 13 AND d = 42;
 
+# On 32 bit platform the rows estimate is 10 vs 11 on 64 bit platforms.
+--replace_result 11 10
 EXPLAIN SELECT a, COUNT(DISTINCT a), SUM(DISTINCT a) FROM t2
   WHERE b = 13 AND c = 42 GROUP BY a;
 SELECT a, COUNT(DISTINCT a), SUM(DISTINCT a) FROM t2
@@ -1216,6 +1301,8 @@ SELECT COUNT(DISTINCT a, b), SUM(DISTINCT a) FROM t2 WHERE b = 42;
 EXPLAIN SELECT SUM(DISTINCT a), MAX(b) FROM t2 GROUP BY a;
 SELECT SUM(DISTINCT a), MAX(b) FROM t2 GROUP BY a;
 
+# On 32 bit platform the rows estimate is 10 vs 11 on 64 bit platforms.
+--replace_result 11 10
 EXPLAIN SELECT 42 * (a + c + COUNT(DISTINCT c, a, b)) FROM t2 GROUP BY a, b, c;
 SELECT 42 * (a + c + COUNT(DISTINCT c, a, b)) FROM t2 GROUP BY a, b, c;
 
@@ -1243,6 +1330,38 @@ explain SELECT f1, COUNT(DISTINCT f2) FROM t1 GROUP BY f1;
  
 drop table t1;
 --echo # End of test#50539.
+
+--echo #
+--echo # Bug#18497308 WRONG COST ESTIMATE FOR LOOSE INDEX SCAN WHEN
+--echo #              INDEX STATISTICS IS MISSING
+--echo #
+
+CREATE TABLE t1 (
+  a INTEGER,
+  b INTEGER,
+  c INTEGER,
+  d INTEGER,
+  KEY foo (a,b,c,d)
+) ENGINE=MyISAM;
+
+INSERT INTO t1 VALUES (1, 1, 1, 1), (1, 2, 1, 2), (1, 3, 1, 3), (1, 4, 1, 4);
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+
+let query=
+SELECT DISTINCT a FROM t1 WHERE b=4;
+
+eval EXPLAIN $query;
+eval $query;
+
+DROP TABLE t1;
 
 --echo #
 --echo # Bug#17217128 -  BAD INTERACTION BETWEEN MIN/MAX AND
@@ -1290,6 +1409,27 @@ SET end_markers_in_json=DEFAULT;
 DROP TABLE t;
 
 --echo #
+--echo # Bug #18066518: THE COST VALUE IS A NEGATIVE NUMBER FOR MERGE ENGINE
+--echo #                TABLE
+--echo #
+CREATE TABLE t(a INT PRIMARY KEY)
+  ENGINE = MERGE;
+EXPLAIN SELECT DISTINCT(a) FROM t;
+SELECT DISTINCT(a) FROM t;
+DROP TABLE t;
+--echo # End of test#18066518.
+
+--echo #
+--echo # Bug #18486293: ASSERTION FAILED: KEYS >= 0.0 IN
+--echo #                COST_MODEL_TABLE::KEY_COMPARE_COST
+--echo #
+CREATE TABLE t (b INT, KEY b_key (b)) ENGINE=INNODB
+  PARTITION BY RANGE COLUMNS(b) (PARTITION p_part VALUES LESS THAN (0));
+SELECT 1 FROM t WHERE b IN ('') GROUP BY  b ;
+DROP TABLE t;
+--echo # End of test#18486293.
+
+--echo #
 --echo # Bug#18109609: LOOSE INDEX SCAN IS NOT USED WHEN IT SHOULD
 --echo #
 
@@ -1312,3 +1452,181 @@ SHOW SESSION STATUS LIKE 'Handler_read%';
 DROP TABLE t1;
 
 --echo # End of test for Bug#18109609
+
+--echo #
+--echo # Bug#24423143 - WRONG RESULTS FOR AGGREGATE QUERY
+--echo #
+
+--echo # Test index merge tree scenario
+CREATE TABLE a (
+  aggr_col int,
+  group_by_col int,
+  KEY aggr_col_key (aggr_col),
+  KEY group_by_col_key (group_by_col, aggr_col)
+) ENGINE=InnoDB;
+
+let $DEFAULT_TRACE_MEM_SIZE=1048576; # 1MB
+eval set optimizer_trace_max_mem_size=$DEFAULT_TRACE_MEM_SIZE;
+set @@session.optimizer_trace='enabled=on';
+set end_markers_in_json=on;
+
+INSERT INTO a VALUES (2,3),(5,6),(6,3),(7,NULL),(9,NULL),(10,6);
+ANALYZE TABLE a;
+
+SELECT group_by_col, MIN(aggr_col) FROM a
+WHERE (group_by_col IN (70, 9)) OR (aggr_col > 2) GROUP BY group_by_col;
+
+EXPLAIN SELECT group_by_col, MIN(aggr_col) FROM a
+WHERE (group_by_col IN (70 ,9)) OR (aggr_col > 2) GROUP BY group_by_col;
+
+SELECT TRACE RLIKE 'disjuntive_predicate_present' AS OK
+                                FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
+
+SELECT group_by_col, MAX(aggr_col) FROM a
+WHERE (group_by_col IN (70, 9)) OR (aggr_col < 9) GROUP BY group_by_col;
+
+EXPLAIN SELECT group_by_col, MAX(aggr_col) FROM a
+WHERE (group_by_col IN (70 , 9)) OR (aggr_col < 9) GROUP BY group_by_col;
+
+SELECT TRACE RLIKE 'disjuntive_predicate_present' AS OK
+                                FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
+
+--echo # Test IMPOSSIBLE TREE scenario
+ALTER TABLE a DROP KEY aggr_col_key;
+
+SELECT group_by_col, MIN(aggr_col) FROM a
+WHERE (group_by_col IN (70 ,9)) OR (aggr_col > 2) GROUP BY group_by_col;
+
+EXPLAIN SELECT group_by_col, MIN(aggr_col) FROM a
+WHERE (group_by_col IN (70, 9)) OR (aggr_col > 2) GROUP BY group_by_col;
+
+SELECT TRACE RLIKE 'minmax_keypart_in_disjunctive_query' AS OK
+                                FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
+
+SELECT group_by_col, MAX(aggr_col) FROM a
+WHERE (group_by_col IN (70, 9)) OR (aggr_col < 9) GROUP BY group_by_col;
+
+EXPLAIN SELECT group_by_col, MAX(aggr_col) FROM a
+WHERE (group_by_col IN (70, 9)) OR (aggr_col < 9) GROUP BY group_by_col;
+
+SELECT TRACE RLIKE 'minmax_keypart_in_disjunctive_query' AS OK
+                                FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
+
+--echo # Scenario 3: aggregate field used as equal expression.
+SELECT group_by_col, MIN(aggr_col), MAX(aggr_col) FROM a
+WHERE (group_by_col IN (3, 9)) OR (aggr_col = 9) GROUP BY group_by_col;
+
+EXPLAIN SELECT group_by_col, MIN(aggr_col), MAX(aggr_col) FROM a
+WHERE (group_by_col IN (3, 9)) OR (aggr_col = 9) GROUP BY group_by_col;
+
+SELECT TRACE RLIKE 'minmax_keypart_in_disjunctive_query' AS OK
+                                FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
+
+--echo # Scenario 4: non aggregate field used as equal expression.
+SELECT group_by_col, MIN(aggr_col), MAX(aggr_col) FROM a
+WHERE (group_by_col = 3) OR (aggr_col > 8) GROUP BY group_by_col;
+
+EXPLAIN SELECT group_by_col, MIN(aggr_col), MAX(aggr_col) FROM a
+WHERE (group_by_col = 3) OR (aggr_col > 8) GROUP BY group_by_col;
+
+SELECT TRACE RLIKE 'minmax_keypart_in_disjunctive_query' AS OK
+                                FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
+
+--echo # Scenario 5: aggregate field used as non-zero expression.
+INSERT INTO a VALUES(0, 3);
+INSERT INTO a VALUES(0, 9);
+INSERT INTO a VALUES(8, 0);
+ANALYZE TABLE a;
+
+SELECT group_by_col, MIN(aggr_col), MAX(aggr_col) FROM a
+WHERE (group_by_col = 9) OR aggr_col GROUP BY group_by_col;
+
+EXPLAIN SELECT group_by_col, MIN(aggr_col), MAX(aggr_col) FROM a
+WHERE group_by_col = 9 OR aggr_col GROUP BY group_by_col;
+
+SELECT TRACE RLIKE 'minmax_keypart_in_disjunctive_query' AS OK
+                                FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
+
+
+--echo # Scenario 6: non aggregate field used as non-zero expression.
+SELECT group_by_col, MIN(aggr_col), MAX(aggr_col) FROM a
+WHERE group_by_col OR (aggr_col < 9) GROUP BY group_by_col;
+
+EXPLAIN SELECT group_by_col, MIN(aggr_col), MAX(aggr_col) FROM a
+WHERE group_by_col OR (aggr_col < 9) GROUP BY group_by_col;
+
+SELECT TRACE RLIKE 'minmax_keypart_in_disjunctive_query' AS OK
+                                FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
+
+
+--echo # Scenario 7: aggregate field used in equal exp without a CONST
+INSERT INTO a VALUES(1,1),(1,2),(2,1);
+
+SELECT group_by_col, MIN(aggr_col), MAX(aggr_col) FROM a
+WHERE aggr_col = group_by_col GROUP BY group_by_col;
+
+EXPLAIN SELECT group_by_col, MIN(aggr_col), MAX(aggr_col) FROM a
+WHERE aggr_col = group_by_col GROUP BY group_by_col;
+
+SELECT TRACE RLIKE 'minmax_keypart_in_disjunctive_query' AS OK
+                                FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
+
+--echo # Scenario 8: aggregate field used in a non-eq exp without a CONST
+SELECT group_by_col, MIN(aggr_col), MAX(aggr_col) FROM a
+WHERE aggr_col < group_by_col GROUP BY group_by_col;
+
+EXPLAIN SELECT group_by_col, MIN(aggr_col), MAX(aggr_col) FROM a
+WHERE aggr_col < group_by_col GROUP BY group_by_col;
+
+SELECT TRACE RLIKE 'minmax_keypart_in_disjunctive_query' AS OK
+                                FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
+
+--echo # Scenario 8
+INSERT INTO a VALUES(0,1),(1,0),(0,0);
+
+SELECT group_by_col, MIN(aggr_col), MAX(aggr_col) FROM a
+WHERE aggr_col OR group_by_col GROUP BY group_by_col;
+
+EXPLAIN SELECT group_by_col, MIN(aggr_col), MAX(aggr_col) FROM a
+WHERE aggr_col OR group_by_col GROUP BY group_by_col;
+
+SELECT TRACE RLIKE 'minmax_keypart_in_disjunctive_query' AS OK
+                                FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
+
+--echo # Scenario 9
+SELECT group_by_col, MIN(aggr_col), MAX(aggr_col) FROM a
+WHERE aggr_col AND group_by_col GROUP BY group_by_col;
+
+EXPLAIN SELECT group_by_col, MIN(aggr_col), MAX(aggr_col) FROM a
+WHERE aggr_col AND group_by_col GROUP BY group_by_col;
+
+SELECT TRACE RLIKE 'minmax_keypart_in_disjunctive_query' AS OK
+                                FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
+
+--echo # Scenario 10: Added for completion. This fix does not have an impact.
+SELECT group_by_col, MIN(aggr_col), MAX(aggr_col) FROM a
+WHERE aggr_col<>0 AND group_by_col<>0 GROUP BY group_by_col;
+
+EXPLAIN SELECT group_by_col, MIN(aggr_col), MAX(aggr_col) FROM a
+WHERE aggr_col<>0 AND group_by_col<>0 GROUP BY group_by_col;
+
+SELECT TRACE RLIKE 'minmax_keypart_in_disjunctive_query' AS OK
+                                FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
+
+--echo # Scenario 11: ITEM_FUNC as an argument of ITEM_FUNC
+SELECT group_by_col, MIN(aggr_col), MAX(aggr_col) FROM a
+WHERE group_by_col OR (group_by_col < (aggr_col = 1)) GROUP BY group_by_col;
+
+EXPLAIN SELECT group_by_col, MIN(aggr_col), MAX(aggr_col) FROM a
+WHERE group_by_col OR (group_by_col < (aggr_col = 1)) GROUP BY group_by_col;
+
+SELECT TRACE RLIKE 'minmax_keypart_in_disjunctive_query' AS OK
+                                FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
+
+SET optimizer_trace_max_mem_size=DEFAULT;
+SET optimizer_trace=DEFAULT;
+SET end_markers_in_json=DEFAULT;
+
+DROP TABLE a;
+
+--echo # End of test for Bug#24423143

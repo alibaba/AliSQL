@@ -1,4 +1,7 @@
 drop table if exists t1,t2,t3,t4,t5,t6,t7;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1 (a blob, b text, c blob(250), d text(70000), e text(70000000));
 show columns from t1;
 Field	Type	Null	Key	Default	Extra
@@ -39,7 +42,7 @@ ERROR 42000: Column length too big for column 'a' (max = 255); use BLOB or TEXT 
 CREATE TABLE t1 (a varchar(70000) default "hello");
 ERROR 42000: Column length too big for column 'a' (max = 65535); use BLOB or TEXT instead
 CREATE TABLE t2 (a blob default "hello");
-ERROR 42000: BLOB/TEXT column 'a' can't have a default value
+ERROR 42000: BLOB, TEXT, GEOMETRY or JSON column 'a' can't have a default value
 drop table if exists t1,t2;
 create table t1 (nr int(5) not null auto_increment,b blob,str char(10), primary key (nr));
 insert into t1 values (null,"a","A");
@@ -269,18 +272,18 @@ select distinct c from t1;
 c
 NULL
 
+a
 hello
 HELLO MY
-a
 select distinct d from t1;
 d
 NULL
 
-hello
+1
 HELLO
 HELLO MY
 a
-1
+hello
 select distinct c from t1 order by c;
 c
 NULL
@@ -504,7 +507,7 @@ fish	10
 drop table t1;
 create table t1 (id integer auto_increment unique,imagem LONGBLOB not null default '');
 Warnings:
-Warning	1101	BLOB/TEXT column 'imagem' can't have a default value
+Warning	1101	BLOB, TEXT, GEOMETRY or JSON column 'imagem' can't have a default value
 insert into t1 (id) values (1);
 select
 charset(load_file('../../std_data/words.dat')),
@@ -516,9 +519,10 @@ explain extended select
 charset(load_file('MYSQLTEST_VARDIR/std_data/words.dat')),
 collation(load_file('MYSQLTEST_VARDIR/std_data/words.dat')),
 coercibility(load_file('MYSQLTEST_VARDIR/std_data/words.dat'));
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
 Warnings:
+Warning	1681	'EXTENDED' is deprecated and will be removed in a future release.
 Note	1003	/* select#1 */ select charset(load_file('MYSQLTEST_VARDIR/std_data/words.dat')) AS `charset(load_file('MYSQLTEST_VARDIR/std_data/words.dat'))`,collation(load_file('MYSQLTEST_VARDIR/std_data/words.dat')) AS `collation(load_file('MYSQLTEST_VARDIR/std_data/words.dat'))`,coercibility(load_file('MYSQLTEST_VARDIR/std_data/words.dat')) AS `coercibility(load_file('MYSQLTEST_VARDIR/std_data/words.dat'))`
 update t1 set imagem=load_file('MYSQLTEST_VARDIR/std_data/words.dat') where id=1;
 select if(imagem is null, "ERROR", "OK"),length(imagem) from t1 where id = 1;
@@ -614,8 +618,10 @@ id	txt
 2	Chevy 
 3	NULL
 explain select * from t1 where txt='Chevy' or txt is NULL;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref_or_null	txt_index	txt_index	23	const	2	Using where
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref_or_null	txt_index	txt_index	23	const	2	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`txt` AS `txt` from `test`.`t1` where ((`test`.`t1`.`txt` = 'Chevy') or isnull(`test`.`t1`.`txt`))
 select * from t1 where txt='Chevy ';
 id	txt
 1	Chevy
@@ -685,15 +691,19 @@ id	txt
 4	Ford
 alter table t1 modify column txt blob;
 explain select * from t1 where txt='Chevy' or txt is NULL;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref_or_null	txt_index	txt_index	23	const	2	Using where
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref_or_null	txt_index	txt_index	23	const	2	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`txt` AS `txt` from `test`.`t1` where ((`test`.`t1`.`txt` = 'Chevy') or isnull(`test`.`t1`.`txt`))
 select * from t1 where txt='Chevy' or txt is NULL;
 id	txt
 1	Chevy
 3	NULL
 explain select * from t1 where txt='Chevy' or txt is NULL order by txt;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref_or_null	txt_index	txt_index	23	const	2	Using where; Using filesort
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref_or_null	txt_index	txt_index	23	const	2	100.00	Using where; Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`txt` AS `txt` from `test`.`t1` where ((`test`.`t1`.`txt` = 'Chevy') or isnull(`test`.`t1`.`txt`)) order by `test`.`t1`.`txt`
 select * from t1 where txt='Chevy' or txt is NULL order by txt;
 id	txt
 3	NULL
@@ -711,10 +721,10 @@ alter table t1 add key (a,b,d,e);
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `a` int(11) NOT NULL DEFAULT '0',
-  `b` int(11) NOT NULL DEFAULT '0',
+  `a` int(11) NOT NULL,
+  `b` int(11) NOT NULL,
   `c` tinyblob NOT NULL,
-  `d` int(11) NOT NULL DEFAULT '0',
+  `d` int(11) NOT NULL,
   `e` int(11) DEFAULT NULL,
   PRIMARY KEY (`a`,`b`,`c`(255),`d`),
   KEY `a` (`a`,`b`,`d`,`e`)
@@ -792,7 +802,7 @@ NULL
 drop table t1;
 create table t1 (a text default '');
 Warnings:
-Warning	1101	BLOB/TEXT column 'a' can't have a default value
+Warning	1101	BLOB, TEXT, GEOMETRY or JSON column 'a' can't have a default value
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
@@ -804,9 +814,13 @@ a
 NULL
 drop table t1;
 set @@sql_mode='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 create table t1 (a text default '');
-ERROR 42000: BLOB/TEXT column 'a' can't have a default value
+ERROR 42000: BLOB, TEXT, GEOMETRY or JSON column 'a' can't have a default value
 set @@sql_mode='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t (c TEXT CHARSET ASCII);
 INSERT INTO t (c) VALUES (REPEAT('1',65537));
 Warnings:
@@ -878,19 +892,17 @@ ERROR 42000: Column length too big for column 'a' (max = 255); use BLOB or TEXT 
 CREATE TABLE b15776 (a char(4294967296));
 ERROR 42000: Display width out of range for column 'a' (max = 4294967295)
 CREATE TABLE b15776 (a year(4294967295));
-Warnings:
-Warning	1818	YEAR(4294967295) column type is deprecated. Creating YEAR(4) column instead.
+ERROR HY000: Supports only YEAR or YEAR(4) column.
+CREATE TABLE b15776 (a year(4));
 INSERT INTO b15776 VALUES (42);
 SELECT * FROM b15776;
 a
 2042
 DROP TABLE b15776;
 CREATE TABLE b15776 (a year(4294967296));
-ERROR 42000: Display width out of range for column 'a' (max = 4294967295)
+ERROR HY000: Supports only YEAR or YEAR(4) column.
 CREATE TABLE b15776 (a year(0));
-Warnings:
-Warning	1818	YEAR(0) column type is deprecated. Creating YEAR(4) column instead.
-DROP TABLE b15776;
+ERROR HY000: Supports only YEAR or YEAR(4) column.
 CREATE TABLE b15776 (a year(-2));
 ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '-2))' at line 1
 CREATE TABLE b15776 (a int(999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999));
@@ -898,7 +910,7 @@ ERROR 42000: Display width out of range for column 'a' (max = 4294967295)
 CREATE TABLE b15776 (a char(999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999));
 ERROR 42000: Display width out of range for column 'a' (max = 4294967295)
 CREATE TABLE b15776 (a year(999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999));
-ERROR 42000: Display width out of range for column 'a' (max = 4294967295)
+ERROR HY000: Supports only YEAR or YEAR(4) column.
 CREATE TABLE b15776 select cast(null as char(4294967295));
 show columns from b15776;
 Field	Type	Null	Key	Default	Extra
@@ -915,14 +927,20 @@ Field	Type	Null	Key	Default	Extra
 cast(null as binary(4294967295))	binary(0)	YES		NULL	
 drop table b15776;
 explain select cast(1 as char(4294967295));
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+Warnings:
+Note	1003	/* select#1 */ select cast(1 as char charset latin1) AS `cast(1 as char(4294967295))`
 explain select cast(1 as nchar(4294967295));
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+Warnings:
+Note	1003	/* select#1 */ select cast(1 as char charset utf8) AS `cast(1 as nchar(4294967295))`
 explain select cast(1 as binary(4294967295));
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+Warnings:
+Note	1003	/* select#1 */ select cast(1 as char charset binary) AS `cast(1 as binary(4294967295))`
 explain select cast(1 as char(4294967296));
 ERROR 42000: Display width out of range for column 'cast as char' (max = 4294967295)
 explain select cast(1 as nchar(4294967296));
@@ -932,8 +950,10 @@ ERROR 42000: Display width out of range for column 'cast as char' (max = 4294967
 explain select cast(1 as decimal(-1));
 ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '-1))' at line 1
 explain select cast(1 as decimal(64, 30));
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+Warnings:
+Note	1003	/* select#1 */ select cast(1 as decimal(64,30)) AS `cast(1 as decimal(64, 30))`
 explain select cast(1 as decimal(64, 999999999999999999999999999999));
 Got one of the listed errors
 explain select cast(1 as decimal(4294967296));
@@ -941,22 +961,28 @@ Got one of the listed errors
 explain select cast(1 as decimal(999999999999999999999999999999999999));
 Got one of the listed errors
 explain select convert(1, char(4294967295));
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+Warnings:
+Note	1003	/* select#1 */ select cast(1 as char charset latin1) AS `convert(1, char(4294967295))`
 explain select convert(1, char(4294967296));
 ERROR 42000: Display width out of range for column 'cast as char' (max = 4294967295)
 explain select convert(1, char(999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999));
 ERROR 42000: Display width out of range for column 'cast as char' (max = 4294967295)
 explain select convert(1, nchar(4294967295));
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+Warnings:
+Note	1003	/* select#1 */ select cast(1 as char charset utf8) AS `convert(1, nchar(4294967295))`
 explain select convert(1, nchar(4294967296));
 ERROR 42000: Display width out of range for column 'cast as char' (max = 4294967295)
 explain select convert(1, nchar(999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999));
 ERROR 42000: Display width out of range for column 'cast as char' (max = 4294967295)
 explain select convert(1, binary(4294967295));
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+Warnings:
+Note	1003	/* select#1 */ select cast(1 as char charset binary) AS `convert(1, binary(4294967295))`
 explain select convert(1, binary(4294967296));
 ERROR 42000: Display width out of range for column 'cast as char' (max = 4294967295)
 explain select convert(1, binary(999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999));
@@ -989,4 +1015,228 @@ COUNT(*)
 2
 DROP FUNCTION f1;
 DROP TABLE t1;
+SET sql_mode = default;
 End of 5.1 tests
+#
+# Bug #18127749: OPTIMIZER SHOULD THROW AN ERROR WHEN USER USES
+#                COMPARISION OPERATORS ON GIS DATA
+#
+CREATE TABLE tab(c1 int NOT NULL PRIMARY KEY,c2 POINT NOT NULL,
+c3 LINESTRING NOT NULL,c4 POLYGON NOT NULL,
+c5 GEOMETRY NOT NULL);
+INSERT INTO tab(c1,c2,c3,c4,c5)
+VALUES(1,ST_GeomFromText('POINT(10 10)'),
+ST_GeomFromText('LINESTRING(5 5,20 20,30 30)'),
+ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))'),
+ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))'));
+INSERT INTO tab(c1,c2,c3,c4,c5)
+VALUES(2,ST_GeomFromText('POINT(20 20)'),
+ST_GeomFromText('LINESTRING(20 20,30 30,40 40)'),
+ST_GeomFromText('POLYGON((40 50,40 70,50 100,70 100,80 80,70 50,40 50))'),
+ST_GeomFromText('POLYGON((40 50,40 70,50 100,70 100,80 80,70 50,40 50))'));
+SET @g1 = ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))');
+SELECT c1,ST_Astext(c4) FROM tab WHERE c4<@g1;
+ERROR HY000: Incorrect arguments to <
+SELECT c1,ST_Astext(c4) FROM tab WHERE
+c4=ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))');
+c1	ST_Astext(c4)
+1	POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))
+SELECT c1,ST_Astext(c4) FROM tab WHERE c4>@g1+3;
+ERROR HY000: Incorrect arguments to >
+SELECT * FROM tab WHERE c2+4 > 5;
+ERROR HY000: Incorrect arguments to +
+SELECT * FROM tab WHERE c3-4 > 5;
+ERROR HY000: Incorrect arguments to -
+SELECT * FROM tab WHERE c4*4 > 5;
+ERROR HY000: Incorrect arguments to *
+SELECT * FROM tab WHERE c5/4 > 5;
+ERROR HY000: Incorrect arguments to /
+SELECT * FROM tab WHERE c3%4 > 5;
+ERROR HY000: Incorrect arguments to %
+SELECT * FROM tab WHERE c3 DIV 4 > 5;
+ERROR HY000: Incorrect arguments to DIV
+select count(*) from tab;
+count(*)
+2
+select count(distinct c2) from tab;
+count(distinct c2)
+2
+select sum(c2) from tab;
+ERROR HY000: Incorrect arguments to sum(
+select sum(distinct c2) from tab;
+ERROR HY000: Incorrect arguments to sum(distinct 
+select avg(c2) from tab;
+ERROR HY000: Incorrect arguments to avg(
+select avg(distinct c2) from tab;
+ERROR HY000: Incorrect arguments to avg(distinct 
+select min(c2) from tab;
+ERROR HY000: Incorrect arguments to min(
+select max(c2) from tab;
+ERROR HY000: Incorrect arguments to max(
+select std(c2) from tab;
+ERROR HY000: Incorrect arguments to std(
+drop table tab;
+set @g1 = 1;
+set @g2 = 2;
+select @g1 < @g2;
+@g1 < @g2
+1
+select @g1 = @g2;
+@g1 = @g2
+0
+select @g1 > @g2;
+@g1 > @g2
+0
+select @g1 + @g2;
+@g1 + @g2
+3
+SET @g1 = ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))');
+SET @g2 = ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))');
+select @g1=ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))');
+@g1=ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))')
+1
+select @g1+ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))');
+ERROR HY000: Incorrect arguments to +
+select @g1-ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))');
+ERROR HY000: Incorrect arguments to -
+select @g1*ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))');
+ERROR HY000: Incorrect arguments to *
+select @g1/ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))');
+ERROR HY000: Incorrect arguments to /
+select @g1%ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))');
+ERROR HY000: Incorrect arguments to %
+select 42 / ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)');
+ERROR HY000: Incorrect arguments to /
+select 42 + ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)');
+ERROR HY000: Incorrect arguments to +
+select -(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+ERROR HY000: Incorrect arguments to -
+select @g1 > ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))');
+ERROR HY000: Incorrect arguments to >
+select @g1 >= ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))');
+ERROR HY000: Incorrect arguments to >=
+select @g1 < ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))');
+ERROR HY000: Incorrect arguments to <
+select @g1 <= ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))');
+ERROR HY000: Incorrect arguments to <=
+select @g1 = ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))');
+@g1 = ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))')
+1
+select @g1 != ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))');
+@g1 != ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))')
+0
+select @g1 between @g1 and ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))');
+ERROR HY000: Incorrect arguments to between
+select least(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'),
+ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+ERROR HY000: Incorrect arguments to least
+select greatest(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'),
+ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+ERROR HY000: Incorrect arguments to greatest
+select abs(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+ERROR HY000: Incorrect arguments to abs
+select acos(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+ERROR HY000: Incorrect arguments to acos
+select asin(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+ERROR HY000: Incorrect arguments to asin
+select atan(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+ERROR HY000: Incorrect arguments to atan
+select atan2(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+ERROR HY000: Incorrect arguments to atan
+select ceil(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+ERROR HY000: Incorrect arguments to ceiling
+select ceiling(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+ERROR HY000: Incorrect arguments to ceiling
+select conv(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'), 2, 10);
+ERROR HY000: Incorrect arguments to conv
+select cos(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+ERROR HY000: Incorrect arguments to cos
+select cot(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+ERROR HY000: Incorrect arguments to cot
+select crc32(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+crc32(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'))
+2439882226
+select degrees(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+ERROR HY000: Incorrect arguments to degrees
+select exp(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+ERROR HY000: Incorrect arguments to exp
+select floor(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+ERROR HY000: Incorrect arguments to floor
+select format(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'), 5);
+ERROR HY000: Incorrect arguments to format
+select hex(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+hex(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'))
+00000000010200000005000000000000000000F0BF000000000000F0BF000000000000F03F000000000000F0BF000000000000F0BF000000000000F0BF000000000000F0BF000000000000F03F000000000000F03F000000000000F03F
+select ln(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+ERROR HY000: Incorrect arguments to ln
+select log(2, ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+ERROR HY000: Incorrect arguments to log
+select log2(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+ERROR HY000: Incorrect arguments to log2
+select log10(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+ERROR HY000: Incorrect arguments to log10
+select mod(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'), 7);
+ERROR HY000: Incorrect arguments to %
+select pow(2, ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+ERROR HY000: Incorrect arguments to pow
+select power(2, ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+ERROR HY000: Incorrect arguments to pow
+select radians(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+ERROR HY000: Incorrect arguments to radians
+select rand(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+ERROR HY000: Incorrect arguments to rand
+select round(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+ERROR HY000: Incorrect arguments to round
+select sign(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+ERROR HY000: Incorrect arguments to sign
+select sin(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+ERROR HY000: Incorrect arguments to sin
+select sqrt(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+ERROR HY000: Incorrect arguments to sqrt
+select tan(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+ERROR HY000: Incorrect arguments to tan
+select truncate(ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'),0);
+ERROR HY000: Incorrect arguments to truncate
+select @g1=@g2;
+@g1=@g2
+1
+set @g1 = 'abc';
+set @g2 = 'def';
+select @g1 < @g2;
+@g1 < @g2
+1
+select @g1 = @g2;
+@g1 = @g2
+0
+select @g1 > @g2;
+@g1 > @g2
+0
+SET @g3 = ST_GeomFromText('POLYGON((30 30,40 40,50 50,30 50,30 40,30 30))');
+select @g1 > @g3;
+@g1 > @g3
+1
+#
+# Bug#21153489 VALGRIND ERRORS IN ITEM_BOOL_FUNC2::IS_NULL 
+#              LEAD TO CRASH LATER
+#
+set sql_mode="";
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+CREATE TABLE t1(a LONGBLOB NOT NULL) engine=innodb default charset=latin1;
+INSERT INTO t1 VALUES (''),(''),(''),('');
+CREATE TABLE t2 (b LONGTEXT) engine=innodb default charset=latin1;
+INSERT INTO t2 VALUES ('a');
+SELECT ( SELECT ( b <> 1 ) FROM t2) <> ALL(SELECT 1681007452 FROM t1) FROM t1;
+( SELECT ( b <> 1 ) FROM t2) <> ALL(SELECT 1681007452 FROM t1)
+1
+1
+1
+1
+SELECT ( SELECT ( b <> 1 ) FROM t2) <> ALL(SELECT 1681007452 FROM t1) FROM t1;
+( SELECT ( b <> 1 ) FROM t2) <> ALL(SELECT 1681007452 FROM t1)
+1
+1
+1
+1
+DROP TABLE t1,t2;
+set sql_mode=default;

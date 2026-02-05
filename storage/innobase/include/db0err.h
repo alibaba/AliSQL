@@ -1,14 +1,22 @@
 /*****************************************************************************
 
-Copyright (c) 1996, 2014, Oracle and/or its affiliates. All Rights Reserved.
+Copyright (c) 1996, 2023, Oracle and/or its affiliates.
 
-This program is free software; you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation; version 2 of the License.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License, version 2.0,
+as published by the Free Software Foundation.
 
-This program is distributed in the hope that it will be useful, but WITHOUT
-ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+This program is also distributed with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have included with MySQL.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License, version 2.0, for more details.
 
 You should have received a copy of the GNU General Public License along with
 this program; if not, write to the Free Software Foundation, Inc.,
@@ -26,6 +34,7 @@ Created 5/24/1996 Heikki Tuuri
 #ifndef db0err_h
 #define db0err_h
 
+/* Do not include univ.i because univ.i includes this. */
 
 enum dberr_t {
 	DB_SUCCESS_LOCKED_REC = 9,	/*!< like DB_SUCCESS, but a new
@@ -63,7 +72,8 @@ enum dberr_t {
 					which is referenced */
 	DB_CANNOT_ADD_CONSTRAINT,	/*!< adding a foreign key constraint
 					to a table failed */
-	DB_CORRUPTION,			/*!< data structure corruption noticed */
+	DB_CORRUPTION,			/*!< data structure corruption
+					noticed */
 	DB_CANNOT_DROP_CONSTRAINT,	/*!< dropping a foreign key constraint
 					from a table failed */
 	DB_NO_SAVEPOINT,		/*!< no savepoint exists with the given
@@ -123,15 +133,53 @@ enum dberr_t {
 	DB_ONLINE_LOG_TOO_BIG,		/*!< Modification log grew too big
 					during online index creation */
 
-	DB_IO_ERROR,			/*!< Generic IO error */
 	DB_IDENTIFIER_TOO_LONG,		/*!< Identifier name too long */
 	DB_FTS_EXCEED_RESULT_CACHE_LIMIT,	/*!< FTS query memory
 					exceeds result cache limit */
-	DB_TEMP_FILE_WRITE_FAILURE,	/*!< Temp file write failure */
+	DB_TEMP_FILE_WRITE_FAIL,	/*!< Temp file write failure */
+	DB_CANT_CREATE_GEOMETRY_OBJECT,	/*!< Cannot create specified Geometry
+					data object */
+	DB_CANNOT_OPEN_FILE,		/*!< Cannot open a file */
 	DB_FTS_TOO_MANY_WORDS_IN_PHRASE,
 					/*< Too many words in a phrase */
-	DB_TOO_BIG_FOR_REDO,		/* Record length greater than 10%
-					of redo log */
+
+	DB_TABLESPACE_TRUNCATED,	/*!< tablespace was truncated */
+
+	DB_IO_ERROR = 100,		/*!< Generic IO error */
+
+	DB_IO_DECOMPRESS_FAIL,		/*!< Failure to decompress a page
+					after reading it from disk */
+
+	DB_IO_NO_PUNCH_HOLE,		/*!< Punch hole not supported by
+					InnoDB */
+
+	DB_IO_NO_PUNCH_HOLE_FS,		/*!< The file system doesn't support
+					punch hole */
+
+	DB_IO_NO_PUNCH_HOLE_TABLESPACE,	/*!< The tablespace doesn't support
+					punch hole */
+
+	DB_IO_DECRYPT_FAIL,		/*!< Failure to decrypt a page
+					after reading it from disk */
+
+	DB_IO_NO_ENCRYPT_TABLESPACE,	/*!< The tablespace doesn't support
+					encrypt */
+
+	DB_IO_PARTIAL_FAILED,		/*!< Partial IO request failed */
+
+	DB_FORCED_ABORT,		/*!< Transaction was forced to rollback
+					by a higher priority transaction */
+
+	DB_TABLE_CORRUPT,		/*!< Table/clustered index is
+					corrupted */
+
+	DB_WRONG_FILE_NAME,		/*!< Invalid Filename */
+
+	DB_COMPUTE_VALUE_FAILED,	/*!< Compute generated value failed */
+	DB_NO_FK_ON_S_BASE_COL,		/*!< Cannot add foreign constrain
+					placed on the base column of
+					stored column */
+
 	/* The following are partial failure codes */
 	DB_FAIL = 1000,
 	DB_OVERFLOW,
@@ -140,12 +188,10 @@ enum dberr_t {
 	DB_ZIP_OVERFLOW,
 	DB_RECORD_NOT_FOUND = 1500,
 	DB_END_OF_INDEX,
-	DB_DICT_CHANGED,		/*!< Some part of table dictionary has
-					changed. Such as index dropped or
-					foreign key dropped */
+	DB_NOT_FOUND,			/*!< Generic error code for "Not found"
+					type of errors */
 
-
-        /* The following are API only error codes. */
+	/* The following are API only error codes. */
 	DB_DATA_MISMATCH = 2000,	/*!< Column update or read failed
 					because the types mismatch */
 
@@ -153,9 +199,9 @@ enum dberr_t {
 					schema to be locked in exclusive mode
 					and if it's not then that API function
 					will return this error code */
+	DB_FTS_TOO_MANY_NESTED_EXP	/*< Too many nested sub expression
+					in full-text search string */
 
-	DB_NOT_FOUND			/*!< Generic error code for "Not found"
-					type of errors */
 };
 
 #endif

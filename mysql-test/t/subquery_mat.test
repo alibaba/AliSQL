@@ -1,3 +1,8 @@
+# The include statement below is a temp one for tests that are yet to
+#be ported to run with InnoDB,
+#but needs to be kept for tests that would need MyISAM in future.
+--source include/force_myisam_default.inc
+
 # 
 # Run subquery_mat.inc with subquery materialization
 #
@@ -20,7 +25,9 @@ if (`select locate('mrr', @@optimizer_switch) > 0`)
 }
 --enable_query_log
 
+set global innodb_large_prefix=off;
 --source include/subquery_mat.inc
+set global innodb_large_prefix=default;
 
 set optimizer_switch=default;
 

@@ -22,6 +22,9 @@
 #                                                                             #
 ###############################################################################
 
+# diagnostics can't be prepared
+--disable_ps_protocol
+
 --echo '#---------------------BS_STVARS_005_01----------------------#'
 ####################################################################
 #   Displaying default value                                       #
@@ -51,17 +54,21 @@ SELECT COUNT(@@SESSION.error_count);
 # Check if the value in SESSION Table matches value in variable #
 #################################################################
 
+--disable_warnings
 SELECT @@SESSION.error_count = VARIABLE_VALUE 
 FROM INFORMATION_SCHEMA.SESSION_VARIABLES 
 WHERE VARIABLE_NAME='error_count';
+--enable_warnings
 --echo 1 Expected
 
 SELECT COUNT(@@SESSION.error_count);
 --echo 1 Expected
 
+--disable_warnings
 SELECT COUNT(VARIABLE_VALUE)
 FROM INFORMATION_SCHEMA.SESSION_VARIABLES 
 WHERE VARIABLE_NAME='error_count';
+--enable_warnings
 --echo 1 Expected
 
 
@@ -94,4 +101,4 @@ SELECT COUNT(@@GLOBAL.error_count);
 SELECT COUNT(error_count = @@GLOBAL.error_count);
 --echo Expected error 'Readonly variable'
 
-
+--enable_ps_protocol

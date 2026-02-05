@@ -1,14 +1,20 @@
-/* Copyright (C) 2008 MySQL AB, 2008, 2009 Sun Microsystems, Inc.
-    All rights reserved. Use is subject to license terms.
+/* Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -18,7 +24,7 @@
 #define NDB_MGMD_HPP
 
 #include <mgmapi.h>
-#include <mgmapi_internal.h>
+#include "../../src/mgmapi/mgmapi_internal.h"
 
 #include <BaseString.hpp>
 #include <Properties.hpp>
@@ -28,12 +34,16 @@
 
 #include "../../src/mgmsrv/Config.hpp"
 
+#include <InputStream.hpp>
+
 class NdbMgmd {
   BaseString m_connect_str;
   NdbMgmHandle m_handle;
   Uint32 m_nodeid;
   bool m_verbose;
   unsigned int m_timeout;
+  NDB_SOCKET_TYPE m_event_socket;
+  
   void error(const char* msg, ...) ATTRIBUTE_FORMAT(printf, 2, 3)
   {
     if (!m_verbose)
@@ -121,8 +131,8 @@ public:
   }
 
   bool connect(const char* connect_string = NULL,
-               int num_retries = 0, int retry_delay_in_seconds = 0) {
-    assert(m_handle == NULL);
+               int num_retries = 12, int retry_delay_in_seconds = 5) {
+    require(m_handle == NULL);
     m_handle= ndb_mgm_create_handle();
     if (!m_handle){
       error("connect: ndb_mgm_create_handle failed");
@@ -227,7 +237,7 @@ public:
 
     SocketOutputStream out(socket());
 
-    if (out.println(cmd)){
+    if (out.println("%s", cmd)){
       error("call: println failed at line %d", __LINE__);
       return false;
     }
@@ -251,7 +261,7 @@ public:
 	break;
       case PropertiesType_Uint64:
 	args.get(name, &val_64);
-	if (out.println("%s: %Ld", name, val_64)){
+	if (out.println("%s: %lld", name, val_64)){
           error("call: println failed at line %d", __LINE__);
           return false;
         }
@@ -278,9 +288,16 @@ public:
     }
 
     // Send any bulk data
-    if (bulk && out.println(bulk)){
-      error("call: print('<bulk>') failed at line %d", __LINE__);
-      return false;
+    if (bulk)
+    {
+      if (out.write(bulk, strlen(bulk)) >= 0)
+      {
+        if (out.write("\n", 1) < 0)
+        {
+          error("call: print('<bulk>') failed at line %d", __LINE__);
+          return false;
+        }
+      }
     }
 
     BaseString buf;
@@ -383,6 +400,74 @@ public:
     }
     return true;
   }
+
+  bool subscribe_to_events(void)
+  {
+    if (!is_connected())
+    {
+      error("subscribe_to_events: not connected");
+      return false;
+    }
+    
+    int filter[] = 
+    {
+      15, NDB_MGM_EVENT_CATEGORY_STARTUP,
+      15, NDB_MGM_EVENT_CATEGORY_SHUTDOWN,
+      15, NDB_MGM_EVENT_CATEGORY_STATISTIC,
+      15, NDB_MGM_EVENT_CATEGORY_CHECKPOINT,
+      15, NDB_MGM_EVENT_CATEGORY_NODE_RESTART,
+      15, NDB_MGM_EVENT_CATEGORY_CONNECTION,
+      15, NDB_MGM_EVENT_CATEGORY_BACKUP,
+      15, NDB_MGM_EVENT_CATEGORY_CONGESTION,
+      15, NDB_MGM_EVENT_CATEGORY_DEBUG,
+      15, NDB_MGM_EVENT_CATEGORY_INFO,
+      0
+    };
+
+#ifdef NDB_WIN
+    m_event_socket.s = ndb_mgm_listen_event(m_handle, filter); 
+#else
+    m_event_socket.fd = ndb_mgm_listen_event(m_handle, filter);
+#endif
+    
+    return my_socket_valid(m_event_socket);
+  }
+
+  bool get_next_event_line(char* buff, int bufflen,
+                          int timeout_millis)
+  {
+    if (!is_connected())
+    {
+      error("get_next_event_line: not connected");
+      return false;
+    }
+    
+    if (!my_socket_valid(m_event_socket))
+    {
+      error("get_next_event_line: not subscribed");
+      return false;
+    }
+
+    SocketInputStream stream(m_event_socket, timeout_millis);
+    
+    const char* result = stream.gets(buff, bufflen);
+    if (result && strlen(result))
+    {
+      return true;
+    }
+    else
+    {
+      if (stream.timedout())
+      {
+        error("get_next_event_line: stream.gets timed out");
+        return false;
+      }
+    }
+    
+    error("get_next_event_line: error from stream.gets()");
+    return false;
+  }
+  
 
   // Pretty printer for 'ndb_mgm_node_type'
   class NodeType {

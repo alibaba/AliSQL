@@ -1,14 +1,22 @@
 #!/bin/bash
 #
-# Copyright (c) 1994, 2016, Oracle and/or its affiliates. All Rights Reserved.
+# Copyright (c) 1994, 2023, Oracle and/or its affiliates.
 #
-# This program is free software; you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the Free Software
-# Foundation; version 2 of the License.
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License, version 2.0,
+# as published by the Free Software Foundation.
 #
-# This program is distributed in the hope that it will be useful, but WITHOUT
-# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-# FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+# This program is also distributed with certain software (including
+# but not limited to OpenSSL) that is licensed under separate terms,
+# as designated in a particular file or component or in included license
+# documentation.  The authors of MySQL hereby grant you an additional
+# permission to link the program and your derivative works with the
+# separately licensed software that they have included with MySQL.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License, version 2.0, for more details.
 #
 # You should have received a copy of the GNU General Public License along with
 # this program; if not, write to the Free Software Foundation, Inc.,
@@ -40,7 +48,6 @@ s/\(\(int\|void\) yy[gs]et_\)/MY_ATTRIBUTE((unused)) static \1/;
 s/\(void \*\?yy\(\(re\)\?alloc\|free\)\)/static \1/;
 s/\(extern \)\?\(int yy\(leng\|lineno\|_flex_debug\)\)/static \2/;
 s/\(int yylex_destroy\)/MY_ATTRIBUTE((unused)) static \1/;
-s/\(extern \)\?\(int yylex \)/UNIV_INTERN \2/;
 s/^\(\(FILE\|char\) *\* *yyget\)/MY_ATTRIBUTE((unused)) static \1/;
 s/^\(extern \)\?\(\(FILE\|char\) *\* *yy\)/static \2/;
 ' < $TMPFILE >> $OUTFILE

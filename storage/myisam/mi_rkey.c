@@ -1,13 +1,20 @@
-/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -36,7 +43,7 @@ int mi_rkey(MI_INFO *info, uchar *buf, int inx, const uchar *key,
                        (long) info, (long) buf, inx, search_flag));
 
   if ((inx = _mi_check_index(info,inx)) < 0)
-    DBUG_RETURN(my_errno);
+    DBUG_RETURN(my_errno());
 
   info->update&= (HA_STATE_CHANGED | HA_STATE_ROW_CHANGED);
   info->last_key_func= search_flag;
@@ -51,12 +58,12 @@ int mi_rkey(MI_INFO *info, uchar *buf, int inx, const uchar *key,
     */
     key_buff=info->lastkey+info->s->base.max_key_length;
     pack_key_length= keypart_map;
-    bmove(key_buff, key, pack_key_length);
+    memmove(key_buff, key, pack_key_length);
     last_used_keyseg= info->s->keyinfo[inx].seg + info->last_used_keyseg;
   }
   else
   {
-    DBUG_ASSERT(keypart_map);
+    assert(keypart_map);
     /* Save the packed key for later use in the second buffer of lastkey. */
     key_buff=info->lastkey+info->s->base.max_key_length;
     pack_key_length=_mi_pack_key(info,(uint) inx, key_buff, (uchar*) key,
@@ -81,18 +88,22 @@ int mi_rkey(MI_INFO *info, uchar *buf, int inx, const uchar *key,
     use_key_length=USE_WHOLE_KEY;
 
   switch (info->s->keyinfo[inx].key_alg) {
-#ifdef HAVE_RTREE_KEYS
   case HA_KEY_ALG_RTREE:
     if (rtree_find_first(info,inx,key_buff,use_key_length,nextflag) < 0)
     {
-      mi_print_error(info->s, HA_ERR_CRASHED);
-      my_errno=HA_ERR_CRASHED;
+      // rtree_find_first will return -1 for an empty index,
+      // but it's not a crash.
+      if (my_errno() != HA_ERR_END_OF_FILE || info->lastpos != HA_OFFSET_ERROR ||
+          info->s->state.state.records != 0)
+      {
+        mi_print_error(info->s, HA_ERR_CRASHED);
+        set_my_errno(HA_ERR_CRASHED);
+      }
       if (share->concurrent_insert)
         mysql_rwlock_unlock(&share->key_root_lock[inx]);
       goto err;
     }
     break;
-#endif
   case HA_KEY_ALG_BTREE:
   default:
     myisam_search_flag= myisam_read_vec[search_flag];
@@ -143,7 +154,7 @@ int mi_rkey(MI_INFO *info, uchar *buf, int inx, const uchar *key,
             ha_key_cmp(keyinfo->seg, key_buff, info->lastkey, use_key_length,
                        SEARCH_FIND, not_used))
         {
-          my_errno= HA_ERR_KEY_NOT_FOUND;
+          set_my_errno(HA_ERR_KEY_NOT_FOUND);
           info->lastpos= HA_OFFSET_ERROR;
           break;
         }
@@ -153,7 +164,8 @@ int mi_rkey(MI_INFO *info, uchar *buf, int inx, const uchar *key,
         info->lastpos= HA_OFFSET_ERROR;
         if (share->concurrent_insert)
           mysql_rwlock_unlock(&share->key_root_lock[inx]);
-        DBUG_RETURN((my_errno= HA_ERR_KEY_NOT_FOUND));
+        set_my_errno(HA_ERR_KEY_NOT_FOUND);
+        DBUG_RETURN(HA_ERR_KEY_NOT_FOUND);
       }
       /*
         Error if no row found within the data file. (Bug #29838)
@@ -163,7 +175,7 @@ int mi_rkey(MI_INFO *info, uchar *buf, int inx, const uchar *key,
           info->lastpos >= info->state->data_file_length)
       {
         info->lastpos= HA_OFFSET_ERROR;
-        my_errno= HA_ERR_KEY_NOT_FOUND;
+        set_my_errno(HA_ERR_KEY_NOT_FOUND);
       }
     }
   }
@@ -179,11 +191,11 @@ int mi_rkey(MI_INFO *info, uchar *buf, int inx, const uchar *key,
     info->last_rkey_length= pack_key_length;
 
   /* Next call to mi_rnext_same should set rnext_same_key. */
-    info->set_rnext_same_key= TRUE;
+  info->set_rnext_same_key= TRUE;
 
   /* Check if we don't want to have record back, only error message */
   if (!buf)
-    DBUG_RETURN(info->lastpos == HA_OFFSET_ERROR ? my_errno : 0);
+    DBUG_RETURN(info->lastpos == HA_OFFSET_ERROR ? my_errno() : 0);
 
   if (!(*info->read_record)(info,info->lastpos,buf))
   {
@@ -202,5 +214,5 @@ int mi_rkey(MI_INFO *info, uchar *buf, int inx, const uchar *key,
   if (search_flag == HA_READ_AFTER_KEY)
     info->update|=HA_STATE_NEXT_FOUND;		/* Previous gives last row */
 err:
-  DBUG_RETURN(my_errno);
+  DBUG_RETURN(my_errno());
 } /* _mi_rkey */

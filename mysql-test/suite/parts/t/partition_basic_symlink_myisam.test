@@ -25,6 +25,8 @@
 #------------------------------------------------------------------------------#
 # General not engine specific settings and requirements
 
+--source include/no_valgrind_without_big.inc
+
 ##### Options, for debugging support #####
 let $debug= 0;
 let $with_partitioning= 1;
@@ -54,7 +56,9 @@ let $more_pk_ui_tests= 0;
 # Engine specific settings and requirements
 
 ##### Storage engine to be tested
+--source include/force_myisam_default.inc 
 let $engine= 'MyISAM';
+
 # The server uses in case of MyISAM symlinking (if available) and the expected
 # results fit to symlinking support.
 --source include/have_symlink.inc

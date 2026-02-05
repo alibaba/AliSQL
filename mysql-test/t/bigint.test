@@ -1,10 +1,14 @@
+
+ #Get deafult engine value
+--let $DEFAULT_ENGINE = `select @@global.default_storage_engine`
+
 #
 # Initialize
 
 --disable_warnings
 drop table if exists t1, t2;
 --enable_warnings
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 #
 # Test of reading of bigint values
 #
@@ -129,9 +133,15 @@ drop table t1;
 #
 
 create table t1 select 1 as 'a';
+
+#Replace default engine value with static engine string 
+--replace_result $DEFAULT_ENGINE ENGINE
 show create table t1;
 drop table t1;
 create table t1 select 9223372036854775809 as 'a';
+
+#Replace default engine value with static engine string 
+--replace_result $DEFAULT_ENGINE ENGINE
 show create table t1;
 select * from t1;
 drop table t1;
@@ -320,7 +330,7 @@ select -(-(9223372036854775808));
 select --9223372036854775808, ---9223372036854775808, ----9223372036854775808;
 select -(-9223372036854775808), -(-(-9223372036854775808));
 
-# Bug #28005 Partitions: can't use -9223372036854775808 
+# Bug #28005 Partitions: cannot use -9223372036854775808 
 create table t1 select -9223372036854775808 bi;
 describe t1;
 drop table t1;
@@ -409,3 +419,67 @@ SELECT * FROM t1 WHERE a=0.9;
 SELECT * FROM t1 WHERE a IN (0.8,0.9);
 
 DROP TABLE t1;
+
+--echo #
+--echo # Bug#17606942 ERROR RESULT WHEN USE BETWEEN...AND
+--echo #              AGAINEST BIGINT UNSIGNED
+--echo #
+--echo # Bug#70622 error result when use between...and againest bigint unsigned 
+
+create table t (id bigint unsigned, b int);
+
+insert into t values(8894754949779693574,1);
+insert into t values(8894754949779693579,2);
+insert into t values(17790886498483827171,3);
+
+select count(*) from t 
+where id>=8894754949779693574 and id <=17790886498483827171;
+
+select count(*) from t 
+where id between 8894754949779693574 and 17790886498483827171;
+
+alter table t add primary key (id);
+
+select count(*) from t 
+where id>=8894754949779693574 and id <=17790886498483827171;
+
+select count(*) from t 
+where id between 8894754949779693574 and 17790886498483827171;
+
+drop table t;
+
+--echo #
+--echo # Bug#18408499 UNSIGNED BIGINT HIGH VALUES
+--echo #              WRONG NUMERICAL COMPARISON RESULTS
+--echo # Bug#72046 UNSIGNED BIGINT high values
+--echo #           wrong numerical comparison results
+
+SELECT (184467440737095 BETWEEN 0 AND 18446744073709551500);
+
+SELECT 184467440737095 >= 0;
+SELECT 0 <= 18446744073709551500;
+
+--echo #
+--echo # Bug#22501606 SELECT CAST(100 AS UNSIGNED) BETWEEN 1 AND -1 RETURNS TRUE
+--echo # Bug#79857 select cast(100 as unsigned) between 1 and -1 returns true
+--echo #
+
+SELECT CAST(100 AS UNSIGNED) BETWEEN 1 AND -1;
+SELECT CAST(100 AS UNSIGNED) NOT BETWEEN 1 AND -1;
+
+SELECT CAST(0 AS UNSIGNED) BETWEEN 0 AND -1;
+SELECT CAST(0 AS UNSIGNED) NOT BETWEEN 0 AND -1;
+
+--echo #
+--echo # Bug #27691347: BETWEEN CLAUSE RETURNS INCOHERENT RESULTS COMPARING
+--echo #                NEGATIVE VALUES
+
+CREATE TABLE Reservation (id BIGINT UNSIGNED NOT NULL,
+                          transaction_id BIGINT UNSIGNED NOT NULL DEFAULT '0',
+                          KEY transaction_id_idx (transaction_id));
+INSERT INTO Reservation(id, transaction_id) VALUES(1, 1);
+
+SELECT COUNT(*) FROM Reservation WHERE transaction_id BETWEEN -2 AND -1;
+DROP TABLE Reservation;
+
+SET sql_mode = default;

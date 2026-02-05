@@ -29,6 +29,9 @@ set sql_mode='traditional';
 create table t1 (a varchar(66000));
 ERROR 42000: Column length too big for column 'a' (max = 65535); use BLOB or TEXT instead
 set sql_mode=default;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1 (a INT);
 SELECT a FROM t1 WHERE a IN(1, (SELECT IF(1=0,1,2/0)));
 a
@@ -41,6 +44,7 @@ SELECT a FROM t1 WHERE a IN(1, (SELECT IF(1=0,1,2/0)));
 a
 1
 DROP TABLE t1;
+SET sql_mode = default;
 CREATE TABLE t1( a INT );
 SELECT b FROM t1;
 ERROR 42S22: Unknown column 'b' in 'field list'

@@ -1,13 +1,25 @@
-/* Copyright (c) 2000, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -17,10 +29,8 @@
 #include "my_static.h"
 #include <errno.h>
 #include "mysys_err.h"
+#include "my_thread_local.h"
 
-#if defined(__FreeBSD__)
-extern int getosreldate(void);
-#endif
 
 static void make_ftype(char * to,int flag);
 
@@ -42,6 +52,7 @@ FILE *my_fopen(const char *filename, int flags, myf MyFlags)
 {
   FILE *fd;
   char type[5];
+  char *dup_filename= NULL;
   DBUG_ENTER("my_fopen");
   DBUG_PRINT("my",("Name: '%s'  flags: %d  MyFlags: %d",
 		   filename, flags, MyFlags));
@@ -64,13 +75,16 @@ FILE *my_fopen(const char *filename, int flags, myf MyFlags)
     int filedesc= my_fileno(fd);
     if ((uint)filedesc >= my_file_limit)
     {
-      thread_safe_increment(my_stream_opened,&THR_LOCK_open);
+      mysql_mutex_lock(&THR_LOCK_open);
+      my_stream_opened++;
+      mysql_mutex_unlock(&THR_LOCK_open);
       DBUG_RETURN(fd);				/* safeguard */
     }
-    mysql_mutex_lock(&THR_LOCK_open);
-    if ((my_file_info[filedesc].name= (char*)
-	 my_strdup(filename,MyFlags)))
+    dup_filename= my_strdup(key_memory_my_file_info, filename, MyFlags);
+    if (dup_filename != NULL)
     {
+      mysql_mutex_lock(&THR_LOCK_open);
+      my_file_info[filedesc].name= dup_filename;
       my_stream_opened++;
       my_file_total_opened++;
       my_file_info[filedesc].type= STREAM_BY_FOPEN;
@@ -78,20 +92,19 @@ FILE *my_fopen(const char *filename, int flags, myf MyFlags)
       DBUG_PRINT("exit",("stream: 0x%lx", (long) fd));
       DBUG_RETURN(fd);
     }
-    mysql_mutex_unlock(&THR_LOCK_open);
     (void) my_fclose(fd,MyFlags);
-    my_errno=ENOMEM;
+    set_my_errno(ENOMEM);
   }
   else
-    my_errno=errno;
-  DBUG_PRINT("error",("Got error %d on open",my_errno));
+    set_my_errno(errno);
+  DBUG_PRINT("error",("Got error %d on open",my_errno()));
   if (MyFlags & (MY_FFNF | MY_FAE | MY_WME))
   {
     char errbuf[MYSYS_STRERROR_SIZE];
     my_error((flags & O_RDONLY) || (flags == O_RDONLY ) ? EE_FILENOTFOUND :
              EE_CANTCREATEFILE,
-             MYF(ME_BELL+ME_WAITTANG), filename,
-             my_errno, my_strerror(errbuf, sizeof(errbuf), my_errno));
+             MYF(0), filename,
+             my_errno(), my_strerror(errbuf, sizeof(errbuf), my_errno()));
   }
   DBUG_RETURN((FILE*) 0);
 } /* my_fopen */
@@ -104,7 +117,7 @@ static FILE *my_win_freopen(const char *path, const char *mode, FILE *stream)
   int handle_fd, fd= _fileno(stream);
   HANDLE osfh;
 
-  DBUG_ASSERT(path && stream);
+  assert(path && stream);
 
   /* Services don't have stdout/stderr on Windows, so _fileno returns -1. */
   if (fd < 0)
@@ -142,53 +155,68 @@ static FILE *my_win_freopen(const char *path, const char *mode, FILE *stream)
 
   return stream;
 }
+#else
 
-#elif defined(__FreeBSD__)
+/**
+  Replacement for freopen() which will not close the stream until the
+  new file has been successfully opened. This gives the ability log
+  the reason for reopen's failure to the stream, and also to flush any
+  buffered messages already written to the stream, before terminating
+  the process.
 
-/* No close operation hook. */
+  After a new stream to path has been opened, its file descriptor is
+  obtained, and dup2() is used to associate the original stream with
+  the new file. The newly opened stream and associated file descriptor
+  is then closed with fclose().
 
-static int no_close(void *cookie MY_ATTRIBUTE((unused)))
+  @param path file which the stream should be opened to
+  @param mode FILE mode to use when opening new file
+  @param stream stream to reopen
+
+  @retval FILE stream being passed in if successful,
+  @retval nullptr otherwise
+ */
+static FILE *my_safe_freopen(const char *path, const char *mode, FILE *stream)
 {
-  return 0;
+  int streamfd= -1;
+  FILE *pathstream= NULL;
+  int pathfd= -1;
+  int ds= -1;
+
+  assert(path != NULL && stream != NULL);
+  streamfd= fileno(stream);
+  if (streamfd == -1)
+  {
+    /* We have not done anything to the stream, but if we cannot
+       get its fd, it is probably in a bad state anyway... */
+    return NULL;
+  }
+  pathstream= fopen(path, mode);
+  if (pathstream == NULL)
+  {
+    /* Failed to open file for some reason. stream should still be
+       usable. */
+    return NULL;
+  }
+
+  pathfd= fileno(pathstream);
+  if (pathfd == -1)
+  {
+    fclose(pathstream);
+    return NULL;
+  }
+  do
+  {
+    ds= fflush(stream);
+    if (ds == 0)
+    {
+      ds= dup2(pathfd, streamfd);
+    }
+  }
+  while (ds == -1 && errno == EINTR);
+  fclose(pathstream);
+  return (ds == -1 ? NULL : stream);
 }
-
-/*
-  A hack around a race condition in the implementation of freopen.
-
-  The race condition steams from the fact that the current fd of
-  the stream is closed before its number is used to duplicate the
-  new file descriptor. This defeats the desired atomicity of the
-  close and duplicate of dup2().
-
-  See PR number 79887 for reference:
-  http://www.freebsd.org/cgi/query-pr.cgi?pr=79887
-*/
-
-static FILE *my_freebsd_freopen(const char *path, const char *mode, FILE *stream)
-{
-  int old_fd;
-  FILE *result;
-
-  flockfile(stream);
-
-  old_fd= fileno(stream);
-
-  /* Use a no operation close hook to avoid having the fd closed. */
-  stream->_close= no_close;
-
-  /* Relies on the implicit dup2 to close old_fd. */
-  result= freopen(path, mode, stream);
-
-  /* If successful, the _close hook was replaced. */
-
-  if (result == NULL)
-    close(old_fd);
-  else
-    funlockfile(result);
-
-  return result;
-}
-
 #endif
 
 
@@ -212,18 +240,8 @@ FILE *my_freopen(const char *path, const char *mode, FILE *stream)
 
 #if defined(_WIN32)
   result= my_win_freopen(path, mode, stream);
-#elif defined(__FreeBSD__)
-  /*
-    XXX: Once the fix is ported to the stable releases, this should
-         be dependent upon the specific FreeBSD versions. Check at:
-         http://www.freebsd.org/cgi/query-pr.cgi?pr=79887
-  */
-  if (getosreldate() > 900027)
-    result= freopen(path, mode, stream);
-  else
-    result= my_freebsd_freopen(path, mode, stream);
 #else
-  result= freopen(path, mode, stream);
+  result= my_safe_freopen(path, mode, stream);
 #endif
 
   return result;
@@ -246,12 +264,12 @@ int my_fclose(FILE *fd, myf MyFlags)
 #endif
   if(err < 0)
   {
-    my_errno=errno;
+    set_my_errno(errno);
     if (MyFlags & (MY_FAE | MY_WME))
     {
       char errbuf[MYSYS_STRERROR_SIZE];
-      my_error(EE_BADCLOSE, MYF(ME_BELL+ME_WAITTANG), my_filename(file),
-               my_errno, my_strerror(errbuf, sizeof(errbuf), my_errno));
+      my_error(EE_BADCLOSE, MYF(0), my_filename(file),
+               my_errno(), my_strerror(errbuf, sizeof(errbuf), my_errno()));
     }
   }
   else
@@ -285,12 +303,12 @@ FILE *my_fdopen(File Filedes, const char *name, int Flags, myf MyFlags)
 #endif
   if (!fd)
   {
-    my_errno=errno;
+    set_my_errno(errno);
     if (MyFlags & (MY_FAE | MY_WME))
     {
       char errbuf[MYSYS_STRERROR_SIZE];
-      my_error(EE_CANT_OPEN_STREAM, MYF(ME_BELL+ME_WAITTANG),
-               my_errno, my_strerror(errbuf, sizeof(errbuf), my_errno));
+      my_error(EE_CANT_OPEN_STREAM, MYF(0),
+               my_errno(), my_strerror(errbuf, sizeof(errbuf), my_errno()));
     }
   }
   else
@@ -305,7 +323,8 @@ FILE *my_fdopen(File Filedes, const char *name, int Flags, myf MyFlags)
       }
       else
       {
-        my_file_info[Filedes].name=  my_strdup(name,MyFlags);
+        my_file_info[Filedes].name= my_strdup(key_memory_my_file_info,
+                                              name,MyFlags);
       }
       my_file_info[Filedes].type = STREAM_BY_FDOPEN;
     }
@@ -342,11 +361,11 @@ FILE *my_fdopen(File Filedes, const char *name, int Flags, myf MyFlags)
     a+ == O_RDWR|O_APPEND|O_CREAT
 */
 
-static void make_ftype(register char * to, register int flag)
+static void make_ftype(char * to, int flag)
 {
   /* check some possible invalid combinations */  
-  DBUG_ASSERT((flag & (O_TRUNC | O_APPEND)) != (O_TRUNC | O_APPEND));
-  DBUG_ASSERT((flag & (O_WRONLY | O_RDWR)) != (O_WRONLY | O_RDWR));
+  assert((flag & (O_TRUNC | O_APPEND)) != (O_TRUNC | O_APPEND));
+  assert((flag & (O_WRONLY | O_RDWR)) != (O_WRONLY | O_RDWR));
 
   if ((flag & (O_RDONLY|O_WRONLY)) == O_WRONLY)    
     *to++= (flag & O_APPEND) ? 'a' : 'w';  

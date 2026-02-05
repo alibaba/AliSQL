@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2009, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -23,6 +30,8 @@ import com.mysql.clusterj.Constants;
 import com.mysql.clusterj.Session;
 import com.mysql.clusterj.SessionFactory;
 import com.mysql.clusterj.Transaction;
+import com.mysql.clusterj.core.util.Logger;
+import com.mysql.clusterj.core.util.LoggerFactoryService;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -37,6 +46,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.sql.SQLWarning;
 import java.sql.Statement;
 
 import java.util.ArrayList;
@@ -56,6 +66,10 @@ import junit.framework.TestCase;
  *
  */
 public abstract class AbstractClusterJTest extends TestCase {
+    /** My logger */
+    static final Logger logger = LoggerFactoryService.getFactory()
+            .getInstance("com.mysql.clusterj.test");
+
     protected static final String JDBC_DRIVER_NAME = "jdbc.driverName";
     protected static final String JDBC_URL = "jdbc.url";
     protected static Connection connection;
@@ -75,7 +89,7 @@ public abstract class AbstractClusterJTest extends TestCase {
      *
      * Error messages collected during a test.
      */
-    private StringBuffer errorMessages;
+    protected StringBuffer errorMessages;
     /**
      *
      * A list of registered pc classes.
@@ -319,6 +333,77 @@ public abstract class AbstractClusterJTest extends TestCase {
         }
     }
 
+    /** Execute the sql in its own statement. If the connection is not
+     * currently autocommit, set autocommit to true and restore it after
+     * the statement is executed.
+     * @param sql the sql to execute
+     */
+    protected void executeSQL(String sql) {
+        Statement statement = null;
+        try {
+            boolean autoCommit = connection.getAutoCommit();
+            if (!autoCommit) {
+                connection.setAutoCommit(true);
+            }
+            statement = connection.createStatement();
+            statement.execute(sql);
+            if (!autoCommit) {
+                connection.setAutoCommit(autoCommit);
+            }
+        } catch (SQLException e) {
+            error("Caught " + e.getClass() + " trying: " + sql);
+            if (statement == null) {
+                error(analyzeWarnings(connection));
+            } else {
+                error(analyzeWarnings(statement));
+            }
+        } finally {
+            if (statement != null) {
+                try {
+                    statement.close();
+                } catch (SQLException e) {
+                    // nothing can be done here
+                    error("Error closing statement " + sql);
+                }
+            }
+        }
+    }
+
+    protected String analyzeWarnings(Connection connection) {
+        SQLWarning warning = null;
+        StringBuilder builder = new StringBuilder();
+        try {
+            warning = connection.getWarnings();
+            analyzeWarnings(warning, builder);
+        } catch (SQLException e) {
+            builder.append("Error getting warnings from connection:\n");
+            builder.append(e.getMessage());
+        }
+        return builder.toString();
+    }
+
+    protected String analyzeWarnings(Statement statement) {
+        SQLWarning warning = null;
+        StringBuilder builder = new StringBuilder();
+        try {
+            warning = statement.getWarnings();
+            analyzeWarnings(warning, builder);
+        } catch (SQLException e) {
+            builder.append("Error getting warnings from statement:\n");
+            builder.append(e.getMessage());
+        }
+        return builder.toString();
+    }
+
+    protected StringBuilder analyzeWarnings(SQLWarning warning, StringBuilder builder) {
+        if (warning != null) {
+            builder.append(warning.getMessage());
+            builder.append("\n");
+            analyzeWarnings(warning.getNextWarning(), builder);
+        }
+        return builder;
+    }
+
     Properties getProperties(String fileName) {
         Properties result = null;
         try {
@@ -468,6 +553,7 @@ public abstract class AbstractClusterJTest extends TestCase {
 
     @Override
     protected final void setUp() throws Exception {
+System.out.println(this.getClass().getName());
         localSetUp();
     }
 
@@ -554,6 +640,63 @@ public abstract class AbstractClusterJTest extends TestCase {
             result.append('\n');
         }
         return result.toString();
+    }
+
+    /** Compare one byte array with another.
+     * @param expected the expected byte array
+     * @param actual the actual byte array
+     * @return String identifying the differences, or null if identical
+     */
+    public String compareBytes(byte[] expected, byte[] actual) {
+        StringBuffer mismatches = new StringBuffer();
+        if (expected == null && actual == null) {
+            return null;
+        }
+        if (expected != null && actual == null) {
+            return "compareBytes mismatch; expected: " + dumpBytes(expected) + "; actual: null";
+        }
+        if (expected.length != actual.length) {
+            return "compareBytes mismatch; expected: " + dumpBytes(expected) + "; actual: " + dumpBytes(actual);
+        }
+        // lengths are equal; compare values
+        for (int i = 0; i < expected.length; ++i) {
+            if (expected[i] != actual[i]) {
+                mismatches.append(i);
+                mismatches.append(' ');
+            }
+        }
+        if (mismatches.length() != 0) {
+            return "compareBytes mismatch; expected: " + dumpBytes(expected) + "; actual: " + dumpBytes(actual);
+        }
+        return null;
+    }
+
+    /** Convert the byte[] into a String to be used for logging and debugging.
+     * 
+     * @param bytes the byte[] to be dumped
+     * @return the String representation
+     */
+    public static String dumpBytes (byte[] bytes) {
+        if (bytes == null) {
+            return "(byte[])null";
+        }
+        StringBuffer buffer = new StringBuffer("byte[");
+        buffer.append(bytes.length);
+        buffer.append("]: [");
+        for (int i = 0; i < bytes.length; ++i) {
+            buffer.append((int)bytes[i]);
+            buffer.append(" ");
+        }
+        buffer.append("]");
+        return buffer.toString();
+    }
+
+    public static String dump(Object object) {
+        if (object instanceof byte[]) {
+            return dumpBytes((byte[])object);
+        } else {
+            return object.toString();
+        }
     }
 
     /** Catch otherwise uncaught exceptions and maintain a list of them.

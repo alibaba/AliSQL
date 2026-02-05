@@ -2,12 +2,16 @@
 # replicated properly in statement-based replication.
 # Currently statement based due to bug 12345
 --source include/have_binlog_format_mixed_or_statement.inc
+--source include/not_group_replication_plugin.inc
 --source include/not_gtid_enabled.inc
 
 source include/master-slave.inc;
 
 # Test replication of auto_increment
 
+
+#Get default engine value          WL#6921
+--let $DEFAULT_ENGINE = `select @@global.default_storage_engine`
 create table t1 (n int auto_increment primary key);
 set insert_id = 2000;
 insert into t1 values (NULL),(NULL),(NULL);
@@ -39,7 +43,10 @@ start slave;
 --source include/wait_for_slave_to_start.inc
 sync_with_master;
 select * from t2;
+#Replace default engine value with static engine string          WL#6921
+--replace_result $DEFAULT_ENGINE ENGINE
 show create table t3;
+--replace_result $DEFAULT_ENGINE ENGINE
 show create table t5;
 connection master;
 drop table t2,t3,t5;

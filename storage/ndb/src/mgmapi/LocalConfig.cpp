@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -117,31 +124,6 @@ void LocalConfig::setError(int lineNumber, const char * _msg) {
   strncpy(error_msg, _msg, sizeof(error_msg));
 }
 
-void LocalConfig::printError() const {
-  ndbout << "Configuration error" << endl;
-  if (error_line)
-    ndbout << "Line: "<< error_line << ", ";
-  ndbout << error_msg << endl << endl;
-}
-
-void LocalConfig::printUsage() const {
-  ndbout << "This node needs information on how to connect"<<endl
-	 << "to the NDB Management Server."<<endl
-	 << "The information can be supplied in one of the following ways:"
-	 << endl;
-    
-  ndbout << "1. Put a Ndb.cfg file in the directory where you start"<<endl 
-	 << "   the node. "<< endl
-	 << "   Ex: Ndb.cfg" << endl
-	 << "   | host=localhost:"<<NDB_PORT<<endl;
-    
-  ndbout << "2. Use the environment variable NDB_CONNECTSTRING to "<<endl
-	 << "   provide this information." <<endl
-	 << "   Ex: " << endl
-	 << "   >export NDB_CONNECTSTRING=\"host=localhost:"<<NDB_PORT<<"\""
-	 <<endl<<endl;
-}
-  
 const char *nodeIdTokens[] = {
   "OwnProcessId %i",
   "nodeid=%i",
@@ -262,8 +244,8 @@ LocalConfig::parseString(const char * connectString, BaseString &err){
   char * copy = strdup(connectString);
   NdbAutoPtr<char> tmp_aptr(copy);
 
-  for (char *tok = strtok_r(copy,";,",&for_strtok); tok != 0;
-       tok = strtok_r(NULL, ";,", &for_strtok)) {
+  for (char *tok = my_strtok_r(copy,";,",&for_strtok); tok != 0;
+       tok = my_strtok_r(NULL, ";,", &for_strtok)) {
     if (tok[0] == '#') continue;
 
     if (!_ownNodeId) // only one nodeid definition allowed

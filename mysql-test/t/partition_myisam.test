@@ -6,6 +6,7 @@ DROP TABLE IF EXISTS t1, t2;
 # These tests is only useful when running on MyISAM,
 # due to DATA/INDEX directory, non transactional behavior, tests with MyISAM
 # files etc.
+--source include/have_myisam.inc
 
 let $MYSQLD_DATADIR= `SELECT @@datadir`;
 

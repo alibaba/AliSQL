@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2000, 2016, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
@@ -23,14 +30,12 @@
 **	 - type set is out of optimization yet
 */
 
-#define MYSQL_LEX 1
-
-#include "sql_priv.h"
-#include "procedure.h"
 #include "sql_analyse.h"
-#include "sql_class.h"
-#include <m_ctype.h>
 
+#include "procedure.h"       // Item_proc
+#include "sql_yacc.h"        // DECIMAL_NUM
+
+#include <algorithm>
 using std::min;
 using std::max;
 
@@ -72,11 +77,11 @@ int compare_decimal2(int* len, const char *s, const char *t)
   @retval true          Failure (OOM)
 */
 bool
-select_analyse::init(List<Item> &field_list)
+Query_result_analyse::init(List<Item> &field_list)
 {
   DBUG_ENTER("proc_analyse_init");
 
-  DBUG_ASSERT(thd->lex->sql_command == SQLCOM_SELECT);
+  assert(thd->lex->sql_command == SQLCOM_SELECT);
 
   if (!(f_info=
         (field_info**)sql_alloc(sizeof(field_info*)*field_list.elements)))
@@ -240,9 +245,10 @@ bool get_ev_num_info(EV_NUM_INFO *ev_info, NUM_INFO *info, const char *num)
 } // get_ev_num_info
 
 
-void free_string(String *s)
+void free_string(void *s_void, TREE_FREE, const void*)
 {
-  s->free();
+  String *s= static_cast<String*>(s_void);
+  s->mem_free();
 }
 
 
@@ -250,7 +256,7 @@ void field_str::add()
 {
   char buff[MAX_FIELD_WIDTH], *ptr;
   String s(buff, sizeof(buff),&my_charset_bin), *res;
-  ulong length;
+  size_t length;
 
   if (!(res= item->str_result(&s)))
   {
@@ -320,7 +326,7 @@ void field_str::add()
       }
       else
       {
-	memset(&s, 0, sizeof(s));  // Let tree handle free of this
+        ::new (&s) String; // Let tree handle free of this
 	if ((treemem += length) > pc->max_treemem)
 	{
 	  room_in_tree = 0;	 // Remove tree, too big tree
@@ -340,7 +346,8 @@ void field_real::add()
 {
   char buff[MAX_FIELD_WIDTH], *ptr, *end;
   double num= item->val_result();
-  uint length, zero_count, decs;
+  size_t length;
+  uint zero_count, decs;
   TREE_ELEMENT *element;
 
   if (item->null_value)
@@ -359,13 +366,9 @@ void field_real::add()
   }
   else
   {
-#ifdef HAVE_SNPRINTF
     buff[sizeof(buff)-1]=0;			// Safety
-    snprintf(buff, sizeof(buff)-1, "%-.*f", (int) decs, num);
-    length = (uint) strlen(buff);
-#else
-    length= sprintf(buff, "%-.*f", (int) decs, num);
-#endif
+    my_snprintf(buff, sizeof(buff)-1, "%-.*f", (int) decs, num);
+    length= strlen(buff);
 
     // We never need to check further than this
     end = buff + length - 1 - decs + max_notzero_dec_len;
@@ -608,7 +611,7 @@ void field_ulonglong::add()
 } // field_ulonglong::add
 
 
-bool select_analyse::send_data(List<Item> & /* field_list */)
+bool Query_result_analyse::send_data(List<Item> & /* field_list */)
 {
   field_info **f = f_info;
 
@@ -622,7 +625,7 @@ bool select_analyse::send_data(List<Item> & /* field_list */)
 }
 
 
-bool select_analyse::send_eof()
+bool Query_result_analyse::send_eof()
 {
   field_info **f = f_info;
   char buff[MAX_FIELD_WIDTH];
@@ -748,7 +751,7 @@ ok:
 error:
   abort_result_set();
   return true;
-} // select_analyse::send_eof
+} // Query_result_analyse::send_eof
 
 
 void field_str::get_opt_type(String *answer, ha_rows total_rows)
@@ -784,7 +787,7 @@ void field_str::get_opt_type(String *answer, ha_rows total_rows)
       sprintf(buff, "INT(%d)", num_info.integers);
     else
       sprintf(buff, "BIGINT(%d)", num_info.integers);
-    answer->append(buff, (uint) strlen(buff));
+    answer->append(buff, strlen(buff));
     if (ev_num_info.llval >= 0 && ev_num_info.min_dval >= 0)
       answer->append(STRING_WITH_LEN(" UNSIGNED"));
     if (num_info.zerofill)
@@ -802,12 +805,12 @@ void field_str::get_opt_type(String *answer, ha_rows total_rows)
     else if ((max_length * (total_rows - nulls)) < (sum + total_rows))
     {
       sprintf(buff, "CHAR(%d)", (int) max_length);
-      answer->append(buff, (uint) strlen(buff));
+      answer->append(buff, strlen(buff));
     }
     else
     {
       sprintf(buff, "VARCHAR(%d)", (int) max_length);
-      answer->append(buff, (uint) strlen(buff));
+      answer->append(buff, strlen(buff));
     }
   }
   else if (max_length < (1L << 16))
@@ -857,7 +860,7 @@ void field_real::get_opt_type(String *answer,
       sprintf(buff, "INT(%d)", len);
     else
       sprintf(buff, "BIGINT(%d)", len);
-    answer->append(buff, (uint) strlen(buff));
+    answer->append(buff, strlen(buff));
     if (min_arg >= 0)
       answer->append(STRING_WITH_LEN(" UNSIGNED"));
   }
@@ -876,7 +879,7 @@ void field_real::get_opt_type(String *answer,
     else
       sprintf(buff, "DOUBLE(%d,%d)", (int) max_length - (item->decimals + 1) + max_notzero_dec_len,
 	      max_notzero_dec_len);
-    answer->append(buff, (uint) strlen(buff));
+    answer->append(buff, strlen(buff));
   }
   // if item is FIELD_ITEM, it _must_be_ Field_num in this class
   if (item->type() == Item::FIELD_ITEM &&
@@ -905,7 +908,7 @@ void field_longlong::get_opt_type(String *answer,
     sprintf(buff, "INT(%d)", (int) max_length);
   else
     sprintf(buff, "BIGINT(%d)", (int) max_length);
-  answer->append(buff, (uint) strlen(buff));
+  answer->append(buff, strlen(buff));
   if (min_arg >= 0)
     answer->append(STRING_WITH_LEN(" UNSIGNED"));
 
@@ -934,7 +937,7 @@ void field_ulonglong::get_opt_type(String *answer,
   else
     sprintf(buff, "BIGINT(%d) UNSIGNED", (int) max_length);
   // if item is FIELD_ITEM, it _must_be_ Field_num in this class
-  answer->append(buff, (uint) strlen(buff));
+  answer->append(buff, strlen(buff));
   if (item->type() == Item::FIELD_ITEM &&
       // a single number shouldn't be zerofill
       max_length != 1 &&
@@ -948,16 +951,16 @@ void field_decimal::get_opt_type(String *answer,
 {
   my_decimal zero;
   char buff[MAX_FIELD_WIDTH];
-  uint length;
+  size_t length;
 
   my_decimal_set_zero(&zero);
   my_bool is_unsigned= (my_decimal_cmp(&zero, &min_arg) >= 0);
 
   length= my_snprintf(buff, sizeof(buff), "DECIMAL(%d, %d)",
-                      (int) (max_length - (item->decimals ? 1 : 0)),
-                      item->decimals);
+                      static_cast<int>(max_length - (item->decimals ? 1 : 0)),
+                      static_cast<int>(item->decimals));
   if (is_unsigned)
-    length= (uint) (strmov(buff+length, " UNSIGNED")- buff);
+    length= (my_stpcpy(buff+length, " UNSIGNED")- buff);
   answer->append(buff, length);
 }
 
@@ -980,7 +983,7 @@ String *field_decimal::avg(String *s, ha_rows rows)
 {
   if (!(rows - nulls))
   {
-    s->set_real((double) 0.0, 1,my_thd_charset);
+    s->set_real(0.0, 1,my_thd_charset);
     return s;
   }
   my_decimal num, avg_val, rounded_avg;
@@ -1001,7 +1004,7 @@ String *field_decimal::std(String *s, ha_rows rows)
 {
   if (!(rows - nulls))
   {
-    s->set_real((double) 0.0, 1,my_thd_charset);
+    s->set_real(0.0, 1,my_thd_charset);
     return s;
   }
   my_decimal num, tmp, sum2, sum2d;
@@ -1014,7 +1017,7 @@ String *field_decimal::std(String *s, ha_rows rows)
   my_decimal_sub(E_DEC_FATAL_ERROR, &sum2, sum_sqr+cur_sum, &tmp);
   my_decimal_div(E_DEC_FATAL_ERROR, &tmp, &sum2, &num, prec_increment);
   my_decimal2double(E_DEC_FATAL_ERROR, &tmp, &std_sqr);
-  s->set_real(((double) std_sqr <= 0.0 ? 0.0 : sqrt(std_sqr)),
+  s->set_real((std_sqr <= 0.0 ? 0.0 : sqrt(std_sqr)),
          min(item->decimals + prec_increment, NOT_FIXED_DEC), my_thd_charset);
 
   return s;
@@ -1118,7 +1121,7 @@ int collect_ulonglong(ulonglong *element,
 /**
   Create items for substituted output columns (both metadata and data)
 */
-bool select_analyse::change_columns()
+bool Query_result_analyse::change_columns()
 {
   func_items[0] = new Item_proc_string("Field_name", 255);
   func_items[1] = new Item_proc_string("Min_value", 255);
@@ -1133,7 +1136,7 @@ bool select_analyse::change_columns()
   func_items[8] = new Item_proc_string("Std", 255);
   func_items[8]->maybe_null = 1;
   func_items[9] = new Item_proc_string("Optimal_fieldtype",
-				       max(64U, output_str_length));
+				       max<size_t>(64U, output_str_length));
   result_fields.empty();
   for (uint i = 0; i < array_elements(func_items); i++)
   {
@@ -1142,10 +1145,10 @@ bool select_analyse::change_columns()
     result_fields.push_back(func_items[i]);
   }
   return false;
-} // select_analyse::change_columns
+} // Query_result_analyse::change_columns
 
 
-void select_analyse::cleanup()
+void Query_result_analyse::cleanup()
 {
   if (f_info)
   {
@@ -1158,14 +1161,15 @@ void select_analyse::cleanup()
 }
 
 
-bool select_analyse::send_result_set_metadata(List<Item> &fields, uint flag)
+bool Query_result_analyse::send_result_set_metadata(List<Item> &fields,
+                                                    uint flag)
 {
   return (init(fields) || change_columns() ||
 	  result->send_result_set_metadata(result_fields, flag));
 }
 
 
-void select_analyse::abort_result_set()
+void Query_result_analyse::abort_result_set()
 {
   cleanup();
   return result->abort_result_set();
@@ -1244,7 +1248,7 @@ bool append_escaped(String *to_str, String *from_str)
 {
   char *from, *end, c;
 
-  if (to_str->realloc(to_str->length() + from_str->length()))
+  if (to_str->mem_realloc(to_str->length() + from_str->length()))
     return 1;
 
   from= (char*) from_str->ptr();

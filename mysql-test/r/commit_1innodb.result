@@ -1,5 +1,7 @@
 call mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
 set sql_mode=no_engine_substitution;
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 set default_storage_engine = InnoDB;
 set autocommit=1;
 drop table if exists t1;
@@ -228,8 +230,7 @@ select * from t2;
 a
 insert into t2 (a) values (1023);
 do (f2(23));
-Warnings:
-Error	1062	Duplicate entry '23' for key 'a'
+ERROR 23000: Duplicate entry '23' for key 'a'
 select * from t2;
 a
 1023
@@ -264,7 +265,7 @@ rollback;
 select * from t2;
 a
 insert into t2 (a) values (1026);
-load data infile "../../std_data/words.dat" into table t1 (a) set a:=f2(26);
+load data infile "../../std_data/words.dat" ignore into table t1 (a) set a:=f2(26);
 ERROR 23000: Duplicate entry '26' for key 'a'
 select * from t2;
 a
@@ -334,6 +335,8 @@ drop function if exists f1;
 drop procedure if exists p_verify_status_increment;
 set @binlog_format=@@global.binlog_format;
 set sql_mode=no_engine_substitution;
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 create table t1 (a int unique);
 create table t2 (a int) engine=myisam;
 set sql_mode=default;
@@ -529,6 +532,8 @@ SUCCESS
 # 13. Read-write statement: INSERT IGNORE, change 0 rows. 
 #
 insert ignore t1 set a=2;
+Warnings:
+Warning	1062	Duplicate entry '2' for key 'a'
 call p_verify_status_increment(2, 2, 1, 0);
 SUCCESS
 
@@ -625,6 +630,8 @@ SUCCESS
 #
 drop table t2;
 set sql_mode=no_engine_substitution;
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 create temporary table t2 (a int);
 call p_verify_status_increment(1, 0, 0, 0);
 SUCCESS

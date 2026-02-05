@@ -1,3 +1,20 @@
+# We use a separate test wrapper for engines not supporting native partitioning
+# since the test results will be different due to deprecation warnings. This test
+# expects to either be executed directly with InnoDB as default engine, or to be
+# executed indirectly by being included in a test wrapper  setting the ENGINE
+# variable.
+--disable_warnings
+if (!$ENGINE)
+{
+  let $ENGINE=`SELECT variable_value FROM performance_schema.global_variables
+               WHERE variable_name = 'DEFAULT_STORAGE_ENGINE'`;
+  if ($ENGINE != "InnoDB")
+  {
+    skip Engines not supporting native partitioning are tested using a test wrapper;
+  }
+}
+--enable_warnings
+
 CREATE TABLE t1 (c1 TINYINT NOT NULL, c2 CHAR(5)) PARTITION BY HASH(c1) PARTITIONS 10;
 INSERT INTO t1 VALUES(0,'abc'),(5,'abc'),(10,'abc'),(15,'abc'),(20,'abc'),(25,'abc'),(30,'abc'),(35,'abc');
 SELECT * FROM t1 ORDER BY c1;
@@ -5,7 +22,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -17,7 +33,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -30,7 +45,6 @@ ALTER TABLE t1 COALESCE PARTITION 18;
 
 SHOW TABLES; 
 SELECT * FROM t1 ORDER BY c1;
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -48,7 +62,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -60,7 +73,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -72,7 +84,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -91,7 +102,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -104,7 +114,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -117,7 +126,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -136,7 +144,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -149,7 +156,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -162,7 +168,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -181,7 +186,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -194,7 +198,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -207,7 +210,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -226,7 +228,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -239,7 +240,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -252,7 +252,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -271,7 +270,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -284,7 +282,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -297,7 +294,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -316,7 +312,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -329,7 +324,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -342,7 +336,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -361,7 +354,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -374,7 +366,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -387,7 +378,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -406,7 +396,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -419,7 +408,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -432,7 +420,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -451,7 +438,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -464,7 +450,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -477,7 +462,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -496,7 +480,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -509,7 +492,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -522,7 +504,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -541,7 +522,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -554,7 +534,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -567,7 +546,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -586,7 +564,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -599,7 +576,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -612,7 +588,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -631,7 +606,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -644,7 +618,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -657,7 +630,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -676,7 +648,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -689,7 +660,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -702,7 +672,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -721,7 +690,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -734,7 +702,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -747,7 +714,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -766,7 +732,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -779,7 +744,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 
@@ -792,7 +756,6 @@ SELECT * FROM t1 ORDER BY c1;
 
 
 SHOW TABLES; 
-let $ENGINE=`select variable_value from information_schema.global_variables where variable_name='STORAGE_ENGINE'`; 
 
 
 

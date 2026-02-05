@@ -1,4 +1,7 @@
 include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
 [connection master]
 
 -------- Test for BUG#9361 --------
@@ -21,7 +24,10 @@ SELECT * FROM t2 ORDER BY a;
 a	b
 1	0
 2	1
+SET @optimizer_switch_saved= @@optimizer_switch;
+SET @@optimizer_switch="derived_merge=off";
 UPDATE t2, (SELECT a FROM t1 ORDER BY a) AS t SET t2.b = t.a+5 ;
+SET @@optimizer_switch=@optimizer_switch_saved;
 SELECT * FROM t1 ORDER BY a;
 a	b
 1	0

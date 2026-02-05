@@ -1,7 +1,17 @@
+if (!$restart_parameters)
+{
+  let $restart_parameters = restart;
+}
+
+# We use --exec echo instead of simple "--echo" because
+# replace_result works on --exec
+--exec echo "# $restart_parameters"
+
 # Include this script only after using shutdown_mysqld.inc
+# or kill_mysqld.inc or expect_crash.inc
 # where $_expect_file_name was initialized.
 # Write file to make mysql-test-run.pl start up the server again
---exec echo "restart" > $_expect_file_name
+--exec echo "$restart_parameters" > $_expect_file_name
 
 # Turn on reconnect
 --enable_reconnect

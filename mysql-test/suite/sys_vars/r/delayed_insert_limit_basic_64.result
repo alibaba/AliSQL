@@ -97,19 +97,19 @@ ERROR HY000: Variable 'delayed_insert_limit' is a GLOBAL variable and should be 
 SELECT @@Session.delayed_insert_limit;
 ERROR HY000: Variable 'delayed_insert_limit' is a GLOBAL variable
 '#----------------------FN_DYNVARS_024_06------------------------#'
-SELECT @@global.delayed_insert_limit =
-VARIABLE_VALUE FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES
-WHERE VARIABLE_NAME='delayed_insert_limit';
-@@global.delayed_insert_limit =
-VARIABLE_VALUE
+SELECT VARIABLE_VALUE FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES
+WHERE VARIABLE_NAME='delayed_insert_limit'
+  into @tmp;
+SELECT @@global.delayed_insert_limit = @tmp;
+@@global.delayed_insert_limit = @tmp
 1
 Warnings:
 Warning	1287	'@@delayed_insert_limit' is deprecated and will be removed in a future release.
-SELECT @@delayed_insert_limit =
-VARIABLE_VALUE FROM INFORMATION_SCHEMA.SESSION_VARIABLES
-WHERE VARIABLE_NAME='delayed_insert_limit';
-@@delayed_insert_limit =
-VARIABLE_VALUE
+SELECT VARIABLE_VALUE FROM INFORMATION_SCHEMA.SESSION_VARIABLES
+WHERE VARIABLE_NAME='delayed_insert_limit'
+  into @tmp;
+SELECT @@delayed_insert_limit = @tmp;
+@@delayed_insert_limit = @tmp
 1
 Warnings:
 Warning	1287	'@@delayed_insert_limit' is deprecated and will be removed in a future release.
@@ -150,11 +150,11 @@ SELECT @@delayed_insert_limit;
 Warnings:
 Warning	1287	'@@delayed_insert_limit' is deprecated and will be removed in a future release.
 SET local.delayed_insert_limit = 1;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'delayed_insert_limit = 1' at line 1
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'local.delayed_insert_limit = 1' at line 1
 SELECT local.delayed_insert_limit;
 ERROR 42S02: Unknown table 'local' in field list
 SET global.delayed_insert_limit = 1;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'delayed_insert_limit = 1' at line 1
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'global.delayed_insert_limit = 1' at line 1
 SELECT global.delayed_insert_limit;
 ERROR 42S02: Unknown table 'global' in field list
 SELECT delayed_insert_limit = @@session.delayed_insert_limit;

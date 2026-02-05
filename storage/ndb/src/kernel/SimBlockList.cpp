@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -49,7 +56,14 @@
 #include <BackupProxy.hpp>
 #include <RestoreProxy.hpp>
 #include <PgmanProxy.hpp>
+#include <DbtcProxy.hpp>
+#include <DbspjProxy.hpp>
+#include <thrman.hpp>
+#include <trpman.hpp>
 #include <mt.hpp>
+
+#define JAM_FILE_ID 492
+
 
 #ifndef VM_TRACE
 #define NEW_BLOCK(B) new B
@@ -128,7 +142,10 @@ SimBlockList::load(EmulatorData& data){
     theList[8]  = NEW_BLOCK(Dblqh)(ctx);
   else
     theList[8]  = NEW_BLOCK(DblqhProxy)(ctx);
-  theList[9]  = NEW_BLOCK(Dbtc)(ctx);
+  if (globalData.ndbMtTcThreads == 0)
+    theList[9]  = NEW_BLOCK(Dbtc)(ctx);
+  else
+    theList[9] = NEW_BLOCK(DbtcProxy)(ctx);
   if (!mtLqh)
     theList[10] = NEW_BLOCK(Dbtup)(ctx);
   else
@@ -151,17 +168,19 @@ SimBlockList::load(EmulatorData& data){
   else
     theList[18] = NEW_BLOCK(RestoreProxy)(ctx);
   theList[19] = NEW_BLOCK(Dbinfo)(ctx);
-  theList[20]  = NEW_BLOCK(Dbspj)(ctx);
-  assert(NO_OF_BLOCKS == 21);
-
-  if (globalData.isNdbMt) {
-    add_main_thr_map();
-    if (globalData.isNdbMtLqh) {
-      for (int i = 0; i < noOfBlocks; i++)
-        theList[i]->loadWorkers();
-    }
-    finalize_thr_map();
-  }
+  if (globalData.ndbMtTcThreads == 0)
+    theList[20]  = NEW_BLOCK(Dbspj)(ctx);
+  else
+    theList[20]  = NEW_BLOCK(DbspjProxy)(ctx);
+  if (NdbIsMultiThreaded() == false)
+    theList[21] = NEW_BLOCK(Thrman)(ctx);
+  else
+    theList[21] = NEW_BLOCK(ThrmanProxy)(ctx);
+  if (NdbIsMultiThreaded() == false)
+    theList[22] = NEW_BLOCK(Trpman)(ctx);
+  else
+    theList[22] = NEW_BLOCK(TrpmanProxy)(ctx);
+  assert(NO_OF_BLOCKS == 23);
 
   // Check that all blocks could be created
   for (int i = 0; i < noOfBlocks; i++)
@@ -171,6 +190,26 @@ SimBlockList::load(EmulatorData& data){
       ERROR_SET(fatal, NDBD_EXIT_MEMALLOC,
                 "Failed to create block", "");
     }
+  }
+
+  if (globalData.isNdbMt)
+  {
+    /**
+      This is where we bind blocks to their respective threads.
+      mt_init_thr_map binds the blocks to the two main threads,
+      the thread for Global blocks (thr = 0), and the thread
+      for Local blocks (thr = 1) and it puts CMVMI into the receiver
+      thread.
+
+      For those blocks where we created proxies above the loadWorkers
+      function will map the instances of the block into the right
+      thread. mt_add_thr_map will be called for each of the block
+      instances.
+    */
+    mt_init_thr_map();
+    for (int i = 0; i < noOfBlocks; i++)
+      theList[i]->loadWorkers();
+    mt_finalize_thr_map();
   }
 }
 

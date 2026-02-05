@@ -1,3 +1,4 @@
+
 --source include/big_test.inc
 --source include/not_gtid_enabled.inc
 --source include/master-slave.inc
@@ -11,7 +12,11 @@ SET @save_default_storage_engine=@@global.default_storage_engine;
 SET @@global.default_storage_engine='innodb';
 
 eval SET GLOBAL slave_parallel_workers= $max_workers;
-#call mtr.add_suppression("The slave coordinator and worker threads are stopped, possibly leaving data in inconsistent state");
+# As the test case is not going to do any synchronization with the master
+# before issuing STOP SLAVE in the non-deterministic activity, there is a
+# chance that the slave applier be in MTS mode and in a condition that it
+# will throw the following error message:
+call mtr.add_suppression("The slave coordinator and worker threads are stopped, possibly leaving data in inconsistent state");
 call mtr.add_suppression("Request to stop slave SQL Thread received while applying a group that has non-transactional changes");
 
 --source include/stop_slave.inc
@@ -41,10 +46,11 @@ while ($i) {
 let $slave_status= 0;
 let $trx= 0;
 let $alter= 0;
-let $i= 200; # with bigger value test times out on some PB hosts 
-if ($VALGRIND_TEST)
+let $i= 200; # with bigger value test times out on some PB hosts
+--let $small_test=`SELECT @@slave_parallel_type='LOGICAL_CLOCK' OR $VALGRIND_TEST`
+if ($small_test)
 {
-  # test may be slow on Valgrind
+  # test may be slow on Valgrind or on MTS SUBMODE = LOGICAL CLOCK
   let $i=50;
 }
 if (`select @@binlog_format like "STATEMENT"`) {

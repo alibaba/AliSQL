@@ -1,21 +1,32 @@
-# Copyright (c) 2000, 2016, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; version 2 of the License.
+# it under the terms of the GNU General Public License, version 2.0,
+# as published by the Free Software Foundation.
+#
+# This program is also distributed with certain software (including
+# but not limited to OpenSSL) that is licensed under separate terms,
+# as designated in a particular file or component or in included license
+# documentation.  The authors of MySQL hereby grant you an additional
+# permission to link the program and your derivative works with the
+# separately licensed software that they have included with MySQL.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# GNU General Public License, version 2.0, for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; see the file COPYING. If not, write to the
+# along with this program. If not, write to the
 # Free Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston
 # MA  02110-1301  USA.
 
 %global mysql_vendor Oracle and/or its affiliates
 %global mysqldatadir /var/lib/mysql
+
+# Pass path to mecab lib
+%{?with_mecab: %global mecab_option -DWITH_MECAB=%{with_mecab}}
+%{?with_mecab: %global mecab 1}
 
 # Regression tests may take a long time, override the default to skip them
 %{!?runselftest:%global runselftest 0}
@@ -28,32 +39,35 @@
 
 %global src_dir               %{src_base}-%{version}
 
+%global license_files_server  %{src_dir}/LICENSE %{src_dir}/README
+
 %if 0%{?commercial}
-%global license_files_server  %{src_dir}/LICENSE.mysql
 %global license_type          Commercial
 %else
-%global license_files_server  %{src_dir}/COPYING %{src_dir}/README
 %global license_type          GPLv2
 %endif
 
 Name:           mysql-%{product_suffix}-minimal
 Summary:        A very fast and reliable SQL database server
 Group:          Applications/Databases
-Version:        @VERSION@
-Release:        2%{?commercial:.1}%{?dist}
+Version:        @MYSQL_NO_DASH_VERSION@
+Release:        1%{?commercial:.1}%{?dist}
 License:        Copyright (c) 2000, @MYSQL_COPYRIGHT_YEAR@, %{mysql_vendor}. All rights reserved. Under %{?license_type} license as shown in the Description field.
 URL:            http://www.mysql.com/
 Packager:       MySQL Release Engineering <mysql-build@oss.oracle.com>
 Vendor:         %{mysql_vendor}
 Source0:        https://cdn.mysql.com/Downloads/MySQL-@MYSQL_BASE_VERSION@/%{src_dir}.tar.gz
-BuildRequires:  cmake
+Source1:        https://downloads.sourceforge.net/boost/@BOOST_PACKAGE_NAME@.tar.bz2
+BuildRequires:  cmake >= 2.8.2
 BuildRequires:  perl
 BuildRequires:  perl(Time::HiRes)
 BuildRequires:  perl(Env)
 BuildRequires:  time
+BuildRequires:  cyrus-sasl-devel
 BuildRequires:  libaio-devel
 BuildRequires:  ncurses-devel
 BuildRequires:  numactl-devel
+BuildRequires:  openldap-devel
 BuildRequires:  openssl-devel
 BuildRequires:  zlib-devel
 BuildRoot:      %(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
@@ -84,7 +98,6 @@ documentation and the manual for more information.
 Summary:        A very fast and reliable SQL database server
 Group:          Applications/Databases
 Requires:       shadow-utils
-Requires:       perl(Data::Dumper)
 Provides:       mysql-server = %{version}-%{release}
 Provides:       mysql-server%{?_isa} = %{version}-%{release}
 Provides:       mysql-compat-server = %{version}-%{release}
@@ -111,7 +124,7 @@ and the manual for more information.
 This package includes the MySQL server binary as well as related utilities
 to run and administer a MySQL server.
 %prep
-%setup -q -T -a 0 -c -n %{src_dir}
+%setup -q -T -a 0 -a 1 -c -n %{src_dir}
 
 %build
 # Fail quickly and obviously if user tries to build as root
@@ -132,17 +145,20 @@ mkdir release
            -DBUILD_CONFIG=mysql_release \
            -DINSTALL_LAYOUT=RPM \
            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+	   -DWITH_BOOST=.. \
            -DCMAKE_C_FLAGS="%{optflags}" \
            -DCMAKE_CXX_FLAGS="%{optflags}" \
            -DWITH_INNODB_MEMCACHED=1 \
            -DINSTALL_LIBDIR="%{_lib}/mysql" \
            -DINSTALL_PLUGINDIR="%{_lib}/mysql/plugin" \
-           -DINSTALL_SQLBENCHDIR="" \
            -DINSTALL_MYSQLTESTDIR="" \
            -DMYSQL_UNIX_ADDR="%{mysqldatadir}/mysql.sock" \
+           -DMYSQLX_UNIX_ADDR="/var/run/mysqld/mysqlx.sock" \
            -DFEATURE_SET="%{feature_set}" \
            -DWITH_EMBEDDED_SERVER=0 \
            -DWITH_EMBEDDED_SHARED_LIBRARY=0 \
+           -DWITH_NUMA=ON \
+           %{?mecab_option} \
            -DWITH_SSL=system \
            -DCOMPILATION_COMMENT="%{compilation_comment_release}" \
            -DMYSQL_SERVER_SUFFIX="%{?server_suffix}"
@@ -157,6 +173,7 @@ MBD=$RPM_BUILD_DIR/%{src_dir}
 install -d -m 0750 %{buildroot}/var/lib/mysql
 install -d -m 0755 %{buildroot}/var/run/mysqld
 install -d -m 0750 %{buildroot}/var/lib/mysql-files
+install -d -m 0750 %{buildroot}/var/lib/mysql-keyring
 
 # Install all binaries
 cd $MBD/release
@@ -166,41 +183,50 @@ make DESTDIR=%{buildroot} install
 install -D -m 0644 $MBD/release/packaging/rpm-docker/my.cnf %{buildroot}%{_sysconfdir}/my.cnf
 install -d %{buildroot}%{_sysconfdir}/my.cnf.d
 
-# Remove man, sql-bench, include, and libs
-for f in %{_mandir} %{_datadir}/sql-bench %{_includedir} %{_datadir}/aclocal/mysql.m4 ; do
+# Remove man, include, and libs
+for f in %{_mandir} %{_includedir} %{_datadir}/aclocal/mysql.m4 ; do
     rm -rf %{buildroot}$f
 done
 rm -rf %{buildroot}%{_libdir}/mysql/libmysql*
 
 # Removing some tools
-for f in msql2mysql mysqlaccess mysqlaccess.conf mysqlbug mysql_convert_table_format \
-         mysql_find_rows mysql_fix_extensions mysqlhotcopy mysql_setpermission \
-         mysql_waitpid mysql_zap; do
-    rm -f %{buildroot}%{_bindir}/$f
-done
-
-for f in innochecksum myisamchk myisam_ftdump myisamlog myisampack mysqladmin \
+for f in innochecksum myisamchk myisam_ftdump myisamlog myisampack \
          mysqlbinlog mysqlcheck mysql_client_test mysql_config_editor \
          mysqld_multi mysqld_safe mysqldumpslow mysql_embedded mysqlimport \
          mysql_plugin mysql_secure_installation mysqlshow mysqlslap  mysqltest \
-         perror replace  resolveip  resolve_stack_dump; do
+         mysqlxtest perror replace resolveip resolve_stack_dump \
+         lz4_decompress zlib_decompress; do
     rm -f %{buildroot}%{_bindir}/$f
 done
 
 #  Remove test plugins
-for p in auth.so auth_test_plugin.so daemon_example.ini libdaemon_example.so qa_auth_client.so \
-    qa_auth_interface.so qa_auth_server.so replication_observers_example_plugin.so ha_example.so \
-    test_udf_services.so ; do
+for p in auth.so auth_test_plugin.so \
+    daemon_example.ini libdaemon_example.so \
+    qa_auth_client.so qa_auth_interface.so qa_auth_server.so \
+    replication_observers_example_plugin.so ha_example.so \
+    test_udf_services.so test_security_context.so udf_example.so ; do
     rm -f %{buildroot}%{_libdir}/mysql/plugin/$p
 done
 
+rm -f %{buildroot}%{_libdir}/mysql/plugin/libtest_*.so
+rm -f %{buildroot}%{_libdir}/pkgconfig/mysqlclient.pc
+
 # No need for these scripts
-rm -f %{buildroot}%{_datadir}/mysql/{mysql.server,mysqld_multi.server,mysql-log-rotate,binary-configure}
+rm -f %{buildroot}%{_datadir}/mysql/{mysql.server,mysqld_multi.server,mysql-log-rotate}
+
+# Remove files pages we explicitly do not want to package
+rm -rf %{buildroot}%{_infodir}/mysql.info*
+rm -f %{buildroot}%{_datadir}/mysql/win_install_firewall.sql
+rm -f %{buildroot}%{_datadir}/mysql/upgrade_firewall.sql
+rm -f %{buildroot}%{_datadir}/mysql/audit_log_filter_win_install.sql
 
 %check
-%if 0%{?runselftest}
+%if 0%{?runselftest} || 0%{?with_unittests}
 pushd release
-make test VERBOSE=1
+export CTEST_OUTPUT_ON_FAILURE=1
+make test || true
+%endif
+%if 0%{?runselftest}
 export MTR_BUILD_THREAD=auto
 pushd mysql-test
 ./mtr \
@@ -217,35 +243,50 @@ rm -r $(readlink var) var
     -c "MySQL Server" -u 27 mysql >/dev/null 2>&1 || :
 
 %post -n mysql-%{product_suffix}-server-minimal
-/bin/touch /var/log/mysqld.log >/dev/null 2>&1 || :
-/bin/chmod 0640 /var/log/mysqld.log >/dev/null 2>&1 || :
-/bin/chown mysql:mysql /var/log/mysqld.log >/dev/null 2>&1 || :
+[ -e /var/log/mysqld.log ] || install /dev/null -m0640 -omysql -gmysql /var/log/mysqld.log || :
 
 %files -n mysql-%{product_suffix}-server-minimal
 %defattr(-, root, root, -)
-%doc %{?license_files_server}
+%doc %{?license_files_server} %{src_dir}/Docs/ChangeLog
 %doc %{src_dir}/Docs/INFO_SRC*
 %doc release/Docs/INFO_BIN*
 %config(noreplace) %{_sysconfdir}/my.cnf
 %dir %{_sysconfdir}/my.cnf.d
 %attr(755, root, root) %{_sbindir}/mysqld
 %attr(755, root, root) %{_bindir}/mysql
+%attr(755, root, root) %{_bindir}/mysqladmin
 %attr(755, root, root) %{_bindir}/mysqldump
+%attr(755, root, root) %{_bindir}/mysqlpump
 %attr(755, root, root) %{_bindir}/mysql_config
 %attr(755, root, root) %{_bindir}/mysql_install_db
+%attr(755, root, root) %{_bindir}/mysql_ssl_rsa_setup
 %attr(755, root, root) %{_bindir}/mysql_tzinfo_to_sql
 %attr(755, root, root) %{_bindir}/mysql_upgrade
 %attr(755, root, root) %{_bindir}/my_print_defaults
 %dir %{_libdir}/mysql/plugin
 %attr(755, root, root) %{_libdir}/mysql/plugin/adt_null.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/auth_socket.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/authentication_ldap_sasl_client.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/group_replication.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/connection_control.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/innodb_engine.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/keyring_file.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/keyring_udf.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/libmemcached.so
+%if 0%{?mecab}
+%{_libdir}/mysql/mecab
+%attr(755, root, root) %{_libdir}/mysql/plugin/libpluginmecab.so
+%endif
+%attr(755, root, root) %{_libdir}/mysql/plugin/locking_service.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/mypluglib.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/mysql_no_login.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/mysqlx.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/rewrite_example.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/rewriter.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/semisync_master.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/semisync_slave.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/validate_password.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/mysql_no_login.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/version_token.so
 %dir %{_datadir}/mysql/
 %{_datadir}/mysql/charsets/
 %{_datadir}/mysql/bulgarian/
@@ -273,28 +314,63 @@ rm -r $(readlink var) var
 %{_datadir}/mysql/swedish/
 %{_datadir}/mysql/ukrainian/
 %attr(644, root, root) %{_datadir}/mysql/errmsg-utf8.txt
-%attr(644, root, root) %{_datadir}/mysql/my-default.cnf
 %attr(644, root, root) %{_datadir}/mysql/fill_help_tables.sql
 %attr(644, root, root) %{_datadir}/mysql/mysql_system_tables.sql
 %attr(644, root, root) %{_datadir}/mysql/mysql_system_tables_data.sql
+%attr(644, root, root) %{_datadir}/mysql/mysql_sys_schema.sql
 %attr(644, root, root) %{_datadir}/mysql/mysql_test_data_timezone.sql
 %attr(644, root, root) %{_datadir}/mysql/mysql_security_commands.sql
 %attr(644, root, root) %{_datadir}/mysql/dictionary.txt
 %attr(644, root, root) %{_datadir}/mysql/innodb_memcached_config.sql
+%attr(644, root, root) %{_datadir}/mysql/install_rewriter.sql
+%attr(644, root, root) %{_datadir}/mysql/uninstall_rewriter.sql
 %attr(644, root, root) %{_datadir}/mysql/magic
+
+%if 0%{?commercial}
+%attr(755, root, root) %{_libdir}/mysql/plugin/audit_log.so
+%attr(644, root, root) %{_datadir}/mysql/audit_log_filter_linux_install.sql
+%attr(755, root, root) %{_libdir}/mysql/plugin/authentication_ldap_sasl.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/authentication_ldap_simple.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/authentication_pam.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/data_masking.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/keyring_encrypted_file.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/keyring_okv.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/thread_pool.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/openssl_udf.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/firewall.so
+%attr(644, root, root) %{_datadir}/mysql/linux_install_firewall.sql
+%endif
+
 %dir %attr(750, mysql, mysql) /var/lib/mysql
 %dir %attr(755, mysql, mysql) /var/run/mysqld
 %dir %attr(750, mysql, mysql) /var/lib/mysql-files
+%dir %attr(750, mysql, mysql) /var/lib/mysql-keyring
 
 %changelog
-* Mon Mar 14 2016 Georgi Kodinov <georgi.kodinov@oracle.com> - 5.6.31-1
+* Thu Sep 05 2019 Bjorn Munch <bjorn.munch@oracle.com> - 5.7.28-1
+- Add License Book, remove COPYING
+
+* Tue Sep 13 2016 Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com> - 5.7.16-1
+- Add connection_control.so to server subpackage
+
+* Mon Apr 04 2016 Georgi Kodinov <georgi.kodinov@oracle.com> - 5.7.13-1
 - Add test_udf_services.so plugin
+- Add keyring_udf.so plugin to server subpackage
 
-* Thu Jun 25 2015 Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com> - 5.6.26-1
+* Mon Jan 4 2016 Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com> - 5.7.11-1
+- Include mysql-keyring directory
+- Provide keyring_file.so plugin
+
+* Mon Oct 19 2015 Bharathy Satish <bharathy.x.satish@oracle.com> - 5.7.10-1
+  Added new decompression utilities lz4_decompress and zlib_decompress binaries to
+  client subpackage.
+
+* Mon Jul 6 2015 Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com> - 5.7.9-1
+- Updated for 5.7.9
+
+* Wed Jul 1 2015 Balasubramanian Kandasamy <balasubramanian.kandasamy@oracle.com> - 5.7.8-0.3.rc
 - Update package names
-
-* Mon Feb 16 2015 Terje Rosten <terje.rosten@oracle.com> - 5.6.23-1
-- Port to 5.6.
+- Handle plugin changes
 
 * Mon Feb 16 2015 Terje Rosten <terje.rosten@oracle.com> - 5.7.6-0.3.m16
 - Introduce minimal server for docker
@@ -637,8 +713,7 @@ rm -r $(readlink var) var
 
 * Mon Nov 16 2009 Joerg Bruehe <joerg.bruehe@sun.com>
 
-- Fix some problems with the directives around "tcmalloc" (experimental),
-  remove erroneous traces of the InnoDB plugin (that is 5.1 only).
+- remove erroneous traces of the InnoDB plugin (that is 5.1 only).
 
 * Tue Oct 06 2009 Magnus Blaudd <mvensson@mysql.com>
 

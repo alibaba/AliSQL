@@ -1,3 +1,8 @@
+# The include statement below is a temp one for tests that are yet to
+#be ported to run with InnoDB,
+#but needs to be kept for tests that would need MyISAM in future.
+--source include/force_myisam_default.inc
+
 #
 # Initialization
 --disable_warnings
@@ -47,6 +52,7 @@ insert into t2 values (107),(75),(1000);
 
 select t1.id, t2.id from t1, t2 where t2.id = t1.id;
 select t1.id, count(t2.id) from t1,t2 where t2.id = t1.id group by t1.id;
+# We see the functional dependency implied by WHERE!
 select t1.id, count(t2.id) from t1,t2 where t2.id = t1.id group by t2.id;
 
 #
@@ -60,7 +66,7 @@ drop table t1,t2;
 #
 # problem with join
 #
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 CREATE TABLE t1 (
   id int(11) NOT NULL auto_increment,
   token varchar(100) DEFAULT '' NOT NULL,
@@ -73,7 +79,7 @@ CREATE TABLE t1 (
   KEY timestamp (timestamp),
   UNIQUE token_2 (token(75),count,phone)
 );
-
+SET sql_mode = default;
 INSERT INTO t1 VALUES (21,'e45703b64de71482360de8fec94c3ade',3,7800,'n','1999-12-23 17:22:21');
 INSERT INTO t1 VALUES (22,'e45703b64de71482360de8fec94c3ade',4,5000,'y','1999-12-23 17:22:21');
 INSERT INTO t1 VALUES (18,'346d1cb63c89285b2351f0ca4de40eda',3,13200,'b','1999-12-23 11:58:04');
@@ -705,7 +711,7 @@ select 'The cost of accessing t1 (dont care if it changes' '^';
 
 select 'vv: Following query must use ALL(t1), eq_ref(A), eq_ref(B): vv' Z;
 
-explain select * from t1, t2 A, t2 B where A.a = t1.a and B.a=A.b;
+explain select * from t1, t2 a, t2 b where a.a = t1.a and b.a=a.b;
 show status like '%cost%';
 select '^^: The above should be ~= 20 + cost(select * from t1). Value less than 20 is an error' Z;
 
@@ -1001,8 +1007,10 @@ WHERE v1.i2 = 211
 GROUP BY t1.pk
 ORDER BY v1.i2;
 
+--source include/turn_off_only_full_group_by.inc
 eval EXPLAIN $query;
 eval $query;
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 
 let query=
 SELECT t1.pk
@@ -1042,3 +1050,54 @@ eval EXPLAIN SELECT STRAIGHT_JOIN * FROM t4 JOIN $rest_of_query;
 eval EXPLAIN SELECT * FROM t4 STRAIGHT_JOIN $rest_of_query;
 
 drop table t1,t2,t3,t4;
+
+--echo # Bug#20455184: Assertion failed: join_cond in optimizer.cc
+
+CREATE TABLE t1(a INTEGER) engine=innodb;
+
+let $query=
+SELECT 1
+FROM (SELECT 1 FROM t1 WHERE a) AS q
+     NATURAL LEFT JOIN t1
+     NATURAL LEFT JOIN t1 AS t2;
+
+eval explain $query;
+eval $query;
+
+let $query=
+SELECT 1
+FROM t1
+     NATURAL RIGHT JOIN t1 AS t2
+     NATURAL RIGHT JOIN (SELECT 1 FROM t1 WHERE a) AS q;
+
+eval explain $query;
+eval $query;
+
+DROP TABLE t1;
+
+--echo # Bug#21045724: Assertion '!table || !table->read_set ...
+
+CREATE TABLE t1
+(pk INTEGER,
+ dummy VARCHAR(64),
+ col_check TINYINT,
+ PRIMARY KEY(pk)
+) engine=innodb;
+
+INSERT INTO t1 VALUES (13, '13', 13);
+
+CREATE VIEW v1 AS
+SELECT *
+FROM t1
+WHERE pk BETWEEN 13 AND 14;
+
+PREPARE st1 FROM "
+UPDATE v1 AS a NATURAL JOIN v1 AS b
+SET a.dummy = '', b.col_check = NULL ";
+
+EXECUTE st1;
+EXECUTE st1;
+
+DEALLOCATE PREPARE st1;
+DROP VIEW v1;
+DROP TABLE t1;

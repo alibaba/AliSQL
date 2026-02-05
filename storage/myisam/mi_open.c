@@ -1,13 +1,20 @@
-/* Copyright (c) 2000, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -31,8 +38,9 @@
 #include "rt_index.h"
 #include <m_ctype.h>
 
-#ifdef __WIN__
+#ifdef _WIN32
 #include <fcntl.h>
+#include <process.h>
 #endif
 
 static void setup_key_functions(MI_KEYDEF *keyinfo);
@@ -43,7 +51,7 @@ static void setup_key_functions(MI_KEYDEF *keyinfo);
 #define disk_pos_assert(pos, end_pos) \
 if (pos > end_pos)             \
 {                              \
-  my_errno=HA_ERR_CRASHED;     \
+  set_my_errno(HA_ERR_CRASHED);\
   goto err;                    \
 }
 
@@ -76,23 +84,25 @@ MI_INFO *test_if_reopen(char *filename)
   have an open count of 0.
 ******************************************************************************/
 
-MI_INFO *mi_open(const char *name, int mode, uint open_flags)
+MI_INFO *mi_open_share(const char *name, MYISAM_SHARE *old_share, int mode,
+                       uint open_flags)
 {
-  int lock_error,kfile,open_mode,save_errno,have_rtree=0, realpath_err;
+  int lock_error,kfile,open_mode,save_errno, realpath_err;
   uint i,j,len,errpos,head_length,base_pos,offset,info_length,keys,
     key_parts,unique_key_parts,fulltext_keys,uniques;
   uint internal_table= open_flags & HA_OPEN_INTERNAL_TABLE;
   char name_buff[FN_REFLEN], org_name[FN_REFLEN], index_name[FN_REFLEN],
        data_name[FN_REFLEN];
   uchar *disk_cache, *disk_pos, *end_pos;
-  MI_INFO info, *m_info, *old_info= NULL;
+  MI_INFO info, *m_info;
   MYISAM_SHARE share_buff,*share;
   ulong rec_per_key_part[HA_MAX_POSSIBLE_KEY*MI_MAX_KEY_SEG];
   my_off_t key_root[HA_MAX_POSSIBLE_KEY],key_del[MI_MAX_KEY_BLOCK_SIZE];
   ulonglong max_key_file_length, max_data_file_length;
-  DBUG_ENTER("mi_open");
+  ST_FILE_ID file_id= {0, 0};
+  DBUG_ENTER("mi_open_share");
 
-  LINT_INIT(m_info);
+  m_info= NULL;
   kfile= -1;
   lock_error=1;
   errpos=0;
@@ -101,20 +111,29 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
 
   realpath_err= my_realpath(name_buff,
                   fn_format(org_name,name,"",MI_NAME_IEXT,4),MYF(0));
-  if (my_is_symlink(org_name) &&
-      (realpath_err || (*myisam_test_invalid_symlink)(name_buff)))
+  if (my_is_symlink(name_buff, &file_id))
   {
-    my_errno= HA_WRONG_CREATE_OPTION;
-    DBUG_RETURN (NULL);
+    if (realpath_err ||
+       (*myisam_test_invalid_symlink)(name_buff) ||
+       my_is_symlink(name_buff, &file_id))
+    {
+      set_my_errno(HA_WRONG_CREATE_OPTION);
+      DBUG_RETURN (NULL);
+    }
   }
 
   if (!internal_table)
   {
     mysql_mutex_lock(&THR_LOCK_myisam);
-    old_info= test_if_reopen(name_buff);
+    if (!old_share && ! (open_flags & HA_OPEN_FROM_SQL_LAYER))
+    {
+      MI_INFO *old_info= test_if_reopen(name_buff);
+      if (old_info)
+        old_share= old_info->s;
+    }
   }
 
-  if (!old_info)
+  if (!old_share)
   {
     share= &share_buff;
     memset(&share_buff, 0, sizeof(share_buff));
@@ -127,26 +146,37 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
     DBUG_EXECUTE_IF("myisam_pretend_crashed_table_on_open",
                     if (strstr(name, "/t1"))
                     {
-                      my_errno= HA_ERR_CRASHED;
+                      set_my_errno(HA_ERR_CRASHED);
                       goto err;
                     });
+    DEBUG_SYNC_C("before_opening_indexfile");
     if ((kfile= mysql_file_open(mi_key_file_kfile,
                                 name_buff,
-                                (open_mode= O_RDWR) | O_SHARE, MYF(0))) < 0)
+                                (open_mode= O_RDWR) | O_SHARE | O_NOFOLLOW,
+                                MYF(0))) < 0)
     {
       if ((errno != EROFS && errno != EACCES) ||
 	  mode != O_RDONLY ||
           (kfile= mysql_file_open(mi_key_file_kfile,
                                   name_buff,
-                                  (open_mode= O_RDONLY) | O_SHARE, MYF(0))) < 0)
+                                  (open_mode= O_RDONLY) | O_SHARE | O_NOFOLLOW,
+                                  MYF(0))) < 0)
 	goto err;
     }
+
+    if (!my_is_same_file(kfile, &file_id))
+    {
+      mysql_file_close(kfile, MYF(0));
+      set_my_errno(HA_WRONG_CREATE_OPTION);
+      goto err;
+    }
+
     share->mode=open_mode;
     errpos=1;
     if (mysql_file_read(kfile, share->state.header.file_version, head_length,
                         MYF(MY_NABP)))
     {
-      my_errno= HA_ERR_NOT_A_TABLE;
+      set_my_errno(HA_ERR_NOT_A_TABLE);
       goto err;
     }
     if (memcmp((uchar*) share->state.header.file_version,
@@ -155,7 +185,7 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
       DBUG_PRINT("error",("Wrong header in %s",name_buff));
       DBUG_DUMP("error_dump", share->state.header.file_version,
 		head_length);
-      my_errno=HA_ERR_NOT_A_TABLE;
+      set_my_errno(HA_ERR_NOT_A_TABLE);
       goto err;
     }
     share->options= mi_uint2korr(share->state.header.options);
@@ -167,20 +197,20 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
           HA_OPTION_RELIES_ON_SQL_LAYER))
     {
       DBUG_PRINT("error",("wrong options: 0x%lx", share->options));
-      my_errno=HA_ERR_OLD_FILE;
+      set_my_errno(HA_ERR_OLD_FILE);
       goto err;
     }
     if ((share->options & HA_OPTION_RELIES_ON_SQL_LAYER) &&
         ! (open_flags & HA_OPEN_FROM_SQL_LAYER))
     {
       DBUG_PRINT("error", ("table cannot be openned from non-sql layer"));
-      my_errno= HA_ERR_UNSUPPORTED;
+      set_my_errno(HA_ERR_UNSUPPORTED);
       goto err;
     }
     /* Don't call realpath() if the name can't be a link */
     if (!strcmp(name_buff, org_name) ||
         my_readlink(index_name, org_name, MYF(0)) == -1)
-      (void) strmov(index_name, org_name);
+      (void) my_stpcpy(index_name, org_name);
     *strrchr(org_name, '.')= '\0';
     (void) fn_format(data_name,org_name,"",MI_NAME_DEXT,
                      MY_APPEND_EXT|MY_UNPACK_FILENAME|MY_RESOLVE_SYMLINKS);
@@ -189,7 +219,7 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
     base_pos=mi_uint2korr(share->state.header.base_pos);
     if (!(disk_cache= (uchar*) my_alloca(info_length+128)))
     {
-      my_errno=ENOMEM;
+      set_my_errno(ENOMEM);
       goto err;
     }
     end_pos=disk_cache+info_length;
@@ -207,7 +237,7 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
     errpos=3;
     if (mysql_file_read(kfile, disk_cache, info_length, MYF(MY_NABP)))
     {
-      my_errno=HA_ERR_CRASHED;
+      set_my_errno(HA_ERR_CRASHED);
       goto err;
     }
     len=mi_uint2korr(share->state.header.state_info_length);
@@ -243,8 +273,8 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
                           "changed: %u  open_count: %u  !locking: %d",
                           open_flags, share->state.changed,
                           share->state.open_count, my_disable_locking));
-      my_errno=((share->state.changed & STATE_CRASHED_ON_REPAIR) ?
-		HA_ERR_CRASHED_ON_REPAIR : HA_ERR_CRASHED_ON_USAGE);
+      set_my_errno(((share->state.changed & STATE_CRASHED_ON_REPAIR) ?
+                    HA_ERR_CRASHED_ON_REPAIR : HA_ERR_CRASHED_ON_USAGE));
       goto err;
     }
 
@@ -252,7 +282,7 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
     if (share->base.keystart > 65535 || 
         share->base.rec_reflength > 8 || share->base.key_reflength > 7) 
     {
-      my_errno=HA_ERR_CRASHED;
+      set_my_errno(HA_ERR_CRASHED);
       goto err;
     }
 
@@ -261,7 +291,7 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
 	key_parts > MI_MAX_KEY * MI_MAX_KEY_SEG)
     {
       DBUG_PRINT("error",("Wrong key info:  Max_key_length: %d  keys: %d  key_parts: %d", share->base.max_key_length, keys, key_parts));
-      my_errno=HA_ERR_UNSUPPORTED;
+      set_my_errno(HA_ERR_UNSUPPORTED);
       goto err;
     }
 
@@ -287,7 +317,8 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
     /* Add space for node pointer */
     share->base.max_key_length+= share->base.key_reflength;
 
-    if (!my_multi_malloc(MY_WME,
+    if (!my_multi_malloc(mi_key_memory_MYISAM_SHARE,
+                         MY_WME,
 			 &share,sizeof(*share),
 			 &share->state.rec_per_key_part,sizeof(long)*key_parts,
 			 &share->keyinfo,keys*sizeof(MI_KEYDEF),
@@ -317,10 +348,10 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
     memcpy((char*) share->state.key_del,
 	   (char*) key_del, (sizeof(my_off_t) *
 			     share->state.header.max_block_size_index));
-    strmov(share->unique_file_name, name_buff);
+    my_stpcpy(share->unique_file_name, name_buff);
     share->unique_name_length= strlen(name_buff);
-    strmov(share->index_file_name,  index_name);
-    strmov(share->data_file_name,   data_name);
+    my_stpcpy(share->index_file_name,  index_name);
+    my_stpcpy(share->data_file_name,   data_name);
 
     share->blocksize= MY_MIN(IO_SIZE, myisam_block_size);
     {
@@ -333,7 +364,7 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
         disk_pos_assert(disk_pos + share->keyinfo[i].keysegs * HA_KEYSEG_SIZE,
  			end_pos);
         if (share->keyinfo[i].key_alg == HA_KEY_ALG_RTREE)
-          have_rtree=1;
+          share->have_rtree=1;
 	set_if_smaller(share->blocksize,share->keyinfo[i].block_length);
 	share->keyinfo[i].seg=pos;
 	for (j=0 ; j < share->keyinfo[i].keysegs; j++,pos++)
@@ -343,7 +374,7 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
               ! (share->options & (HA_OPTION_COMPRESS_RECORD |
                                    HA_OPTION_PACK_RECORD)))
           {
-            my_errno= HA_ERR_CRASHED;
+            set_my_errno(HA_ERR_CRASHED);
             goto err;
           }
 	  if (pos->type == HA_KEYTYPE_TEXT ||
@@ -354,7 +385,7 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
 	      pos->charset=default_charset_info;
 	    else if (!(pos->charset= get_charset(pos->language, MYF(MY_WME))))
 	    {
-	      my_errno=HA_ERR_UNKNOWN_CHARSET;
+	      set_my_errno(HA_ERR_UNKNOWN_CHARSET);
 	      goto err;
 	    }
 	  }
@@ -363,20 +394,15 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
           if (!(share->keyinfo[i].flag & HA_SPATIAL) &&
               pos->start > share->base.reclength)
           {
-            my_errno= HA_ERR_CRASHED;
+            set_my_errno(HA_ERR_CRASHED);
             goto err;
           }
 	}
 	if (share->keyinfo[i].flag & HA_SPATIAL)
 	{
-#ifdef HAVE_SPATIAL
 	  uint sp_segs=SPDIMS*2;
 	  share->keyinfo[i].seg=pos-sp_segs;
 	  share->keyinfo[i].keysegs--;
-#else
-	  my_errno=HA_ERR_UNSUPPORTED;
-	  goto err;
-#endif
 	}
         else if (share->keyinfo[i].flag & HA_FULLTEXT)
 	{
@@ -395,7 +421,7 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
               pos[0].language= pos[-1].language;
               if (!(pos[0].charset= pos[-1].charset))
               {
-                my_errno=HA_ERR_CRASHED;
+                set_my_errno(HA_ERR_CRASHED);
                 goto err;
               }
               pos++;
@@ -441,7 +467,7 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
 	      pos->charset=default_charset_info;
 	    else if (!(pos->charset= get_charset(pos->language, MYF(MY_WME))))
 	    {
-	      my_errno=HA_ERR_UNKNOWN_CHARSET;
+	      set_my_errno(HA_ERR_UNKNOWN_CHARSET);
 	      goto err;
 	    }
 	  }
@@ -475,7 +501,7 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
     if (offset > share->base.reclength)
     {
       /* purecov: begin inspected */
-      my_errno= HA_ERR_CRASHED;
+      set_my_errno(HA_ERR_CRASHED);
       goto err;
       /* purecov: end */
     }
@@ -517,7 +543,6 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
     }
     else if (share->options & HA_OPTION_PACK_RECORD)
       share->data_file_type = DYNAMIC_RECORD;
-    my_afree(disk_cache);
     mi_setup_functions(share);
     share->is_log_table= FALSE;
     thr_lock_init(&share->lock);
@@ -527,19 +552,14 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
       mysql_rwlock_init(mi_key_rwlock_MYISAM_SHARE_key_root_lock,
                         &share->key_root_lock[i]);
     mysql_rwlock_init(mi_key_rwlock_MYISAM_SHARE_mmap_lock, &share->mmap_lock);
-    if (!thr_lock_inited)
-    {
-      /* Probably a single threaded program; Don't use concurrent inserts */
-      myisam_concurrent_insert=0;
-    }
-    else if (myisam_concurrent_insert)
+    if (myisam_concurrent_insert)
     {
       share->concurrent_insert=
 	((share->options & (HA_OPTION_READ_ONLY_DATA | HA_OPTION_TMP_TABLE |
 			   HA_OPTION_COMPRESS_RECORD |
 			   HA_OPTION_TEMP_COMPRESS_RECORD)) ||
 	 (open_flags & HA_OPEN_TMP_TABLE) ||
-	 have_rtree) ? 0 : 1;
+	 share->have_rtree) ? 0 : 1;
       if (share->concurrent_insert)
       {
 	share->lock.get_status=mi_get_status;
@@ -560,20 +580,20 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
   }
   else
   {
-    share= old_info->s;
+    share= old_share;
     if (mode == O_RDWR && share->mode == O_RDONLY)
     {
-      my_errno=EACCES;				/* Can't open in write mode */
+      set_my_errno(EACCES);				/* Can't open in write mode */
       goto err;
     }
-    if (mi_open_datafile(&info, share, name, old_info->dfile))
+    if (mi_open_datafile(&info, share, name, -1))
       goto err;
     errpos=5;
-    have_rtree= old_info->rtree_recursion_state != NULL;
   }
 
   /* alloc and set up private structure parts */
-  if (!my_multi_malloc(MY_WME,
+  if (!my_multi_malloc(mi_key_memory_MI_INFO,
+                       MY_WME,
 		       &m_info,sizeof(MI_INFO),
 		       &info.blobs,sizeof(MI_BLOB)*share->base.blobs,
 		       &info.buff,(share->base.max_key_block_length*2+
@@ -582,15 +602,15 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
                        &info.rnext_same_key, share->base.max_key_length,
 		       &info.first_mbr_key, share->base.max_key_length,
 		       &info.filename,strlen(name)+1,
-		       &info.rtree_recursion_state,have_rtree ? 1024 : 0,
+		       &info.rtree_recursion_state,share->have_rtree ? 1024 : 0,
 		       NullS))
     goto err;
   errpos=6;
 
-  if (!have_rtree)
+  if (!share->have_rtree)
     info.rtree_recursion_state= NULL;
 
-  strmov(info.filename,name);
+  my_stpcpy(info.filename,name);
   memcpy(info.blobs,share->blobs,sizeof(MI_BLOB)*share->base.blobs);
   info.lastkey2=info.lastkey+share->base.max_key_length;
 
@@ -670,7 +690,7 @@ MI_INFO *mi_open(const char *name, int mode, uint open_flags)
   DBUG_RETURN(m_info);
 
 err:
-  save_errno=my_errno ? my_errno : HA_ERR_END_OF_FILE;
+  save_errno=my_errno() ? my_errno() : HA_ERR_END_OF_FILE;
   if ((save_errno == HA_ERR_CRASHED) ||
       (save_errno == HA_ERR_CRASHED_ON_USAGE) ||
       (save_errno == HA_ERR_CRASHED_ON_REPAIR))
@@ -681,7 +701,7 @@ err:
     /* fall through */
   case 5:
     (void) mysql_file_close(info.dfile, MYF(0));
-    if (old_info)
+    if (old_share)
       break;					/* Don't remove open table */
     /* fall through */
   case 4:
@@ -692,7 +712,6 @@ err:
       (void) my_lock(kfile, F_UNLCK, 0L, F_TO_EOF, MYF(MY_SEEK_NOT_DONE));
     /* fall through */
   case 2:
-    my_afree(disk_cache);
     /* fall through */
   case 1:
     (void) mysql_file_close(kfile, MYF(0));
@@ -703,16 +722,15 @@ err:
   }
   if (!internal_table)
     mysql_mutex_unlock(&THR_LOCK_myisam);
-  my_errno=save_errno;
+  set_my_errno(save_errno);
   DBUG_RETURN (NULL);
-} /* mi_open */
+} /* mi_open_share */
 
 
 uchar *mi_alloc_rec_buff(MI_INFO *info, ulong length, uchar **buf)
 {
   uint extra;
-  uint32 UNINIT_VAR(old_length);
-  LINT_INIT(old_length);
+  uint32 old_length= 0;
 
   if (! *buf || length > (old_length=mi_get_rec_buff_len(info, *buf)))
   {
@@ -736,7 +754,8 @@ uchar *mi_alloc_rec_buff(MI_INFO *info, ulong length, uchar **buf)
 	    MI_REC_BUFF_OFFSET : 0);
     if (extra && newptr)
       newptr-= MI_REC_BUFF_OFFSET;
-    if (!(newptr=(uchar*) my_realloc((uchar*)newptr, length+extra+8,
+    if (!(newptr=(uchar*) my_realloc(mi_key_memory_record_buffer,
+                                     (uchar*)newptr, length+extra+8,
                                      MYF(MY_ALLOW_ZERO_PTR))))
       return newptr;
     *((uint32 *) newptr)= (uint32) length;
@@ -757,7 +776,7 @@ ulonglong mi_safe_mul(ulonglong a, ulonglong b)
 
 	/* Set up functions in structs */
 
-void mi_setup_functions(register MYISAM_SHARE *share)
+void mi_setup_functions(MYISAM_SHARE *share)
 {
   if (share->options & HA_OPTION_COMPRESS_RECORD)
   {
@@ -811,16 +830,12 @@ void mi_setup_functions(register MYISAM_SHARE *share)
 }
 
 
-static void setup_key_functions(register MI_KEYDEF *keyinfo)
+static void setup_key_functions(MI_KEYDEF *keyinfo)
 {
   if (keyinfo->key_alg == HA_KEY_ALG_RTREE)
   {
-#ifdef HAVE_RTREE_KEYS
     keyinfo->ck_insert = rtree_insert;
     keyinfo->ck_delete = rtree_delete;
-#else
-    DBUG_ASSERT(0); /* mi_open should check it never happens */
-#endif
   }
   else
   {
@@ -1233,24 +1248,36 @@ int mi_open_datafile(MI_INFO *info, MYISAM_SHARE *share, const char *org_name,
 {
   char *data_name= share->data_file_name;
   char real_data_name[FN_REFLEN];
+  ST_FILE_ID file_id= {0, 0};
 
   if (org_name)
   {
     fn_format(real_data_name,org_name,"",MI_NAME_DEXT,4);
-    if (my_is_symlink(real_data_name))
+    if (my_is_symlink(real_data_name, &file_id))
     {
       if (my_realpath(real_data_name, real_data_name, MYF(0)) ||
-          (*myisam_test_invalid_symlink)(real_data_name))
+          (*myisam_test_invalid_symlink)(real_data_name) ||
+          my_is_symlink(real_data_name, &file_id))
       {
-        my_errno= HA_WRONG_CREATE_OPTION;
+        set_my_errno(HA_WRONG_CREATE_OPTION);
         return 1;
       }
       data_name= real_data_name;
     }
   }
+  DEBUG_SYNC_C("before_opening_datafile");
   info->dfile= mysql_file_open(mi_key_file_dfile,
-                               data_name, share->mode | O_SHARE, MYF(MY_WME));
-  return info->dfile >= 0 ? 0 : 1;
+                               data_name, share->mode | O_SHARE | O_NOFOLLOW,
+                               MYF(MY_WME));
+  if (info->dfile < 0)
+    return 1;
+  if (org_name && !my_is_same_file(info->dfile, &file_id))
+  {
+    mysql_file_close(info->dfile, MYF(0));
+    set_my_errno(HA_WRONG_CREATE_OPTION);
+    return 1;
+  }
+  return 0;
 }
 
 

@@ -1,13 +1,20 @@
-/* Copyright (c) 2000, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
@@ -25,7 +32,6 @@
 */
 
 #include "my_global.h"
-#include "sql_priv.h"
 #include "hostname.h"
 #include "hash_filo.h"
 #include <m_ctype.h>
@@ -33,17 +39,15 @@
                                                 // sql_print_information
 #include "violite.h"                            // vio_getnameinfo,
                                                 // vio_get_normalized_ip_string
-#ifdef	__cplusplus
-extern "C" {					// Because of SCO 3.2V4.2
+
+#ifdef HAVE_ARPA_INET_H
+#include <arpa/inet.h>
 #endif
-#if !defined( __WIN__)
 #ifdef HAVE_SYS_UN_H
 #include <sys/un.h>
 #endif
+#if !defined(_WIN32)
 #include <sys/utsname.h>
-#endif // __WIN__
-#ifdef	__cplusplus
-}
 #endif
 
 Host_errors::Host_errors()
@@ -145,7 +149,8 @@ bool hostname_cache_init(uint size)
   Host_entry tmp;
   uint key_offset= (uint) ((char*) (&tmp.ip_key) - (char*) &tmp);
 
-  if (!(hostname_cache= new hash_filo(size,
+  if (!(hostname_cache= new hash_filo(key_memory_host_cache_hostname,
+                                      size,
                                       key_offset, HOST_ENTRY_KEY_SIZE,
                                       NULL, (my_hash_free_key) free,
                                       &my_charset_bin)))
@@ -175,8 +180,8 @@ void hostname_cache_unlock()
 static void prepare_hostname_cache_key(const char *ip_string,
                                        char *ip_key)
 {
-  int ip_string_length= strlen(ip_string);
-  DBUG_ASSERT(ip_string_length < HOST_ENTRY_KEY_SIZE);
+  size_t ip_string_length= strlen(ip_string);
+  assert(ip_string_length < HOST_ENTRY_KEY_SIZE);
 
   memset(ip_key, 0, HOST_ENTRY_KEY_SIZE);
   memcpy(ip_key, ip_string, ip_string_length);
@@ -224,24 +229,24 @@ static void add_hostname_impl(const char *ip_key, const char *hostname,
   {
     if (hostname != NULL)
     {
-      uint len= strlen(hostname);
+      size_t len= strlen(hostname);
       if (len > sizeof(entry->m_hostname) - 1)
         len= sizeof(entry->m_hostname) - 1;
       memcpy(entry->m_hostname, hostname, len);
       entry->m_hostname[len]= '\0';
-      entry->m_hostname_length= len;
+      entry->m_hostname_length= static_cast<uint>(len);
 
       DBUG_PRINT("info",
                  ("Adding/Updating '%s' -> '%s' (validated) to the hostname cache...'",
-                 (const char *) ip_key,
-                 (const char *) entry->m_hostname));
+                 ip_key,
+                 entry->m_hostname));
     }
     else
     {
       entry->m_hostname_length= 0;
       DBUG_PRINT("info",
                  ("Adding/Updating '%s' -> NULL (validated) to the hostname cache...'",
-                 (const char *) ip_key));
+                 ip_key));
     }
     entry->m_host_validated= true;
     /*
@@ -258,7 +263,7 @@ static void add_hostname_impl(const char *ip_key, const char *hostname,
     errors->clear_connect_errors();
     DBUG_PRINT("info",
                ("Adding/Updating '%s' -> NULL (not validated) to the hostname cache...'",
-               (const char *) ip_key));
+               ip_key));
   }
 
   if (errors->has_error())
@@ -413,12 +418,11 @@ int ip_to_hostname(struct sockaddr_storage *ip_storage,
 {
   const struct sockaddr *ip= (const sockaddr *) ip_storage;
   int err_code;
-  bool err_status MY_ATTRIBUTE((unused));
   Host_errors errors;
 
   DBUG_ENTER("ip_to_hostname");
   DBUG_PRINT("info", ("IP address: '%s'; family: %d.",
-                      (const char *) ip_string,
+                      ip_string,
                       (int) ip->sa_family));
 
   /* Default output values, for most cases. */
@@ -473,12 +477,13 @@ int ip_to_hostname(struct sockaddr_storage *ip_storage,
       if (entry->m_host_validated)
       {
         if (entry->m_hostname_length)
-          *hostname= my_strdup(entry->m_hostname, MYF(0));
+          *hostname= my_strdup(key_memory_host_cache_hostname,
+                               entry->m_hostname, MYF(0));
 
         DBUG_PRINT("info",("IP (%s) has been found in the cache. "
                            "Hostname: '%s'",
-                           (const char *) ip_key,
-                           (const char *) (*hostname? *hostname : "null")
+                           ip_key,
+                           (*hostname? *hostname : "null")
                           ));
 
         mysql_mutex_unlock(&hostname_cache->lock);
@@ -551,6 +556,15 @@ int ip_to_hostname(struct sockaddr_storage *ip_storage,
                   }
                   );
 
+
+  DBUG_EXECUTE_IF ("getnameinfo_fake_max_length",
+                  {
+                    std::string s(NI_MAXHOST-1, 'a');
+                    strcpy(hostname_buffer, s.c_str());
+                    err_code= 0;
+                  }
+                  );
+
   /*
   ===========================================================================
   DEBUG code only (end)
@@ -562,12 +576,12 @@ int ip_to_hostname(struct sockaddr_storage *ip_storage,
     // NOTE: gai_strerror() returns a string ending by a dot.
 
     DBUG_PRINT("error", ("IP address '%s' could not be resolved: %s",
-                         (const char *) ip_key,
-                         (const char *) gai_strerror(err_code)));
+                         ip_key,
+                         gai_strerror(err_code)));
 
     sql_print_warning("IP address '%s' could not be resolved: %s",
-                      (const char *) ip_key,
-                      (const char *) gai_strerror(err_code));
+                      ip_key,
+                      gai_strerror(err_code));
 
     bool validated;
     if (vio_is_no_name_error(err_code))
@@ -618,14 +632,14 @@ int ip_to_hostname(struct sockaddr_storage *ip_storage,
     DBUG_PRINT("error", ("IP address '%s' has been resolved "
                          "to the host name '%s', which resembles "
                          "IPv4-address itself.",
-                         (const char *) ip_key,
-                         (const char *) hostname_buffer));
+                         ip_key,
+                         hostname_buffer));
 
     sql_print_warning("IP address '%s' has been resolved "
                       "to the host name '%s', which resembles "
                       "IPv4-address itself.",
-                      (const char *) ip_key,
-                      (const char *) hostname_buffer);
+                      ip_key,
+                      hostname_buffer);
 
     errors.m_format= 1;
     add_hostname(ip_key, hostname_buffer, false, &errors);
@@ -649,7 +663,7 @@ int ip_to_hostname(struct sockaddr_storage *ip_storage,
   hints.ai_family= AF_UNSPEC;
 
   DBUG_PRINT("info", ("Getting IP addresses for hostname '%s'...",
-                      (const char *) hostname_buffer));
+                      hostname_buffer));
 
   err_code= getaddrinfo(hostname_buffer, NULL, &hints, &addr_info_list);
   if (err_code == 0)
@@ -904,8 +918,8 @@ int ip_to_hostname(struct sockaddr_storage *ip_storage,
   if (err_code != 0)
   {
     sql_print_warning("Host name '%s' could not be resolved: %s",
-                      (const char *) hostname_buffer,
-                      (const char *) gai_strerror(err_code));
+                      hostname_buffer,
+                      gai_strerror(err_code));
 
     bool validated;
 
@@ -934,7 +948,7 @@ int ip_to_hostname(struct sockaddr_storage *ip_storage,
   /* Check that getaddrinfo() returned the used IP (FCrDNS technique). */
 
   DBUG_PRINT("info", ("The following IP addresses found for '%s':",
-                      (const char *) hostname_buffer));
+                      hostname_buffer));
 
   for (struct addrinfo *addr_info= addr_info_list;
        addr_info; addr_info= addr_info->ai_next)
@@ -942,19 +956,21 @@ int ip_to_hostname(struct sockaddr_storage *ip_storage,
     char ip_buffer[HOST_ENTRY_KEY_SIZE];
 
     {
+      bool err_status MY_ATTRIBUTE((unused));
       err_status=
         vio_get_normalized_ip_string(addr_info->ai_addr, addr_info->ai_addrlen,
                                      ip_buffer, sizeof (ip_buffer));
-      DBUG_ASSERT(!err_status);
+      assert(!err_status);
     }
 
-    DBUG_PRINT("info", ("  - '%s'", (const char *) ip_buffer));
+    DBUG_PRINT("info", ("  - '%s'", ip_buffer));
 
-    if (strcasecmp(ip_key, ip_buffer) == 0)
+    if (native_strcasecmp(ip_key, ip_buffer) == 0)
     {
       /* Copy host name string to be stored in the cache. */
 
-      *hostname= my_strdup(hostname_buffer, MYF(0));
+      *hostname= my_strdup(key_memory_host_cache_hostname,
+                           hostname_buffer, MYF(0));
 
       if (!*hostname)
       {
@@ -976,22 +992,24 @@ int ip_to_hostname(struct sockaddr_storage *ip_storage,
     errors.m_FCrDNS= 1;
 
     sql_print_warning("Hostname '%s' does not resolve to '%s'.",
-                      (const char *) hostname_buffer,
-                      (const char *) ip_key);
+                      hostname_buffer,
+                      ip_key);
     sql_print_information("Hostname '%s' has the following IP addresses:",
-                          (const char *) hostname_buffer);
+                          hostname_buffer);
 
     for (struct addrinfo *addr_info= addr_info_list;
          addr_info; addr_info= addr_info->ai_next)
     {
       char ip_buffer[HOST_ENTRY_KEY_SIZE];
 
-      err_status=
+#ifndef NDEBUG
+      bool err_status=
+#endif
         vio_get_normalized_ip_string(addr_info->ai_addr, addr_info->ai_addrlen,
                                      ip_buffer, sizeof (ip_buffer));
-      DBUG_ASSERT(!err_status);
+      assert(!err_status);
 
-      sql_print_information(" - %s", (const char *) ip_buffer);
+      sql_print_information(" - %s", ip_buffer);
     }
   }
 

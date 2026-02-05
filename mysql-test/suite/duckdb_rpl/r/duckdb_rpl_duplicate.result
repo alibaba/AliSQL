@@ -1,0 +1,44 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+###########################################################################
+# Prepare, DuckDB (master) -> DuckDB (slave)
+###########################################################################
+CREATE TABLE t_duckdb (c1 VARCHAR(10) PRIMARY KEY, c2 INT) ENGINE = DuckDB;
+FLUSH LOGS;
+INSERT INTO t_duckdb VALUES(x'61626364', 1);
+###########################################################################
+# 1. Switch on 'duckdb_data_import_mode'
+###########################################################################
+SET duckdb_data_import_mode=on;
+BEGIN;
+DELETE FROM t_duckdb WHERE c1 = x'61626364';
+INSERT INTO t_duckdb VALUES(x'61626364', 2);
+COMMIT;
+include/rpl_sync.inc
+include/rpl_diff.inc
+SELECT * FROM t_duckdb;
+c1	c2
+abcd	2
+include/assert_grep.inc [Check Delete SQL is not executed]
+###########################################################################
+# 2. Switch off 'duckdb_data_import_mode'
+###########################################################################
+SET duckdb_data_import_mode=off;
+BEGIN;
+DELETE FROM t_duckdb WHERE c1 = x'61626364';
+INSERT INTO t_duckdb VALUES(x'61626364', 3);
+COMMIT;
+include/rpl_sync.inc
+include/rpl_diff.inc
+SELECT * FROM t_duckdb;
+c1	c2
+abcd	3
+include/assert_grep.inc [Check Delete SQL is executed]
+###########################################################################
+# Cleanup
+###########################################################################
+DROP TABLE t_duckdb;
+include/rpl_end.inc

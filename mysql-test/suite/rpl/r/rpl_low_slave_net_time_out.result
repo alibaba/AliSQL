@@ -13,15 +13,8 @@ CREATE TABLE t1(i INT) engine=innodb;
 INSERT INTO t1 VALUES (1);
 include/sync_slave_sql_with_master.inc
 include/stop_slave.inc
-include/stop_dump_threads.inc
-SET GLOBAL DEBUG='+d,hold_dump_thread_inside_inner_loop';
 DROP TABLE t1;
 include/start_slave.inc
-SET DEBUG_SYNC='now WAIT_FOR signal_inside_inner_loop';
-include/stop_slave.inc
-SET GLOBAL DEBUG='-d,hold_dump_thread_inside_inner_loop';
-include/start_slave.inc
-SET DEBUG_SYNC='now signal signal_continue';
 include/sync_slave_sql_with_master.inc
 SET GLOBAL DEBUG=@save_debug;
 SET @@global.slave_net_timeout=@save_old_slave_net_timeout;

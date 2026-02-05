@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2009, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -24,6 +31,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import com.mysql.clusterj.ClusterJUserException;
 import com.mysql.clusterj.core.store.Blob;
 import com.mysql.clusterj.core.store.Column;
 import com.mysql.clusterj.core.store.Operation;
@@ -57,7 +65,9 @@ class OperationImpl implements Operation {
 
     protected ClusterTransactionImpl clusterTransaction;
 
-    /** The size of the receive buffer for this operation (may be zero for non-read operations) */
+    protected VariableByteBufferPoolImpl byteBufferPool;
+
+   /** The size of the receive buffer for this operation (may be zero for non-read operations) */
     protected int bufferSize;
 
     /** The maximum column id for this operation (may be zero for non-read operations) */
@@ -176,7 +186,7 @@ class OperationImpl implements Operation {
     public Blob getBlobHandle(Column storeColumn) {
         NdbBlob blobHandle = ndbOperation.getBlobHandleM(storeColumn.getColumnId());
         handleError(blobHandle, ndbOperation);
-        return new BlobImpl(blobHandle);
+        return new BlobImpl(blobHandle, this.byteBufferPool);
     }
 
     /** Specify the columns to be used for the operation.
@@ -235,6 +245,11 @@ class OperationImpl implements Operation {
 
     public void setBytes(Column storeColumn, byte[] value) {
         // TODO use the string storage buffer instead of allocating a new buffer for each value
+        int length = value.length;
+        if (length > storeColumn.getLength()) {
+            throw new ClusterJUserException(local.message("ERR_Data_Too_Long", 
+                    storeColumn.getName(), storeColumn.getLength(), length));
+        }
         ByteBuffer buffer = Utility.convertValue(storeColumn, value);
         int returnCode = ndbOperation.setValue(storeColumn.getColumnId(), buffer);
         handleError(returnCode, ndbOperation);
@@ -263,7 +278,7 @@ class OperationImpl implements Operation {
 
     public void setLong(Column storeColumn, long value) {
         long storeValue = Utility.convertLongValueForStorage(storeColumn, value);
-        int returnCode = ndbOperation.setValue(storeColumn.getName(), storeValue);
+        int returnCode = ndbOperation.setValue(storeColumn.getColumnId(), storeValue);
         handleError(returnCode, ndbOperation);
     }
 
@@ -280,6 +295,11 @@ class OperationImpl implements Operation {
 
     public void setString(Column storeColumn, String value) {
         ByteBuffer stringStorageBuffer = Utility.encode(value, storeColumn, bufferManager);
+        int length = stringStorageBuffer.remaining() - storeColumn.getPrefixLength();
+        if (length > storeColumn.getLength()) {
+            throw new ClusterJUserException(local.message("ERR_Data_Too_Long", 
+                    storeColumn.getName(), storeColumn.getLength(), length));
+        }
         int returnCode = ndbOperation.setValue(storeColumn.getColumnId(), stringStorageBuffer);
         bufferManager.clearStringStorageBuffer();
         handleError(returnCode, ndbOperation);
@@ -303,6 +323,34 @@ class OperationImpl implements Operation {
         } else {
             Utility.throwError(null, ndbOperation.getNdbError());
         }
+    }
+
+    public void beginDefinition() {
+        // nothing to do
+    }
+
+    public void endDefinition() {
+        // nothing to do
+    }
+
+    public int getErrorCode() {
+        return ndbOperation.getNdbError().code();
+    }
+
+    public int getClassification() {
+        return ndbOperation.getNdbError().classification();
+    }
+
+    public int getMysqlCode() {
+        return ndbOperation.getNdbError().mysql_code();
+    }
+
+    public int getStatus() {
+        return ndbOperation.getNdbError().status();
+    }
+
+    public void freeResourcesAfterExecute() {
+        System.out.println("OperationImpl.freeResourcesAfterExecute()");
     }
 
 }

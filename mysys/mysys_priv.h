@@ -1,56 +1,56 @@
-/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include <my_global.h>
-#include <my_sys.h>
+#ifndef MYSYS_PRIV_INCLUDED
+#define MYSYS_PRIV_INCLUDED
 
-#ifdef USE_SYSTEM_WRAPPERS
-#include "system_wrappers.h"
-#endif
-
-#ifdef HAVE_GETRUSAGE
-#include <sys/resource.h>
-#endif
-
-#include <my_pthread.h>
+#include "my_global.h"
+#include "mysql/psi/mysql_thread.h"
 
 #ifdef HAVE_PSI_INTERFACE
 
-#if !defined(HAVE_PREAD) && !defined(_WIN32)
-extern PSI_mutex_key key_my_file_info_mutex;
-#endif /* !defined(HAVE_PREAD) && !defined(_WIN32) */
+#include <mysql/psi/mysql_file.h>
+#include <mysql/psi/mysql_thread.h>
 
-#if !defined(HAVE_LOCALTIME_R) || !defined(HAVE_GMTIME_R)
-extern PSI_mutex_key key_LOCK_localtime_r;
-#endif /* !defined(HAVE_LOCALTIME_R) || !defined(HAVE_GMTIME_R) */
+C_MODE_START
 
 extern PSI_mutex_key key_BITMAP_mutex, key_IO_CACHE_append_buffer_lock,
-  key_IO_CACHE_SHARE_mutex, key_KEY_CACHE_cache_lock, key_LOCK_alarm,
-  key_my_thread_var_mutex, key_THR_LOCK_charset, key_THR_LOCK_heap,
+  key_IO_CACHE_SHARE_mutex, key_KEY_CACHE_cache_lock,
+  key_THR_LOCK_charset, key_THR_LOCK_heap,
   key_THR_LOCK_lock, key_THR_LOCK_malloc,
   key_THR_LOCK_mutex, key_THR_LOCK_myisam, key_THR_LOCK_net,
   key_THR_LOCK_open, key_THR_LOCK_threads,
   key_TMPDIR_mutex, key_THR_LOCK_myisam_mmap;
 
-extern PSI_cond_key key_COND_alarm, key_IO_CACHE_SHARE_cond,
-  key_IO_CACHE_SHARE_cond_writer, key_my_thread_var_suspend,
-  key_THR_COND_threads;
+extern PSI_rwlock_key key_SAFE_HASH_lock;
 
-#ifdef USE_ALARM_THREAD
-extern PSI_thread_key key_thread_alarm;
-#endif /* USE_ALARM_THREAD */
+extern PSI_cond_key key_IO_CACHE_SHARE_cond,
+  key_IO_CACHE_SHARE_cond_writer,
+  key_THR_COND_threads;
 
 #endif /* HAVE_PSI_INTERFACE */
 
@@ -60,14 +60,49 @@ extern mysql_mutex_t THR_LOCK_malloc, THR_LOCK_open, THR_LOCK_keycache;
 extern mysql_mutex_t THR_LOCK_lock, THR_LOCK_net;
 extern mysql_mutex_t THR_LOCK_charset;
 
-#include <mysql/psi/mysql_file.h>
-
 #ifdef HAVE_PSI_INTERFACE
-#ifdef HUGETLB_USE_PROC_MEMINFO
+#ifdef HAVE_LINUX_LARGE_PAGES
 extern PSI_file_key key_file_proc_meminfo;
-#endif /* HUGETLB_USE_PROC_MEMINFO */
+#endif /* HAVE_LINUX_LARGE_PAGES */
 extern PSI_file_key key_file_charset;
+
+C_MODE_END
+
 #endif /* HAVE_PSI_INTERFACE */
+
+/* These keys are always defined. */
+
+C_MODE_START
+
+extern PSI_memory_key key_memory_charset_file;
+extern PSI_memory_key key_memory_charset_loader;
+extern PSI_memory_key key_memory_lf_node;
+extern PSI_memory_key key_memory_lf_dynarray;
+extern PSI_memory_key key_memory_lf_slist;
+extern PSI_memory_key key_memory_LIST;
+extern PSI_memory_key key_memory_IO_CACHE;
+extern PSI_memory_key key_memory_KEY_CACHE;
+extern PSI_memory_key key_memory_SAFE_HASH_ENTRY;
+extern PSI_memory_key key_memory_MY_TMPDIR_full_list;
+extern PSI_memory_key key_memory_MY_BITMAP_bitmap;
+extern PSI_memory_key key_memory_my_compress_alloc;
+extern PSI_memory_key key_memory_pack_frm;
+extern PSI_memory_key key_memory_my_err_head;
+extern PSI_memory_key key_memory_my_file_info;
+extern PSI_memory_key key_memory_MY_DIR;
+extern PSI_memory_key key_memory_MY_STAT;
+extern PSI_memory_key key_memory_QUEUE;
+extern PSI_memory_key key_memory_DYNAMIC_STRING;
+extern PSI_memory_key key_memory_TREE;
+extern PSI_memory_key key_memory_defaults;
+
+#ifdef _WIN32
+extern PSI_memory_key key_memory_win_SECURITY_ATTRIBUTES;
+extern PSI_memory_key key_memory_win_PACL;
+extern PSI_memory_key key_memory_win_IP_ADAPTER_ADDRESSES;
+#endif
+
+C_MODE_END
 
 /*
   EDQUOT is used only in 3 C files only in mysys/. If it does not exist on
@@ -103,3 +138,5 @@ extern File     my_win_dup(File fd);
 extern File     my_win_sopen(const char *path, int oflag, int shflag, int perm);
 extern File     my_open_osfhandle(HANDLE handle, int oflag);
 #endif
+
+#endif /* MYSYS_PRIV_INCLUDED */

@@ -1,13 +1,20 @@
-/* Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -15,7 +22,7 @@
 
 #include "vio_priv.h"
 
-#if defined(_WIN32) && defined(HAVE_SMEM)
+#if !defined(EMBEDDED_LIBRARY)
 
 size_t vio_read_shared_memory(Vio *vio, uchar *buf, size_t size)
 {
@@ -66,7 +73,7 @@ size_t vio_read_shared_memory(Vio *vio, uchar *buf, size_t size)
       }
 
       vio->shared_memory_pos= vio->handle_map;
-      vio->shared_memory_remain= uint4korr((ulong*)vio->shared_memory_pos);
+      vio->shared_memory_remain= uint4korr(vio->shared_memory_pos);
       vio->shared_memory_pos+= 4;
     }
 
@@ -133,7 +140,7 @@ size_t vio_write_shared_memory(Vio *vio, const uchar *buf, size_t size)
     sz= (remain > shared_memory_buffer_length ? shared_memory_buffer_length :
          remain);
 
-    int4store(vio->handle_map, sz);
+    int4store(vio->handle_map, (uint32)sz);
     pos= vio->handle_map + 4;
     memcpy(pos, current_position, sz);
     remain-= sz;
@@ -222,21 +229,5 @@ int vio_shutdown_shared_memory(Vio * vio)
   DBUG_RETURN(0);
 }
 
-int vio_cancel_shared_memory(Vio * vio, int how)
-{
-  DBUG_ENTER("vio_cancel_shared_memory");
-  if (vio->inactive == FALSE)
-  {
-    /*
-      Set event_conn_closed for notification of both client and server that
-      connection is closed
-    */
-    SetEvent(vio->event_conn_closed);
-  }
-
-  vio->inactive= TRUE;
-  DBUG_RETURN(0);
-}
-
-#endif /* #if defined(_WIN32) && defined(HAVE_SMEM) */
+#endif /* #if !defined(!EMBEDDED_LIBRARY) */
 

@@ -1,5 +1,3 @@
-#Want to skip this test from daily Valgrind execution
---source include/no_valgrind_without_big.inc
 # Test for BUG#1858 "OPTIMIZE TABLE done by a client
 # thread stops the slave SQL thread".
 # You can replace OPTIMIZE by REPAIR.
@@ -12,6 +10,13 @@
 # version of this test will be need.
 # Skipping this test if default engine = ndb
 #####################################
+--source include/not_group_replication_plugin.inc
+# Bug#18128323: On SLOW Solaris/WINT machines and debug
+# builds test is failing due to timeout (if InnoDB engine).
+# Hence, we will be using MyISAM engine as default until
+# that issue is sorted out.
+-- source include/have_myisam.inc
+
 -- source include/not_ndb_default.inc
 -- source include/master-slave.inc
 
@@ -45,7 +50,9 @@ delete from t1 order by b limit 10000;
 
 connection slave;
 sync_with_master;
+--disable_result_log
 optimize table t1;
+--enable_result_log
 connection master;
 save_master_pos;
 connection slave;

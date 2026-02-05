@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -34,9 +41,9 @@ static int _mi_balance_page(MI_INFO *info,MI_KEYDEF *keyinfo,uchar *key,
 static uchar *_mi_find_last_pos(MI_KEYDEF *keyinfo, uchar *page,
 				uchar *key, uint *return_key_length,
 				uchar **after_key);
-int _mi_ck_write_tree(register MI_INFO *info, uint keynr,uchar *key,
+int _mi_ck_write_tree(MI_INFO *info, uint keynr,uchar *key,
 		      uint key_length);
-int _mi_ck_write_btree(register MI_INFO *info, uint keynr,uchar *key,
+int _mi_ck_write_btree(MI_INFO *info, uint keynr,uchar *key,
 		       uint key_length);
 
 	/* Write new record to database */
@@ -54,13 +61,15 @@ int mi_write(MI_INFO *info, uchar *record)
 
   DBUG_EXECUTE_IF("myisam_pretend_crashed_table_on_usage",
                   mi_print_error(info->s, HA_ERR_CRASHED);
-                  DBUG_RETURN(my_errno= HA_ERR_CRASHED););
+                  set_my_errno(HA_ERR_CRASHED);
+                  DBUG_RETURN(HA_ERR_CRASHED););
   if (share->options & HA_OPTION_READ_ONLY_DATA)
   {
-    DBUG_RETURN(my_errno=EACCES);
+    set_my_errno(EACCES);
+    DBUG_RETURN(EACCES);
   }
   if (_mi_readinfo(info,F_WRLCK,1))
-    DBUG_RETURN(my_errno);
+    DBUG_RETURN(my_errno());
 
   filepos= ((share->state.dellink != HA_OFFSET_ERROR &&
              !info->append_insert_at_end) ?
@@ -71,12 +80,12 @@ int mi_write(MI_INFO *info, uchar *record)
       share->base.records == (ha_rows) 1 &&
       info->state->records == (ha_rows) 1)
   {						/* System file */
-    my_errno=HA_ERR_RECORD_FILE_FULL;
+    set_my_errno(HA_ERR_RECORD_FILE_FULL);
     goto err2;
   }
   if (info->state->key_file_length >= share->base.margin_key_file_length)
   {
-    my_errno=HA_ERR_INDEX_FILE_FULL;
+    set_my_errno(HA_ERR_INDEX_FILE_FULL);
     goto err2;
   }
   if (_mi_mark_file_changed(info))
@@ -115,7 +124,7 @@ int mi_write(MI_INFO *info, uchar *record)
         {
 	  if (local_lock_tree)
             mysql_rwlock_unlock(&share->key_root_lock[i]);
-          DBUG_PRINT("error",("Got error: %d on write",my_errno));
+          DBUG_PRINT("error",("Got error: %d on write",my_errno()));
           goto err;
         }
       }
@@ -126,7 +135,7 @@ int mi_write(MI_INFO *info, uchar *record)
         {
           if (local_lock_tree)
             mysql_rwlock_unlock(&share->key_root_lock[i]);
-          DBUG_PRINT("error",("Got error: %d on write",my_errno));
+          DBUG_PRINT("error",("Got error: %d on write",my_errno()));
           goto err;
         }
       }
@@ -173,9 +182,9 @@ int mi_write(MI_INFO *info, uchar *record)
   DBUG_RETURN(0);
 
 err:
-  save_errno=my_errno;
-  if (my_errno == HA_ERR_FOUND_DUPP_KEY || my_errno == HA_ERR_RECORD_FILE_FULL ||
-      my_errno == HA_ERR_NULL_IN_SPATIAL || my_errno == HA_ERR_OUT_OF_MEM)
+  save_errno=my_errno();
+  if (my_errno() == HA_ERR_FOUND_DUPP_KEY || my_errno() == HA_ERR_RECORD_FILE_FULL ||
+      my_errno() == HA_ERR_NULL_IN_SPATIAL || my_errno() == HA_ERR_OUT_OF_MEM)
   {
     if (info->bulk_insert)
     {
@@ -223,12 +232,13 @@ err:
     mi_mark_crashed(info);
   }
   info->update= (HA_STATE_CHANGED | HA_STATE_WRITTEN | HA_STATE_ROW_CHANGED);
-  my_errno=save_errno;
+  set_my_errno(save_errno);
 err2:
-  save_errno=my_errno;
-  myisam_log_record(MI_LOG_WRITE,info,record,filepos,my_errno);
+  save_errno=my_errno();
+  myisam_log_record(MI_LOG_WRITE,info,record,filepos,my_errno());
   (void) _mi_writeinfo(info,WRITEINFO_UPDATE_KEYFILE);
-  DBUG_RETURN(my_errno=save_errno);
+  set_my_errno(save_errno);
+  DBUG_RETURN(save_errno);
 } /* mi_write */
 
 
@@ -253,7 +263,7 @@ int _mi_ck_write(MI_INFO *info, uint keynr, uchar *key, uint key_length)
  *                Normal insert code                                  *
  **********************************************************************/
 
-int _mi_ck_write_btree(register MI_INFO *info, uint keynr, uchar *key,
+int _mi_ck_write_btree(MI_INFO *info, uint keynr, uchar *key,
 		       uint key_length)
 {
   int error;
@@ -332,7 +342,7 @@ int _mi_enlarge_root(MI_INFO *info, MI_KEYDEF *keyinfo, uchar *key,
 		   1  = key should be stored in higher tree
 	*/
 
-static int w_search(register MI_INFO *info, register MI_KEYDEF *keyinfo,
+static int w_search(MI_INFO *info, MI_KEYDEF *keyinfo,
 		    uint comp_flag, uchar *key, uint key_length, my_off_t page,
 		    uchar *father_buff, uchar *father_keypos,
 		    my_off_t father_page, my_bool insert_last)
@@ -393,19 +403,17 @@ static int w_search(register MI_INFO *info, register MI_KEYDEF *keyinfo,
                                       &root, comp_flag);
         _mi_dpointer(info, keypos+HA_FT_WLEN, root);
         subkeys--; /* should there be underflow protection ? */
-        DBUG_ASSERT(subkeys < 0);
+        assert(subkeys < 0);
         ft_intXstore(keypos, subkeys);
         if (!error)
           error=_mi_write_keypage(info,keyinfo,page,DFLT_INIT_HITS,temp_buff);
-        my_afree((uchar*) temp_buff);
         DBUG_RETURN(error);
       }
     }
     else /* not HA_FULLTEXT, normal HA_NOSAME key */
     {
       info->dupp_key_pos= dupp_key_pos;
-      my_afree((uchar*) temp_buff);
-      my_errno=HA_ERR_FOUND_DUPP_KEY;
+      set_my_errno(HA_ERR_FOUND_DUPP_KEY);
       DBUG_RETURN(-1);
     }
   }
@@ -423,11 +431,9 @@ static int w_search(register MI_INFO *info, register MI_KEYDEF *keyinfo,
     if (_mi_write_keypage(info,keyinfo,page,DFLT_INIT_HITS,temp_buff))
       goto err;
   }
-  my_afree((uchar*) temp_buff);
   DBUG_RETURN(error);
 err:
-  my_afree((uchar*) temp_buff);
-  DBUG_PRINT("exit",("Error: %d",my_errno));
+  DBUG_PRINT("exit",("Error: %d",my_errno()));
   DBUG_RETURN (-1);
 } /* w_search */
 
@@ -457,7 +463,7 @@ err:
     < 0         Error.
 */
 
-int _mi_insert(register MI_INFO *info, register MI_KEYDEF *keyinfo,
+int _mi_insert(MI_INFO *info, MI_KEYDEF *keyinfo,
 	       uchar *key, uchar *anc_buff, uchar *key_pos, uchar *key_buff,
                uchar *father_buff, uchar *father_key_pos, my_off_t father_page,
 	       my_bool insert_last)
@@ -478,7 +484,7 @@ int _mi_insert(register MI_INFO *info, register MI_KEYDEF *keyinfo,
 				(key_pos == endpos ? (uchar*) 0 : key_pos),
 				prev_key, prev_key,
 				key,&s_temp);
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   if (key_pos != anc_buff+2+nod_flag && (keyinfo->flag &
 					 (HA_BINARY_PACK_KEY | HA_PACK_KEY)))
   {
@@ -497,20 +503,20 @@ int _mi_insert(register MI_INFO *info, register MI_KEYDEF *keyinfo,
     if (t_length >= keyinfo->maxlength*2+MAX_POINTER_LENGTH)
     {
       mi_print_error(info->s, HA_ERR_CRASHED);
-      my_errno=HA_ERR_CRASHED;
+      set_my_errno(HA_ERR_CRASHED);
       DBUG_RETURN(-1);
     }
-    bmove_upp((uchar*) endpos+t_length,(uchar*) endpos,(uint) (endpos-key_pos));
+    memmove(key_pos + t_length, key_pos, (size_t) (endpos - key_pos));
   }
   else
   {
     if (-t_length >= keyinfo->maxlength*2+MAX_POINTER_LENGTH)
     {
       mi_print_error(info->s, HA_ERR_CRASHED);
-      my_errno=HA_ERR_CRASHED;
+      set_my_errno(HA_ERR_CRASHED);
       DBUG_RETURN(-1);
     }
-    bmove(key_pos,key_pos-t_length,(uint) (endpos-key_pos)+t_length);
+    memmove(key_pos, key_pos - t_length, (uint) (endpos - key_pos) + t_length);
   }
   (*keyinfo->store_key)(keyinfo,key_pos,&s_temp);
   a_length+=t_length;
@@ -530,21 +536,24 @@ int _mi_insert(register MI_INFO *info, register MI_KEYDEF *keyinfo,
       uchar *a=key, *b=anc_buff+2+nod_flag;
       uint alen, blen, ft2len=info->s->ft2_keyinfo.keylength;
       /* the very first key on the page is always unpacked */
-      DBUG_ASSERT((*b & 128) == 0);
-#if HA_FT_MAXLEN >= 127
+      assert((*b & 128) == 0);
+#if HA_FT_MAXLEN >= 127 /* TODO: Undefined symbol */
       blen= mi_uint2korr(b); b+=2;
 #else
       blen= *b++;
 #endif
       get_key_length(alen,a);
-      DBUG_ASSERT(info->ft1_to_ft2==0);
+      assert(info->ft1_to_ft2==0);
       if (alen == blen &&
           ha_compare_text(keyinfo->seg->charset, a, alen, b, blen, 0, 0)==0)
       {
         /* yup. converting */
         info->ft1_to_ft2=(DYNAMIC_ARRAY *)
-          my_malloc(sizeof(DYNAMIC_ARRAY), MYF(MY_WME));
-        my_init_dynamic_array(info->ft1_to_ft2, ft2len, 300, 50);
+          my_malloc(mi_key_memory_MI_INFO_ft1_to_ft2,
+                    sizeof(DYNAMIC_ARRAY), MYF(MY_WME));
+        my_init_dynamic_array(info->ft1_to_ft2,
+                              mi_key_memory_MI_INFO_ft1_to_ft2,
+                              ft2len, NULL, 300, 50);
 
         /*
           now, adding all keys from the page to dynarray
@@ -560,7 +569,7 @@ int _mi_insert(register MI_INFO *info, register MI_KEYDEF *keyinfo,
             if (insert_dynamic(info->ft1_to_ft2, b))
             {
               mi_print_error(info->s, HA_ERR_OUT_OF_MEM);
-              my_errno= HA_ERR_OUT_OF_MEM;
+              set_my_errno(HA_ERR_OUT_OF_MEM);
               DBUG_RETURN(-1);
             }
           }
@@ -586,16 +595,15 @@ int _mi_insert(register MI_INFO *info, register MI_KEYDEF *keyinfo,
 
 	/* split a full page in two and assign emerging item to key */
 
-int _mi_split_page(register MI_INFO *info, register MI_KEYDEF *keyinfo,
+int _mi_split_page(MI_INFO *info, MI_KEYDEF *keyinfo,
 		   uchar *key, uchar *buff, uchar *key_buff,
 		   my_bool insert_last_key)
 {
   uint length,a_length,key_ref_length,t_length,nod_flag,key_length;
-  uchar *key_pos,*pos, *after_key;
+  uchar *key_pos,*pos, *after_key= NULL;
   my_off_t new_pos;
   MI_KEY_PARAM s_temp;
   DBUG_ENTER("mi_split_page");
-  LINT_INIT(after_key);
   DBUG_DUMP("buff",(uchar*) buff,mi_getint(buff));
 
   if (info->s->keyinfo+info->lastinx == keyinfo)
@@ -706,8 +714,8 @@ static uchar *_mi_find_last_pos(MI_KEYDEF *keyinfo, uchar *page,
 				uchar *key, uint *return_key_length,
 				uchar **after_key)
 {
-  uint keys,length,UNINIT_VAR(last_length),key_ref_length;
-  uchar *end,*lastpos,*UNINIT_VAR(prevpos);
+  uint keys, length, last_length= 0, key_ref_length;
+  uchar *end, *lastpos, *prevpos= NULL;
   uchar key_buff[MI_MAX_KEY_BUFF];
   DBUG_ENTER("_mi_find_last_pos");
 
@@ -738,7 +746,7 @@ static uchar *_mi_find_last_pos(MI_KEYDEF *keyinfo, uchar *page,
     if (!(length=(*keyinfo->get_key)(keyinfo,0,&page,key_buff)))
     {
       mi_print_error(keyinfo->share, HA_ERR_CRASHED);
-      my_errno=HA_ERR_CRASHED;
+      set_my_errno(HA_ERR_CRASHED);
       DBUG_RETURN(0);
     }
   }
@@ -753,7 +761,7 @@ static uchar *_mi_find_last_pos(MI_KEYDEF *keyinfo, uchar *page,
 	/* Balance page with not packed keys with page on right/left */
 	/* returns 0 if balance was done */
 
-static int _mi_balance_page(register MI_INFO *info, MI_KEYDEF *keyinfo,
+static int _mi_balance_page(MI_INFO *info, MI_KEYDEF *keyinfo,
 			    uchar *key, uchar *curr_buff, uchar *father_buff,
 			    uchar *father_key_pos, my_off_t father_page)
 {
@@ -819,13 +827,14 @@ static int _mi_balance_page(register MI_INFO *info, MI_KEYDEF *keyinfo,
 	     (size_t) (length=new_left_length - left_length - k_length));
       pos=buff+2+length;
       memcpy((uchar*) father_key_pos,(uchar*) pos,(size_t) k_length);
-      bmove((uchar*) buff + 2, (uchar*) pos + k_length, new_right_length - 2);
+      memmove((uchar*) buff + 2,
+              (uchar*) pos + k_length, new_right_length - 2);
     }
     else
     {						/* Move keys -> buff */
 
-      bmove_upp((uchar*) buff+new_right_length,(uchar*) buff+right_length,
-		right_length-2);
+      memmove(buff + new_right_length - right_length + 2,
+              buff + 2, right_length - 2);
       length=new_right_length-right_length-k_length;
       memcpy((uchar*) buff+2+length,father_key_pos,(size_t) k_length);
       pos=curr_buff+new_left_length;
@@ -861,8 +870,9 @@ static int _mi_balance_page(register MI_INFO *info, MI_KEYDEF *keyinfo,
   /* Save new parting key */
   memcpy(tmp_part_key, pos-k_length,k_length);
   /* Make place for new keys */
-  bmove_upp((uchar*) buff+new_right_length,(uchar*) pos-k_length,
-	    right_length-extra_length-k_length-2);
+  memmove(buff + new_right_length - right_length + extra_length + k_length + 2,
+          pos - right_length + extra_length + 2,
+          right_length - extra_length - k_length - 2);
   /* Copy keys from left page */
   pos= curr_buff+new_left_length;
   memcpy((uchar*) buff+2,(uchar*) pos+k_length,
@@ -898,7 +908,7 @@ typedef struct {
   uint keynr;
 } bulk_insert_param;
 
-int _mi_ck_write_tree(register MI_INFO *info, uint keynr, uchar *key,
+int _mi_ck_write_tree(MI_INFO *info, uint keynr, uchar *key,
 		      uint key_length)
 {
   int error;
@@ -966,8 +976,8 @@ int mi_init_bulk_insert(MI_INFO *info, ulong cache_size, ha_rows rows)
   DBUG_ENTER("_mi_init_bulk_insert");
   DBUG_PRINT("enter",("cache_size: %lu", cache_size));
 
-  DBUG_ASSERT(!info->bulk_insert &&
-	      (!rows || rows >= MI_MIN_ROWS_TO_USE_BULK_INSERT));
+  assert(!info->bulk_insert &&
+         (!rows || rows >= MI_MIN_ROWS_TO_USE_BULK_INSERT));
 
   mi_clear_all_keys_active(key_map);
   for (i=total_keylength=num_keys=0 ; i < share->base.keys ; i++)
@@ -991,7 +1001,8 @@ int mi_init_bulk_insert(MI_INFO *info, ulong cache_size, ha_rows rows)
     cache_size/=total_keylength*16;
 
   info->bulk_insert=(TREE *)
-    my_malloc((sizeof(TREE)*share->base.keys+
+    my_malloc(mi_key_memory_MI_INFO_bulk_insert,
+              (sizeof(TREE)*share->base.keys+
                sizeof(bulk_insert_param)*num_keys),MYF(0));
 
   if (!info->bulk_insert)

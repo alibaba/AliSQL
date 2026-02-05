@@ -8,7 +8,11 @@
 # Test supplied by Are Casilla
 
 source include/master-slave.inc;
+
+SET SESSION sql_log_bin= 0;
 call mtr.add_suppression('Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT.');
+SET SESSION sql_log_bin= 1;
+
 --disable_warnings
 connection master;
 drop database if exists test1;
@@ -20,7 +24,7 @@ CREATE TABLE `t1` (
   `id` int(10) unsigned NOT NULL auto_increment,
   `fname` varchar(100) default NULL,
   PRIMARY KEY  (`id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1 AUTO_INCREMENT=2 ;
+) DEFAULT CHARSET=latin1 AUTO_INCREMENT=2 ;
 
 INSERT INTO `t1` VALUES (1, 'blablabla');
 
@@ -28,7 +32,7 @@ CREATE TABLE `t2` (
   `id` int(10) NOT NULL auto_increment,
   `comment` varchar(255) NOT NULL default '',
   PRIMARY KEY  (`id`)
-) ENGINE=MyISAM  AUTO_INCREMENT=3 ;
+) AUTO_INCREMENT=3 ;
 
 INSERT INTO `t2` VALUES (1, 'testtest 1');
 INSERT INTO `t2` VALUES (2, 'test 2');
@@ -57,6 +61,10 @@ CALL simpleproc3();
 select * from t1;
 
 --source include/sync_slave_sql_with_master.inc
+
+SET SESSION sql_log_bin= 0;
+call mtr.add_suppression('Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT.');
+SET SESSION sql_log_bin= 1;
 
 use test1;
 select * from t1;

@@ -1,13 +1,20 @@
-/* Copyright (c) 2008, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -22,6 +29,9 @@
 #include <signaldata/LgmanContinueB.hpp>
 
 #include <EventLogger.hpp>
+
+#define JAM_FILE_ID 413
+
 extern EventLogger * g_eventLogger;
 
 DbtupProxy::DbtupProxy(Block_context& ctx) :
@@ -399,7 +409,8 @@ DbtupProxy::disk_restart_undo_finish(Signal* signal)
   if (undo.m_actions & Proxy_undo::SendUndoNext) {
     jam();
     signal->theData[0] = LgmanContinueB::EXECUTE_UNDO_RECORD;
-    sendSignal(LGMAN_REF, GSN_CONTINUEB, signal, 1, JBB);
+    signal->theData[1] = 0; /* Not applied flag */
+    sendSignal(LGMAN_REF, GSN_CONTINUEB, signal, 2, JBB);
   }
 
   if (undo.m_actions & Proxy_undo::NoExecute) {
@@ -472,7 +483,8 @@ DbtupProxy::disk_restart_alloc_extent(Uint32 tableId, Uint32 fragId,
 
   Uint32 i = workerIndex(instanceNo);
   Dbtup* dbtup = (Dbtup*)workerBlock(i);
-  return dbtup->disk_restart_alloc_extent(tableId, fragId, key, pages);
+  return dbtup->disk_restart_alloc_extent(jamBuffer(), tableId, fragId, key, 
+                                          pages);
 }
 
 void
@@ -487,7 +499,7 @@ DbtupProxy::disk_restart_page_bits(Uint32 tableId, Uint32 fragId,
 
   Uint32 i = workerIndex(instanceNo);
   Dbtup* dbtup = (Dbtup*)workerBlock(i);
-  dbtup->disk_restart_page_bits(tableId, fragId, key, bits);
+  dbtup->disk_restart_page_bits(jamBuffer(), tableId, fragId, key, bits);
 }
 
 BLOCK_FUNCTIONS(DbtupProxy)

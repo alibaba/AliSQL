@@ -3,16 +3,25 @@ partition by range (a)
 subpartition by hash (a)
 (partition p0 VALUES LESS THAN (1) DATA DIRECTORY = 'MYSQLTEST_VARDIR/tmp' INDEX DIRECTORY = 'MYSQLTEST_VARDIR/tmp'
 (SUBPARTITION subpart00, SUBPARTITION subpart01));
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # Checking if file exists before alter
 ALTER TABLE t1 REORGANIZE PARTITION p0 INTO
 (partition p1 VALUES LESS THAN (1) DATA DIRECTORY = 'MYSQLTEST_VARDIR/tmp' INDEX DIRECTORY = 'MYSQLTEST_VARDIR/tmp'
 (SUBPARTITION subpart10, SUBPARTITION subpart11),
 partition p2 VALUES LESS THAN (2) DATA DIRECTORY = 'MYSQLTEST_VARDIR/tmp' INDEX DIRECTORY = 'MYSQLTEST_VARDIR/tmp'
 (SUBPARTITION subpart20, SUBPARTITION subpart21));
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # Checking if file exists after alter
 drop table t1;
+set innodb_strict_mode=off;
+Warnings:
+Warning	1618	<INDEX DIRECTORY> option ignored
 set @org_mode=@@sql_mode;
 set @@sql_mode='NO_DIR_IN_CREATE';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 select @@sql_mode;
 @@sql_mode
 NO_DIR_IN_CREATE
@@ -30,11 +39,13 @@ show create table t2;
 Table	Create Table
 t2	CREATE TABLE `t2` (
   `i` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=latin1
 /*!50100 PARTITION BY RANGE (i)
-(PARTITION p01 VALUES LESS THAN (1000) ENGINE = MyISAM) */
+(PARTITION p01 VALUES LESS THAN (1000) ENGINE = InnoDB) */
 DROP TABLE t1, t2;
 set @@sql_mode=@org_mode;
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(a INT)
 PARTITION BY KEY (a)
 (PARTITION p0 DATA DIRECTORY 'MYSQLD_DATADIR/test');
@@ -80,6 +91,8 @@ INDEX DIRECTORY = 'MYSQLTEST_VARDIR/p2Index',
 PARTITION p3 DATA DIRECTORY = 'MYSQLTEST_VARDIR/p3Data'
 INDEX DIRECTORY = 'MYSQLTEST_VARDIR/p3Index'
 );
+Warnings:
+Warning	1287	The partition engine, used by table 'test.example', is deprecated and will be removed in a future release. Please use native partitioning instead.
 # Checking that MyISAM .MYD and .MYI are in test db and data/idx dir
 DROP TABLE example;
 CREATE TABLE `example` (

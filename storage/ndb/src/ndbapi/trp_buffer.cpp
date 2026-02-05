@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2010, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -31,10 +38,13 @@ TFPool::init(size_t mem, size_t page_sz)
   {
     TFPage * p = (TFPage*)(ptr + i);
     p->m_size = (Uint16)(page_sz - offsetof(TFPage, m_data));
+    assert(((UintPtr)(&p->m_data[0]) & 3) == 0);
     p->init();
     p->m_next = m_first_free;
     m_first_free = p;
   }
+  m_tot_send_buffer = mem;
+  m_tot_used_send_buffer = 0;
   return true;
 }
 
@@ -42,6 +52,11 @@ TFPool::~TFPool()
 {
   if (m_alloc_ptr)
     free (m_alloc_ptr);
+}
+
+TFMTPool::TFMTPool(const char * name)
+{
+  NdbMutex_InitWithName(&m_mutex, name);
 }
 
 void
@@ -52,8 +67,8 @@ TFBuffer::validate() const
     assert(m_head == m_tail);
     if (m_head)
     {
-      assert(m_head->m_bytes < m_head->m_size);  // Full pages should be release
-      assert(m_head->m_bytes == m_head->m_start);
+      assert(m_head->m_start < m_head->m_size);  // Full pages should be release
+      assert(m_head->m_bytes == 0);
     }
     return;
   }
@@ -67,10 +82,9 @@ TFBuffer::validate() const
   while (p)
   {
     assert(p->m_bytes <= p->m_size);
-    assert(p->m_start <= p->m_bytes);
-    assert((p->m_start & 3) == 0);
-    assert(p->m_bytes - p->m_start > 0);
-    assert(p->m_bytes - p->m_start <= (int)m_bytes_in_buffer);
+    assert(p->m_start <= p->m_size);
+    assert(p->m_start + p->m_bytes <= p->m_size);
+    assert(p->m_bytes <= (int)m_bytes_in_buffer);
     assert(p->m_next != p);
     if (p == m_tail)
     {
@@ -80,7 +94,7 @@ TFBuffer::validate() const
     {
       assert(p->m_next != 0);
     }
-    sum += p->m_bytes - p->m_start;
+    sum += p->m_bytes;
     p = p->m_next;
   }
   assert(sum == m_bytes_in_buffer);

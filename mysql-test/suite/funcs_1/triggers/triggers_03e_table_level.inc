@@ -23,11 +23,11 @@ let $message= #########      Testcase for table level:   ########;
 	eval create table t1 (f1 char(20)) engine= $engine_type;
 
 	create User test_yesprivs@localhost;
-	set password for test_yesprivs@localhost = password('PWD');
+	set password for test_yesprivs@localhost = 'PWD';
 	revoke ALL PRIVILEGES, GRANT OPTION FROM test_yesprivs@localhost;
 
         create User test_noprivs@localhost;
-        set password for test_noprivs@localhost = password('PWD');
+        set password for test_noprivs@localhost = 'PWD';
         revoke ALL PRIVILEGES, GRANT OPTION FROM test_noprivs@localhost;
 
 	connect (yes_privs,localhost,test_yesprivs,PWD,test,$MASTER_MYPORT,$MASTER_MYSOCK);
@@ -44,6 +44,7 @@ let $message= no trigger privilege on table level for create:;
 --source include/show_msg.inc
 	connection default;
         select current_user;
+--replace_column 6 #
 	show triggers;
 	grant  select, insert, update on priv_db.t1 to test_yesprivs@localhost;
 	show grants for test_yesprivs@localhost;
@@ -68,6 +69,7 @@ let $message= no trigger privilege on table level for create:;
 	
 	connection default;
         select current_user;
+--replace_column 6 #
 	show triggers;
 	show tables;
 	insert into t1 (f1) values ('insert2-yes');
@@ -81,6 +83,7 @@ let $message= trigger privilege on table level for create:;
 --source include/show_msg.inc
 	connection yes_privs;
         select current_user;
+--replace_column 6 #
 	show triggers;
 	create trigger trg1_2 before INSERT  on t1 for each row
 		set new.f1 = 'trig 1_2-yes';
@@ -179,6 +182,7 @@ let $message= use table with trigger privilege and without...:;
                 set new.f1 = 'trig 2_2-no';
         create trigger trg1_4 before UPDATE  on t1 for each row
                 set new.f1 = 'trig 1_4-yes';
+--replace_column 6 #
 	show triggers;
         connection no_privs;
         select current_user;

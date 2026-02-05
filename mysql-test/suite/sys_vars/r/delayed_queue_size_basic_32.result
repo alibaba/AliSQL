@@ -98,17 +98,21 @@ ERROR HY000: Variable 'delayed_queue_size' is a GLOBAL variable and should be se
 SELECT @@session.delayed_queue_size;
 ERROR HY000: Variable 'delayed_queue_size' is a GLOBAL variable
 '#----------------------FN_DYNVARS_026_06------------------------#'
-SELECT @@global.delayed_queue_size = VARIABLE_VALUE 
+SELECT VARIABLE_VALUE 
 FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
-WHERE VARIABLE_NAME='delayed_queue_size';
-@@global.delayed_queue_size = VARIABLE_VALUE
+WHERE VARIABLE_NAME='delayed_queue_size'
+into @tmp;
+SELECT @@global.delayed_queue_size = @tmp;
+@@global.delayed_queue_size = @tmp
 1
 Warnings:
 Warning	1287	'@@delayed_queue_size' is deprecated and will be removed in a future release.
-SELECT @@delayed_queue_size = VARIABLE_VALUE 
+SELECT VARIABLE_VALUE 
 FROM INFORMATION_SCHEMA.SESSION_VARIABLES 
-WHERE VARIABLE_NAME='delayed_queue_size';
-@@delayed_queue_size = VARIABLE_VALUE
+WHERE VARIABLE_NAME='delayed_queue_size'
+into @tmp;
+SELECT @@delayed_queue_size = @tmp;
+@@delayed_queue_size = @tmp
 1
 Warnings:
 Warning	1287	'@@delayed_queue_size' is deprecated and will be removed in a future release.
@@ -149,11 +153,11 @@ SELECT @@delayed_queue_size;
 Warnings:
 Warning	1287	'@@delayed_queue_size' is deprecated and will be removed in a future release.
 SET local.delayed_queue_size = 1;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'delayed_queue_size = 1' at line 1
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'local.delayed_queue_size = 1' at line 1
 SELECT local.delayed_queue_size;
 ERROR 42S02: Unknown table 'local' in field list
 SET global.delayed_queue_size = 1;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'delayed_queue_size = 1' at line 1
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'global.delayed_queue_size = 1' at line 1
 SELECT global.delayed_queue_size;
 ERROR 42S02: Unknown table 'global' in field list
 SELECT delayed_queue_size = @@session.delayed_queue_size;

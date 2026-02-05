@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2005, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -404,6 +411,19 @@ struct Ndb_logevent_body_row ndb_logevent_body[]= {
   ROW( LogFileInitStatus,   "total_mbytes",  4, total_mbytes),
   ROW( LogFileInitStatus,   "mbytes_done",   5, mbytes_done),
 
+ 
+  ROW( RedoStatus,          "log_part",      1, log_part), 
+  ROW( RedoStatus,          "head_file_no",  2, head_file_no), 
+  ROW( RedoStatus,          "head_mbyte",    3, head_mbyte), 
+  ROW( RedoStatus,          "tail_file_no",  4, tail_file_no), 
+  ROW( RedoStatus,          "tail_mbyte",    5, tail_mbyte), 
+  ROW( RedoStatus,          "total_hi",      6, total_hi), 
+  ROW( RedoStatus,          "total_lo",      7, total_lo), 
+  ROW( RedoStatus,          "free_hi",       8, free_hi), 
+  ROW( RedoStatus,          "free_lo",       9, free_lo), 
+  ROW( RedoStatus,          "no_logfiles",  10, no_logfiles),
+  ROW( RedoStatus,          "logfilesize",  11, logfilesize),
+ 
   { NDB_LE_ILLEGAL_TYPE, 0, 0, 0, 0, 0}
 };
 
@@ -476,13 +496,42 @@ int memcpy_atoi(void *dst, const char *str, int sz)
 
 extern "C"
 int ndb_logevent_get_next(const NdbLogEventHandle h,
-			  struct ndb_logevent *dst,
-			  unsigned timeout_in_milliseconds)
+                           struct ndb_logevent *dst,
+                           unsigned timeout_in_milliseconds)
+{
+  int rc = ndb_logevent_get_next2(h,
+                                  dst,
+                                  timeout_in_milliseconds);
+  if (rc == 1)
+  {
+    /**
+     * Undo effect of bug#16723708 fix to maintain
+     * backwards compatibility
+     */
+    Uint32 category = (Uint32) dst->category;
+    switch(category)
+    {
+    case NDB_MGM_ILLEGAL_EVENT_CATEGORY:
+      category = (Uint32) LogLevel::llInvalid;
+      break;
+    default:
+      category -= CFG_MIN_LOGLEVEL;
+    }
+    dst->category = (enum ndb_mgm_event_category) category;
+  }
+
+  return rc;
+}
+
+extern "C"
+int ndb_logevent_get_next2(const NdbLogEventHandle h,
+                           struct ndb_logevent *dst,
+                           unsigned timeout_in_milliseconds)
 {
   if (timeout_in_milliseconds == 0)
   {
     int res;
-    while ((res = ndb_logevent_get_next(h, dst, 60000))==0);
+    while ((res = ndb_logevent_get_next2(h, dst, 60000))==0);
     return res;
   }
 
@@ -494,7 +543,7 @@ int ndb_logevent_get_next(const NdbLogEventHandle h,
     send <PING>'s that should be ignored.
   */
   char buf[1024];
-  NDB_TICKS start = NdbTick_CurrentMillisecond();
+  const NDB_TICKS start = NdbTick_getCurrentTicks();
   while(1)
   {
     if (in.gets(buf,sizeof(buf)) == 0)
@@ -515,9 +564,10 @@ int ndb_logevent_get_next(const NdbLogEventHandle h,
       ndbout_c("skipped: %s", buf);
 
     if(in.timedout())
-        return 0;
+      return 0;
 
-    if ((NdbTick_CurrentMillisecond() - start) > timeout_in_milliseconds)
+    const NDB_TICKS now = NdbTick_getCurrentTicks();
+    if ((NdbTick_Elapsed(start,now)).milliSec() > timeout_in_milliseconds)
       return 0;
 
   };
@@ -578,7 +628,17 @@ int ndb_logevent_get_next(const NdbLogEventHandle h,
     h->m_error= NDB_LEH_UNKNOWN_EVENT_TYPE;
     return -1;
   }
-  dst->category= (enum ndb_mgm_event_category)category;
+
+  /* convert LogLevel::EventCategory enum values to ndb_mgm_event_category 
+   * enum values and store in dst->category
+   */
+  enum ndb_mgm_event_category mgm_category;
+  if(category == LogLevel::llInvalid) 
+      mgm_category= NDB_MGM_ILLEGAL_EVENT_CATEGORY;
+  else
+      mgm_category= (enum ndb_mgm_event_category)(category + CFG_MIN_LOGLEVEL);
+
+  dst->category= mgm_category;
   dst->severity= (enum ndb_mgm_event_severity)severity;
   dst->level=    level;
 
@@ -616,7 +676,7 @@ int ndb_logevent_get_next(const NdbLogEventHandle h,
     BaseString tmp(val);
     Vector<BaseString> list;
     tmp.split(list);
-    for (size_t j = 0; j<list.size(); j++)
+    for (unsigned j = 0; j<list.size(); j++)
     {
       dst->Data[j] = atoi(list[j].c_str());
     }

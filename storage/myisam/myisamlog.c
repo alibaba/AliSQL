@@ -1,13 +1,20 @@
-/* Copyright (c) 2000, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -22,7 +29,7 @@
 #include "myisamdef.h"
 #include <my_tree.h>
 #include <stdarg.h>
-#ifdef HAVE_GETRUSAGE
+#ifdef HAVE_SYS_RESOURCE_H
 #include <sys/resource.h>
 #endif
 
@@ -81,11 +88,21 @@ static const char *command_name[]=
  "delete-all", NullS};
 
 
+extern st_keycache_thread_var *keycache_thread_var()
+{
+  return &main_thread_keycache_var;
+}
+
+
 int main(int argc, char **argv)
 {
   int error,i,first;
   ulong total_count,total_error,total_recover;
   MY_INIT(argv[0]);
+
+  memset(&main_thread_keycache_var, 0, sizeof(st_keycache_thread_var));
+  mysql_cond_init(PSI_NOT_INSTRUMENTED,
+                  &main_thread_keycache_var.suspend);
 
   log_filename=myisam_log_filename;
   get_options(&argc,&argv);
@@ -124,12 +141,13 @@ int main(int argc, char **argv)
   (void) mi_panic(HA_PANIC_CLOSE);
   my_free_open_file_info();
   my_end(test_info ? MY_CHECK_ERROR | MY_GIVE_INFO : MY_CHECK_ERROR);
+  mysql_cond_destroy(&main_thread_keycache_var.suspend);
   exit(error);
   return 0;				/* No compiler warning */
 } /* main */
 
 
-static void get_options(register int *argc, register char ***argv)
+static void get_options(int *argc, char ***argv)
 {
   int help,version;
   const char *pos,*usage;
@@ -184,7 +202,7 @@ static void get_options(register int *argc, register char ***argv)
 	  else
 	    pos= *(++*argv);
 	}
-	start_offset=(my_off_t) strtoll(pos,NULL,10);
+	start_offset=(my_off_t) my_strtoll(pos,NULL,10);
 	pos=" ";
 	break;
       case 'p':
@@ -215,7 +233,7 @@ static void get_options(register int *argc, register char ***argv)
 	record_pos_file=(char*) pos;
 	if (!--*argc)
 	  goto err;
-	record_pos=(my_off_t) strtoll(*(++*argv),NULL,10);
+	record_pos=(my_off_t) my_strtoll(*(++*argv),NULL,10);
 	pos=" ";
 	break;
       case 'v':
@@ -405,7 +423,7 @@ static int examine_log(char * file_name, char **table_names)
 	to=isam_file_name;
 	if (filepath)
 	  to=convert_dirname(isam_file_name,filepath,NullS);
-	strmov(to,pos);
+	my_stpcpy(to,pos);
 	fn_ext(isam_file_name)[0]=0;	/* Remove extension */
       }
       open_param.name=file_info.name;
@@ -421,7 +439,8 @@ static int examine_log(char * file_name, char **table_names)
        * The additional space is needed for the sprintf commands two lines
        * below.
        */ 
-      file_info.show_name=my_memdup(isam_file_name,
+      file_info.show_name=my_memdup(PSI_NOT_INSTRUMENTED,
+                                    isam_file_name,
 				    (uint) strlen(isam_file_name)+10,
 				    MYF(MY_WME));
       if (file_info.id > 1)
@@ -450,7 +469,8 @@ static int examine_log(char * file_name, char **table_names)
 	if (!(file_info.isam= mi_open(isam_file_name,O_RDWR,
 				      HA_OPEN_WAIT_IF_LOCKED)))
 	  goto com_err;
-	if (!(file_info.record=my_malloc(file_info.isam->s->base.reclength,
+	if (!(file_info.record=my_malloc(PSI_NOT_INSTRUMENTED,
+                                         file_info.isam->s->base.reclength,
 					 MYF(MY_WME))))
 	  goto end;
 	files_open++;
@@ -492,9 +512,9 @@ static int examine_log(char * file_name, char **table_names)
 	{
 	  fflush(stdout);
 	  (void) fprintf(stderr,
-		       "Warning: error %d, expected %d on command %s at %s\n",
-		       my_errno,result,command_name[command],
-		       llstr(isamlog_filepos,llbuff));
+                         "Warning: error %d, expected %d on command %s at %s\n",
+                         my_errno(),result,command_name[command],
+                         llstr(isamlog_filepos,llbuff));
 	  fflush(stderr);
 	}
       }
@@ -521,7 +541,7 @@ static int examine_log(char * file_name, char **table_names)
 	}
 	mi_result=mi_delete(curr_file_info->isam,curr_file_info->record);
 	if ((mi_result == 0 && result) ||
-	    (mi_result && (uint) my_errno != result))
+	    (mi_result && (uint) my_errno() != result))
 	{
 	  if (!recover)
 	    goto com_err;
@@ -580,7 +600,7 @@ static int examine_log(char * file_name, char **table_names)
 	  mi_result=mi_update(curr_file_info->isam,curr_file_info->record,
 			      buff);
 	  if ((mi_result == 0 && result) ||
-	      (mi_result && (uint) my_errno != result))
+	      (mi_result && (uint) my_errno() != result))
 	  {
 	    if (!recover)
 	      goto com_err;
@@ -595,7 +615,7 @@ static int examine_log(char * file_name, char **table_names)
 	{
 	  mi_result=mi_write(curr_file_info->isam,buff);
 	  if ((mi_result == 0 && result) ||
-	      (mi_result && (uint) my_errno != result))
+	      (mi_result && (uint) my_errno() != result))
 	  {
 	    if (!recover)
 	      goto com_err;
@@ -656,14 +676,14 @@ static int examine_log(char * file_name, char **table_names)
 
  err:
   fflush(stdout);
-  (void) fprintf(stderr,"Got error %d when reading from logfile\n",my_errno);
+  (void) fprintf(stderr,"Got error %d when reading from logfile\n",my_errno());
   fflush(stderr);
   goto end;
  com_err:
   fflush(stdout);
   (void) fprintf(stderr,"Got error %d, expected %d on command %s at %s\n",
-	       my_errno,result,command_name[command],
-	       llstr(isamlog_filepos,llbuff));
+                 my_errno(),result,command_name[command],
+                 llstr(isamlog_filepos,llbuff));
   fflush(stderr);
  end:
   end_key_cache(dflt_key_cache, 1);
@@ -676,13 +696,14 @@ static int examine_log(char * file_name, char **table_names)
 }
 
 
-static int read_string(IO_CACHE *file, register uchar* *to, register uint length)
+static int read_string(IO_CACHE *file, uchar* *to, uint length)
 {
   DBUG_ENTER("read_string");
 
   if (*to)
     my_free(*to);
-  if (!(*to= (uchar*) my_malloc(length+1,MYF(MY_WME))) ||
+  if (!(*to= (uchar*) my_malloc(PSI_NOT_INSTRUMENTED,
+                                length+1,MYF(MY_WME))) ||
       my_b_read(file,(uchar*) *to,length))
   {
     if (*to)
@@ -789,7 +810,7 @@ static int reopen_closed_file(TREE *tree, struct file_info *fileinfo)
   char name[FN_REFLEN];
   if (close_some_file(tree))
     return 1;				/* No file to close */
-  strmov(name,fileinfo->show_name);
+  my_stpcpy(name,fileinfo->show_name);
   if (fileinfo->id > 1)
     *strrchr(name,'<')='\0';		/* Remove "<id>" */
 

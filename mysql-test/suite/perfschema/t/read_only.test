@@ -6,23 +6,25 @@
 
 --source include/not_embedded.inc
 --source include/have_perfschema.inc
+--enable_connect_log
 
 use performance_schema;
 
 set @start_read_only= @@global.read_only;
+set @start_super_read_only= @@global.super_read_only;
 
+set @orig_sql_mode= @@sql_mode;
+set sql_mode= (select replace(@@sql_mode,'NO_AUTO_CREATE_USER',''));
 grant SELECT, UPDATE on performance_schema.* to pfsuser@localhost;
+set sql_mode= @orig_sql_mode;
 flush privileges;
 
---echo connect (con1, localhost, pfsuser, , test);
 connect (con1, localhost, pfsuser, , test);
 
---echo connection default;
 connection default;
 
 set global read_only=0;
 
---echo connection con1;
 connection con1;
 
 select @@global.read_only;
@@ -33,32 +35,27 @@ update performance_schema.setup_instruments set enabled='NO';
 update performance_schema.setup_instruments set enabled='YES';
 --enable_result_log
 
---echo connection default;
 connection default;
 
 set global read_only=1;
 
---echo connection con1;
 connection con1;
 
 select @@global.read_only;
 show grants;
 --disable_result_log
+--echo # Update on perf_schema is allowed in read_only mode.
 select * from performance_schema.setup_instruments;
---error ER_OPTION_PREVENTS_STATEMENT
 update performance_schema.setup_instruments set enabled='NO';
---error ER_OPTION_PREVENTS_STATEMENT
 update performance_schema.setup_instruments set enabled='YES';
 --enable_result_log
 
---echo connection default;
 connection default;
 
 grant super on *.* to pfsuser@localhost;
 flush privileges;
 
 disconnect con1;
---echo connect (con1, localhost, pfsuser, , test);
 connect (con1, localhost, pfsuser, , test);
 
 select @@global.read_only;
@@ -69,14 +66,118 @@ update performance_schema.setup_instruments set enabled='NO';
 update performance_schema.setup_instruments set enabled='YES';
 --enable_result_log
 
+connection default;
+
+set global super_read_only=1;
+
+connection con1;
+
+select @@global.super_read_only;
+show grants;
+--disable_result_log
+select * from performance_schema.setup_instruments;
+--echo # Update is allowed in super_read_only on perf schema for
+--echo # super user.
+update performance_schema.setup_instruments set enabled='NO';
+update performance_schema.setup_instruments set enabled='YES';
+--enable_result_log
+
+--echo #
+--echo # Bug#31080309 - REGRESSION FOR BUG 81009 FIXED IN 5.7.17
+--echo #   Bug23103937(BUG81009) - PS_TRUNCATE_ALL_TABLES() DOES NOT WORK IN
+--echo #                           SUPER_READ_ONLY MODE.
+--echo #
+
+connection default;
+--echo # Reset read_only and super_read_only mode.
+set global read_only=0;
+set global super_read_only=0;
+--echo # Grant truncate table and execute stored procedure privileges to pfsuser.
+grant DROP on performance_schema.* to pfsuser@localhost;
+grant EXECUTE on procedure sys.ps_truncate_all_tables to pfsuser@localhost;
+
+--echo #-----------------------------------------------------------------------
+--echo # Test case to verify truncate operation on performance schema table by
+--echo # super user with super_read_only=ON.
+--echo #-----------------------------------------------------------------------
+--echo # Set super_read_only mode.
+set global super_read_only=1;
+
+connection con1;
+--echo # truncate operation is allowed in super_read_only mode on performance schema
+--echo # tables for super user.
+--echo # Without fix following statements fail because of super read only mode.
+--disable_result_log
+truncate table performance_schema.events_statements_summary_by_digest;
+call sys.ps_truncate_all_tables(0);
+--enable_result_log
+
+--echo #-----------------------------------------------------------------------
+--echo # Test case to verify truncate operation on performance schema table by
+--echo # super user with read_only=ON.
+--echo #-----------------------------------------------------------------------
+connection default;
+--echo # Reset super_read_only mode.
+set global super_read_only=0;
+--echo # Set read_only mode.
+set global read_only=1;
+
+connection con1;
+--echo # truncate operation is allowed in read_only mode on performance schema
+--echo # tables for super user.
+--echo # Without fix following statements fail because of super read only mode.
+--disable_result_log
+truncate table performance_schema.events_statements_summary_by_digest;
+call sys.ps_truncate_all_tables(0);
+--enable_result_log
+
+--echo #-----------------------------------------------------------------------
+--echo # Test case to verify truncate operation on performance schema table by
+--echo # non-super user with super_read_only=ON.
+--echo #-----------------------------------------------------------------------
+connection default;
+set global super_read_only=0;
+--echo # Revoke SUPER privilege from pfsuser.
+revoke SUPER on *.* from pfsuser@localhost;
+--echo # Reset super_read_only mode.
+set global super_read_only=1;
+
+connection con1;
+--echo # truncate operation is allowed in super_read_only mode on performance schema
+--echo # tables for non-super user.
+--disable_result_log
+truncate table performance_schema.events_statements_summary_by_digest;
+call sys.ps_truncate_all_tables(0);
+--enable_result_log
+
+--echo #-----------------------------------------------------------------------
+--echo # Test case to verify truncate operation on performance schema table by
+--echo # non-super user with read_only=ON.
+--echo #-----------------------------------------------------------------------
+connection default;
+--echo # Reset super_read_only mode.
+set global super_read_only=0;
+--echo # Set read_only mode.
+set global read_only=1;
+
+connection con1;
+--echo # truncate operation is allowed in read_only mode on performance schema
+--echo # tables for non-super user.
+--disable_result_log
+truncate table performance_schema.events_statements_summary_by_digest;
+call sys.ps_truncate_all_tables(0);
+--enable_result_log
+--echo ########################################################################
+
 disconnect con1;
 --source include/wait_until_disconnected.inc
 
---echo connection default;
 connection default;
 
 set global read_only= @start_read_only;
+set global super_read_only= @start_super_read_only;
 
 drop user pfsuser@localhost;
 flush privileges;
 
+--disable_connect_log

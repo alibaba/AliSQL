@@ -2,8 +2,10 @@
 # BUG#49562: SBR out of sync when using numeric data types + user variable
 #
 
--- source include/master-slave.inc
+-- source include/not_group_replication_plugin.inc
 -- source include/have_binlog_format_statement.inc
+-- source include/have_myisam.inc
+-- source include/master-slave.inc
 
 ## Setup user variables for several numeric types, so that we get
 ## coverage on the User_var_log_event different val types
@@ -32,7 +34,7 @@ CREATE TABLE t1 (`tinyint` TINYINT,
 
 -- echo ### insert max unsigned
 -- echo ### a) declarative
--- eval INSERT INTO t1 VALUES ($max_unsigned_long, $max_unsigned_long, $max_unsigned_long, $max_unsigned_long, $max_unsigned_long, $max_unsigned_long, $max_unsigned_long,$max_unsigned_long, $max_unsigned_long, $max_unsigned_long, $max_unsigned_long, $max_unsigned_long, $max_unsigned_long, $max_unsigned_long);
+-- eval INSERT IGNORE INTO t1 VALUES ($max_unsigned_long, $max_unsigned_long, $max_unsigned_long, $max_unsigned_long, $max_unsigned_long, $max_unsigned_long, $max_unsigned_long,$max_unsigned_long, $max_unsigned_long, $max_unsigned_long, $max_unsigned_long, $max_unsigned_long, $max_unsigned_long, $max_unsigned_long);
 
 -- echo #########################################
 -- echo #### [ on master ]
@@ -49,20 +51,20 @@ CREATE TABLE t1 (`tinyint` TINYINT,
 TRUNCATE t1;
 
 -- echo ### b) user var
-INSERT INTO t1 VALUES (@positive,
-                       @positive,
-                       @positive,
-                       @positive,
-                       @positive,
-                       @positive,
-                       @positive,
-                       @positive,
-                       @positive,
-                       @positive,
-                       @positive,
-                       @positive,
-                       @positive,
-                       @positive);
+INSERT IGNORE INTO t1 VALUES (@positive,
+                              @positive,
+                              @positive,
+                              @positive,
+                              @positive,
+                              @positive,
+                              @positive,
+                              @positive,
+                              @positive,
+                              @positive,
+                              @positive,
+                              @positive,
+                              @positive,
+                              @positive);
 
 -- echo #########################################
 -- echo #### [ on master ]
@@ -81,7 +83,7 @@ TRUNCATE t1;
 
 -- echo ### insert min signed
 -- echo ### a) declarative
--- eval INSERT INTO t1 VALUES ($min_signed_long, $min_signed_long, $min_signed_long, $min_signed_long, $min_signed_long, $min_signed_long, $min_signed_long,$min_signed_long, $min_signed_long, $min_signed_long, $min_signed_long, $min_signed_long, $min_signed_long, $min_signed_long);
+-- eval INSERT IGNORE INTO t1 VALUES ($min_signed_long, $min_signed_long, $min_signed_long, $min_signed_long, $min_signed_long, $min_signed_long, $min_signed_long,$min_signed_long, $min_signed_long, $min_signed_long, $min_signed_long, $min_signed_long, $min_signed_long, $min_signed_long);
 
 -- echo #########################################
 -- echo #### [ on master ]
@@ -98,20 +100,20 @@ TRUNCATE t1;
 TRUNCATE t1;
 
 -- echo ### b) user var
-INSERT INTO t1 VALUES (@negative,
-                       @negative,
-                       @negative,
-                       @negative,
-                       @negative,
-                       @negative,
-                       @negative,
-                       @negative,
-                       @negative,
-                       @negative,
-                       @negative,
-                       @negative,
-                       @negative,
-                       @negative);
+INSERT IGNORE INTO t1 VALUES (@negative,
+                              @negative,
+                              @negative,
+                              @negative,
+                              @negative,
+                              @negative,
+                              @negative,
+                              @negative,
+                              @negative,
+                              @negative,
+                              @negative,
+                              @negative,
+                              @negative,
+                              @negative);
 
 -- echo #########################################
 -- echo #### [ on master ]
@@ -144,6 +146,8 @@ DROP TABLE t1;
 --source include/rpl_reset.inc
 -- connection master
 
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+
 CREATE TABLE t1 ( c INT, PRIMARY KEY (c)) Engine=MyISAM;
 
 # offending trigger that would reset the unsigned flag for aux before
@@ -164,6 +168,8 @@ INSERT INTO t1 VALUES (@aux) , (@aux1);
 --connection master
 DROP TRIGGER tr1;
 DROP TABLE t1;
+
+SET sql_mode = default;
 
 --source include/sync_slave_sql_with_master.inc
 
@@ -199,8 +205,10 @@ connection slave;
 SELECT * FROM t1 ORDER BY a;
 
 connection master;
+--let $mask_binlog_commit_events= 1
 --echo # Show events and cleanup
 --source include/show_binlog_events.inc
+--let $mask_binlog_commit_events= 0
 DROP TABLE t1;
 DROP PROCEDURE p1;
 

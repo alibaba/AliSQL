@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2010, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -17,6 +24,7 @@
 
 #cmakedefine HAVE_POSIX_MEMALIGN 1
 #cmakedefine HAVE_CLOCK_GETTIME 1
+#cmakedefine HAVE_NANOSLEEP 1
 #cmakedefine HAVE_PTHREAD_CONDATTR_SETCLOCK 1
 #cmakedefine HAVE_PTHREAD_SELF 1
 #cmakedefine HAVE_SCHED_GET_PRIORITY_MIN 1
@@ -29,8 +37,9 @@
 #cmakedefine HAVE_SYSCONF 1
 #cmakedefine HAVE_DIRECTIO 1
 #cmakedefine HAVE_ATOMIC_SWAP32 1
+#cmakedefine HAVE_MAC_OS_X_THREAD_INFO 1
 #cmakedefine HAVE_LINUX_SCHEDULING 1
-#cmakedefine HAVE_SOLARIS_AFFINITY1
+#cmakedefine HAVE_SOLARIS_AFFINITY 1
 #cmakedefine HAVE_LINUX_FUTEX 1
 #cmakedefine HAVE_ATOMIC_H 1
 #cmakedefine HAVE_SUN_PREFETCH_H 1
@@ -38,8 +47,12 @@
 #cmakedefine HAVE_MLOCK 1
 #cmakedefine HAVE_FFS 1
 #cmakedefine HAVE___BUILTIN_FFS 1
+#cmakedefine HAVE___BUILTIN_CTZ 1
+#cmakedefine HAVE___BUILTIN_CLZ 1
 #cmakedefine HAVE__BITSCANFORWARD 1
+#cmakedefine HAVE__BITSCANREVERSE 1
 #cmakedefine HAVE_PTHREAD_MUTEXATTR_INIT 1
 #cmakedefine HAVE_PTHREAD_MUTEXATTR_SETTYPE 1
 #cmakedefine HAVE_PTHREAD_SETSCHEDPARAM 1
 #cmakedefine HAVE_BZERO 1
+#cmakedefine HAVE_MY_DEFAULT_H 1

@@ -6,7 +6,6 @@ Note	####	Storing MySQL user name or password information in the master info rep
 call mtr.add_suppression('Attempting backtrace');
 call mtr.add_suppression("Recovery from master pos .*");
 call mtr.add_suppression(".*  InnoDB: Warning: allocated tablespace .*, old maximum was .*");
-call mtr.add_suppression(".*int __cxa_pure_virtual().*");
 ########################################################################
 #                               SET UP
 ########################################################################
@@ -331,7 +330,7 @@ slave_master_info	CREATE TABLE `slave_master_info` (
   `Number_of_lines` int(10) unsigned NOT NULL COMMENT 'Number of lines in the file.',
   `Master_log_name` text CHARACTER SET utf8 COLLATE utf8_bin NOT NULL COMMENT 'The name of the master binary log currently being read from the master.',
   `Master_log_pos` bigint(20) unsigned NOT NULL COMMENT 'The master log position of the last read event.',
-  `Host` char(64) CHARACTER SET utf8 COLLATE utf8_bin NOT NULL DEFAULT '' COMMENT 'The host name of the master.',
+  `Host` char(64) CHARACTER SET utf8 COLLATE utf8_bin DEFAULT NULL COMMENT 'The host name of the master.',
   `User_name` text CHARACTER SET utf8 COLLATE utf8_bin COMMENT 'The user name used to connect to the master.',
   `User_password` text CHARACTER SET utf8 COLLATE utf8_bin COMMENT 'The password used to connect to the master.',
   `Port` int(10) unsigned NOT NULL COMMENT 'The network port used to connect to the master.',
@@ -351,7 +350,9 @@ slave_master_info	CREATE TABLE `slave_master_info` (
   `Ssl_crl` text CHARACTER SET utf8 COLLATE utf8_bin COMMENT 'The file used for the Certificate Revocation List (CRL)',
   `Ssl_crlpath` text CHARACTER SET utf8 COLLATE utf8_bin COMMENT 'The path used for Certificate Revocation List (CRL) files',
   `Enabled_auto_position` tinyint(1) NOT NULL COMMENT 'Indicates whether GTIDs will be used to retrieve events from the master.',
-  PRIMARY KEY (`Host`,`Port`)
+  `Channel_name` char(64) NOT NULL COMMENT 'The channel on which the slave is connected to a source. Used in Multisource Replication',
+  `Tls_version` text CHARACTER SET utf8 COLLATE utf8_bin COMMENT 'Tls version',
+  PRIMARY KEY (`Channel_name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 STATS_PERSISTENT=0 COMMENT='Master Information'
 SHOW CREATE TABLE mysql.slave_relay_log_info;
 Table	Create Table
@@ -364,7 +365,8 @@ slave_relay_log_info	CREATE TABLE `slave_relay_log_info` (
   `Sql_delay` int(11) NOT NULL COMMENT 'The number of seconds that the slave must lag behind the master.',
   `Number_of_workers` int(10) unsigned NOT NULL,
   `Id` int(10) unsigned NOT NULL COMMENT 'Internal Id that uniquely identifies this record.',
-  PRIMARY KEY (`Id`)
+  `Channel_name` char(64) NOT NULL COMMENT 'The channel on which the slave is connected to a source. Used in Multisource Replication',
+  PRIMARY KEY (`Channel_name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 STATS_PERSISTENT=0 COMMENT='Relay Log Information'
 SHOW CREATE TABLE mysql.slave_worker_info;
 Table	Create Table
@@ -381,7 +383,8 @@ slave_worker_info	CREATE TABLE `slave_worker_info` (
   `Checkpoint_seqno` int(10) unsigned NOT NULL,
   `Checkpoint_group_size` int(10) unsigned NOT NULL,
   `Checkpoint_group_bitmap` blob NOT NULL,
-  PRIMARY KEY (`Id`)
+  `Channel_name` char(64) NOT NULL COMMENT 'The channel on which the slave is connected to a source. Used in Multisource Replication',
+  PRIMARY KEY (`Channel_name`,`Id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 STATS_PERSISTENT=0 COMMENT='Worker Information'
 ALTER TABLE mysql.slave_master_info ENGINE= Innodb;
 ALTER TABLE mysql.slave_relay_log_info ENGINE= Innodb;
@@ -392,7 +395,7 @@ slave_master_info	CREATE TABLE `slave_master_info` (
   `Number_of_lines` int(10) unsigned NOT NULL COMMENT 'Number of lines in the file.',
   `Master_log_name` text CHARACTER SET utf8 COLLATE utf8_bin NOT NULL COMMENT 'The name of the master binary log currently being read from the master.',
   `Master_log_pos` bigint(20) unsigned NOT NULL COMMENT 'The master log position of the last read event.',
-  `Host` char(64) CHARACTER SET utf8 COLLATE utf8_bin NOT NULL DEFAULT '' COMMENT 'The host name of the master.',
+  `Host` char(64) CHARACTER SET utf8 COLLATE utf8_bin DEFAULT NULL COMMENT 'The host name of the master.',
   `User_name` text CHARACTER SET utf8 COLLATE utf8_bin COMMENT 'The user name used to connect to the master.',
   `User_password` text CHARACTER SET utf8 COLLATE utf8_bin COMMENT 'The password used to connect to the master.',
   `Port` int(10) unsigned NOT NULL COMMENT 'The network port used to connect to the master.',
@@ -412,7 +415,9 @@ slave_master_info	CREATE TABLE `slave_master_info` (
   `Ssl_crl` text CHARACTER SET utf8 COLLATE utf8_bin COMMENT 'The file used for the Certificate Revocation List (CRL)',
   `Ssl_crlpath` text CHARACTER SET utf8 COLLATE utf8_bin COMMENT 'The path used for Certificate Revocation List (CRL) files',
   `Enabled_auto_position` tinyint(1) NOT NULL COMMENT 'Indicates whether GTIDs will be used to retrieve events from the master.',
-  PRIMARY KEY (`Host`,`Port`)
+  `Channel_name` char(64) NOT NULL COMMENT 'The channel on which the slave is connected to a source. Used in Multisource Replication',
+  `Tls_version` text CHARACTER SET utf8 COLLATE utf8_bin COMMENT 'Tls version',
+  PRIMARY KEY (`Channel_name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 STATS_PERSISTENT=0 COMMENT='Master Information'
 SHOW CREATE TABLE mysql.slave_relay_log_info;
 Table	Create Table
@@ -425,7 +430,8 @@ slave_relay_log_info	CREATE TABLE `slave_relay_log_info` (
   `Sql_delay` int(11) NOT NULL COMMENT 'The number of seconds that the slave must lag behind the master.',
   `Number_of_workers` int(10) unsigned NOT NULL,
   `Id` int(10) unsigned NOT NULL COMMENT 'Internal Id that uniquely identifies this record.',
-  PRIMARY KEY (`Id`)
+  `Channel_name` char(64) NOT NULL COMMENT 'The channel on which the slave is connected to a source. Used in Multisource Replication',
+  PRIMARY KEY (`Channel_name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 STATS_PERSISTENT=0 COMMENT='Relay Log Information'
 SHOW CREATE TABLE mysql.slave_worker_info;
 Table	Create Table
@@ -442,11 +448,12 @@ slave_worker_info	CREATE TABLE `slave_worker_info` (
   `Checkpoint_seqno` int(10) unsigned NOT NULL,
   `Checkpoint_group_size` int(10) unsigned NOT NULL,
   `Checkpoint_group_bitmap` blob NOT NULL,
-  PRIMARY KEY (`Id`)
+  `Channel_name` char(64) NOT NULL COMMENT 'The channel on which the slave is connected to a source. Used in Multisource Replication',
+  PRIMARY KEY (`Channel_name`,`Id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 STATS_PERSISTENT=0 COMMENT='Worker Information'
 ==== end rpl_mts_crash_safe.inc:configure ====
 ########################################################################
-#                                TEST 
+#                                TEST
 ########################################################################
 SET @@global.slave_parallel_workers= 1;
 SET @@global.slave_checkpoint_period= 0;
@@ -458,8 +465,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (7, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (7, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -495,8 +502,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (8, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (8, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -514,8 +521,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (9, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (9, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -551,8 +558,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (10, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (10, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -570,8 +577,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (11, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (11, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -589,8 +596,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (12, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (12, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -626,8 +633,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (13, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (13, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -663,8 +670,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (14, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (14, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -682,8 +689,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (15, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (15, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -719,8 +726,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (16, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (16, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -738,8 +745,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (17, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (17, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -757,8 +764,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (18, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (18, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -794,8 +801,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (19, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (19, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -813,8 +820,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (20, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (20, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -850,8 +857,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (21, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (21, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -869,8 +876,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (22, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (22, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -888,8 +895,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (23, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (23, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -907,8 +914,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (24, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (24, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -944,8 +951,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (25, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (25, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -963,8 +970,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (26, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (26, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -982,8 +989,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (27, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (27, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1001,8 +1008,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (28, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (28, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1020,8 +1027,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (29, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (29, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1039,8 +1046,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (30, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (30, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1076,8 +1083,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (31, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (31, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1095,8 +1102,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (32, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (32, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1132,8 +1139,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (33, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (33, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1151,8 +1158,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (34, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (34, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1170,8 +1177,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (35, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (35, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1189,8 +1196,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (36, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (36, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1226,8 +1233,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (37, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (37, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1245,8 +1252,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (38, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (38, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1264,8 +1271,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (39, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (39, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1283,8 +1290,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (40, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (40, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1302,8 +1309,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (41, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (41, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1321,8 +1328,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (42, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (42, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1358,8 +1365,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (43, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (43, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1377,8 +1384,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (44, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (44, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1396,8 +1403,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (45, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (45, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1433,8 +1440,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (46, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (46, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1452,8 +1459,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (47, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (47, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1471,8 +1478,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (48, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (48, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1490,8 +1497,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (49, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (49, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1509,8 +1516,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (50, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (50, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1528,8 +1535,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (51, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (51, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1565,8 +1572,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (52, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (52, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1584,8 +1591,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (53, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (53, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1603,8 +1610,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (54, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (54, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1622,8 +1629,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (55, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (55, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1641,8 +1648,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (56, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (56, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1660,8 +1667,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (57, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (57, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1679,8 +1686,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (58, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (58, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1698,8 +1705,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (59, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (59, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1717,8 +1724,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (60, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (60, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1754,8 +1761,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (61, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (61, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1773,8 +1780,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (62, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (62, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1792,8 +1799,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (63, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (63, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1829,8 +1836,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (64, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (64, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1848,8 +1855,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (65, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (65, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1867,8 +1874,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (66, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (66, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1886,8 +1893,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (67, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (67, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1905,8 +1912,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (68, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (68, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1924,8 +1931,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (69, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (69, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1961,8 +1968,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (70, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (70, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1980,8 +1987,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (71, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (71, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -1999,8 +2006,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (72, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (72, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2018,8 +2025,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (73, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (73, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2037,8 +2044,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (74, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (74, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2056,8 +2063,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (75, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (75, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2075,8 +2082,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (76, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (76, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2094,8 +2101,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (77, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (77, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2113,8 +2120,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (78, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (78, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2150,8 +2157,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (79, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (79, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2169,8 +2176,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (80, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (80, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2206,8 +2213,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (81, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (81, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2225,8 +2232,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (82, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (82, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2244,8 +2251,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (83, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (83, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2281,8 +2288,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (84, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (84, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2300,8 +2307,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (85, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (85, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2337,8 +2344,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (86, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (86, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2356,8 +2363,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (87, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (87, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2375,8 +2382,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (88, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (88, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2412,8 +2419,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (89, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (89, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2431,8 +2438,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (90, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (90, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2468,8 +2475,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (91, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (91, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2487,8 +2494,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (92, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (92, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2506,8 +2513,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (93, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (93, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2543,8 +2550,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (94, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (94, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2562,8 +2569,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (95, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (95, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2581,8 +2588,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (96, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (96, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2600,8 +2607,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (97, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (97, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2637,8 +2644,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (98, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (98, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2656,8 +2663,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (99, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (99, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2675,8 +2682,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (100, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (100, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2694,8 +2701,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (101, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (101, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2713,8 +2720,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (102, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (102, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2732,8 +2739,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (103, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (103, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2769,8 +2776,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (104, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (104, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2788,8 +2795,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (105, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (105, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2807,8 +2814,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (106, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (106, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2826,8 +2833,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (107, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (107, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2863,8 +2870,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (108, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (108, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2882,8 +2889,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (109, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (109, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2901,8 +2908,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (110, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (110, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2920,8 +2927,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (111, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (111, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2939,8 +2946,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (112, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (112, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2958,8 +2965,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (113, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (113, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -2995,8 +3002,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (114, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (114, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3014,8 +3021,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (115, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (115, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3033,8 +3040,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (116, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (116, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3052,8 +3059,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (117, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (117, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3089,8 +3096,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (118, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (118, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3108,8 +3115,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (119, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (119, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3127,8 +3134,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (120, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (120, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3146,8 +3153,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (121, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (121, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3165,8 +3172,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (122, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (122, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3184,8 +3191,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (123, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (123, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3221,8 +3228,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (124, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (124, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3240,8 +3247,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (125, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (125, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3259,8 +3266,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (126, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (126, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3278,8 +3285,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (127, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (127, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3297,8 +3304,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (128, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (128, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3316,8 +3323,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (129, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (129, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3353,8 +3360,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (130, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (130, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3372,8 +3379,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (131, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (131, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3391,8 +3398,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (132, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (132, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3410,8 +3417,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (133, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (133, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3429,8 +3436,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (134, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (134, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3448,8 +3455,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (135, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (135, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3467,8 +3474,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (136, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (136, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3486,8 +3493,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (137, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (137, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3505,8 +3512,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (138, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (138, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3542,8 +3549,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (139, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (139, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3561,8 +3568,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (140, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (140, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3580,8 +3587,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (141, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (141, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3599,8 +3606,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (142, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (142, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3618,8 +3625,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (143, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (143, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3637,8 +3644,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (144, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (144, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3674,8 +3681,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (145, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (145, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3693,8 +3700,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (146, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (146, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3712,8 +3719,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (147, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (147, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3731,8 +3738,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (148, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (148, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3750,8 +3757,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (149, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (149, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3769,8 +3776,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (150, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (150, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3788,8 +3795,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (151, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (151, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3807,8 +3814,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (152, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (152, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3826,8 +3833,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (153, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (153, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3863,8 +3870,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (154, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (154, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3882,8 +3889,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (155, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (155, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3901,8 +3908,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (156, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (156, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3920,8 +3927,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (157, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (157, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3939,8 +3946,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (158, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (158, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3958,8 +3965,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (159, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (159, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -3995,8 +4002,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (160, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (160, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4014,8 +4021,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (161, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (161, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4033,8 +4040,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (162, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (162, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4052,8 +4059,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (163, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (163, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4071,8 +4078,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (164, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (164, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4090,8 +4097,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (165, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (165, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4109,8 +4116,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (166, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (166, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4128,8 +4135,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (167, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (167, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4147,8 +4154,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (168, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (168, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4184,8 +4191,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (169, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (169, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4203,8 +4210,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (170, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (170, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4222,8 +4229,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (171, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (171, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4259,8 +4266,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (172, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (172, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4278,8 +4285,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (173, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (173, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4297,8 +4304,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (174, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (174, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4334,8 +4341,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (175, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (175, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4353,8 +4360,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (176, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (176, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4372,8 +4379,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (177, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (177, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4409,8 +4416,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (178, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (178, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4428,8 +4435,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (179, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (179, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4447,8 +4454,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (180, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (180, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4484,8 +4491,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (181, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (181, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4503,8 +4510,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (182, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (182, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4522,8 +4529,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (183, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (183, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4541,8 +4548,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (184, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (184, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4560,8 +4567,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (185, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (185, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4579,8 +4586,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (186, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (186, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4616,8 +4623,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (187, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (187, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4635,8 +4642,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (188, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (188, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4654,8 +4661,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (189, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (189, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4673,8 +4680,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (190, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (190, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4692,8 +4699,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (191, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (191, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4711,8 +4718,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (192, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (192, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4748,8 +4755,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (193, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (193, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4767,8 +4774,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (194, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (194, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4786,8 +4793,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (195, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (195, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4805,8 +4812,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (196, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (196, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4824,8 +4831,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (197, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (197, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4843,8 +4850,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (198, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (198, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4880,8 +4887,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (199, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (199, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4899,8 +4906,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (200, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (200, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4918,8 +4925,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (201, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (201, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4937,8 +4944,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (202, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (202, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4956,8 +4963,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (203, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (203, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -4975,8 +4982,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (204, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (204, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -5012,8 +5019,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (205, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (205, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -5031,8 +5038,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (206, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (206, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -5050,8 +5057,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (207, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (207, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -5069,8 +5076,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (208, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (208, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -5088,8 +5095,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (209, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (209, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -5107,8 +5114,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (210, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (210, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -5126,8 +5133,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (211, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (211, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -5145,8 +5152,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (212, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (212, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -5164,8 +5171,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (213, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (213, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -5201,8 +5208,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (214, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (214, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -5220,8 +5227,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (215, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (215, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -5239,8 +5246,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (216, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (216, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -5258,8 +5265,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (217, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (217, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -5277,8 +5284,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (218, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (218, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -5296,8 +5303,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (219, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (219, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -5315,8 +5322,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (220, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (220, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -5334,8 +5341,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (221, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (221, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -5353,8 +5360,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (222, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (222, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -5390,8 +5397,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (223, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (223, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -5409,8 +5416,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (224, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (224, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -5428,8 +5435,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (225, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (225, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -5447,8 +5454,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (226, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (226, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -5466,8 +5473,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (227, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (227, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -5485,8 +5492,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (228, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (228, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -5504,8 +5511,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (229, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (229, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -5523,8 +5530,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (230, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (230, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -5542,8 +5549,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (231, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (231, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -5579,8 +5586,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (232, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (232, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -5598,8 +5605,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (233, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (233, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -5617,8 +5624,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (234, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (234, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -5636,8 +5643,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (235, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (235, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -5655,8 +5662,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (236, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (236, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -5674,8 +5681,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (237, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (237, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -5693,8 +5700,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (238, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (238, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_1.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -5712,8 +5719,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (239, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (239, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_2.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -5731,8 +5738,8 @@ INSERT INTO tt_1(trans_id, stmt_id) VALUES (240, 2);
 INSERT INTO tt_1(trans_id, stmt_id) VALUES (240, 4);
 COMMIT;
 -b-b-b-b-b-b-b-b-b-b-b- >> B T T C << -b-b-b-b-b-b-b-b-b-b-b-
-include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= Gtid_set
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test_3.tt_1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F

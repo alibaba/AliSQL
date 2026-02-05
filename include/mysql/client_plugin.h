@@ -1,14 +1,26 @@
 #ifndef MYSQL_CLIENT_PLUGIN_INCLUDED
-/* Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -28,14 +40,48 @@
 #include <stdlib.h>
 #endif
 
+/*
+  On Windows, exports from DLL need to be declared.
+  Also, plugin needs to be declared as extern "C" because MSVC
+  unlike other compilers, uses C++ mangling for variables not only
+  for functions.
+*/
+
+#undef MYSQL_PLUGIN_EXPORT
+
+#if defined(_MSC_VER)
+#if defined(MYSQL_DYNAMIC_PLUGIN)
+  #ifdef __cplusplus
+    #define MYSQL_PLUGIN_EXPORT extern "C" __declspec(dllexport)
+  #else
+    #define MYSQL_PLUGIN_EXPORT __declspec(dllexport)
+  #endif
+#else /* MYSQL_DYNAMIC_PLUGIN */
+  #ifdef __cplusplus
+    #define  MYSQL_PLUGIN_EXPORT extern "C"
+  #else
+    #define MYSQL_PLUGIN_EXPORT
+  #endif
+#endif /*MYSQL_DYNAMIC_PLUGIN */
+#else /*_MSC_VER */
+#define MYSQL_PLUGIN_EXPORT
+#endif
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* known plugin types */
 #define MYSQL_CLIENT_reserved1               0
 #define MYSQL_CLIENT_reserved2               1
 #define MYSQL_CLIENT_AUTHENTICATION_PLUGIN   2
+#define MYSQL_CLIENT_TRACE_PLUGIN            3
 
 #define MYSQL_CLIENT_AUTHENTICATION_PLUGIN_INTERFACE_VERSION  0x0100
+#define MYSQL_CLIENT_TRACE_PLUGIN_INTERFACE_VERSION           0x0100
 
-#define MYSQL_CLIENT_MAX_PLUGINS             3
+#define MYSQL_CLIENT_MAX_PLUGINS             4
 
 #define mysql_declare_client_plugin(X)          \
      MYSQL_PLUGIN_EXPORT struct st_mysql_client_plugin_ ## X        \
@@ -55,7 +101,7 @@
   const char *license;                                  \
   void *mysql_api;                                      \
   int (*init)(char *, size_t, int, va_list);            \
-  int (*deinit)();                                      \
+  int (*deinit)(void);                                  \
   int (*options)(const char *option, const void *);
 
 struct st_mysql_client_plugin
@@ -66,7 +112,7 @@ struct st_mysql_client_plugin
 struct st_mysql;
 
 /******** authentication plugin specific declarations *********/
-#include <mysql/plugin_auth_common.h>
+#include "plugin_auth_common.h"
 
 struct st_mysql_client_plugin_AUTHENTICATION
 {
@@ -158,5 +204,11 @@ mysql_client_register_plugin(struct st_mysql *mysql,
 **/
 int mysql_plugin_options(struct st_mysql_client_plugin *plugin,
                          const char *option, const void *value);
+
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif
 

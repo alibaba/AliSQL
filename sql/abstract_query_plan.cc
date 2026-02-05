@@ -1,25 +1,30 @@
 /*
-   Copyright (c) 2010, 2013, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-#include "sql_priv.h"
-#include "sql_select.h"
-#include "sql_optimizer.h"
 #include "abstract_query_plan.h"
-#include "sql_join_buffer.h"
+
+#include "sql_optimizer.h"    // JOIN
 
 namespace AQP
 {
@@ -29,7 +34,7 @@ namespace AQP
     @param access_count Length of array.
   */
   Join_plan::Join_plan(const JOIN* join)
-   : m_join_tabs(join->join_tab),
+   : m_qep_tabs(join->qep_tab),
      m_access_count(join->primary_tables),
      m_table_accesses(NULL)
   {
@@ -37,10 +42,9 @@ namespace AQP
       This combination is assumed not to appear. If it does, code must
       be written to handle it.
     */
-    DBUG_ASSERT((m_join_tabs[0].use_quick != 2)
-                || (m_join_tabs[0].type == JT_ALL)
-                || (m_join_tabs[0].select == NULL)
-                || (m_join_tabs[0].select->quick == NULL));
+    assert(!m_qep_tabs[0].dynamic_range()
+           || (m_qep_tabs[0].type() == JT_ALL)
+           || (m_qep_tabs[0].quick() == NULL));
 
     m_table_accesses= new Table_access[m_access_count];
     for(uint i= 0; i < m_access_count; i++)
@@ -56,11 +60,11 @@ namespace AQP
     m_table_accesses= NULL;
   }
 
-  /** Get the JOIN_TAB of the n'th table access operation.*/
-  const JOIN_TAB* Join_plan::get_join_tab(uint join_tab_no) const
+  /** Get the QEP_TAB of the n'th table access operation.*/
+  const QEP_TAB* Join_plan::get_qep_tab(uint qep_tab_no) const
   {
-    DBUG_ASSERT(join_tab_no < m_access_count);
-    return m_join_tabs + join_tab_no;
+    assert(qep_tab_no < m_access_count);
+    return m_qep_tabs + qep_tab_no;
   }
 
   /**
@@ -71,14 +75,15 @@ namespace AQP
   Table_access::get_join_type(const Table_access* predecessor) const
   {
     DBUG_ENTER("get_join_type");
-    DBUG_ASSERT(get_access_no() > predecessor->get_access_no());
+    assert(get_access_no() > predecessor->get_access_no());
 
-    const JOIN_TAB* const first_inner= get_join_tab()->first_inner;
-    if (first_inner == NULL)
+    const QEP_TAB* const me= get_qep_tab();
+    const plan_idx first_inner= me->first_inner();
+    if (first_inner == NO_PLAN_IDX)
     {
       // 'this' is not outer joined with any table.
       DBUG_PRINT("info", ("JT_INNER_JOIN'ed table %s",
-                           get_join_tab()->table->alias));
+                          me->table()->alias));
       DBUG_RETURN(JT_INNER_JOIN);
     }
 
@@ -87,20 +92,20 @@ namespace AQP
      * but 'predecessor' may still be embedded in the same
      * inner join as 'this'.
      */
-    const JOIN_TAB* const last_inner= first_inner->last_inner;
-    if (predecessor->get_join_tab() >= first_inner &&
-        predecessor->get_join_tab() <= last_inner)
+    const plan_idx last_inner= me->join()->qep_tab[first_inner].last_inner();
+    if (predecessor->get_access_no() >= static_cast<uint>(first_inner) &&
+        predecessor->get_access_no() <= static_cast<uint>(last_inner))
     {
       DBUG_PRINT("info", ("JT_INNER_JOIN between %s and %s",
-                          predecessor->get_join_tab()->table->alias,
-                          get_join_tab()->table->alias));
+                          predecessor->get_qep_tab()->table()->alias,
+                          me->table()->alias));
       DBUG_RETURN(JT_INNER_JOIN);
     }
     else
     {
       DBUG_PRINT("info", ("JT_OUTER_JOIN between %s and %s",
-                          predecessor->get_join_tab()->table->alias,
-                          get_join_tab()->table->alias));
+                          predecessor->get_qep_tab()->table()->alias,
+                          me->table()->alias));
       DBUG_RETURN(JT_OUTER_JOIN);
     }
   } //Table_access::get_join_type
@@ -112,12 +117,12 @@ namespace AQP
   */
   uint Table_access::get_no_of_key_fields() const
   {
-    DBUG_ASSERT(m_access_type == AT_PRIMARY_KEY ||
-                m_access_type == AT_UNIQUE_KEY ||
-                m_access_type == AT_MULTI_PRIMARY_KEY ||
-                m_access_type == AT_MULTI_UNIQUE_KEY ||
-                m_access_type == AT_ORDERED_INDEX_SCAN); // Used as 'range scan'
-    return get_join_tab()->ref.key_parts;
+    assert(m_access_type == AT_PRIMARY_KEY ||
+           m_access_type == AT_UNIQUE_KEY ||
+           m_access_type == AT_MULTI_PRIMARY_KEY ||
+           m_access_type == AT_MULTI_UNIQUE_KEY ||
+           m_access_type == AT_ORDERED_INDEX_SCAN); // Used as 'range scan'
+    return get_qep_tab()->ref().key_parts;
   }
 
   /**
@@ -127,8 +132,8 @@ namespace AQP
   */
   const Item* Table_access::get_key_field(uint field_no) const
   {
-    DBUG_ASSERT(field_no < get_no_of_key_fields());
-    return get_join_tab()->ref.items[field_no];
+    assert(field_no < get_no_of_key_fields());
+    return get_qep_tab()->ref().items[field_no];
   }
 
   /**
@@ -138,8 +143,8 @@ namespace AQP
   */
   const KEY_PART_INFO* Table_access::get_key_part_info(uint field_no) const
   {
-    DBUG_ASSERT(field_no < get_no_of_key_fields());
-    const KEY* key= &get_join_tab()->table->key_info[get_join_tab()->ref.key];
+    assert(field_no < get_no_of_key_fields());
+    const KEY* key= &get_qep_tab()->table()->key_info[get_qep_tab()->ref().key];
     return &key->key_part[field_no];
   }
 
@@ -148,7 +153,7 @@ namespace AQP
   */
   TABLE* Table_access::get_table() const
   {
-    return get_join_tab()->table;
+    return get_qep_tab()->table();
   }
 
   double Table_access::get_fanout() const
@@ -160,39 +165,39 @@ namespace AQP
         return 1.0;
 
       case AT_ORDERED_INDEX_SCAN:
-        DBUG_ASSERT(get_join_tab()->position);
-        DBUG_ASSERT(get_join_tab()->position->records_read>0.0);
-        return get_join_tab()->position->records_read;
+        assert(get_qep_tab()->position());
+        assert(get_qep_tab()->position()->rows_fetched > 0.0);
+        return get_qep_tab()->position()->rows_fetched;
 
       case AT_MULTI_PRIMARY_KEY:
       case AT_MULTI_UNIQUE_KEY:
       case AT_MULTI_MIXED:
-        DBUG_ASSERT(get_join_tab()->position);
-        DBUG_ASSERT(get_join_tab()->position->records_read>0.0);
-        return get_join_tab()->position->records_read;
+        assert(get_qep_tab()->position());
+        assert(get_qep_tab()->position()->rows_fetched > 0.0);
+        return get_qep_tab()->position()->rows_fetched;
 
       case AT_TABLE_SCAN:
-        DBUG_ASSERT(get_join_tab()->table->file->stats.records>0.0);
-        return static_cast<double>(get_join_tab()->table->file->stats.records);
+        assert(get_qep_tab()->table()->file->stats.records > 0.0);
+        return static_cast<double>(get_qep_tab()->table()->file->stats.records);
 
       default:
         return 99999999.0;
     }
   }
 
-  /** Get the JOIN_TAB object that corresponds to this operation.*/
-  const JOIN_TAB* Table_access::get_join_tab() const
+  /** Get the QEP_TAB object that corresponds to this operation.*/
+  const QEP_TAB* Table_access::get_qep_tab() const
   {
-    return m_join_plan->get_join_tab(m_tab_no);
+    return m_join_plan->get_qep_tab(m_tab_no);
   }
 
   /** Get the Item_equal's set relevant for the specified 'Item_field' */
   Item_equal*
   Table_access::get_item_equal(const Item_field* field_item) const
   {
-    DBUG_ASSERT(field_item->type() == Item::FIELD_ITEM);
+    assert(field_item->type() == Item::FIELD_ITEM);
 
-    COND_EQUAL* const cond_equal = get_join_tab()->join->cond_equal;
+    COND_EQUAL* const cond_equal = get_qep_tab()->join()->cond_equal;
     if (cond_equal!=NULL)
     {
       return (field_item->item_equal != NULL)
@@ -207,36 +212,34 @@ namespace AQP
   */
   void Table_access::dbug_print() const
   {
-    DBUG_PRINT("info", ("type:%d", get_join_tab()->type));
-    DBUG_PRINT("info", ("ref.key:%d", get_join_tab()->ref.key));
-    DBUG_PRINT("info", ("ref.key_parts:%d", get_join_tab()->ref.key_parts));
-    DBUG_PRINT("info", ("ref.key_length:%d", get_join_tab()->ref.key_length));
+    DBUG_PRINT("info", ("type:%d", get_qep_tab()->type()));
+    DBUG_PRINT("info", ("ref().key:%d", get_qep_tab()->ref().key));
+    DBUG_PRINT("info", ("ref().key_parts:%d", get_qep_tab()->ref().key_parts));
+    DBUG_PRINT("info", ("ref().key_length:%d", get_qep_tab()->ref().key_length));
 
-    DBUG_PRINT("info", ("order:%p", get_join_tab()->join->order.order));
+    DBUG_PRINT("info", ("order:%p", get_qep_tab()->join()->order.order));
     DBUG_PRINT("info", ("skip_sort_order:%d",
-                        get_join_tab()->join->skip_sort_order));
-    DBUG_PRINT("info", ("no_order:%d", get_join_tab()->join->no_order));
-    DBUG_PRINT("info", ("simple_order:%d", get_join_tab()->join->simple_order));
+                        get_qep_tab()->join()->skip_sort_order));
+    DBUG_PRINT("info", ("no_order:%d", get_qep_tab()->join()->no_order));
+    DBUG_PRINT("info", ("simple_order:%d", get_qep_tab()->join()->simple_order));
 
-    DBUG_PRINT("info", ("group:%d", get_join_tab()->join->group));
-    DBUG_PRINT("info", ("group_list:%p", get_join_tab()->join->group_list.order));
-    DBUG_PRINT("info", ("simple_group:%d", get_join_tab()->join->simple_group));
+    DBUG_PRINT("info", ("group:%d", get_qep_tab()->join()->grouped));
+    DBUG_PRINT("info", ("group_list:%p", get_qep_tab()->join()->group_list.order));
+    DBUG_PRINT("info", ("simple_group:%d", get_qep_tab()->join()->simple_group));
     DBUG_PRINT("info", ("group_optimized_away:%d",
-                        get_join_tab()->join->group_optimized_away));
+                        get_qep_tab()->join()->group_optimized_away));
 
-    DBUG_PRINT("info", ("full_join:%d", get_join_tab()->join->full_join));
-    DBUG_PRINT("info", ("need_tmp:%d", get_join_tab()->join->need_tmp));
+    DBUG_PRINT("info", ("need_tmp:%d", get_qep_tab()->join()->need_tmp));
     DBUG_PRINT("info", ("select_distinct:%d",
-                        get_join_tab()->join->select_distinct));
+                        get_qep_tab()->join()->select_distinct));
 
-    DBUG_PRINT("info", ("use_quick:%d", get_join_tab()->use_quick));
-    DBUG_PRINT("info", ("index:%d", get_join_tab()->index));
-    DBUG_PRINT("info", ("quick:%p", get_join_tab()->quick));
-    DBUG_PRINT("info", ("select:%p", get_join_tab()->select));
-    if (get_join_tab()->select && get_join_tab()->select->quick)
+    DBUG_PRINT("info", ("dynamic_range:%d", (int)get_qep_tab()->dynamic_range()));
+    DBUG_PRINT("info", ("index:%d", get_qep_tab()->index()));
+    DBUG_PRINT("info", ("quick:%p", get_qep_tab()->quick()));
+    if (get_qep_tab()->quick())
     {
-      DBUG_PRINT("info", ("select->quick->get_type():%d",
-                          get_join_tab()->select->quick->get_type()));
+      DBUG_PRINT("info", ("quick->get_type():%d",
+                          get_qep_tab()->quick()->get_type()));
     }
   }
 
@@ -247,8 +250,8 @@ namespace AQP
   void Table_access::compute_type_and_index() const
   {
     DBUG_ENTER("Table_access::compute_type_and_index");
-    const JOIN_TAB* const join_tab= get_join_tab();
-    JOIN* const join= join_tab->join;
+    const QEP_TAB* const qep_tab= get_qep_tab();
+    JOIN* const join= qep_tab->join();
 
     /**
      * OLEJA: I think this restriction can be removed
@@ -266,7 +269,7 @@ namespace AQP
     /* Tables below 'const_tables' has been const'ified, or entirely
      * optimized away due to 'impossible WHERE/ON'
      */
-    if (join_tab < join->join_tab+join->const_tables)
+    if (qep_tab < join->qep_tab + join->const_tables)
     {
       DBUG_PRINT("info", ("Operation %d is const-optimized.", m_tab_no));
       m_access_type= AT_FIXED;
@@ -276,12 +279,12 @@ namespace AQP
     /*
       Identify the type of access operation and the index to use (if any).
     */
-    switch (join_tab->type)
+    switch (qep_tab->type())
     {
     case JT_EQ_REF:
-      m_index_no= join_tab->ref.key;
+      m_index_no= qep_tab->ref().key;
 
-      if (m_index_no == static_cast<int>(join_tab->table->s->primary_key))
+      if (m_index_no == static_cast<int>(qep_tab->table()->s->primary_key))
       {
         DBUG_PRINT("info", ("Operation %d is a primary key lookup.", m_tab_no));
         m_access_type= AT_PRIMARY_KEY;
@@ -296,61 +299,62 @@ namespace AQP
 
     case JT_REF:
     {
-      DBUG_ASSERT(join_tab->ref.key >= 0);
-      DBUG_ASSERT((uint)join_tab->ref.key < MAX_KEY);
-      m_index_no= join_tab->ref.key;
+      assert(qep_tab->ref().key >= 0);
+      assert((uint)qep_tab->ref().key < MAX_KEY);
+      m_index_no= qep_tab->ref().key;
 
       /*
         All parts of a key are specified for an unique index -> access is a key lookup.
       */
-      const KEY *key_info= join_tab->table->s->key_info;
+      const KEY *key_info= qep_tab->table()->s->key_info;
       if (key_info[m_index_no].user_defined_key_parts ==
-          join_tab->ref.key_parts &&
+          qep_tab->ref().key_parts &&
           key_info[m_index_no].flags & HA_NOSAME)
       {
         m_access_type= 
-          (m_index_no == static_cast<int32>(join_tab->table->s->primary_key)) 
+          (m_index_no == static_cast<int32>(qep_tab->table()->s->primary_key)) 
               ? AT_PRIMARY_KEY
               : AT_UNIQUE_KEY;
         DBUG_PRINT("info", ("Operation %d is an unique key referrence.", m_tab_no));
       }
       else
       {
-        DBUG_ASSERT(join_tab->ref.key_parts > 0);
-        DBUG_ASSERT(join_tab->ref.key_parts <=
-                    key_info[m_index_no].user_defined_key_parts);
+        assert(qep_tab->ref().key_parts > 0);
+        assert(qep_tab->ref().key_parts <=
+               key_info[m_index_no].user_defined_key_parts);
         m_access_type= AT_ORDERED_INDEX_SCAN;
         DBUG_PRINT("info", ("Operation %d is an ordered index scan.", m_tab_no));
       }
       break;
     }
     case JT_INDEX_SCAN:
-      DBUG_ASSERT(join_tab->index < MAX_KEY);
-      m_index_no=    join_tab->index;
+      assert(qep_tab->index() < MAX_KEY);
+      m_index_no=    qep_tab->index();
       m_access_type= AT_ORDERED_INDEX_SCAN;
       DBUG_PRINT("info", ("Operation %d is an ordered index scan.", m_tab_no));
       break;
 
     case JT_ALL:
-      if (join_tab->use_quick == 2)
+    case JT_RANGE:
+    case JT_INDEX_MERGE:
+      if (qep_tab->dynamic_range())
       {
         /*
-          use_quick == 2 means that the decision on which access method to use
-          will be taken late (as rows from the preceeding operation arrive).
+          It means that the decision on which access method to use
+          will be taken late (as rows from the preceding operation arrive).
           This operation is therefor not pushable.
         */
         DBUG_PRINT("info",
-                   ("Operation %d has 'use_quick == 2' -> not pushable",
+                   ("Operation %d has 'dynamic range' -> not pushable",
                     m_tab_no));
         m_access_type= AT_UNDECIDED;
         m_index_no=    -1;
       }
       else
       {
-        if (join_tab->select != NULL &&
-            join_tab->select->quick != NULL)
+        if (qep_tab->quick() != NULL)
         {
-          QUICK_SELECT_I *quick= join_tab->select->quick;
+          QUICK_SELECT_I *quick= qep_tab->quick();
 
           /** QUICK_SELECT results in execution of MRR (Multi Range Read).
            *  Depending on each range, it may require execution of
@@ -361,25 +365,25 @@ namespace AQP
            *  whenever required.
            **/
 
-          const KEY *key_info= join_tab->table->s->key_info;
+          const KEY *key_info= qep_tab->table()->s->key_info;
           DBUG_EXECUTE("info", quick->dbug_dump(0, TRUE););
 
           // Temporary assert as we are still investigation the relation between 
           // 'quick->index == MAX_KEY' and the different quick_types
-          DBUG_ASSERT ((quick->index == MAX_KEY)  ==
-                        ((quick->get_type() == QUICK_SELECT_I::QS_TYPE_INDEX_MERGE) ||
-                         (quick->get_type() == QUICK_SELECT_I::QS_TYPE_ROR_INTERSECT) ||
-                         (quick->get_type() == QUICK_SELECT_I::QS_TYPE_ROR_UNION)));
+          assert ((quick->index == MAX_KEY)  ==
+                  ((quick->get_type() == QUICK_SELECT_I::QS_TYPE_INDEX_MERGE) ||
+                   (quick->get_type() == QUICK_SELECT_I::QS_TYPE_ROR_INTERSECT) ||
+                   (quick->get_type() == QUICK_SELECT_I::QS_TYPE_ROR_UNION)));
 
           // JT_INDEX_MERGE: We have a set of qualifying PKs as root of pushed joins
           if (quick->index == MAX_KEY) 
           {
-            m_index_no=    join_tab->table->s->primary_key;
+            m_index_no=    qep_tab->table()->s->primary_key;
             m_access_type= AT_MULTI_PRIMARY_KEY;    // Multiple PKs are produced by merge
           }
 
           // Else JT_RANGE: May be both exact PK and/or index scans when sorted index available
-          else if (quick->index == join_tab->table->s->primary_key)
+          else if (quick->index == qep_tab->table()->s->primary_key)
           {
             m_index_no= quick->index;
             if (key_info[m_index_no].algorithm == HA_KEY_ALG_HASH)
@@ -413,7 +417,7 @@ namespace AQP
       */
       DBUG_PRINT("info",
                  ("Operation %d has join_type %d. -> Not pushable.",
-                  m_tab_no, join_tab->type));
+                  m_tab_no, qep_tab->type()));
       m_access_type= AT_OTHER;
       m_index_no=    -1;
       m_other_access_reason = "This table access method can not be pushed.";
@@ -439,7 +443,28 @@ namespace AQP
   */
   bool Table_access::uses_join_cache() const
   {
-    return get_join_tab()->use_join_cache != JOIN_CACHE::ALG_NONE;
+    return get_qep_tab()->op &&
+      get_qep_tab()->op->type() == QEP_operation::OT_CACHE;
+  }
+
+  /**
+    Check if 'FirstMatch' strategy is used for this table and return
+    the last table 'firstmatch' will skip over.
+    The tables ['last_skipped'..'this'] will form a range of tables
+    which we skipped when a 'firstmatch' is found
+  */
+  const Table_access* Table_access::get_firstmatch_last_skipped() const
+  {
+    const QEP_TAB* const qep_tab= get_qep_tab();
+    if (qep_tab->do_firstmatch())
+    {
+      assert(qep_tab->firstmatch_return < qep_tab->idx());
+      const uint firstmatch_last_skipped= 
+        qep_tab->firstmatch_return + 1;
+
+      return m_join_plan->get_table_access(firstmatch_last_skipped);
+    }
+    return NULL;
   }
 
   /**
@@ -454,8 +479,8 @@ namespace AQP
       return false;
     }
 
-    const JOIN_TAB* const join_tab= get_join_tab();
-    JOIN* const join= join_tab->join;
+    const QEP_TAB* const qep_tab= get_qep_tab();
+    JOIN* const join= qep_tab->join();
 
     /**
      Table will be presorted before joining with child tables, if:
@@ -468,7 +493,7 @@ namespace AQP
      A 'simple' order/group by contain only column references to
      the first non-const table
     */
-    if (join_tab == join->join_tab+join->const_tables &&// First non-const table
+    if (qep_tab == join->qep_tab + join->const_tables &&    // First non-const table
         !join->plan_is_const())                         // There are more tables
     {
       if (join->need_tmp)
@@ -481,6 +506,14 @@ namespace AQP
         return false;
     }
     return false;
+  }
+
+  void Table_access::set_pushed_table_access_method() const
+  {
+    // Remove the QEP_TABs constness allowing the QEP_TAB
+    // instance for this part ot the join to be modified
+    QEP_TAB* const qep_tab= const_cast<QEP_TAB*>(get_qep_tab());
+    qep_tab->set_pushed_table_access_method();
   }
 
 };

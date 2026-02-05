@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2004, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2004, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -34,12 +41,13 @@ struct restore_callback_t {
 };
 
 struct char_n_padding_struct {
-Uint32 n_old;
+Uint32 n_old; // used also for time precision
 Uint32 n_new;
 char new_row[1];
 };
 
-enum AttrConvType { ACT_UNSUPPORTED = 0, ACT_PRESERVING = 1, ACT_LOSSY =-1 };
+enum AttrConvType { ACT_UNSUPPORTED = 0, ACT_PRESERVING = 1, ACT_LOSSY =-1,
+                    ACT_STAGING_PRESERVING = 2, ACT_STAGING_LOSSY = -2 };
 typedef  AttrConvType (*AttrCheckCompatFunc)(const NDBCOL &old_col,
                                              const NDBCOL &new_col);
 
@@ -57,6 +65,7 @@ public:
                 int ndb_nodeid,
                 NODE_GROUP_MAP *ng_map,
                 uint ng_map_len,
+                int backup_nodeid,
                 Uint32 parallelism=1) :
     m_ndb(NULL),
     m_cluster_connection(NULL),
@@ -76,6 +85,7 @@ public:
     m_restore_meta = false;
     m_no_restore_disk = false;
     m_restore_epoch = false;
+    m_backup_nodeid = backup_nodeid;
     m_parallelism = parallelism;
     m_callback = 0;
     m_free_callback = 0;
@@ -94,7 +104,9 @@ public:
   virtual void release();
   virtual bool object(Uint32 type, const void* ptr);
   virtual bool table(const TableS &);
+  virtual bool fk(Uint32 type, const void* ptr);
   virtual bool endOfTables();
+  virtual bool endOfTablesFK();
   virtual void tuple(const TupleS &, Uint32 fragId);
   virtual void tuple_free();
   virtual void tuple_a(restore_callback_t *cb);
@@ -107,11 +119,14 @@ public:
   virtual void endOfTuples();
   virtual void logEntry(const LogEntry &);
   virtual void endOfLogEntrys();
+  virtual bool prepare_staging(const TableS &);
+  virtual bool finalize_staging(const TableS &);
   virtual bool finalize_table(const TableS &);
   virtual bool rebuild_indexes(const TableS&);
   virtual bool has_temp_error();
   virtual bool createSystable(const TableS & table);
-  virtual bool table_compatible_check(const TableS & tableS);
+  virtual bool table_compatible_check(TableS & tableS);
+  virtual bool check_blobs(TableS & tableS); 
   virtual bool column_compatible_check(const char* tableName,
                                        const NDBCOL* backupCol, 
                                        const NDBCOL* dbCol);
@@ -130,9 +145,20 @@ public:
   bool map_nodegroups(Uint32 *ng_array, Uint32 no_parts);
   Uint32 map_ng(Uint32 ng);
   bool translate_frm(NdbDictionary::Table *table);
+  bool isMissingTable(const TableS& table);
 
   static AttrConvType check_compat_sizes(const NDBCOL &old_col,
                                          const NDBCOL &new_col);
+  static AttrConvType check_compat_precision(const NDBCOL &old_col,
+                                             const NDBCOL &new_col);
+  static AttrConvType check_compat_char_binary(const NDBCOL &old_col,
+                                               const NDBCOL &new_col);
+  static AttrConvType check_compat_char_to_text(const NDBCOL &old_col,
+                                                const NDBCOL &new_col);
+  static AttrConvType check_compat_text_to_char(const NDBCOL &old_col,
+                                                const NDBCOL &new_col);
+  static AttrConvType check_compat_text_to_text(const NDBCOL &old_col,
+                                                const NDBCOL &new_col);
   static AttrConvType check_compat_promotion(const NDBCOL &old_col,
                                              const NDBCOL &new_col);
   static AttrConvType check_compat_lossy(const NDBCOL &old_col,
@@ -152,6 +178,26 @@ public:
   template< typename T, typename S >
   static void *
   convert_integral(const void * source, void * target, bool & truncated);
+
+  // times with fractional seconds, see wl#946
+  static void*
+  convert_time_time2(const void * source, void * target, bool &);
+  static void*
+  convert_time2_time(const void * source, void * target, bool &);
+  static void*
+  convert_time2_time2(const void * source, void * target, bool &);
+  static void*
+  convert_datetime_datetime2(const void * source, void * target, bool &);
+  static void*
+  convert_datetime2_datetime(const void * source, void * target, bool &);
+  static void*
+  convert_datetime2_datetime2(const void * source, void * target, bool &);
+  static void*
+  convert_timestamp_timestamp2(const void * source, void * target, bool &);
+  static void*
+  convert_timestamp2_timestamp(const void * source, void * target, bool &);
+  static void*
+  convert_timestamp2_timestamp2(const void * source, void * target, bool &);
 
   // returns the handler function checking type conversion compatibility
   AttrCheckCompatFunc 
@@ -189,6 +235,7 @@ public:
   Uint32 m_logCount;
   Uint32 m_dataCount;
 
+  int m_backup_nodeid;
   Uint32 m_parallelism;
   volatile Uint32 m_transactions;
 
@@ -206,13 +253,14 @@ public:
     const NdbDictionary::Table* m_old_table;
     const NdbDictionary::Table* m_new_table;
   } m_cache;
-  const NdbDictionary::Table* get_table(const NdbDictionary::Table* );
+  const NdbDictionary::Table* get_table(const TableS &);
 
   Vector<const NdbDictionary::Table*> m_indexes;
   Vector<Vector<NdbDictionary::Index *> > m_index_per_table; //
   Vector<NdbDictionary::Tablespace*> m_tablespaces;    // Index by id
   Vector<NdbDictionary::LogfileGroup*> m_logfilegroups;// Index by id
   Vector<NdbDictionary::HashMap*> m_hashmaps;
+  Vector<const NdbDictionary::ForeignKey*> m_fks;
 
   static const PromotionRules m_allowed_promotion_attrs[];
 };

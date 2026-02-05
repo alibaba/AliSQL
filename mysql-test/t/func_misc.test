@@ -1,7 +1,10 @@
+ #Get deafult engine value
+--let $DEFAULT_ENGINE = `select @@global.default_storage_engine`
+
 #
 # Testing of misc functions
 #
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 --disable_warnings
 DROP TABLE IF EXISTS t1, t2;
 --enable_warnings
@@ -15,6 +18,11 @@ select inet_ntoa(1099511627775),inet_ntoa(4294902271),inet_ntoa(511);
 select hex(inet_aton('127'));
 select hex(inet_aton('127.1'));
 select hex(inet_aton('127.1.1'));
+
+select inet_aton("122.256");
+select inet_aton("122.226.");
+select inet_aton("");
+explain extended select inet_aton("122.256"),inet_aton("122.226."),inet_aton("");
 
 select length(uuid()), charset(uuid()), length(unhex(replace(uuid(),_utf8'-',_utf8'')));
 
@@ -50,42 +58,6 @@ drop table t1;
 
 
 #
-# Bug#16501: IS_USED_LOCK does not appear to work
-#
-
-CREATE TABLE t1 (conn CHAR(7), connection_id INT);
-INSERT INTO t1 VALUES ('default', CONNECTION_ID());
-
-SELECT GET_LOCK('bug16501',600);
-
-connect (con1,localhost,root,,);
-INSERT INTO t1 VALUES ('con1', CONNECTION_ID());
-SELECT IS_USED_LOCK('bug16501') = connection_id
-FROM t1
-WHERE conn = 'default';
-send SELECT GET_LOCK('bug16501',600);
-
-connection default;
-SELECT IS_USED_LOCK('bug16501') = CONNECTION_ID();
-SELECT RELEASE_LOCK('bug16501');
-connection con1;
-reap;
-connection default;
-SELECT IS_USED_LOCK('bug16501') = connection_id
-FROM t1
-WHERE conn = 'con1';
-
-connection con1;
-SELECT IS_USED_LOCK('bug16501') = CONNECTION_ID();
-SELECT RELEASE_LOCK('bug16501');
-SELECT IS_USED_LOCK('bug16501');
-
-disconnect con1;
-connection default;
-
-DROP TABLE t1;
-
-#
 # Bug #21531: EXPORT_SET() doesn't accept args with coercible character sets
 #
 select export_set(3, _latin1'foo', _utf8'bar', ',', 4);
@@ -99,6 +71,9 @@ select export_set(3, _latin1'foo', _utf8'bar', ',', 4);
 --disable_warnings
 create table t1 as select uuid(), length(uuid());
 --enable_warnings
+
+#Replace default engine value with static engine string 
+--replace_result $DEFAULT_ENGINE ENGINE
 show create table t1;
 drop table t1;
 
@@ -295,6 +270,9 @@ SET @@global.query_cache_size = default;
 #
 
 create table t1 select INET_ATON('255.255.0.1') as `a`;
+
+#Replace default engine value with static engine string 
+--replace_result $DEFAULT_ENGINE ENGINE
 show create table t1;
 drop table t1;
 
@@ -565,7 +543,7 @@ DROP TABLE t1;
 SELECT INET6_ATON(NULL) IS NULL;
 SELECT INET6_ATON(123) IS NULL;
 SELECT INET6_ATON(123.45) IS NULL;
-SELECT INET6_ATON(NOW()) IS NULL;
+SELECT INET6_ATON(str_to_date('2014,2,28 09', '%Y,%m,%d %h')) IS NULL;
 
 SELECT INET6_ATON('1.2.3') IS NULL;
 SELECT INET6_ATON('1.2.3.') IS NULL;
@@ -670,7 +648,7 @@ SELECT LENGTH(INET6_ATON('1020:3040:5060:7080:90A0:B0C0:D0E0:F010'));
 SELECT INET6_NTOA(NULL);
 SELECT INET6_NTOA(123);
 SELECT INET6_NTOA(123.456);
-SELECT INET6_NTOA(NOW());
+SELECT INET6_NTOA(str_to_date('2014,2,28 09', '%Y,%m,%d %h'));
 SELECT INET6_NTOA(UNHEX('C0A801'));     # 3 bytes -> NULL
 SELECT INET6_NTOA(UNHEX('C0A80102'));   # 4 bytes -> 192.168.1.2
 SELECT INET6_NTOA(UNHEX('C0A8010203')); # 5 bytes -> NULL
@@ -839,13 +817,79 @@ SELECT INET6_NTOA(ip), HEX(ip), LENGTH(ip) FROM t2;
 
 --echo
 
+DELETE FROM t2;
+INSERT INTO t2 VALUES (INET6_ATON('1.0002.3.4'));
+INSERT INTO t2 VALUES (INET6_ATON('1.2.255'));
+INSERT INTO t2 VALUES (INET6_ATON('1.2.256'));
+INSERT INTO t2 VALUES (INET6_ATON('192.168.0x8.2'));
+
+INSERT INTO t2 VALUES (inet_aton("122.256"));
+INSERT INTO t2 VALUES (inet_aton("122.226."));
+INSERT INTO t2 VALUES (inet_aton(""));
+
+INSERT INTO t2 VALUES (UNHEX('Z0Q80F02'));
+
+SELECT INET6_NTOA(ip), HEX(ip), LENGTH(ip) FROM t2;
+DELETE FROM t2;
+
+--echo
+SET sql_mode = default;
+
+--error ER_WRONG_VALUE_FOR_TYPE
+INSERT INTO t2 VALUES (INET6_ATON('1.0002.3.4'));
+--error ER_WRONG_VALUE_FOR_TYPE
+INSERT INTO t2 VALUES (INET6_ATON('1.2.255'));
+--error ER_WRONG_VALUE_FOR_TYPE
+INSERT INTO t2 VALUES (INET6_ATON('1.2.256'));
+--error ER_WRONG_VALUE_FOR_TYPE
+INSERT INTO t2 VALUES (INET6_ATON('192.168.0x8.2'));
+
+--error ER_WRONG_VALUE_FOR_TYPE
+INSERT INTO t2 VALUES (inet_aton("122.256"));
+--error ER_WRONG_VALUE_FOR_TYPE
+INSERT INTO t2 VALUES (inet_aton("122.226."));
+--error ER_WRONG_VALUE_FOR_TYPE
+INSERT INTO t2 VALUES (inet_aton(""));
+--echo
+
+--error ER_WRONG_VALUE_FOR_TYPE
+INSERT INTO t2 VALUES (UNHEX('Z0Q80F02'));
+
+SELECT INET6_NTOA(ip), HEX(ip), LENGTH(ip) FROM t2;
+
 DROP TABLE t1;
 DROP TABLE t2;
+
+
+--echo #
+--echo # Bug#22071558 INET_ATON ACCEPTS MORE THAN FOUR GROUPS OF DIGITS AND RETURNS INT BIGGER THAN 4G
+--echo #
+
+select inet_aton("0.255.255.255.255");
+select inet_aton("255.255.255.2551");
+
+--echo #
+--echo # Bug #26319675:"ILLEGAL MIX OF COLLATIONS" HAPPENS IN CONCAT WITH
+--echo # NAME_CONST
+--echo #
+--let $query = SELECT CONCAT(NAME_CONST('char_col',_cp932'test' COLLATE 'cp932_japanese_ci'), NAME_CONST('num_col',0)) AS a
+--eval $query
+--eval CREATE TABLE t1 AS $query
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+
+--echo #
+--echo # Bug 33334507 - 5.7 - utf8mb4 + REPLACE(UUID(),'-','') returns duplicate UUIDs!
+--echo #
+CREATE TABLE t1(c1 CHAR(10) CHARACTER SET ascii);
+INSERT INTO t1 VALUES (NULL), (NULL), (NULL);
+SELECT COUNT(*) FROM t1 GROUP BY COALESCE(c1, UUID());
+DROP TABLE t1;
 
 --echo
 --echo # -- Done.
 --echo
-
 --echo #
 --echo # End of tests
 --echo #

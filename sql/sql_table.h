@@ -1,14 +1,20 @@
-/* Copyright (c) 2006, 2014, Oracle and/or its affiliates. All rights
-   reserved.
+/* Copyright (c) 2006, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -18,9 +24,14 @@
 #define SQL_TABLE_INCLUDED
 
 #include "my_global.h"                          /* my_bool */
-#include "my_pthread.h"
 #include "m_ctype.h"                            /* CHARSET_INFO */
 #include "mysql_com.h"                          /* enum_field_types */
+#include "mysql/psi/mysql_thread.h"             /* mysql_mutex_t */
+#include "my_global.h"                  /* my_bool */
+#include "m_ctype.h"                    /* CHARSET_INFO */
+#include "mysql_com.h"                  /* enum_field_types */
+#include "mysql/psi/mysql_thread.h"     /* mysql_mutex_t */
+#include "mysqld.h"
 
 class Alter_info;
 class Alter_table_ctx;
@@ -130,7 +141,6 @@ enum enum_explain_filename_mode
 #define WFRM_WRITE_SHADOW 1
 #define WFRM_INSTALL_SHADOW 2
 #define WFRM_PACK_FRM 4
-#define WFRM_KEEP_SHARE 8
 
 /* Flags for conversion functions. */
 static const uint FN_FROM_IS_TMP=  1 << 0;
@@ -140,33 +150,31 @@ static const uint NO_FRM_RENAME=   1 << 2;
 static const uint FRM_ONLY=        1 << 3;
 /** Don't remove table in engine. Remove only .FRM and maybe .PAR files. */
 static const uint NO_HA_TABLE=     1 << 4;
-/** Don't resolve MySQL's fake "foo.sym" symbolic directory names. */
-static const uint SKIP_SYMDIR_ACCESS= 1 << 5;
 /** Don't check foreign key constraints while renaming table */
-static const uint NO_FK_CHECKS=    1 << 6;
+static const uint NO_FK_CHECKS=    1 << 5;
 
-uint filename_to_tablename(const char *from, char *to, uint to_length
-#ifndef DBUG_OFF
+size_t filename_to_tablename(const char *from, char *to, size_t to_length
+#ifndef NDEBUG
                            , bool stay_quiet = false
-#endif /* DBUG_OFF */
+#endif /* NDEBUG */
                            );
-uint tablename_to_filename(const char *from, char *to, uint to_length);
-uint check_n_cut_mysql50_prefix(const char *from, char *to, uint to_length);
+size_t tablename_to_filename(const char *from, char *to, size_t to_length);
+size_t check_n_cut_mysql50_prefix(const char *from, char *to, size_t to_length);
 bool check_mysql50_prefix(const char *name);
-uint build_table_filename(char *buff, size_t bufflen, const char *db,
-                          const char *table, const char *ext,
-                          uint flags, bool *was_truncated);
+size_t build_table_filename(char *buff, size_t bufflen, const char *db,
+                            const char *table, const char *ext,
+                            uint flags, bool *was_truncated);
 // For caller's who are mostly sure that path do not truncate
-uint inline build_table_filename(char *buff, size_t bufflen, const char *db,
-                          const char *table, const char *ext, uint flags)
+size_t inline build_table_filename(char *buff, size_t bufflen, const char *db,
+                                   const char *table, const char *ext, uint flags)
 {
     bool truncated_not_used;
     return build_table_filename(buff, bufflen, db, table, ext, flags,
                                 &truncated_not_used);
 }
-uint build_table_shadow_filename(char *buff, size_t bufflen,
-                                 ALTER_PARTITION_PARAM_TYPE *lpt);
-uint build_tmptable_filename(THD* thd, char *buff, size_t bufflen);
+size_t build_table_shadow_filename(char *buff, size_t bufflen,
+                                   ALTER_PARTITION_PARAM_TYPE *lpt);
+size_t build_tmptable_filename(THD* thd, char *buff, size_t bufflen);
 bool mysql_create_table(THD *thd, TABLE_LIST *create_table,
                         HA_CREATE_INFO *create_info,
                         Alter_info *alter_info);
@@ -185,11 +193,10 @@ bool mysql_prepare_alter_table(THD *thd, TABLE *table,
                                Alter_table_ctx *alter_ctx);
 bool mysql_trans_prepare_alter_copy_data(THD *thd);
 bool mysql_trans_commit_alter_copy_data(THD *thd);
-bool mysql_alter_table(THD *thd, char *new_db, char *new_name,
+bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
                        HA_CREATE_INFO *create_info,
                        TABLE_LIST *table_list,
-                       Alter_info *alter_info,
-                       uint order_num, ORDER *order, bool ignore);
+                       Alter_info *alter_info);
 bool mysql_compare_tables(TABLE *table,
                           Alter_info *alter_info,
                           HA_CREATE_INFO *create_info,
@@ -226,7 +233,7 @@ const CHARSET_INFO* get_sql_field_charset(Create_field *sql_field,
                                           HA_CREATE_INFO *create_info);
 bool mysql_write_frm(ALTER_PARTITION_PARAM_TYPE *lpt, uint flags);
 int write_bin_log(THD *thd, bool clear_error,
-                  char const *query, ulong query_length,
+                  const char *query, size_t query_length,
                   bool is_trans= FALSE);
 bool write_ddl_log_entry(DDL_LOG_ENTRY *ddl_log_entry,
                            DDL_LOG_MEMORY_ENTRY **active_entry);
@@ -249,13 +256,21 @@ void promote_first_timestamp_column(List<Create_field> *column_definitions);
 /*
   These prototypes where under INNODB_COMPATIBILITY_HOOKS.
 */
-uint explain_filename(THD* thd, const char *from, char *to, uint to_length,
-                      enum_explain_filename_mode explain_mode);
+size_t explain_filename(THD* thd, const char *from, char *to, size_t to_length,
+                        enum_explain_filename_mode explain_mode);
 
 
 extern MYSQL_PLUGIN_IMPORT const char *primary_key_name;
 extern mysql_mutex_t LOCK_gdl;
 
-extern void limit_io(THD *thd);
+/* BEGIN: RDS Functions */
+/* For DuckDB */
+extern my_bool force_innodb_to_duckdb;
+extern my_bool force_innodb_to_duckdb_fallback;
+extern my_bool duckdb_require_primary_key;
+
+void create_duckdb_convertor_thread();
+int show_convert_stage(THD *, SHOW_VAR *var, char *buff);
+/* END: RDS Functions */
 
 #endif /* SQL_TABLE_INCLUDED */

@@ -1,4 +1,7 @@
 include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
 [connection master]
 CREATE TABLE `t1` ( `nid` int(11) NOT NULL default '0',
 `nom` char(4) default NULL,
@@ -151,7 +154,7 @@ CREATE TABLE t1 (c1 INT KEY) ENGINE=NDB;
 INSERT INTO t1 VALUES (1),(2),(3),(4),(5),(6),(7),(8),(9),(10);
 ALTER TABLE t1 ADD c2 INT;
 Warnings:
-Warning	1478	Converted FIXED field to DYNAMIC to enable on-line ADD COLUMN
+Warning	1478	Converted FIXED field 'c2' to DYNAMIC to enable on-line ADD COLUMN
 SELECT * FROM t1 ORDER BY c1;
 c1	c2
 1	NULL
@@ -233,10 +236,10 @@ set @v1000 =concat(@v100,@v100,@v100,@v100,@v100,@v100,@v100,@v100,@v100,@v100);
 set @v10000 = concat(@v1000,@v1000,@v1000,@v1000,@v1000,@v1000,@v1000,@v1000,@v1000,@v1000);
 set @v13000 = concat(@v10000, @v1000,@v1000,@v1000);
 insert into t1 (c1,c500) values (1,@v10000), (2,@v10000), (3,@v10000);
-alter offline table t1 modify c1 int auto_increment;
-alter online table t1 add column c501 bit(1) column_format DYNAMIC;
-alter online table t1 add column c502 varchar(2000);
-ERROR 42000: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 14000. You have to change some columns to TEXT or BLOBs
+alter table t1 algorithm=copy, modify c1 int auto_increment;
+alter table t1 algorithm=inplace, add column c501 bit(1) column_format DYNAMIC;
+alter table t1 algorithm=inplace, add column c502 varchar(2000);
+ERROR 42000: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 14000. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
 select length(c500) from t1 order by 1;
 length(c500)
 10000

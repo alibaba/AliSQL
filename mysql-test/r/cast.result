@@ -19,9 +19,10 @@ select ~5, cast(~5 as signed);
 ~5	cast(~5 as signed)
 18446744073709551610	-6
 explain extended select ~5, cast(~5 as signed);
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
 Warnings:
+Warning	1681	'EXTENDED' is deprecated and will be removed in a future release.
 Note	1003	/* select#1 */ select ~(5) AS `~5`,cast(~(5) as signed) AS `cast(~5 as signed)`
 select cast(5 as unsigned) -6.0;
 cast(5 as unsigned) -6.0
@@ -29,9 +30,13 @@ cast(5 as unsigned) -6.0
 select cast(NULL as signed), cast(1/0 as signed);
 cast(NULL as signed)	cast(1/0 as signed)
 NULL	NULL
+Warnings:
+Warning	1365	Division by 0
 select cast(NULL as unsigned), cast(1/0 as unsigned);
 cast(NULL as unsigned)	cast(1/0 as unsigned)
 NULL	NULL
+Warnings:
+Warning	1365	Division by 0
 select cast("A" as binary) = "a", cast(BINARY "a" as CHAR) = "A";
 cast("A" as binary) = "a"	cast(BINARY "a" as CHAR) = "A"
 0	1
@@ -157,8 +162,8 @@ create table t1 select cast(_koi8r'тест' as char character set cp1251) as t;
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `t` varchar(4) CHARACTER SET cp1251 NOT NULL DEFAULT ''
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+  `t` varchar(4) CHARACTER SET cp1251 DEFAULT NULL
+) ENGINE=ENGINE DEFAULT CHARSET=latin1
 drop table t1;
 select
 cast(_latin1'ab'  AS char)    as c1,
@@ -176,6 +181,9 @@ cast(1000 as CHAR(3))
 100
 Warnings:
 Warning	1292	Truncated incorrect BINARY(3) value: '1000'
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 create table t1 select
 cast(_latin1'ab'  AS char)    as c1,
 cast(_latin1'a '  AS char)    as c2,
@@ -196,7 +204,7 @@ t1	CREATE TABLE `t1` (
   `c3` varbinary(2) NOT NULL DEFAULT '',
   `c4` varbinary(2) NOT NULL DEFAULT '',
   `c5` varbinary(2) NOT NULL DEFAULT ''
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=latin1
 drop table t1;
 select
 cast(_koi8r'фг'  AS nchar)    as c1,
@@ -229,8 +237,9 @@ t1	CREATE TABLE `t1` (
   `c3` varchar(2) CHARACTER SET utf8 NOT NULL DEFAULT '',
   `c4` varchar(2) CHARACTER SET utf8 NOT NULL DEFAULT '',
   `c5` varchar(2) CHARACTER SET utf8 NOT NULL DEFAULT ''
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=latin1
 drop table t1;
+SET sql_mode = default;
 create table t1 (a binary(4), b char(4) character set koi8r);
 insert into t1 values (_binary'тест',_binary'тест');
 select a,b,cast(a as char character set cp1251),cast(b as binary) from t1;
@@ -481,6 +490,9 @@ End of 5.1 tests
 #
 # Bug#13581962 HIGH MEMORY USAGE ATTEMPT, THEN CRASH WITH LONGTEXT, UNION, USER VARIABLE
 #
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1 AS SELECT CONCAT(CAST(REPEAT('9', 1000) AS SIGNED)),
 CONCAT(CAST(REPEAT('9', 1000) AS UNSIGNED));
 Warnings:
@@ -491,6 +503,7 @@ Table	Create Table
 t1	CREATE TABLE `t1` (
   `CONCAT(CAST(REPEAT('9', 1000) AS SIGNED))` varchar(21) NOT NULL DEFAULT '',
   `CONCAT(CAST(REPEAT('9', 1000) AS UNSIGNED))` varchar(21) NOT NULL DEFAULT ''
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=latin1
 DROP TABLE t1;
+SET sql_mode = default;
 End of 5.5 tests

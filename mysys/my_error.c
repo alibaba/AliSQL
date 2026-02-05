@@ -1,25 +1,39 @@
-/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "mysys_priv.h"
+#include "my_sys.h"
 #include "mysys_err.h"
 #include <m_string.h>
 #include <stdarg.h>
 #include <m_ctype.h>
 #include "my_base.h"
 #include "my_handler_errors.h"
+#include "my_thread_local.h"
 
 /* Max length of a error message. Should be kept in sync with MYSQL_ERRMSG_SIZE. */
 #define ERRMSGSIZE      (512)
@@ -29,20 +43,25 @@
 /*
   WARNING!
   my_error family functions have to be used according following rules:
-  - if message have not parameters use my_message(ER_CODE, ER(ER_CODE), MYF(N))
-  - if message registered use my_error(ER_CODE, MYF(N), ...).
-  - With some special text of errror message use:
-  my_printf_error(ER_CODE, format, MYF(N), ...)
+  - if message has no parameters, use my_message(ER_CODE, ER(ER_CODE), MYF(N))
+  - if message has parameters and is registered: my_error(ER_CODE, MYF(N), ...)
+  - for free-form messages use my_printf_error(ER_CODE, format, MYF(N), ...)
+
+  These three send their messages using error_handler_hook, which normally
+  means we'll send them to the client if we have one, or to error-log / stderr
+  otherwise.
 */
 
 /*
   Message texts are registered into a linked list of 'my_err_head' structs.
-  Each struct contains (1.) an array of pointers to C character strings with
-  '\0' termination, (2.) the error number for the first message in the array
-  (array index 0) and (3.) the error number for the last message in the array
-  (array index (last - first)).
-  The array may contain gaps with NULL pointers and pointers to empty strings.
-  Both kinds of gaps will be translated to "Unknown error %d.", if my_error()
+  Each struct contains
+  (1.) a pointer to a function that returns C character strings with '\0'
+       termination
+  (2.) the error number for the first message in the array (array index 0)
+  (3.) the error number for the last message in the array
+       (array index (last - first)).
+  The function may return NULL pointers and pointers to empty strings.
+  Both kinds will be translated to "Unknown error %d.", if my_error()
   is called with a respective error number.
   The list of header structs is sorted in increasing order of error numbers.
   Negative error numbers are allowed. Overlap of error numbers is not allowed.
@@ -51,10 +70,10 @@
 static struct my_err_head
 {
   struct my_err_head    *meh_next;         /* chain link */
-  const char**          (*get_errmsgs) (); /* returns error message format */
+  const char*           (*get_errmsg) (int); /* returns error message format */
   int                   meh_first;       /* error number matching array slot 0 */
   int                   meh_last;          /* error number matching last slot */
-} my_errmsgs_globerrs = {NULL, get_global_errmsgs, EE_ERROR_FIRST, EE_ERROR_LAST};
+} my_errmsgs_globerrs = {NULL, get_global_errmsg, EE_ERROR_FIRST, EE_ERROR_LAST};
 
 static struct my_err_head *my_errmsgs_list= &my_errmsgs_globerrs;
 
@@ -92,8 +111,26 @@ char *my_strerror(char *buf, size_t len, int nr)
       this choice is not advertised, use the default (POSIX/XSI).  Testing
       for __GNUC__ is not sufficient to determine whether this choice exists.
     */
-#if defined(__WIN__)
+#if defined(_WIN32)
     strerror_s(buf, len, nr);
+    if (thr_winerr() != 0)
+    {
+      /*
+        If error code is EINVAL, and Windows Error code has been set, we append
+        the Windows error code to the message.
+      */
+      if (nr == EINVAL)
+      {
+        char tmp_buff[256] ;
+
+        my_snprintf(tmp_buff, sizeof(tmp_buff), 
+                    " [OS Error Code : 0x%x]", thr_winerr());
+
+        strcat_s(buf, len, tmp_buff);
+      }
+
+      set_thr_winerr(0);
+    }
 #elif ((defined _POSIX_C_SOURCE && (_POSIX_C_SOURCE >= 200112L)) ||    \
        (defined _XOPEN_SOURCE   && (_XOPEN_SOURCE >= 600)))      &&    \
       ! defined _GNU_SOURCE
@@ -146,7 +183,7 @@ const char *my_get_err_msg(int nr)
     we return NULL.
   */
   if (!(format= (meh_p && (nr >= meh_p->meh_first)) ?
-                meh_p->get_errmsgs()[nr - meh_p->meh_first] : NULL) ||
+                meh_p->get_errmsg(nr) : NULL) ||
       !*format)
     return NULL;
 
@@ -239,28 +276,6 @@ void my_printv_error(uint error, const char *format, myf MyFlags, va_list ap)
   DBUG_VOID_RETURN;
 }
 
-/*
-  Warning as printf
-
-  SYNOPSIS
-    my_printf_warning()
-      format>   Format string
-      ...>      variable list
-*/
-void(*sql_print_warning_hook)(const char *format,...);
-void my_printf_warning(const char *format, ...)
-{
-  va_list args;
-  char wbuff[ERRMSGSIZE];
-  DBUG_ENTER("my_printf_warning");
-  DBUG_PRINT("my", ("Format: %s", format));
-  va_start(args,format);
-  (void) my_vsnprintf (wbuff, sizeof(wbuff), format, args);
-  va_end(args);
-  (*sql_print_warning_hook)(wbuff);
-  DBUG_VOID_RETURN;
-}
-
 /**
   Print an error message.
 
@@ -272,7 +287,7 @@ void my_printf_warning(const char *format, ...)
   @param MyFlags   Flags
 */
 
-void my_message(uint error, const char *str, register myf MyFlags)
+void my_message(uint error, const char *str, myf MyFlags)
 {
   (*error_handler_hook)(error, str, MyFlags);
 }
@@ -283,31 +298,32 @@ void my_message(uint error, const char *str, register myf MyFlags)
 
   @description
 
-    The pointer array is expected to contain addresses to NUL-terminated
-    C character strings. The array contains (last - first + 1) pointers.
+    The function is expected to return addresses to NUL-terminated
+    C character strings.
     NULL pointers and empty strings ("") are allowed. These will be mapped to
     "Unknown error" when my_error() is called with a matching error number.
     This function registers the error numbers 'first' to 'last'.
     No overlapping with previously registered error numbers is allowed.
 
-  @param   errmsgs  array of pointers to error messages
-  @param   first    error number of first message in the array
-  @param   last     error number of last message in the array
+  @param   get_errmsg  function that returns error messages
+  @param   first       error number of first message in the array
+  @param   last        error number of last message in the array
 
   @retval  0        OK
   @retval  != 0     Error
 */
 
-int my_error_register(const char** (*get_errmsgs) (), int first, int last)
+int my_error_register(const char* (*get_errmsg) (int), int first, int last)
 {
   struct my_err_head *meh_p;
   struct my_err_head **search_meh_pp;
 
   /* Allocate a new header structure. */
-  if (! (meh_p= (struct my_err_head*) my_malloc(sizeof(struct my_err_head),
+  if (! (meh_p= (struct my_err_head*) my_malloc(key_memory_my_err_head,
+                                                sizeof(struct my_err_head),
                                                 MYF(MY_WME))))
     return 1;
-  meh_p->get_errmsgs= get_errmsgs;
+  meh_p->get_errmsg= get_errmsg;
   meh_p->meh_first= first;
   meh_p->meh_last= last;
 
@@ -343,22 +359,19 @@ int my_error_register(const char** (*get_errmsgs) (), int first, int last)
     These must have been previously registered by my_error_register().
     'first' and 'last' must exactly match the registration.
     If a matching registration is present, the header is removed from the
-    list and the pointer to the error messages pointers array is returned.
-    (The messages themselves are not released here as they may be static.)
-    Otherwise, NULL is returned.
+    list.
 
   @param   first     error number of first message
   @param   last      error number of last message
 
-  @retval  NULL      Error, no such number range registered.
-  @retval  non-NULL  OK, returns address of error messages pointers array.
+  @retval  TRUE      Error, no such number range registered.
+  @retval  FALSE     OK
 */
 
-const char **my_error_unregister(int first, int last)
+my_bool my_error_unregister(int first, int last)
 {
   struct my_err_head    *meh_p;
   struct my_err_head    **search_meh_pp;
-  const char            **errmsgs;
 
   /* Search for the registration in the list. */
   for (search_meh_pp= &my_errmsgs_list;
@@ -370,17 +383,16 @@ const char **my_error_unregister(int first, int last)
       break;
   }
   if (! *search_meh_pp)
-    return NULL;
+    return TRUE;
 
   /* Remove header from the chain. */
   meh_p= *search_meh_pp;
   *search_meh_pp= meh_p->meh_next;
 
-  /* Save the return value and free the header. */
-  errmsgs= meh_p->get_errmsgs();
+  /* Free the header. */
   my_free(meh_p);
-  
-  return errmsgs;
+
+  return FALSE;
 }
 
 
@@ -409,4 +421,69 @@ void my_error_unregister_all(void)
   my_errmsgs_globerrs.meh_next= NULL;  /* Freed in first iteration above. */
 
   my_errmsgs_list= &my_errmsgs_globerrs;
+}
+
+/**
+  Issue a message locally (i.e. on the same host the program is
+  running on, don't transmit to a client).
+
+  This is the default value for local_message_hook, and therefore
+  the default printer for my_message_local(). mysys users should
+  not call this directly, but go through my_message_local() instead.
+
+  This printer prepends an Error/Warning/Note label to the string,
+  then prints it to stderr using my_message_stderr().
+  Since my_message_stderr() appends a '\n', the format string
+  should not end in a newline.
+
+  @param ll      log level: (ERROR|WARNING|INFORMATION)_LEVEL
+                 the printer may use these to filter for verbosity
+  @param format  a format string a la printf. Should not end in '\n'
+  @param args    parameters to go with that format string
+*/
+void my_message_local_stderr(enum loglevel ll,
+                             const char *format, va_list args)
+{
+  char   buff[1024];
+  size_t len;
+
+  DBUG_ENTER("my_message_local_stderr");
+
+  len= my_snprintf(buff, sizeof(buff), "[%s] ",
+                   (ll == ERROR_LEVEL ? "ERROR" : ll == WARNING_LEVEL ?
+                    "Warning" : "Note"));
+  my_vsnprintf(buff + len, sizeof(buff) - len, format, args);
+
+  my_message_stderr(0, buff, MYF(0));
+
+  DBUG_VOID_RETURN;
+}
+
+/**
+  Issue a message locally (i.e. on the same host the program is
+  running on, don't transmit to a client).
+
+  This goes through local_message_hook, i.e. by default, it calls
+  my_message_local_stderr() which prepends an Error/Warning/Note
+  label to the string, then prints it to stderr.  More advanced
+  programs can use their own printers; mysqld for instance uses
+  its own error log facilities which prepend an ISO 8601 / RFC 3339
+  compliant timestamp etc.
+
+  @param ll      log level: (ERROR|WARNING|INFORMATION)_LEVEL
+                 the printer may use these to filter for verbosity
+  @param format  a format string a la printf. Should not end in '\n'.
+  @param ...     parameters to go with that format string
+*/
+
+void my_message_local(enum loglevel ll, const char *format, ...)
+{
+  va_list args;
+  DBUG_ENTER("local_print_error");
+
+  va_start(args, format);
+  (*local_message_hook)(ll, format, args);
+  va_end(args);
+
+  DBUG_VOID_RETURN;
 }

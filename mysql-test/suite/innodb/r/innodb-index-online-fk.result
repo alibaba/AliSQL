@@ -117,17 +117,32 @@ SELECT t2.name, t1.name FROM information_schema.innodb_sys_columns t1, informati
 name	name
 test/child	a1
 test/child	a2
-SELECT NAME FROM information_schema.INNODB_SYS_TABLES;
+SELECT NAME FROM information_schema.INNODB_SYS_TABLES WHERE NAME not like 'sys\/%';
 NAME
 SYS_DATAFILES
 SYS_FOREIGN
 SYS_FOREIGN_COLS
 SYS_TABLESPACES
+SYS_VIRTUAL
+mysql/engine_cost
+mysql/gtid_executed
+mysql/help_category
+mysql/help_keyword
+mysql/help_relation
+mysql/help_topic
 mysql/innodb_index_stats
 mysql/innodb_table_stats
+mysql/plugin
+mysql/server_cost
+mysql/servers
 mysql/slave_master_info
 mysql/slave_relay_log_info
 mysql/slave_worker_info
+mysql/time_zone
+mysql/time_zone_leap_second
+mysql/time_zone_name
+mysql/time_zone_transition
+mysql/time_zone_transition_type
 test/child
 test/parent
 INSERT INTO child VALUES(5,4);
@@ -144,10 +159,10 @@ ALTER TABLE `#child` ADD CONSTRAINT fk_40 FOREIGN KEY (a1, a2)
 REFERENCES `#parent`(a, b) ON DELETE CASCADE ON UPDATE CASCADE,
 ALGORITHM = INPLACE;
 ERROR HY000: Failed to add the foreign key constaint. Missing index for constraint 'fk_40' in the foreign table '#child'
-SET DEBUG = '-d,innodb_test_no_foreign_idx';
 SHOW ERRORS;
 Level	Code	Message
 Error	1821	Failed to add the foreign key constaint. Missing index for constraint 'fk_40' in the foreign table '#child'
+SET DEBUG = '-d,innodb_test_no_foreign_idx';
 SELECT * FROM information_schema.INNODB_SYS_FOREIGN;
 ID	FOR_NAME	REF_NAME	N_COLS	TYPE
 test/fk_1	test/child	test/parent	1	6
@@ -171,10 +186,10 @@ ALTER TABLE child ADD CONSTRAINT fk_42 FOREIGN KEY (a1, a2)
 REFERENCES parent(a, b) ON DELETE CASCADE ON UPDATE CASCADE,
 ALGORITHM = INPLACE;
 ERROR HY000: Failed to add the foreign key constaint. Missing index for constraint 'fk_42' in the referenced table 'parent'
-SET DEBUG = '-d,innodb_test_no_reference_idx';
 SHOW ERRORS;
 Level	Code	Message
 Error	1822	Failed to add the foreign key constaint. Missing index for constraint 'fk_42' in the referenced table 'parent'
+SET DEBUG = '-d,innodb_test_no_reference_idx';
 SET DEBUG = '+d,innodb_test_wrong_fk_option';
 ALTER TABLE child ADD CONSTRAINT fk_42 FOREIGN KEY (a1, a2)
 REFERENCES parent(a, b) ON DELETE CASCADE ON UPDATE CASCADE,
@@ -204,10 +219,10 @@ ALTER TABLE `#child` ADD CONSTRAINT fk_43 FOREIGN KEY (a1, a2)
 REFERENCES `#parent`(a, b) ON DELETE CASCADE ON UPDATE CASCADE,
 ALGORITHM = INPLACE;
 ERROR HY000: Failed to add the foreign key constraint 'test/fk_43' to system tables
-SET DEBUG = '-d,innodb_test_cannot_add_fk_system';
 SHOW ERRORS;
 Level	Code	Message
 Error	1823	Failed to add the foreign key constraint 'test/fk_43' to system tables
+SET DEBUG = '-d,innodb_test_cannot_add_fk_system';
 DROP TABLE `#child`;
 DROP TABLE `#parent`;
 SET foreign_key_checks = 0;
@@ -310,17 +325,32 @@ SELECT t2.name, t1.name FROM information_schema.innodb_sys_columns t1, informati
 name	name
 test/child	a1
 test/child	a2
-SELECT NAME FROM information_schema.INNODB_SYS_TABLES;
+SELECT NAME FROM information_schema.INNODB_SYS_TABLES WHERE NAME not like 'sys\/%';
 NAME
 SYS_DATAFILES
 SYS_FOREIGN
 SYS_FOREIGN_COLS
 SYS_TABLESPACES
+SYS_VIRTUAL
+mysql/engine_cost
+mysql/gtid_executed
+mysql/help_category
+mysql/help_keyword
+mysql/help_relation
+mysql/help_topic
 mysql/innodb_index_stats
 mysql/innodb_table_stats
+mysql/plugin
+mysql/server_cost
+mysql/servers
 mysql/slave_master_info
 mysql/slave_relay_log_info
 mysql/slave_worker_info
+mysql/time_zone
+mysql/time_zone_leap_second
+mysql/time_zone_name
+mysql/time_zone_transition
+mysql/time_zone_transition_type
 test/child
 test/parent
 ALTER TABLE child ADD PRIMARY KEY idx (a3), CHANGE a1 a3 INT,
@@ -337,23 +367,38 @@ SELECT t2.name, t1.name FROM information_schema.innodb_sys_columns t1, informati
 name	name
 test/child	a2
 test/child	a3
-SELECT NAME FROM information_schema.INNODB_SYS_TABLES;
+SELECT NAME FROM information_schema.INNODB_SYS_TABLES WHERE NAME not like 'sys\/%';
 NAME
 SYS_DATAFILES
 SYS_FOREIGN
 SYS_FOREIGN_COLS
 SYS_TABLESPACES
+SYS_VIRTUAL
+mysql/engine_cost
+mysql/gtid_executed
+mysql/help_category
+mysql/help_keyword
+mysql/help_relation
+mysql/help_topic
 mysql/innodb_index_stats
 mysql/innodb_table_stats
+mysql/plugin
+mysql/server_cost
+mysql/servers
 mysql/slave_master_info
 mysql/slave_relay_log_info
 mysql/slave_worker_info
+mysql/time_zone
+mysql/time_zone_leap_second
+mysql/time_zone_name
+mysql/time_zone_transition
+mysql/time_zone_transition_type
 test/child
 test/parent
 SHOW CREATE TABLE child;
 Table	Create Table
 child	CREATE TABLE `child` (
-  `a3` int(11) NOT NULL DEFAULT '0',
+  `a3` int(11) NOT NULL,
   `a2` int(11) DEFAULT NULL,
   PRIMARY KEY (`a3`),
   KEY `tb` (`a2`),
@@ -375,17 +420,32 @@ SELECT t2.name, t1.name FROM information_schema.innodb_sys_columns t1, informati
 name	name
 test/child	a1
 test/child	a2
-SELECT NAME FROM information_schema.INNODB_SYS_TABLES;
+SELECT NAME FROM information_schema.INNODB_SYS_TABLES WHERE NAME not like 'sys\/%';
 NAME
 SYS_DATAFILES
 SYS_FOREIGN
 SYS_FOREIGN_COLS
 SYS_TABLESPACES
+SYS_VIRTUAL
+mysql/engine_cost
+mysql/gtid_executed
+mysql/help_category
+mysql/help_keyword
+mysql/help_relation
+mysql/help_topic
 mysql/innodb_index_stats
 mysql/innodb_table_stats
+mysql/plugin
+mysql/server_cost
+mysql/servers
 mysql/slave_master_info
 mysql/slave_relay_log_info
 mysql/slave_worker_info
+mysql/time_zone
+mysql/time_zone_leap_second
+mysql/time_zone_name
+mysql/time_zone_transition
+mysql/time_zone_transition_type
 test/child
 test/parent
 SHOW CREATE TABLE child;
@@ -413,17 +473,32 @@ SELECT t2.name, t1.name FROM information_schema.innodb_sys_columns t1, informati
 name	name
 test/child	a2
 test/child	a3
-SELECT NAME FROM information_schema.INNODB_SYS_TABLES;
+SELECT NAME FROM information_schema.INNODB_SYS_TABLES WHERE NAME not like 'sys\/%';
 NAME
 SYS_DATAFILES
 SYS_FOREIGN
 SYS_FOREIGN_COLS
 SYS_TABLESPACES
+SYS_VIRTUAL
+mysql/engine_cost
+mysql/gtid_executed
+mysql/help_category
+mysql/help_keyword
+mysql/help_relation
+mysql/help_topic
 mysql/innodb_index_stats
 mysql/innodb_table_stats
+mysql/plugin
+mysql/server_cost
+mysql/servers
 mysql/slave_master_info
 mysql/slave_relay_log_info
 mysql/slave_worker_info
+mysql/time_zone
+mysql/time_zone_leap_second
+mysql/time_zone_name
+mysql/time_zone_transition
+mysql/time_zone_transition_type
 test/child
 test/parent
 SHOW CREATE TABLE child;
@@ -616,3 +691,42 @@ test/e	d	a	0
 test/fw	c	a	0
 DROP TABLE t2;
 DROP TABLE t3;
+# Bug #17449901	 TABLE DISAPPEARS WHEN ALTERING
+# WITH FOREIGN KEY CHECKS OFF
+create table t1(f1 int,primary key(f1))engine=innodb;
+create table t2(f2 int,f3 int,key t(f2,f3),foreign key(f2) references t1(f1))engine=innodb;
+SET foreign_key_checks=0;
+drop index t on t2;
+ERROR HY000: Cannot drop index 't': needed in a foreign key constraint
+drop table t2;
+drop table t1;
+create table t1(f1 int ,primary key(f1))engine=innodb;
+create table t2(f2 int,f3 int, key t(f2),foreign key(f2) references t1(f1))engine=innodb;
+SET foreign_key_checks = 0;
+alter table t2 drop key t,algorithm=inplace;
+ERROR HY000: Cannot drop index 't': needed in a foreign key constraint
+show create table t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `f2` int(11) DEFAULT NULL,
+  `f3` int(11) DEFAULT NULL,
+  KEY `t` (`f2`),
+  CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`f2`) REFERENCES `t1` (`f1`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1
+drop table t2;
+drop table t1;
+create table t1(f1 int ,primary key(f1))engine=innodb;
+create table t2(f2 int,f3 int, key t(f2),key t1(f2,f3),
+foreign key(f2) references t1(f1))engine=innodb;
+SET foreign_key_checks = 0;
+alter table t2 drop key t,algorithm=inplace;
+show create table t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `f2` int(11) DEFAULT NULL,
+  `f3` int(11) DEFAULT NULL,
+  KEY `t1` (`f2`,`f3`),
+  CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`f2`) REFERENCES `t1` (`f1`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1
+drop table t2;
+drop table t1;

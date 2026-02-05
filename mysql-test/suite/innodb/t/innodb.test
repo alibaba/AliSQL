@@ -17,9 +17,9 @@
 #######################################################################
 
 -- source include/have_innodb.inc
+-- source include/have_innodb_max_16k.inc
 
 let $MYSQLD_DATADIR= `select @@datadir`;
-
 # Save the original values of some variables in order to be able to
 # estimate how much they have changed during the tests. Previously this
 # test assumed that e.g. rows_deleted is 0 here and after deleting 23
@@ -29,10 +29,15 @@ let $MYSQLD_DATADIR= `select @@datadir`;
 # the test to be run multiple times without restarting the mysqld server.
 # See Bug#43309 Test main.innodb can't be run twice
 -- disable_query_log
+call mtr.add_suppression("Cannot add field .* in table .* because after adding it, the row size is");
+call mtr.add_suppression("\\[ERROR\\] InnoDB: in ALTER TABLE `test`.`t1`");
+call mtr.add_suppression("\\[ERROR\\] InnoDB: in RENAME TABLE table `test`.`t1`");
+
 SET @innodb_thread_sleep_delay_orig = @@innodb_thread_sleep_delay;
 
 SET @innodb_thread_concurrency_orig = @@innodb_thread_concurrency;
 
+--disable_warnings
 SET @innodb_rows_deleted_orig = (SELECT variable_value FROM information_schema.global_status WHERE LOWER(variable_name) = 'innodb_rows_deleted');
 SET @innodb_rows_inserted_orig = (SELECT variable_value FROM information_schema.global_status WHERE LOWER(variable_name) = 'innodb_rows_inserted');
 SET @innodb_rows_updated_orig = (SELECT variable_value FROM information_schema.global_status WHERE LOWER(variable_name) = 'innodb_rows_updated');
@@ -41,6 +46,7 @@ SET @innodb_row_lock_current_waits_orig = (SELECT variable_value FROM informatio
 SET @innodb_row_lock_time_orig = (SELECT variable_value FROM information_schema.global_status WHERE LOWER(variable_name) = 'innodb_row_lock_time');
 SET @innodb_row_lock_time_max_orig = (SELECT variable_value FROM information_schema.global_status WHERE LOWER(variable_name) = 'innodb_row_lock_time_max');
 SET @innodb_row_lock_time_avg_orig = (SELECT variable_value FROM information_schema.global_status WHERE LOWER(variable_name) = 'innodb_row_lock_time_avg');
+--enable_warnings
 -- enable_query_log
 
 --disable_warnings
@@ -92,17 +98,17 @@ update t1 set parent_id=parent_id+100;
 select * from t1 where parent_id=102;
 update t1 set id=id+1000;
 -- error ER_DUP_ENTRY,1022
-update t1 set id=1024 where id=1009; 
+update t1 set id=1024 where id=1009;
 select * from t1;
 update ignore t1 set id=id+1; # This will change all rows
 select * from t1;
 update ignore t1 set id=1023 where id=1010;
 select * from t1 where parent_id=102;
---replace_column 9 #
+--replace_column 10 #
 explain select level from t1 where level=1;
---replace_column 9 #
+--replace_column 10 #
 explain select level,id from t1 where level=1;
---replace_column 9 #
+--replace_column 10 #
 explain select level,id,parent_id from t1 where level=1;
 select level,id from t1 where level=1;
 select level,id,parent_id from t1 where level=1;
@@ -248,7 +254,7 @@ drop table t1;
 
 #
 # Simple not autocommit test
-# 
+#
 
 CREATE TABLE t1 (id char(8) not null primary key, val int not null) engine=innodb;
 insert into t1 values ('pippo', 12);
@@ -407,13 +413,13 @@ INSERT INTO t1 values (179,5,2);
 update t1 set parent_id=parent_id+100;
 select * from t1 where parent_id=102;
 update t1 set id=id+1000;
-update t1 set id=1024 where id=1009; 
+update t1 set id=1024 where id=1009;
 select * from t1;
 update ignore t1 set id=id+1; # This will change all rows
 select * from t1;
 update ignore t1 set id=1023 where id=1010;
 select * from t1 where parent_id=102;
---replace_column 9 #
+--replace_column 10 #
 explain select level from t1 where level=1;
 select level,id from t1 where level=1;
 select level,id,parent_id from t1 where level=1;
@@ -457,7 +463,7 @@ drop table t1;
 # Test of opening table twice and timestamps
 #
 set @a:=now();
-CREATE TABLE t1 (a int not null, b timestamp not null default 
+CREATE TABLE t1 (a int not null, b timestamp not null default
 current_timestamp on update current_timestamp, primary key (a)) engine=innodb;
 insert into t1 (a) values(1),(2),(3);
 select t1.a from t1 natural join t1 as t2 where t1.b >= @a order by t1.a;
@@ -496,21 +502,10 @@ CREATE TABLE t1 (
   b int1 unsigned NOT NULL,
   UNIQUE (a, b)
 ) ENGINE = innodb;
- 
+
 INSERT INTO t1 VALUES (1, 1);
 SELECT MIN(B),MAX(b) FROM t1 WHERE t1.a = 1;
 drop table t1;
-
-#
-# Test INSERT DELAYED
-#
-
-CREATE TABLE t1 (a int unsigned NOT NULL) engine=innodb;
-# Can't test this in 3.23
-# INSERT DELAYED INTO t1 VALUES (1);
-INSERT INTO t1 VALUES (1);
-SELECT * FROM t1;
-DROP TABLE t1;
 
 
 #
@@ -519,7 +514,7 @@ DROP TABLE t1;
 
 create table t1 (a int  primary key,b int, c int, d int, e int, f int, g int, h int, i int, j int, k int, l int, m int, n int, o int, p int, q int, r int, s int, t int, u int, v int, w int, x int, y int, z int, a1 int, a2 int, a3 int, a4 int, a5 int, a6 int, a7 int, a8 int, a9 int, b1 int, b2 int, b3 int, b4 int, b5 int, b6 int) engine = innodb;
 insert into t1 values (1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1);
---replace_column 9 #
+--replace_column 10 #
 explain select * from t1 where a > 0 and a < 50;
 drop table t1;
 
@@ -646,21 +641,21 @@ drop table t1;
 
 create table t1 (a int not null, b int not null, c int not null, primary key (a),key(b)) engine=innodb;
 insert into t1 values (3,3,3),(1,1,1),(2,2,2),(4,4,4);
---replace_column 9 #
+--replace_column 10 #
 explain select * from t1 order by a;
---replace_column 9 #
+--replace_column 10 #
 explain select * from t1 order by b;
---replace_column 9 #
+--replace_column 10 #
 explain select * from t1 order by c;
---replace_column 9 #
+--replace_column 10 #
 explain select a from t1 order by a;
---replace_column 9 #
+--replace_column 10 #
 explain select b from t1 order by b;
---replace_column 9 #
+--replace_column 10 #
 explain select a,b from t1 order by b;
---replace_column 9 #
+--replace_column 10 #
 explain select a,b from t1;
---replace_column 9 #
+--replace_column 10 #
 explain select a,b,c from t1;
 drop table t1;
 
@@ -676,6 +671,8 @@ drop table t1;
 # Test of multi-table-delete
 #
 
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+
 CREATE TABLE t1 (
   number bigint(20) NOT NULL default '0',
   cname char(15) NOT NULL default '',
@@ -689,6 +686,8 @@ CREATE TABLE t1 (
   assigned_scps int(11) default '0',
   status tinyint(4) default '0'
 ) ENGINE=InnoDB;
+
+
 INSERT INTO t1 VALUES (4077711111,'SeanWheeler',90,2,20020111112846,500,00000000000000,-1,2,3,1);
 INSERT INTO t1 VALUES (9197722223,'berry',90,3,20020111112809,500,20020102114532,501,4,10,0);
 INSERT INTO t1 VALUES (650,'San Francisco',0,0,20011227111336,342,00000000000000,-1,1,24,1);
@@ -716,9 +715,10 @@ select * from t1;
 select * from t2;
 delete t1, t2 from t1 left join t2 on t1.number=t2.number where (t1.carrier_id=90 and t1.number=t2.number) or (t2.carrier_id=90 and t1.number=t2.number) or  (t1.carrier_id=90 and t2.number is null);
 select * from t1;
-select * from t2; 
+select * from t2;
 select * from t2;
 drop table t1,t2;
+SET sql_mode = default;
 
 #
 # A simple test with some isolation levels
@@ -762,7 +762,7 @@ select * from t2;
 drop table t1,t2;
 
 #
-# Bug #29136  	erred multi-delete on trans table does not rollback 
+# Bug #29136  	erred multi-delete on trans table does not rollback
 #
 
 # prepare
@@ -794,7 +794,7 @@ drop table t1, t2;
 
 
 #
-# Bug #29136  	erred multi-delete on trans table does not rollback 
+# Bug #29136  	erred multi-delete on trans table does not rollback
 #
 
 # prepare
@@ -950,10 +950,10 @@ insert into t1 (a) select b from t2;
 insert into t2 (a) select b from t1;
 insert into t1 (a) select b from t2;
 select count(*) from t1;
---replace_column 9 #
+--replace_column 10 #
 explain select * from t1 where c between 1 and 2500;
 update t1 set c=a;
---replace_column 9 #
+--replace_column 10 # 11 #
 explain select * from t1 where c between 1 and 2500;
 drop table t1,t2;
 
@@ -1054,17 +1054,21 @@ INSERT INTO t2 VALUES (10, 'old'), (20, 'other');
 UPDATE t1 SET c1 = 'other' WHERE c1 = 'old';
 DROP TABLE t2,t1;
 
+
 #
-# test for recursion depth limit
+# test for FK cascade depth limit
 #
+call mtr.add_suppression("Cannot delete/update rows with cascading foreign key constraints that exceed max depth of 15. Please drop excessive foreign constraints and try again");
+
 create table t1(
 	id int primary key,
 	pid int,
 	index(pid),
 	foreign key(pid) references t1(id) on delete cascade) engine=innodb;
 insert into t1 values(0,0),(1,0),(2,1),(3,2),(4,3),(5,4),(6,5),(7,6),
-	(8,7),(9,8),(10,9),(11,10),(12,11),(13,12),(14,13),(15,14);
--- error 1451
+(8,7),(9,8),(10,9),(11,10),(12,11),(13,12),(14,13),(15,14);
+
+--error ER_FK_DEPTH_EXCEEDED
 delete from t1 where id=0;
 delete from t1 where id=15;
 delete from t1 where id=0;
@@ -1080,7 +1084,7 @@ CREATE TABLE t2 (col1 int(1),stamp TIMESTAMP,INDEX stamp_idx
 (stamp))ENGINE=InnoDB;
 insert into t1 values (1),(2),(3);
 # Note that timestamp 3 is wrong
-insert into t2 values (1, 20020204130000),(2, 20020204130000),(4,20020204310000 ),(5,20020204230000);
+insert ignore into t2 values (1, 20020204130000),(2, 20020204130000),(4,20020204310000 ),(5,20020204230000);
 SELECT col1 FROM t1 UNION SELECT col1 FROM t2 WHERE stamp <
 '20020204120000' GROUP BY col1;
 drop table t1,t2;
@@ -1112,7 +1116,7 @@ CREATE TABLE t2 (
 INSERT INTO t2 VALUES("3524", "1"),("3525", "1"),("1794", "4"),("102", "5"),("1822", "6"),("3382", "9");
 
 SELECT t2.id, t1.`label` FROM t2 INNER JOIN
-(SELECT t1.id_object as id_object FROM t1 WHERE t1.`label` LIKE '%test%') AS lbl 
+(SELECT t1.id_object as id_object FROM t1 WHERE t1.`label` LIKE '%test%') AS lbl
 ON (t2.id = lbl.id_object) INNER JOIN t1 ON (t2.id = t1.id_object) ORDER BY 1;
 drop table t1,t2;
 
@@ -1240,7 +1244,7 @@ drop table t1;
 #drop table t1;
 
 #
-# BUG#7709 test case - Boolean fulltext query against unsupported 
+# BUG#7709 test case - Boolean fulltext query against unsupported
 #                      engines does not fail
 #
 
@@ -1256,7 +1260,7 @@ drop table t1;
 --disable_warnings
 CREATE TABLE t1 (a_id tinyint(4) NOT NULL default '0', PRIMARY KEY  (a_id)) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 INSERT INTO t1 VALUES (1),(2),(3);
-CREATE TABLE t2 (b_id tinyint(4) NOT NULL default '0',b_a tinyint(4) NOT NULL default '0', PRIMARY KEY  (b_id), KEY  (b_a), 
+CREATE TABLE t2 (b_id tinyint(4) NOT NULL default '0',b_a tinyint(4) NOT NULL default '0', PRIMARY KEY  (b_id), KEY  (b_a),
                 CONSTRAINT fk_b_a FOREIGN KEY (b_a) REFERENCES t1 (a_id) ON DELETE CASCADE ON UPDATE NO ACTION) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 --enable_warnings
 INSERT INTO t2 VALUES (1,1),(2,1),(3,1),(4,2),(5,2);
@@ -1283,7 +1287,7 @@ select * from t1;
 drop table t1;
 
 #
-# Bug #13025  Server crash during filesort	
+# Bug #13025  Server crash during filesort
 #
 
 create table t1 (a int not null, b int not null, c blob not null, d int not null, e int, primary key (a,b,c(255),d)) engine=innodb;
@@ -1328,20 +1332,24 @@ drop table t1;
 
 # Test for testable InnoDB status variables. This test
 # uses previous ones(pages_created, rows_deleted, ...).
---replace_result 511 {checked_valid} 512 {checked_valid} 1023 {checked_valid} 1024 {checked_valid} 2048 {checked_valid}
+--disable_warnings
+--replace_result 1535 {checked_valid} 1536 {checked_valid} 3071 {checked_valid} 3072 {checked_valid} 6144 {checked_valid}
 SELECT variable_value FROM information_schema.global_status WHERE LOWER(variable_name) = 'innodb_buffer_pool_pages_total';
 --replace_result 4096 {checked_valid} 8192 {checked_valid} 16384 {checked_valid}
 SELECT variable_value FROM information_schema.global_status WHERE LOWER(variable_name) = 'innodb_page_size';
 SELECT variable_value - @innodb_rows_deleted_orig FROM information_schema.global_status WHERE LOWER(variable_name) = 'innodb_rows_deleted';
 SELECT variable_value - @innodb_rows_inserted_orig FROM information_schema.global_status WHERE LOWER(variable_name) = 'innodb_rows_inserted';
 SELECT variable_value - @innodb_rows_updated_orig FROM information_schema.global_status WHERE LOWER(variable_name) = 'innodb_rows_updated';
+--enable_warnings
 
 # Test for row locks InnoDB status variables.
+--disable_warnings
 SELECT variable_value - @innodb_row_lock_waits_orig FROM information_schema.global_status WHERE LOWER(variable_name) = 'innodb_row_lock_waits';
 SELECT variable_value - @innodb_row_lock_current_waits_orig FROM information_schema.global_status WHERE LOWER(variable_name) = 'innodb_row_lock_current_waits';
 SELECT variable_value - @innodb_row_lock_time_orig FROM information_schema.global_status WHERE LOWER(variable_name) = 'innodb_row_lock_time';
 SELECT variable_value - @innodb_row_lock_time_max_orig FROM information_schema.global_status WHERE LOWER(variable_name) = 'innodb_row_lock_time_max';
 SELECT variable_value - @innodb_row_lock_time_avg_orig FROM information_schema.global_status WHERE LOWER(variable_name) = 'innodb_row_lock_time_avg';
+--enable_warnings
 
 # Test for innodb_sync_spin_loops variable
 SET @innodb_sync_spin_loops_orig = @@innodb_sync_spin_loops;
@@ -1395,10 +1403,12 @@ set session old_alter_table=0;
 #
 # Some errors/warnings on create
 #
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 # Embedded server doesn't chdir to data directory
 --replace_result $MYSQLTEST_VARDIR . master-data/ ''
+SET GLOBAL innodb_large_prefix=OFF;
 create table t1 (v varchar(65530), key(v));
+SET GLOBAL innodb_large_prefix=default;
 drop table t1;
 create table t1 (v varchar(65536));
 show create table t1;
@@ -1406,7 +1416,7 @@ drop table t1;
 create table t1 (v varchar(65530) character set utf8);
 show create table t1;
 drop table t1;
-
+SET sql_mode = default;
 eval set default_storage_engine=$default;
 
 # InnoDB specific varchar tests
@@ -1548,7 +1558,8 @@ create table t8 (col1 blob, index(col1(767)))
 # multi-column tests can be found in innodb_16k, innodb_8k & innodb_4k
 
 drop table t1, t2, t3, t4, t5, t6, t7, t8;
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+SET GLOBAL innodb_large_prefix=OFF;
 # these should have their index length trimmed
 create table t1 (col1 varchar(768), index(col1))
  character set = latin1 engine = innodb;
@@ -1558,12 +1569,14 @@ create table t3 (col1 text, index(col1(768)))
  character set = latin1 engine = innodb;
 create table t4 (col1 blob, index(col1(768)))
  character set = latin1 engine = innodb;
+SET GLOBAL innodb_large_prefix=default;
 
 show create table t1;
 
 drop table t1, t2, t3, t4;
 
 # these should be refused
+set global innodb_large_prefix=OFF;
 --error ER_TOO_LONG_KEY
 create table t1 (col1 varchar(768) primary key)
  character set = latin1 engine = innodb;
@@ -1576,7 +1589,8 @@ create table t3 (col1 text, primary key(col1(768)))
 --error ER_TOO_LONG_KEY
 create table t4 (col1 blob, primary key(col1(768)))
  character set = latin1 engine = innodb;
-
+SET sql_mode = default;
+set global innodb_large_prefix=default;
 #
 # Test improved foreign key error messages (bug #3443)
 #
@@ -1751,7 +1765,7 @@ drop table t4,t3,t2,t1;
 #
 
 # test the padding of BINARY types and collations (Bug #14189)
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 create table t1 (s1 varbinary(2),primary key (s1)) engine=innodb;
 create table t2 (s1 binary(2),primary key (s1)) engine=innodb;
 create table t3 (s1 varchar(2) binary,primary key (s1)) engine=innodb;
@@ -1835,7 +1849,7 @@ ALTER TABLE t2 ADD CONSTRAINT t2_ibfk_0 FOREIGN KEY (a) REFERENCES t1(a);
 ALTER TABLE t2 DROP FOREIGN KEY t2_ibfk_0;
 SHOW CREATE TABLE t2;
 DROP TABLE t2,t1;
-
+SET sql_mode = default;
 #
 # Test case for bug #16229: MySQL/InnoDB uses full explicit table locks in trigger processing
 #
@@ -2333,11 +2347,8 @@ INSERT INTO t1 VALUES (1);
 INSERT INTO t2 VALUES (1);
 ALTER TABLE t2 ADD FOREIGN KEY (a) REFERENCES t1 (a) ON DELETE SET NULL;
 # NULL -> NOT NULL only allowed INPLACE if strict sql_mode is on.
-set @old_sql_mode = @@sql_mode;
-set @@sql_mode = 'STRICT_TRANS_TABLES';
 --error ER_FK_COLUMN_NOT_NULL
 ALTER TABLE t2 MODIFY a INT NOT NULL;
-set @@sql_mode = @old_sql_mode;
 DELETE FROM t1;
 DROP TABLE t2,t1;
 
@@ -2635,6 +2646,9 @@ SELECT * FROM t2;
 
 DROP TABLE t1;
 DROP TABLE t2;
+
+-- source suite/innodb/include/check_pfs_mem_other_is_zero.inc
+
 #######################################################################
 #                                                                     #
 # Please, DO NOT TOUCH this file as well as the innodb.result file.   #

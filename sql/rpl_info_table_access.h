@@ -1,13 +1,20 @@
-/* Copyright (c) 2010, 2014, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -16,24 +23,34 @@
 #define RPL_INFO_TABLE_ACCESS_H
 
 #include "my_global.h"
-#include "sql_priv.h"
+#include "rpl_table_access.h"    // System_table_access
+/*
 #include <table.h>
 #include <key.h>
-#include <sql_base.h>
 #include "rpl_info_handler.h"
 #include "rpl_info_values.h"
+*/
+class Field;
+class Rpl_info_values;
+
 
 enum enum_return_id { FOUND_ID= 1, NOT_FOUND_ID, ERROR_ID };
 
-class Rpl_info_table_access
+class Rpl_info_table_access : public System_table_access
 {
 public:
   Rpl_info_table_access(): thd_created(false) { };
   virtual ~Rpl_info_table_access() { };
 
-  bool open_table(THD* thd, const LEX_STRING dbstr, const LEX_STRING tbstr,
-                  uint max_num_field, enum thr_lock_type lock_type,
-                  TABLE** table, Open_tables_backup* backup);
+  /**
+    Prepares before opening table.
+    - set flags
+    - start lex and reset the part of THD responsible
+      for the state of command processing if needed.
+
+    @param[in]  thd  Thread requesting to open the table
+  */
+  void before_open(THD* thd);
   bool close_table(THD* thd, TABLE* table, Open_tables_backup* backup,
                    bool error);
   enum enum_return_id find_info(Rpl_info_values *field_values, TABLE *table);
@@ -44,7 +61,7 @@ public:
   bool store_info_values(uint max_num_field, Field **fields,
                          Rpl_info_values *field_values);
   THD *create_thd();
-  bool drop_thd(THD* thd);
+  void drop_thd(THD* thd);
 
 private:
   bool thd_created;

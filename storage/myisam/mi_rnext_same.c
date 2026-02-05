@@ -1,13 +1,20 @@
-/* Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -32,28 +39,29 @@ int mi_rnext_same(MI_INFO *info, uchar *buf)
   DBUG_ENTER("mi_rnext_same");
 
   if ((int) (inx=info->lastinx) < 0 || info->lastpos == HA_OFFSET_ERROR)
-    DBUG_RETURN(my_errno=HA_ERR_WRONG_INDEX);
+  {
+    set_my_errno(HA_ERR_WRONG_INDEX);
+    DBUG_RETURN(HA_ERR_WRONG_INDEX);
+  }
   keyinfo=info->s->keyinfo+inx;
   if (fast_mi_readinfo(info))
-    DBUG_RETURN(my_errno);
+    DBUG_RETURN(my_errno());
 
   if (info->s->concurrent_insert)
     mysql_rwlock_rdlock(&info->s->key_root_lock[inx]);
 
   switch (keyinfo->key_alg)
   {
-#ifdef HAVE_RTREE_KEYS
     case HA_KEY_ALG_RTREE:
       if ((error=rtree_find_next(info,inx,
 				 myisam_read_vec[info->last_key_func])))
       {
 	error=1;
-	my_errno=HA_ERR_END_OF_FILE;
+	set_my_errno(HA_ERR_END_OF_FILE);
 	info->lastpos= HA_OFFSET_ERROR;
 	break;
       }
       break;
-#endif
     case HA_KEY_ALG_BTREE:
     default:
 
@@ -73,7 +81,7 @@ int mi_rnext_same(MI_INFO *info, uchar *buf)
                        info->last_rkey_length, SEARCH_FIND, not_used))
         {
           error=1;
-          my_errno=HA_ERR_END_OF_FILE;
+          set_my_errno(HA_ERR_END_OF_FILE);
           info->lastpos= HA_OFFSET_ERROR;
           break;
         }
@@ -91,17 +99,17 @@ int mi_rnext_same(MI_INFO *info, uchar *buf)
 
   if (error)
   {
-    if (my_errno == HA_ERR_KEY_NOT_FOUND)
-      my_errno=HA_ERR_END_OF_FILE;
+    if (my_errno() == HA_ERR_KEY_NOT_FOUND)
+      set_my_errno(HA_ERR_END_OF_FILE);
   }
   else if (!buf)
   {
-    DBUG_RETURN(info->lastpos==HA_OFFSET_ERROR ? my_errno : 0);
+    DBUG_RETURN(info->lastpos==HA_OFFSET_ERROR ? my_errno() : 0);
   }
   else if (!(*info->read_record)(info,info->lastpos,buf))
   {
     info->update|= HA_STATE_AKTIV;		/* Record is read */
     DBUG_RETURN(0);
   }
-  DBUG_RETURN(my_errno);
+  DBUG_RETURN(my_errno());
 } /* mi_rnext_same */

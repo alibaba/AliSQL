@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2004, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2004, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -153,12 +160,11 @@ NdbBlob::getBlobTable(NdbTableImpl& bt, const NdbTableImpl* t, const NdbColumnIm
   } else {
     {
       // table PK attributes
-      const uint columns = t->m_columns.size();
       const uint noOfKeys = t->m_noOfKeys;
       uint n = 0;
       uint i;
       for (i = 0; n < noOfKeys; i++) {
-        assert(i < columns);
+        assert(i < t->m_columns.size());
         const NdbColumnImpl* c = t->getColumn(i);
         assert(c != NULL);
         if (c->m_pk) {
@@ -696,7 +702,7 @@ NdbBlob::copyKeyFromRow(const NdbRecord *record, const char *row,
     unpacked+= unpacked_len;
   }
 
-  packedBuf.size= packed - packedBuf.data;
+  packedBuf.size= (Uint32)(packed - packedBuf.data);
   packedBuf.zerorest();
   assert(unpacked == unpackedBuf.data + unpackedBuf.size);
   DBUG_RETURN(0);
@@ -875,12 +881,11 @@ NdbBlob::setTableKeyValue(NdbOperation* anOp)
   DBUG_DUMP("info", (uchar*) theKeyBuf.data, 4 * theTable->m_keyLenInWords);
   const bool isBlobPartOp = (anOp->m_currentTable == theBlobTable);
   const Uint32* data = (const Uint32*)theKeyBuf.data;
-  const unsigned columns = theTable->m_columns.size();
   uint n = 0;
   const uint noOfKeys = theTable->m_noOfKeys;
   unsigned pos = 0;
   for (unsigned i = 0;  n < noOfKeys; i++) {
-    assert(i < columns);
+    assert(i < theTable->m_columns.size());
     const NdbColumnImpl* c = theTable->getColumn(i);
     assert(c != NULL);
     if (c->m_pk) {
@@ -2273,6 +2278,8 @@ NdbBlob::atPrepareNdbRecord(NdbTransaction* aCon, NdbOperation* anOp,
   }
   else if (isIndexOp())
     res= copyKeyFromRow(key_record, key_row, thePackKeyBuf, theAccessKeyBuf);
+  else
+    res = -1;
   if (res == -1)
     DBUG_RETURN(-1);
 
@@ -2397,12 +2404,11 @@ NdbBlob::atPrepare(NdbEventOperationImpl* anOp, NdbEventOperationImpl* aBlobOp, 
         DBUG_RETURN(-1);
       }
     } else {
-      const uint columns = theTable->m_columns.size();
       const uint noOfKeys = theTable->m_noOfKeys;
       uint n = 0;
       uint i;
       for (i = 0; n < noOfKeys; i++) {
-        assert(i < columns);
+        assert(i < theTable->m_columns.size());
         const NdbColumnImpl* c = theTable->m_columns[i];
         assert(c != NULL);
         if (c->m_pk) {
@@ -2648,12 +2654,13 @@ NdbBlob::preExecute(NdbTransaction::ExecType anExecType,
         const char* buf = theSetBuf + theInlineSize;
         Uint32 bytes = theGetSetBytes - theInlineSize;
         assert(thePos == theInlineSize);
+#ifndef NDEBUG
         Uint32 savePendingBlobWriteBytes = theNdbCon->pendingBlobWriteBytes;
+#endif
         if (writeDataPrivate(buf, bytes) == -1)
           DBUG_RETURN(-1);
         /* Assert that we didn't execute inline there */
-        assert(theNdbCon->pendingBlobWriteBytes >
-               savePendingBlobWriteBytes);
+        assert(theNdbCon->pendingBlobWriteBytes > savePendingBlobWriteBytes);
       }
       
       if (theHeadInlineUpdateFlag)
@@ -3283,9 +3290,11 @@ NdbBlob::setErrorCode(int anErrorCode, bool invalidFlag)
   if (invalidFlag)
     setState(Invalid);
 #ifdef VM_TRACE
+#ifdef NDB_USE_GET_ENV
   if (NdbEnv_GetEnv("NDB_BLOB_ABORT_ON_ERROR", (char*)0, 0)) {
     abort();
   }
+#endif
 #endif
   DBUG_VOID_RETURN;
 }

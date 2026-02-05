@@ -1,0 +1,7 @@
+--skip-log-bin
+--enforce-gtid-consistency=on
+--gtid-mode=on
+--duckdb_multi_trx_in_batch=on
+--force_innodb_to_duckdb=on
+--duckdb_multi_trx_timeout=1000
+--debug=+d,duckdb_print_dml

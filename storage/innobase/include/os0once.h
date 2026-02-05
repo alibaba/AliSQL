@@ -1,14 +1,22 @@
 /*****************************************************************************
 
-Copyright (c) 2014, Oracle and/or its affiliates. All Rights Reserved.
+Copyright (c) 2014, 2023, Oracle and/or its affiliates.
 
-This program is free software; you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation; version 2 of the License.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License, version 2.0,
+as published by the Free Software Foundation.
 
-This program is distributed in the hope that it will be useful, but WITHOUT
-ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+This program is also distributed with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have included with MySQL.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License, version 2.0, for more details.
 
 You should have received a copy of the GNU General Public License along with
 this program; if not, write to the Free Software Foundation, Inc.,
@@ -29,7 +37,7 @@ Created Feb 20, 2014 Vasil Dimov
 
 #include "univ.i"
 
-#include "os0sync.h"
+#include "os0atomic.h"
 #include "ut0ut.h"
 
 /** Execute a given function exactly once in a multi-threaded environment
@@ -67,7 +75,6 @@ public:
 	/** Finished execution. */
 	static const state_t	DONE = 2;
 
-#ifdef HAVE_ATOMIC_BUILTINS
 	/** Call a given function or wait its execution to complete if it is
 	already called by another thread.
 	@param[in,out]	state		control variable
@@ -119,7 +126,6 @@ public:
 			}
 		}
 	}
-#endif /* HAVE_ATOMIC_BUILTINS */
 };
 
 #endif /* os0once_h */

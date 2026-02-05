@@ -1,0 +1,46 @@
+#
+# Test DuckDB engine behavior with auto_increment
+#
+CREATE TABLE t_auto_inc_duckdb (
+id INT AUTO_INCREMENT PRIMARY KEY,
+name VARCHAR(255)
+) ENGINE=duckdb;
+------------------------------------------------------------------------
+## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_auto_inc_duckdb begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
+# ① Print columns of t_auto_inc_duckdb ##
+RESULT
+column_name	column_index	data_type	numeric_precision	
+VARCHAR	INTEGER	VARCHAR	INTEGER	
+[ Rows: 2]
+id	1	INTEGER	32
+name	2	VARCHAR	NULL
+
+
+# ② Print CONSTRAINTs of t_auto_inc_duckdb ##
+RESULT
+table_name	constraint_type	constraint_text	
+VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+t_auto_inc_duckdb	NOT NULL	NOT NULL
+
+
+# ③ Print INDEXs of t_auto_inc_duckdb ##
+RESULT
+index_name	comment	tags	is_unique	is_primary	expressions	
+VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
+[ Rows: 0]
+
+
+# ④ Print SEQUENCE of t_auto_inc_duckdb ##
+RESULT
+sequence_name	min_value	increment_by	last_value	
+VARCHAR	BIGINT	BIGINT	BIGINT	
+[ Rows: 0]
+
+
+## ↑↑↑↑↑↑↑↑↑↑↑↑↑↑ Print table t_auto_inc_duckdb end ↑↑↑↑↑↑↑↑↑↑↑↑↑↑ ##
+------------------------------------------------------------------------
+DROP TABLE IF EXISTS t_auto_inc_innodb;
+Warnings:
+Note	1051	Unknown table 'test.t_auto_inc_innodb'
+DROP TABLE IF EXISTS t_auto_inc_duckdb;

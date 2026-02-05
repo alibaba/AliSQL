@@ -104,7 +104,7 @@ SELECT * FROM information_schema.INNODB_SYS_FOREIGN_COLS;
 
 SELECT t2.name, t1.name FROM information_schema.innodb_sys_columns t1, information_schema.innodb_sys_tables t2 WHERE t1.table_id = t2.table_id AND t2.name LIKE "%child" ORDER BY t1.name;
 
-SELECT NAME FROM information_schema.INNODB_SYS_TABLES;
+SELECT NAME FROM information_schema.INNODB_SYS_TABLES WHERE NAME not like 'sys\/%';
 
 # this should succeed, since we disabled the foreign key check
 INSERT INTO child VALUES(5,4);
@@ -132,9 +132,10 @@ SET DEBUG = '+d,innodb_test_no_foreign_idx';
 ALTER TABLE `#child` ADD CONSTRAINT fk_40 FOREIGN KEY (a1, a2)
 REFERENCES `#parent`(a, b) ON DELETE CASCADE ON UPDATE CASCADE,
 ALGORITHM = INPLACE;
-SET DEBUG = '-d,innodb_test_no_foreign_idx';
 
 SHOW ERRORS;
+
+SET DEBUG = '-d,innodb_test_no_foreign_idx';
 
 SELECT * FROM information_schema.INNODB_SYS_FOREIGN;
 
@@ -147,9 +148,10 @@ SET DEBUG = '+d,innodb_test_no_reference_idx';
 ALTER TABLE child ADD CONSTRAINT fk_42 FOREIGN KEY (a1, a2)
 REFERENCES parent(a, b) ON DELETE CASCADE ON UPDATE CASCADE,
 ALGORITHM = INPLACE;
-SET DEBUG = '-d,innodb_test_no_reference_idx';
 
 SHOW ERRORS;
+
+SET DEBUG = '-d,innodb_test_no_reference_idx';
 
 # This is to test the scenario no index on referenced table,
 # alter table should fail
@@ -171,9 +173,10 @@ SET DEBUG = '+d,innodb_test_cannot_add_fk_system';
 ALTER TABLE `#child` ADD CONSTRAINT fk_43 FOREIGN KEY (a1, a2)
 REFERENCES `#parent`(a, b) ON DELETE CASCADE ON UPDATE CASCADE,
 ALGORITHM = INPLACE;
-SET DEBUG = '-d,innodb_test_cannot_add_fk_system';
 
 SHOW ERRORS;
+
+SET DEBUG = '-d,innodb_test_cannot_add_fk_system';
 
 DROP TABLE `#child`;
 DROP TABLE `#parent`;
@@ -286,7 +289,7 @@ SET DEBUG = '-d,innodb_test_cannot_add_fk_system';
 SELECT * FROM INFORMATION_SCHEMA.INNODB_SYS_FOREIGN;
 SELECT * FROM INFORMATION_SCHEMA.INNODB_SYS_FOREIGN_COLS;
 SELECT t2.name, t1.name FROM information_schema.innodb_sys_columns t1, information_schema.innodb_sys_tables t2 WHERE t1.table_id = t2.table_id AND t2.name LIKE "%child" ORDER BY t1.name;
-SELECT NAME FROM information_schema.INNODB_SYS_TABLES;
+SELECT NAME FROM information_schema.INNODB_SYS_TABLES WHERE NAME not like 'sys\/%';
 
 # This should be successful. It will also check any left over
 # from previous failed operation (if dictionary entries not cleaned,
@@ -299,7 +302,7 @@ ALGORITHM = INPLACE;
 SELECT * FROM INFORMATION_SCHEMA.INNODB_SYS_FOREIGN;
 SELECT * FROM INFORMATION_SCHEMA.INNODB_SYS_FOREIGN_COLS;
 SELECT t2.name, t1.name FROM information_schema.innodb_sys_columns t1, information_schema.innodb_sys_tables t2 WHERE t1.table_id = t2.table_id AND t2.name LIKE "%child" ORDER BY t1.name;
-SELECT NAME FROM information_schema.INNODB_SYS_TABLES;
+SELECT NAME FROM information_schema.INNODB_SYS_TABLES WHERE NAME not like 'sys\/%';
 
 SHOW CREATE TABLE child;
 
@@ -316,7 +319,7 @@ ALGORITHM = INPLACE;
 SELECT * from information_schema.INNODB_SYS_FOREIGN;
 SELECT * from information_schema.INNODB_SYS_FOREIGN_COLS;
 SELECT t2.name, t1.name FROM information_schema.innodb_sys_columns t1, information_schema.innodb_sys_tables t2 WHERE t1.table_id = t2.table_id AND t2.name LIKE "%child" ORDER BY t1.name;
-SELECT NAME FROM information_schema.INNODB_SYS_TABLES;
+SELECT NAME FROM information_schema.INNODB_SYS_TABLES WHERE NAME not like 'sys\/%';
 
 SHOW CREATE TABLE child;
 
@@ -332,7 +335,7 @@ ALGORITHM = INPLACE;
 SELECT * from information_schema.INNODB_SYS_FOREIGN;
 SELECT * from information_schema.INNODB_SYS_FOREIGN_COLS;
 SELECT t2.name, t1.name FROM information_schema.innodb_sys_columns t1, information_schema.innodb_sys_tables t2 WHERE t1.table_id = t2.table_id AND t2.name LIKE "%child" ORDER BY t1.name;
-SELECT NAME FROM information_schema.INNODB_SYS_TABLES;
+SELECT NAME FROM information_schema.INNODB_SYS_TABLES WHERE NAME not like 'sys\/%';
 
 SHOW CREATE TABLE child;
 
@@ -481,3 +484,34 @@ SELECT * FROM INFORMATION_SCHEMA.INNODB_SYS_FOREIGN_COLS;
 DROP TABLE t2;
 
 DROP TABLE t3;
+
+--echo # Bug #17449901	 TABLE DISAPPEARS WHEN ALTERING
+--echo # WITH FOREIGN KEY CHECKS OFF
+
+# Drop index via inplace algorithm
+create table t1(f1 int,primary key(f1))engine=innodb;
+create table t2(f2 int,f3 int,key t(f2,f3),foreign key(f2) references t1(f1))engine=innodb;
+SET foreign_key_checks=0;
+--error ER_DROP_INDEX_FK
+drop index t on t2;
+drop table t2;
+drop table t1;
+
+# Drop index using alter statement via inplace
+create table t1(f1 int ,primary key(f1))engine=innodb;
+create table t2(f2 int,f3 int, key t(f2),foreign key(f2) references t1(f1))engine=innodb;
+SET foreign_key_checks = 0;
+--error ER_DROP_INDEX_FK
+alter table t2 drop key t,algorithm=inplace;
+show create table t2;
+drop table t2;
+drop table t1;
+
+create table t1(f1 int ,primary key(f1))engine=innodb;
+create table t2(f2 int,f3 int, key t(f2),key t1(f2,f3),
+foreign key(f2) references t1(f1))engine=innodb;
+SET foreign_key_checks = 0;
+alter table t2 drop key t,algorithm=inplace;
+show create table t2;
+drop table t2;
+drop table t1;

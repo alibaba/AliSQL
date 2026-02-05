@@ -1,13 +1,20 @@
-/* Copyright (c) 2008, 2014, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
@@ -16,13 +23,41 @@
 #ifndef REPLICATION_H
 #define REPLICATION_H
 
-#include <mysql.h>
+#include "my_global.h"
+#include "my_thread_local.h"          // my_thread_id
+#include "mysql/psi/mysql_thread.h"   // mysql_mutex_t
+#include "handler.h"  // enum_tx_isolation
+#include "rpl_context.h"  // enum_rpl_channel_type
 
 typedef struct st_mysql MYSQL;
+typedef struct st_io_cache IO_CACHE;
+
+#ifdef __cplusplus
+class THD;
+#define MYSQL_THD THD*
+#else
+#define MYSQL_THD void*
+#endif
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/**
+  Struct to share server ssl variables
+*/
+struct st_server_ssl_variables
+{
+  bool have_ssl_opt;
+  char *ssl_ca;
+  char *ssl_capath;
+  char *tls_version;
+  char *ssl_cert;
+  char *ssl_cipher;
+  char *ssl_key;
+  char *ssl_crl;
+  char *ssl_crlpath;
+};
 
 /**
    Transaction observer flags.
@@ -33,10 +68,65 @@ enum Trans_flags {
 };
 
 /**
+ This represents table metadata involved in a transaction
+ */
+typedef struct Trans_table_info {
+  const char* table_name;
+  uint number_of_primary_keys;
+  /// The db_type of the storage engine used by the table
+  int db_type;
+  /// information to store if the table has foreign key with 'CASCADE' clause.
+  bool has_cascade_foreign_key;
+} Trans_table_info;
+
+/**
+  This represents some of the context in which a transaction is running
+  It summarizes all necessary requirements for Group Replication to work.
+
+  These requirements might be extracted in two different moments in time, and,
+  as such, with different contexts:
+  - Startup verifications, that are extracted when Group Replication starts,
+    and typically from global vars.
+  - Runtime verifications, that are extracted when a transaction is running. It
+    it typically from session THD vars or from mutable global vars.
+
+  Please refer to the place where information is extracted for more details
+  about it.
+ */
+typedef struct Trans_context_info {
+  bool  binlog_enabled;
+  ulong gtid_mode;               //enum values in enum_gtid_mode
+  bool log_slave_updates;
+  ulong binlog_checksum_options; //enum values in enum enum_binlog_checksum_alg
+  ulong binlog_format;           //enum values in enum enum_binlog_format
+  // enum values in enum_transaction_write_set_hashing_algorithm
+  ulong transaction_write_set_extraction;
+  ulong mi_repository_type;     //enum values in enum_info_repository
+  ulong rli_repository_type;    //enum values in enum_info_repository
+  // enum values in enum_mts_parallel_type
+  ulong parallel_applier_type;
+  ulong parallel_applier_workers;
+  bool parallel_applier_preserve_commit_order;
+  enum_tx_isolation tx_isolation;  // enum values in enum_tx_isolation
+  uint lower_case_table_names;
+} Trans_context_info;
+
+/**
+  This represents the GTID context of the transaction.
+ */
+typedef struct Trans_gtid_info {
+  ulong type;                    // enum values in enum_group_type
+  int sidno;                     // transaction sidno
+  long long int gno;             // transaction gno
+} Trans_gtid_info;
+
+/**
    Transaction observer parameter
 */
 typedef struct Trans_param {
   uint32 server_id;
+  const char *server_uuid;
+  my_thread_id thread_id;
   uint32 flags;
 
   /*
@@ -48,7 +138,39 @@ typedef struct Trans_param {
   */
   const char *log_file;
   my_off_t log_pos;
+
+  /*
+    Transaction GTID information.
+  */
+  Trans_gtid_info gtid_info;
+
+  /*
+    Set on before_commit hook.
+  */
+  IO_CACHE *trx_cache_log;
+  IO_CACHE *stmt_cache_log;
+  ulonglong cache_log_max_size;
+
+  /*
+   This is the list of tables that are involved in this transaction and its
+   information
+   */
+  Trans_table_info* tables_info;
+  uint number_of_tables;
+
+  /*
+   Context information about system variables in the transaction
+   */
+  Trans_context_info trans_ctx_info;
+
+  /** Replication channel info associated to this transaction/THD */
+  enum_rpl_channel_type rpl_channel_type;
 } Trans_param;
+
+/**
+   Transaction observer parameter initialization.
+*/
+#define TRANS_PARAM_ZERO(trans_param_obj) memset(&trans_param_obj, 0, sizeof(Trans_param));
 
 /**
    Observes and extends transaction execution
@@ -56,9 +178,36 @@ typedef struct Trans_param {
 typedef struct Trans_observer {
   uint32 len;
 
+  int (*before_dml)(Trans_param *param, int& out_val);
+
+  /**
+     This callback is called before transaction commit
+
+     This callback is called right before write binlog cache to
+     binary log.
+
+     @param param The parameter for transaction observers
+
+     @retval 0 Sucess
+     @retval 1 Failure
+  */
+  int (*before_commit)(Trans_param *param);
+
+  /**
+     This callback is called before transaction rollback
+
+     This callback is called before rollback to storage engines.
+
+     @param param The parameter for transaction observers
+
+     @retval 0 Sucess
+     @retval 1 Failure
+  */
+  int (*before_rollback)(Trans_param *param);
+
   /**
      This callback is called after transaction commit
-     
+
      This callback is called right after commit to storage engines for
      transactional tables.
 
@@ -103,6 +252,84 @@ enum Binlog_storage_flags {
   BINLOG_STORAGE_IS_SYNCED = 1
 };
 
+typedef struct Server_state_param {
+  uint32 server_id;
+} Server_state_param;
+
+/**
+  Observer server state
+ */
+typedef struct Server_state_observer {
+  uint32 len;
+
+  /**
+    This is called just before the server is ready to accept the client
+    connections to the Server/Node. It marks the possible point where the
+    server can be said to be ready to serve client queries.
+
+    @param[in]  param Observer common parameter
+
+    @retval 0 Success
+    @retval >0 Failure
+  */
+  int (*before_handle_connection)(Server_state_param *param);
+
+  /**
+    This callback is called before the start of the recovery
+
+    @param[in]  param Observer common parameter
+
+    @retval 0 Success
+    @retval >0 Failure
+  */
+  int (*before_recovery)(Server_state_param *param);
+
+  /**
+    This callback is called after the end of the engine recovery.
+
+    This is called before the start of the recovery procedure ie.
+    the engine recovery.
+
+    @param[in]  param Observer common parameter
+
+    @retval 0 Success
+    @retval >0 Failure
+  */
+  int (*after_engine_recovery)(Server_state_param *param);
+
+  /**
+    This callback is called after the end of the recovery procedure.
+
+    @param[in]  param Observer common parameter
+
+    @retval 0 Success
+    @retval >0 Failure
+  */
+  int (*after_recovery)(Server_state_param *param);
+
+  /**
+    This callback is called before the start of the shutdown procedure.
+    Can be useful to initiate some cleanup operations in some cases.
+
+    @param[in]  param Observer common parameter
+
+    @retval 0 Success
+    @retval >0 Failure
+  */
+  int (*before_server_shutdown)(Server_state_param *param);
+
+  /**
+    This callback is called after the end of the shutdown procedure.
+    Can be used as a checkpoint of the proper cleanup operations in some cases.
+
+    @param[in]  param Observer common parameter
+
+    @retval 0 Success
+    @retval >0 Failure
+  */
+  int (*after_server_shutdown)(Server_state_param *param);
+} Server_state_observer;
+
 /**
    Binlog storage observer parameters
  */
@@ -130,6 +357,8 @@ typedef struct Binlog_storage_observer {
      @retval 1 Failure
   */
   int (*after_flush)(Binlog_storage_param *param,
+                     const char *log_file, my_off_t log_pos);
+  int (*after_sync)(Binlog_storage_param *param,
                      const char *log_file, my_off_t log_pos);
 } Binlog_storage_observer;
 
@@ -163,7 +392,7 @@ typedef struct Binlog_transmit_param {
 */
 typedef struct Binlog_transmit_observer {
   uint32 len;
-  
+
   /**
      This callback is called when binlog dumping starts
 
@@ -182,7 +411,7 @@ typedef struct Binlog_transmit_observer {
      This callback is called when binlog dumping stops
 
      @param param Observer common parameter
-     
+
      @retval 0 Sucess
      @retval 1 Failure
   */
@@ -275,6 +504,10 @@ enum Binlog_relay_IO_flags {
 */
 typedef struct Binlog_relay_IO_param {
   uint32 server_id;
+  my_thread_id thread_id;
+
+  /* Channel name */
+  char* channel_name;
 
   /* Master host, user and port */
   char *host;
@@ -312,6 +545,28 @@ typedef struct Binlog_relay_IO_observer {
      @retval 1 Failure
   */
   int (*thread_stop)(Binlog_relay_IO_param *param);
+
+  /**
+    This callback is called when a relay log consumer thread starts
+
+    @param param Observer common parameter
+
+    @retval 0 Sucess
+    @retval 1 Failure
+  */
+  int (*applier_start)(Binlog_relay_IO_param *param);
+
+  /**
+     This callback is called when a relay log consumer thread stops
+
+     @param param   Observer common parameter
+     @param aborted thread aborted or exited on error
+
+
+     @retval 0 Sucess
+     @retval 1 Failure
+  */
+  int (*applier_stop)(Binlog_relay_IO_param *param, bool aborted);
 
   /**
      This callback is called before slave requesting binlog transmission from master
@@ -360,7 +615,7 @@ typedef struct Binlog_relay_IO_observer {
 
   /**
      This callback is called after reset slave relay log IO status
-     
+
      @param param Observer common parameter
 
      @retval 0 Sucess
@@ -437,6 +692,28 @@ int register_binlog_transmit_observer(Binlog_transmit_observer *observer, void *
 int unregister_binlog_transmit_observer(Binlog_transmit_observer *observer, void *p);
 
 /**
+   Register a server state observer
+
+   @param observer The server state observer to register
+   @param p pointer to the internal plugin structure
+
+   @retval 0 Success
+   @retval 1 Observer already exists
+*/
+int register_server_state_observer(Server_state_observer *observer, void *p);
+
+/**
+   Unregister a server state observer
+
+   @param observer The server state observer to unregister
+   @param p pointer to the internal plugin structure
+
+   @retval 0 Success
+   @retval 1 Observer not exists
+*/
+int unregister_server_state_observer(Server_state_observer *observer, void *p);
+
+/**
    Register a binlog relay IO (slave IO thread) observer
 
    @param observer The binlog relay IO observer to register
@@ -475,7 +752,7 @@ int unregister_binlog_relay_io_observer(Binlog_relay_IO_observer *observer, void
    @param src_file The caller source file name
    @param src_line The caller source line number
 */
-void thd_enter_cond(MYSQL_THD thd, mysql_cond_t *cond, mysql_mutex_t *mutex,
+void thd_enter_cond(void *opaque_thd, mysql_cond_t *cond, mysql_mutex_t *mutex,
                     const PSI_stage_info *stage, PSI_stage_info *old_stage,
                     const char *src_function, const char *src_file,
                     int src_line);
@@ -496,7 +773,7 @@ void thd_enter_cond(MYSQL_THD thd, mysql_cond_t *cond, mysql_mutex_t *mutex,
    @param src_file The caller source file name
    @param src_line The caller source line number
 */
-void thd_exit_cond(MYSQL_THD thd, const PSI_stage_info *stage,
+void thd_exit_cond(void *opaque_thd, const PSI_stage_info *stage,
                    const char *src_function, const char *src_file,
                    int src_line);
 
@@ -560,7 +837,6 @@ int get_user_var_str(const char *name,
                      char *value, unsigned long len,
                      unsigned int precision, int *null_value);
 
-  
 
 #ifdef __cplusplus
 }

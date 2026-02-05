@@ -1,0 +1,115 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+#
+# Test: create tables with a name containing only digits.
+#
+DROP DATABASE IF EXISTS `001test_db`;
+CREATE DATABASE `001test_db`;
+USE  `001test_db`;
+CREATE TABLE t (`000000000000000000000` bigint NOT NULL DEFAULT '0' ) ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb3;
+INSERT INTO t VALUES (1),(2),(3);
+SELECT schema_name FROM information_schema.schemata WHERE schema_name = '001test_db';
+schema_name
+001test_db
+SHOW CREATE TABLE `001test_db`.t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `000000000000000000000` bigint(20) NOT NULL DEFAULT '0'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8
+SELECT * FROM `001test_db`.t;
+000000000000000000000
+1
+2
+3
+include/rpl_sync.inc
+[connection slave]
+SELECT schema_name FROM information_schema.schemata WHERE schema_name = '001test_db';
+schema_name
+001test_db
+SHOW CREATE TABLE `001test_db`.t;
+Table	Create Table
+t	CREATE TABLE `t` (
+  `000000000000000000000` bigint(20) NOT NULL DEFAULT '0'
+) ENGINE=DUCKDB DEFAULT CHARSET=utf8
+SELECT * FROM `001test_db`.t;
+000000000000000000000
+1
+2
+3
+#
+# Test: create tables with a name containing special characters.
+#
+[connection master]
+DROP DATABASE IF EXISTS mydb1;
+CREATE DATABASE mydb1;
+DROP TABLE IF EXISTS mydb1.t;
+DROP TABLE IF EXISTS mydb1.y;
+CREATE TABLE mydb1.t (i INT, d DECIMAL, f FLOAT);
+INSERT INTO mydb1.t VALUES(1,1,1),(2,2,2),(3,3,3);
+CREATE TABLE mydb1.y like mydb1.t;
+INSERT INTO mydb1.y VALUES(3,3,3);
+SHOW CREATE TABLE mydb1.y;
+Table	Create Table
+y	CREATE TABLE `y` (
+  `i` int(11) DEFAULT NULL,
+  `d` decimal(10,0) DEFAULT NULL,
+  `f` float DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8
+SELECT * FROM mydb1.y;
+i	d	f
+3	3	3
+include/rpl_sync.inc
+[connection slave]
+SHOW CREATE TABLE mydb1.y;
+Table	Create Table
+y	CREATE TABLE `y` (
+  `i` int(11) DEFAULT NULL,
+  `d` decimal(10,0) DEFAULT NULL,
+  `f` float DEFAULT NULL
+) ENGINE=DUCKDB DEFAULT CHARSET=utf8
+SELECT * FROM mydb1.y;
+i	d	f
+3	3	3
+[connection master]
+CREATE TABLE mydb1.t6 (a int);
+INSERT INTO mydb1.t6 VALUES (1), (2), (3), (4);
+CREATE VIEW mydb1.v11 AS SELECT a+1 FROM mydb1.t6;
+CREATE TABLE mydb1.t7 like mydb1.t6;
+INSERT INTO mydb1.t7 VALUES (2), (3), (4), (5);
+SHOW CREATE TABLE mydb1.t7;
+Table	Create Table
+t7	CREATE TABLE `t7` (
+  `a` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8
+SELECT * FROM mydb1.t7;
+a
+2
+3
+4
+5
+include/rpl_sync.inc
+[connection slave]
+SHOW CREATE TABLE mydb1.t7;
+Table	Create Table
+t7	CREATE TABLE `t7` (
+  `a` int(11) DEFAULT NULL
+) ENGINE=DUCKDB DEFAULT CHARSET=utf8
+SELECT * FROM mydb1.t7;
+a
+2
+3
+4
+5
+#
+# CLEANUP
+#
+[connection master]
+DROP DATABASE IF EXISTS `001test_db`;
+DROP DATABASE IF EXISTS mydb1;
+[connection master]
+include/rpl_sync.inc
+include/rpl_end.inc

@@ -59,8 +59,10 @@ WHERE constraint_catalog IS NOT NULL;
 constraint_catalog	constraint_schema	constraint_name	table_schema	table_name
 def	mysql	PRIMARY	mysql	columns_priv
 def	mysql	PRIMARY	mysql	db
+def	mysql	PRIMARY	mysql	engine_cost
 def	mysql	PRIMARY	mysql	event
 def	mysql	PRIMARY	mysql	func
+def	mysql	PRIMARY	mysql	gtid_executed
 def	mysql	PRIMARY	mysql	help_category
 def	mysql	name	mysql	help_category
 def	mysql	PRIMARY	mysql	help_keyword
@@ -75,6 +77,7 @@ def	mysql	PRIMARY	mysql	plugin
 def	mysql	PRIMARY	mysql	proc
 def	mysql	PRIMARY	mysql	procs_priv
 def	mysql	PRIMARY	mysql	proxies_priv
+def	mysql	PRIMARY	mysql	server_cost
 def	mysql	PRIMARY	mysql	servers
 def	mysql	PRIMARY	mysql	slave_master_info
 def	mysql	PRIMARY	mysql	slave_relay_log_info
@@ -86,6 +89,7 @@ def	mysql	PRIMARY	mysql	time_zone_name
 def	mysql	PRIMARY	mysql	time_zone_transition
 def	mysql	PRIMARY	mysql	time_zone_transition_type
 def	mysql	PRIMARY	mysql	user
+def	sys	PRIMARY	sys	sys_config
 #########################################################################################
 # Testcase 3.2.7.2 + 3.2.7.3: INFORMATION_SCHEMA.TABLE_CONSTRAINTS accessible information
 #########################################################################################
@@ -115,16 +119,16 @@ def	db_datadict	my_idx2	db_datadict	t1	UNIQUE
 def	db_datadict	PRIMARY	db_datadict	t1	PRIMARY KEY
 def	db_datadict	PRIMARY	db_datadict	t2	PRIMARY KEY
 SHOW INDEXES FROM db_datadict.t1;
-Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible
-t1	0	PRIMARY	1	f1	###	###	###	###	###	###	###		YES
-t1	0	PRIMARY	2	f2	###	###	###	###	###	###	###		YES
-t1	0	my_idx1	1	f6	###	###	###	###	###	###	###		YES
-t1	0	my_idx1	2	f1	###	###	###	###	###	###	###		YES
-t1	0	my_idx2	1	f3	###	###	###	###	###	###	###		YES
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment
+t1	0	PRIMARY	1	f1	###	###	###	###	###	###	###	
+t1	0	PRIMARY	2	f2	###	###	###	###	###	###	###	
+t1	0	my_idx1	1	f6	###	###	###	###	###	###	###	
+t1	0	my_idx1	2	f1	###	###	###	###	###	###	###	
+t1	0	my_idx2	1	f3	###	###	###	###	###	###	###	
 SHOW INDEXES FROM db_datadict.t2;
-Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible
-t2	0	PRIMARY	1	f1	###	###	###	###	###	###	###		YES
-t2	0	PRIMARY	2	f2	###	###	###	###	###	###	###		YES
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment
+t2	0	PRIMARY	1	f1	###	###	###	###	###	###	###	
+t2	0	PRIMARY	2	f2	###	###	###	###	###	###	###	
 # Establish connection testuser1 (user=testuser1)
 SHOW GRANTS FOR 'testuser1'@'localhost';
 Grants for testuser1@localhost
@@ -138,12 +142,12 @@ def	db_datadict	my_idx1	db_datadict	t1	UNIQUE
 def	db_datadict	my_idx2	db_datadict	t1	UNIQUE
 def	db_datadict	PRIMARY	db_datadict	t1	PRIMARY KEY
 SHOW INDEXES FROM db_datadict.t1;
-Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible
-t1	0	PRIMARY	1	f1	###	###	###	###	###	###	###		YES
-t1	0	PRIMARY	2	f2	###	###	###	###	###	###	###		YES
-t1	0	my_idx1	1	f6	###	###	###	###	###	###	###		YES
-t1	0	my_idx1	2	f1	###	###	###	###	###	###	###		YES
-t1	0	my_idx2	1	f3	###	###	###	###	###	###	###		YES
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment
+t1	0	PRIMARY	1	f1	###	###	###	###	###	###	###	
+t1	0	PRIMARY	2	f2	###	###	###	###	###	###	###	
+t1	0	my_idx1	1	f6	###	###	###	###	###	###	###	
+t1	0	my_idx1	2	f1	###	###	###	###	###	###	###	
+t1	0	my_idx2	1	f3	###	###	###	###	###	###	###	
 SHOW INDEXES FROM db_datadict.t2;
 ERROR 42000: SELECT command denied to user 'testuser1'@'localhost' for table 't2'
 # Switch to connection default and close connection testuser1

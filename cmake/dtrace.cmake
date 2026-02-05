@@ -1,61 +1,73 @@
-# Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2009, 2023, Oracle and/or its affiliates.
 # 
 # This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; version 2 of the License.
+# it under the terms of the GNU General Public License, version 2.0,
+# as published by the Free Software Foundation.
+#
+# This program is also distributed with certain software (including
+# but not limited to OpenSSL) that is licensed under separate terms,
+# as designated in a particular file or component or in included license
+# documentation.  The authors of MySQL hereby grant you an additional
+# permission to link the program and your derivative works with the
+# separately licensed software that they have included with MySQL.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# GNU General Public License, version 2.0, for more details.
 #
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA 
 
-IF(CMAKE_SYSTEM_NAME MATCHES "SunOS" AND CMAKE_COMPILER_IS_GNUCXX
-  AND CMAKE_SIZEOF_VOID_P EQUAL 4)
-  IF(NOT DEFINED BUGGY_GCC_NO_DTRACE_MODULES)
-    EXECUTE_PROCESS(
-      COMMAND ${CMAKE_C_COMPILER} ${CMAKE_C_COMPILER_ARG1}  --version
-      OUTPUT_VARIABLE out)
-    IF(out MATCHES "3.4.6")
-     # This gcc causes crashes in dlopen() for dtraced shared libs,
-     # while standard shipped with Solaris10 3.4.3 is ok
-     SET(BUGGY_GCC_NO_DTRACE_MODULES 1 CACHE INTERNAL "")
-    ELSE()
-     SET(BUGGY_GCC_NO_DTRACE_MODULES 0 CACHE INTERNAL "")
-    ENDIF()
-  ENDIF()
-ENDIF()
-
 # Check if OS supports DTrace
 MACRO(CHECK_DTRACE)
- FIND_PROGRAM(DTRACE dtrace)
- MARK_AS_ADVANCED(DTRACE)
+  IF(DEFINED ENABLE_DTRACE AND NOT ENABLE_DTRACE)
+    MESSAGE(STATUS "DTRACE is disabled")
+  ELSE()
+    FIND_PROGRAM(DTRACE dtrace)
+    MARK_AS_ADVANCED(DTRACE)
 
- # On FreeBSD, dtrace does not handle userland tracing yet
- IF(DTRACE AND NOT CMAKE_SYSTEM_NAME MATCHES "FreeBSD"
-     AND NOT BUGGY_GCC_NO_DTRACE_MODULES)
-   SET(ENABLE_DTRACE ON CACHE BOOL "Enable dtrace")
- ENDIF()
- SET(HAVE_DTRACE ${ENABLE_DTRACE})
- EXECUTE_PROCESS(
-   COMMAND ${DTRACE} -V
-   OUTPUT_VARIABLE out)
- IF(out MATCHES "Sun D" OR out MATCHES "Oracle D")
-   IF(NOT CMAKE_SYSTEM_NAME MATCHES "FreeBSD" AND
-      NOT CMAKE_SYSTEM_NAME MATCHES "Darwin")
-     SET(HAVE_REAL_DTRACE_INSTRUMENTING ON CACHE BOOL "Real DTrace detected")
-   ENDIF()
- ENDIF()
- IF(HAVE_REAL_DTRACE_INSTRUMENTING)
-   IF(CMAKE_SIZEOF_VOID_P EQUAL 4)
-     SET(DTRACE_FLAGS -32 CACHE INTERNAL "DTrace architecture flags")
-   ELSE()
-     SET(DTRACE_FLAGS -64 CACHE INTERNAL "DTrace architecture flags")
-   ENDIF()
- ENDIF()
+    IF(DTRACE)
+      EXECUTE_PROCESS(
+        COMMAND ${DTRACE} -V
+        OUTPUT_VARIABLE out)
+      IF(out MATCHES "Sun D" OR out MATCHES "Oracle D")
+        IF(NOT CMAKE_SYSTEM_NAME MATCHES "FreeBSD" AND
+            NOT CMAKE_SYSTEM_NAME MATCHES "Darwin")
+          SET(HAVE_REAL_DTRACE_INSTRUMENTING ON CACHE BOOL "Real DTrace detected")
+        ENDIF()
+      ENDIF()
+    ENDIF()
+
+    # On FreeBSD, dtrace does not handle userland tracing yet
+    IF(DTRACE AND NOT CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
+      # We do not support DTrace 2.0 on Linux
+      IF(LINUX AND HAVE_REAL_DTRACE_INSTRUMENTING)
+        # Break the build if ENABLE_DTRACE set explicitly.
+        IF(DEFINED ENABLE_DTRACE AND ENABLE_DTRACE)
+          MESSAGE(FATAL_ERROR "Found unsupported dtrace at ${DTRACE}\n ${out}")
+        ELSE()
+          MESSAGE(WARNING "Found unsupported dtrace at ${DTRACE}\n ${out}")
+          SET(HAVE_REAL_DTRACE_INSTRUMENTING OFF CACHE BOOL "")
+          SET(ENABLE_DTRACE OFF CACHE BOOL "Enable dtrace")
+        ENDIF()
+      ELSE()
+        SET(ENABLE_DTRACE ON CACHE BOOL "Enable dtrace")
+        MESSAGE(STATUS "DTRACE is enabled")
+      ENDIF()
+    ENDIF()
+    SET(HAVE_DTRACE ${ENABLE_DTRACE})
+
+    IF(HAVE_REAL_DTRACE_INSTRUMENTING)
+      IF(SIZEOF_VOIDP EQUAL 4)
+        SET(DTRACE_FLAGS -32 CACHE INTERNAL "DTrace architecture flags")
+      ELSE()
+        SET(DTRACE_FLAGS -64 CACHE INTERNAL "DTrace architecture flags")
+      ENDIF()
+    ENDIF()
+
+  ENDIF()
 ENDMACRO()
 
 CHECK_DTRACE()
@@ -92,12 +104,6 @@ IF(ENABLE_DTRACE)
 ENDIF()
 
 FUNCTION(DTRACE_INSTRUMENT target)
-  IF(BUGGY_GCC_NO_DTRACE_MODULES)
-    GET_TARGET_PROPERTY(target_type ${target} TYPE)
-    IF(target_type MATCHES "MODULE_LIBRARY")
-      RETURN()
-    ENDIF()
-  ENDIF()
   IF(ENABLE_DTRACE)
     ADD_DEPENDENCIES(${target} gen_dtrace_header)
 
@@ -148,11 +154,10 @@ FUNCTION(DTRACE_INSTRUMENT target)
         # Note: DTrace probes in static libraries are  unusable currently 
         # (see explanation for DTRACE_INSTRUMENT_STATIC_LIBS below)
         # but maybe one day this will be fixed.
-        GET_TARGET_PROPERTY(target_location ${target} LOCATION)
         ADD_CUSTOM_COMMAND(
           TARGET ${target} POST_BUILD
-          COMMAND ${CMAKE_AR} r  ${target_location} ${outfile}
-	  COMMAND ${CMAKE_RANLIB} ${target_location}
+          COMMAND ${CMAKE_AR} r $<TARGET_FILE:${target}> ${outfile}
+          COMMAND ${CMAKE_RANLIB} $<TARGET_FILE:${target}>
           )
         # Used in DTRACE_INSTRUMENT_WITH_STATIC_LIBS
         SET(TARGET_OBJECT_DIRECTORY_${target}  ${objdir} CACHE INTERNAL "")

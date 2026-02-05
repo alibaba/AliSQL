@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -267,8 +274,11 @@ waitForThreads(ThreadData* pt)
     NdbSleep_MilliSleep(100);
     cont = 0;
     for (unsigned int i = 0; i < tNoOfThreads; i++){
-      if (pt[i].threadReady == 0) 
+      if (pt[i].threadReady == 0){ 
+        // Found one thread not yet ready, continue waiting
         cont = 1;
+        break;
+      }
     }
   }
 }
@@ -371,7 +381,7 @@ NDB_COMMAND(flexBench, "flexBench", "flexBench", "flexbench", 65535)
       pThreadsData[i].threadNo = i;
       pThreadsData[i].threadLife = NdbThread_Create(flexBenchThread,
                                                     (void**)&pThreadsData[i],
-                                                    32768,
+                                                    64 * 1024,  // 64K stack
                                                     "flexBenchThread",
                                                     NDB_THREAD_PRIO_LOW);
     }
@@ -652,6 +662,16 @@ static void* flexBenchThread(void* pArg)
   for (int tab= 0; tab<(int)tNoOfTables; tab++)
   {
     const NdbDictionary::Table *table= dict->getTable(tableName[tab]);
+    if (table == NULL)
+    {
+      // This is a fatal error, abort program
+      ndbout << "Failed to find table: " << tableName[tab];
+      ndbout << ", in thread: " << threadNo;
+      ndbout << endl;
+      tResult = 1; // Indicate fatal error
+      break;
+    }
+
     int numPKs= (useLongKeys ? tNoOfLongPK : 1);
 
     /* First create NdbRecord for just the primary key(s). */
@@ -905,7 +925,7 @@ static void* flexBenchThread(void* pArg)
                                                pAttrSet[countTables]);
 	  break;
 	default:
-	  assert(false);
+	  require(false);
 	}//switch
 
 	if (pOps[countTables] == NULL) {
@@ -942,7 +962,7 @@ static void* flexBenchThread(void* pArg)
 	  }//if
 	  break;
 	default:
-	  assert(false);
+	  require(false);
 	}//switch
       }//if
       tSpecialTrans = 0;

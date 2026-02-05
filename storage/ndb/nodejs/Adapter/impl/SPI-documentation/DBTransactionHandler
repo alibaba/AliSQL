@@ -1,0 +1,82 @@
+/*
+   Copyright (c) 2013, 2021, Oracle and/or its affiliates.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License, version 2.0, for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
+
+/* DBTransactionHandler represents a database transaction.
+*/
+
+var DBTransactionHandler; // Standard members of DBTransactionHandler object
+
+
+DBTransactionHandler = { 
+  autocommit         : null,  // Boolean autocommit mode flag
+  dbSession          : null,  // DBSession link for this transaction
+  state              : null,  // DBTransactionState applying to the transaction
+  success            : null,  // Boolean inidcating success with no errors
+  error              : null,  // DBOperationError applying to the transaction
+  userCallback       : null,  // A higher-level callback function 
+  executedOperations : null,  // List of dbOperations already executed
+};
+
+
+/* setPartitionKey(TableHandler Table, Array partitionKey)
+  IMMEDIATE
+  
+  In NDB, setting the partition key causes the NDB API to select a 
+  Transaction Coordinator on the node that would be the primary node
+  for a row with that key.
+*/
+  function setPartitionKey(tableHandler, partitionKey) {}
+
+
+/* execute(DBOperation[] dbOperationList,
+           function(error, DBTransactionHandler) callback)
+   ASYNC
+   
+   Executes the DBOperations in dbOperationList.
+   Commits the transaction if autocommit is true.
+*/
+  function execute(dbOperationList, callback) {}
+
+
+/* commit(function(error, DBTransactionHandler) callback)
+   ASYNC 
+   
+   Commit work.
+*/
+  function commit(callback) {}
+
+
+/* rollback(function(error, DBTransactionHandler) callback)
+   ASYNC 
+   
+   Roll back all previously executed operations.
+*/
+  function rollback(callback) {}
+
+
+
+/* This documentation file is a valid JavaScript module and exports: 
+*/
+exports.DBTransactionHandler =  DBTransactionHandler;
+

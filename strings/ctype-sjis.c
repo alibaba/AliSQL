@@ -1,13 +1,25 @@
-/* Copyright (c) 2000, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -31,7 +43,7 @@
  * .configure. mbmaxlen_sjis=2
  */
 
-static uchar ctype_sjis[257] =
+static const uchar ctype_sjis[257] =
 {
     0,				/* For standard library */
     0040, 0040, 0040, 0040, 0040, 0040, 0040, 0040,	/* NUL ^A - ^G */
@@ -68,7 +80,7 @@ static uchar ctype_sjis[257] =
     0020, 0020, 0020, 0020, 0020, 0000, 0000, 0000
 };
 
-static uchar to_lower_sjis[]=
+static const uchar to_lower_sjis[]=
 {
   '\000','\001','\002','\003','\004','\005','\006','\007',
   '\010','\011','\012','\013','\014','\015','\016','\017',
@@ -104,7 +116,7 @@ static uchar to_lower_sjis[]=
   (uchar) '\370',(uchar) '\371',(uchar) '\372',(uchar) '\373',(uchar) '\374',(uchar) '\375',(uchar) '\376',(uchar) '\377'
 };
 
-static uchar to_upper_sjis[]=
+static const uchar to_upper_sjis[]=
 {
   '\000','\001','\002','\003','\004','\005','\006','\007',
   '\010','\011','\012','\013','\014','\015','\016','\017',
@@ -140,7 +152,7 @@ static uchar to_upper_sjis[]=
   (uchar) '\370',(uchar) '\371',(uchar) '\372',(uchar) '\373',(uchar) '\374',(uchar) '\375',(uchar) '\376',(uchar) '\377'
 };
 
-static uchar sort_order_sjis[]=
+static const uchar sort_order_sjis[]=
 {
   '\000','\001','\002','\003','\004','\005','\006','\007',
   '\010','\011','\012','\013','\014','\015','\016','\017',
@@ -198,7 +210,7 @@ static uint mbcharlen_sjis(const CHARSET_INFO *cs MY_ATTRIBUTE((unused)),
 #define sjiscode(c,d)	((((uint) (uchar)(c)) << 8) | (uint) (uchar) (d))
 
 
-static MY_UNICASE_CHARACTER c81[256]=
+static const MY_UNICASE_CHARACTER c81[256]=
 {
   /* 8100-810F */
   {0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},
@@ -408,7 +420,7 @@ static MY_UNICASE_CHARACTER c81[256]=
 };
 
 
-static MY_UNICASE_CHARACTER c82[256]=
+static const MY_UNICASE_CHARACTER c82[256]=
 {
   /* 8200-820F */
   {0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},
@@ -616,7 +628,7 @@ static MY_UNICASE_CHARACTER c82[256]=
 };
 
 
-static MY_UNICASE_CHARACTER c83[256]=
+static const MY_UNICASE_CHARACTER c83[256]=
 {
   /* 8300-830F */
   {0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},
@@ -826,7 +838,7 @@ static MY_UNICASE_CHARACTER c83[256]=
 };
 
 
-static MY_UNICASE_CHARACTER c84[256]=
+static const MY_UNICASE_CHARACTER c84[256]=
 {
   /* 8400-840F */
   {0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},{0,0,0},
@@ -1036,7 +1048,7 @@ static MY_UNICASE_CHARACTER c84[256]=
 };
 
 
-static MY_UNICASE_CHARACTER *my_caseinfo_pages_sjis[256]=
+static const MY_UNICASE_CHARACTER *my_caseinfo_pages_sjis[256]=
 {
   NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 0 */
   NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
@@ -1164,7 +1176,7 @@ static int my_strnncollsp_sjis(const CHARSET_INFO *cs MY_ATTRIBUTE((unused)),
 
 
 /* SJIS->Unicode conversion table */
-static uint16 sjis_to_unicode[65536]=
+static const uint16 sjis_to_unicode[65536]=
 {
       0x0000,      0x0001,      0x0002,      0x0003, /* 0000 */
       0x0004,      0x0005,      0x0006,      0x0007,
@@ -17554,7 +17566,7 @@ static uint16 sjis_to_unicode[65536]=
 
 
 /* Unicode->SJIS conversion table */
-static uint16 unicode_to_sjis[65536]=
+static const uint16 unicode_to_sjis[65536]=
 {
       0x0000,      0x0001,      0x0002,      0x0003, /* 0000 */
       0x0004,      0x0005,      0x0006,      0x0007,
@@ -34198,7 +34210,8 @@ CHARSET_INFO my_charset_sjis_japanese_ci=
     1,                  /* caseup_multiply  */
     1,                  /* casedn_multiply  */
     1,			/* mbminlen   */
-    2,			/* mbmaxlen */
+    2,			/* mbmaxlen   */
+    1,			/* mbmaxlenlen */
     0,			/* min_sort_char */
     0xFCFC,		/* max_sort_char */
     ' ',                /* pad char      */
@@ -34231,7 +34244,8 @@ CHARSET_INFO my_charset_sjis_bin=
     1,                  /* caseup_multiply  */
     1,                  /* casedn_multiply  */
     1,			/* mbminlen   */
-    2,			/* mbmaxlen */
+    2,			/* mbmaxlen   */
+    1,			/* mbmaxlenlen */
     0,			/* min_sort_char */
     0xFCFC,		/* max_sort_char */
     ' ',                /* pad char      */

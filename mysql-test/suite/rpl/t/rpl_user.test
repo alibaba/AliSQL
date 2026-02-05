@@ -1,19 +1,20 @@
-# BUG#33862 completely failed DROP USER statement gets replicated
+--source include/not_group_replication_plugin.inc
 
+# BUG#33862 completely failed DROP USER statement gets replicated
 --source include/master-slave.inc
 
 #
 # remove all users will be used in the test
 #
 connection master;
-set session sql_log_bin=0; 
+set session sql_log_bin=0;
 delete from mysql.user where Host='fakehost';
-set session sql_log_bin=1; 
+set session sql_log_bin=1;
 
 connection slave;
-set session sql_log_bin=0; 
+set session sql_log_bin=0;
 delete from mysql.user where Host='fakehost';
-set session sql_log_bin=1; 
+set session sql_log_bin=1;
 
 #
 # Test create user
@@ -83,7 +84,7 @@ disconnect must_change_con_slave;
 connect(must_change_con_master,localhost,must_change2,aha);
 connection must_change_con_master;
 --echo # setting a password unlocks it
-SET PASSWORD = PASSWORD('aha2');
+SET PASSWORD = 'aha2';
 connection master;
 disconnect must_change_con_master;
 

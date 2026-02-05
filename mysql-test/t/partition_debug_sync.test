@@ -27,7 +27,6 @@ CREATE TABLE t1
 (a INTEGER,
  b INTEGER NOT NULL,
  KEY (b))
-ENGINE = MYISAM
 /*!50100  PARTITION BY RANGE (a)
 (PARTITION p0 VALUES LESS THAN (2),
  PARTITION p1 VALUES LESS THAN (20),
@@ -63,7 +62,6 @@ CREATE TABLE t2
 (a INTEGER,
  b INTEGER NOT NULL,
  KEY (b))
-ENGINE = MYISAM
 /*!50100  PARTITION BY RANGE (a)
 (PARTITION p0 VALUES LESS THAN (2),
  PARTITION p1 VALUES LESS THAN (20),
@@ -96,22 +94,23 @@ SET DEBUG_SYNC= 'RESET';
 --echo #
 --echo # Coverage test for non pruned ha_partition::store_lock()
 --echo #
-CREATE TABLE t1 (a int) ENGINE = InnoDB;
+--echo # Use MyISAM tables as InnoDB no longer relies on THR_LOCK locks.
+CREATE TABLE t1 (a int) ENGINE = MyISAM;
 CREATE TABLE t2 (a int PRIMARY KEY)
-ENGINE = InnoDB PARTITION BY HASH (a) PARTITIONS 3;
+ENGINE = MyISAM PARTITION BY HASH (a) PARTITIONS 3;
 
 HANDLER t1 OPEN;
 
 --echo # Con1
 connect (con1, localhost, root,,);
 
-LOCK TABLES t1 WRITE, t2 READ;
+LOCK TABLES t1 WRITE, t2 READ LOCAL;
 
 --echo # Default
 connection default;
 
 SET DEBUG_SYNC="wait_for_lock SIGNAL locking";
-send INSERT INTO t2 VALUES (1), (2), (3);
+send UPDATE t2 SET a=1;
 
 --echo # Con1
 connection con1;
@@ -136,4 +135,97 @@ UNLOCK TABLES;
 --echo # Default
 connection default;
 
+DROP TABLE t1, t2;
+
+
+--echo #
+--echo # Test Auto increment generation and release of overbooked values.
+--echo #
+CREATE TABLE t1 (a SERIAL) ENGINE = InnoDB
+PARTITION BY KEY ALGORITHM = 1 () PARTITIONS 3;
+INSERT INTO t1 VALUES (10);
+SET DEBUG_SYNC="release_auto_increment SIGNAL auto_inc_held WAIT_FOR release";
+send INSERT INTO t1 VALUES (3), (NULL), (4);
+
+--echo # Con1
+connect (con1, localhost, root,,);
+SET DEBUG_SYNC="now WAIT_FOR auto_inc_held";
+INSERT INTO t1 VALUES (5);
+--echo # Not really a bug, since no row has been assigned the number between
+--echo # this and the next auto_inc value.
+SELECT AUTO_INCREMENT FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 't1';
+SET DEBUG_SYNC="now SIGNAL release";
+
+--echo # Default
+connection default;
+--echo # Reaping INSERT INTO t1 VALUES (3), (NULL), (4);
+reap;
+SELECT AUTO_INCREMENT FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 't1';
+
+--echo # Test with generating an auto inc value in Con1
+TRUNCATE TABLE t1;
+INSERT INTO t1 VALUES (10);
+SET DEBUG_SYNC="release_auto_increment SIGNAL auto_inc_held WAIT_FOR release";
+send INSERT INTO t1 VALUES (3), (NULL), (4);
+
+--echo # Con1
+connection con1;
+SET DEBUG_SYNC="now WAIT_FOR auto_inc_held";
+INSERT INTO t1 VALUES (NULL);
+--echo # Not really a bug, since no row has been assigned the number between
+--echo # this and the next auto_inc value.
+SELECT AUTO_INCREMENT FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 't1';
+SET DEBUG_SYNC="now SIGNAL release";
+
+--echo # Default
+connection default;
+--echo # Reaping INSERT INTO t1 VALUES (3), (NULL), (4);
+reap;
+SELECT AUTO_INCREMENT FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 't1';
+
+--echo #
+--echo # Test with INSERT SELECT
+--echo #
+TRUNCATE TABLE t1;
+CREATE TABLE t2 (a INT);
+INSERT INTO t1 VALUES (10);
+INSERT INTO t2 VALUES (3), (NULL), (4);
+SET DEBUG_SYNC="release_auto_increment SIGNAL auto_inc_held WAIT_FOR release";
+send INSERT INTO t1 SELECT * FROM t2;
+
+--echo # Con1
+connection con1;
+SET DEBUG_SYNC="now WAIT_FOR auto_inc_held";
+INSERT INTO t1 VALUES (5);
+SELECT AUTO_INCREMENT FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 't1';
+SET DEBUG_SYNC="now SIGNAL release";
+
+--echo # Default
+connection default;
+--echo # Reaping: INSERT INTO t1 SELECT * FROM t2;
+reap;
+SELECT AUTO_INCREMENT FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 't1';
+
+--echo # Test with generating an auto inc value in Con1
+TRUNCATE TABLE t1;
+INSERT INTO t1 VALUES (10);
+SET DEBUG_SYNC="release_auto_increment SIGNAL auto_inc_held WAIT_FOR release";
+send INSERT INTO t1 SELECT * FROM t2;
+
+--echo # Con1
+connection con1;
+SET DEBUG_SYNC="now WAIT_FOR auto_inc_held";
+INSERT INTO t1 VALUES (NULL);
+--echo # Not really a bug, since no row has been assigned the number between
+--echo # this and the next auto_inc value.
+SELECT AUTO_INCREMENT FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 't1';
+SET DEBUG_SYNC="now SIGNAL release";
+
+--echo # Default
+connection default;
+--echo # Reaping: INSERT INTO t1 SELECT * FROM t2;
+reap;
+SELECT AUTO_INCREMENT FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 't1';
+
+disconnect con1;
 DROP TABLE t1, t2;

@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2004, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2004, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -27,6 +34,7 @@
 #include <ndb_internal.hpp>
 #include <ndb_logevent.h>
 #include "../src/ndbapi/NdbDictionaryImpl.hpp"
+#include "../ndb_lib_move_data.hpp"
 
 #define NDB_ANYVALUE_FOR_NOLOGGING 0x8000007f
 
@@ -216,6 +224,287 @@ BackupRestore::convert_integral(const void * source,
   return target;
 }
 
+static uint
+truncate_fraction(uint f, uint n_old, uint n_new, bool& truncated)
+{
+  static const uint pow10[1 + 6] = {
+    1, 10, 100, 1000, 10000, 100000, 1000000
+  };
+  assert(n_old <= 6 && n_new <= 6);
+  if (n_old <= n_new)
+    return f;
+  uint k = n_old - n_new;
+  uint n = pow10[k];
+  uint g = f / n;
+  if (g * n != f)
+    truncated = true;
+  return g;
+}
+
+void *
+BackupRestore::convert_time_time2(const void * source,
+                                  void * target,
+                                  bool & truncated)
+{
+  if (!source || !target)
+    return NULL;
+
+  const uchar* s = (const uchar*)source;
+  char_n_padding_struct* t = (char_n_padding_struct*)target;
+  assert(t->n_old == 0 && t->n_new <= 6);
+
+  NdbSqlUtil::Time ss;
+  NdbSqlUtil::Time2 ts;
+  truncated = false;
+
+  NdbSqlUtil::unpack_time(ss, s);
+
+  ts.sign = ss.sign;
+  ts.interval = 0;
+  ts.hour = ss.hour;
+  ts.minute = ss.minute;
+  ts.second = ss.second;
+  ts.fraction = 0;
+  NdbSqlUtil::pack_time2(ts, (uchar*)t->new_row, t->n_new);
+
+  return t->new_row;
+}
+
+void *
+BackupRestore::convert_time2_time(const void * source,
+                                  void * target,
+                                  bool & truncated)
+{
+  if (!source || !target)
+    return NULL;
+
+  const uchar* s = (const uchar*)source;
+  char_n_padding_struct* t = (char_n_padding_struct*)target;
+  assert(t->n_old <= 6 && t->n_new == 0);
+
+  NdbSqlUtil::Time2 ss;
+  NdbSqlUtil::Time ts;
+  truncated = false;
+
+  NdbSqlUtil::unpack_time2(ss, s, t->n_old);
+  if (ss.fraction != 0)
+    truncated = true;
+
+  ts.sign = ss.sign;
+  ts.hour = ss.hour;
+  ts.minute = ss.minute;
+  ts.second = ss.second;
+  NdbSqlUtil::pack_time(ts, (uchar*)t->new_row);
+
+  return t->new_row;
+}
+
+void *
+BackupRestore::convert_time2_time2(const void * source,
+                                   void * target,
+                                   bool & truncated)
+{
+  if (!source || !target)
+    return NULL;
+
+  const uchar* s = (const uchar*)source;
+  char_n_padding_struct* t = (char_n_padding_struct*)target;
+  assert(t->n_old <= 6 && t->n_new <= 6);
+
+  NdbSqlUtil::Time2 ss;
+  NdbSqlUtil::Time2 ts;
+  truncated = false;
+
+  NdbSqlUtil::unpack_time2(ss, s, t->n_old);
+  uint fraction = truncate_fraction(ss.fraction,
+                                    t->n_old, t->n_new, truncated);
+
+  ts.sign = ss.sign;
+  ts.interval = ss.interval;
+  ts.hour = ss.hour;
+  ts.minute = ss.minute;
+  ts.second = ss.second;
+  ts.fraction = fraction;
+  NdbSqlUtil::pack_time2(ts, (uchar*)t->new_row, t->n_new);
+
+  return t->new_row;
+}
+
+void *
+BackupRestore::convert_datetime_datetime2(const void * source,
+                                          void * target,
+                                          bool & truncated)
+{
+  if (!source || !target)
+    return NULL;
+
+  const uchar* s = (const uchar*)source;
+  char_n_padding_struct* t = (char_n_padding_struct*)target;
+  assert(t->n_old == 0 && t->n_new <= 6);
+
+  NdbSqlUtil::Datetime ss;
+  NdbSqlUtil::Datetime2 ts;
+  truncated = false;
+
+  NdbSqlUtil::unpack_datetime(ss, s);
+
+  ts.sign = 1;
+  ts.year = ss.year;
+  ts.month = ss.month;
+  ts.day = ss.day;
+  ts.hour = ss.hour;
+  ts.minute = ss.minute;
+  ts.second = ss.second;
+  ts.fraction = 0;
+  NdbSqlUtil::pack_datetime2(ts, (uchar*)t->new_row, t->n_new);
+
+  return t->new_row;
+}
+
+void *
+BackupRestore::convert_datetime2_datetime(const void * source,
+                                          void * target,
+                                          bool & truncated)
+{
+  if (!source || !target)
+    return NULL;
+
+  const uchar* s = (const uchar*)source;
+  char_n_padding_struct* t = (char_n_padding_struct*)target;
+  assert(t->n_old <= 6 && t->n_new == 0);
+
+  NdbSqlUtil::Datetime2 ss;
+  NdbSqlUtil::Datetime ts;
+  truncated = false;
+
+  NdbSqlUtil::unpack_datetime2(ss, s, t->n_old);
+  if (ss.fraction != 0)
+    truncated = true;
+  if (ss.sign != 1) // should not happen
+    truncated = true;
+
+  ts.year = ss.year;
+  ts.month = ss.month;
+  ts.day = ss.day;
+  ts.hour = ss.hour;
+  ts.minute = ss.minute;
+  ts.second = ss.second;
+  NdbSqlUtil::pack_datetime(ts, (uchar*)t->new_row);
+
+  return t->new_row;
+}
+
+void *
+BackupRestore::convert_datetime2_datetime2(const void * source,
+                                           void * target,
+                                           bool & truncated)
+{
+  if (!source || !target)
+    return NULL;
+
+  const uchar* s = (const uchar*)source;
+  char_n_padding_struct* t = (char_n_padding_struct*)target;
+  assert(t->n_old <= 6 && t->n_new <= 6);
+
+  NdbSqlUtil::Datetime2 ss;
+  NdbSqlUtil::Datetime2 ts;
+  truncated = false;
+
+  NdbSqlUtil::unpack_datetime2(ss, s, t->n_old);
+  uint fraction = truncate_fraction(ss.fraction,
+                                    t->n_old, t->n_new, truncated);
+
+  ts.sign = ss.sign;
+  ts.year = ss.year;
+  ts.month = ss.month;
+  ts.day = ss.day;
+  ts.hour = ss.hour;
+  ts.minute = ss.minute;
+  ts.second = ss.second;
+  ts.fraction = fraction;
+  NdbSqlUtil::pack_datetime2(ts, (uchar*)t->new_row, t->n_new);
+
+  return t->new_row;
+}
+
+void *
+BackupRestore::convert_timestamp_timestamp2(const void * source,
+                                            void * target,
+                                            bool & truncated)
+{
+  if (!source || !target)
+    return NULL;
+
+  const uchar* s = (const uchar*)source;
+  char_n_padding_struct* t = (char_n_padding_struct*)target;
+  assert(t->n_old == 0 && t->n_new <= 6);
+
+  NdbSqlUtil::Timestamp ss;
+  NdbSqlUtil::Timestamp2 ts;
+  truncated = false;
+
+  NdbSqlUtil::unpack_timestamp(ss, s);
+
+  ts.second = ss.second;
+  ts.fraction = 0;
+  NdbSqlUtil::pack_timestamp2(ts, (uchar*)t->new_row, t->n_new);
+
+  return t->new_row;
+}
+
+void *
+BackupRestore::convert_timestamp2_timestamp(const void * source,
+                                            void * target,
+                                            bool & truncated)
+{
+  if (!source || !target)
+    return NULL;
+
+  const uchar* s = (const uchar*)source;
+  char_n_padding_struct* t = (char_n_padding_struct*)target;
+  assert(t->n_old <= 6 && t->n_new == 0);
+
+  NdbSqlUtil::Timestamp2 ss;
+  NdbSqlUtil::Timestamp ts;
+  truncated = false;
+
+  NdbSqlUtil::unpack_timestamp2(ss, s, t->n_old);
+  if (ss.fraction != 0)
+    truncated = true;
+
+  ts.second = ss.second;
+  NdbSqlUtil::pack_timestamp(ts, (uchar*)t->new_row);
+
+  return t->new_row;
+}
+
+void *
+BackupRestore::convert_timestamp2_timestamp2(const void * source,
+                                             void * target,
+                                             bool & truncated)
+{
+  if (!source || !target)
+    return NULL;
+
+  const uchar* s = (const uchar*)source;
+  char_n_padding_struct* t = (char_n_padding_struct*)target;
+  assert(t->n_old <= 6 && t->n_new <= 6);
+
+  NdbSqlUtil::Timestamp2 ss;
+  NdbSqlUtil::Timestamp2 ts;
+  truncated = false;
+
+  NdbSqlUtil::unpack_timestamp2(ss, s, t->n_old);
+  uint fraction = truncate_fraction(ss.fraction,
+                                    t->n_old, t->n_new, truncated);
+
+  ts.second = ss.second;
+  ts.fraction = fraction;
+  NdbSqlUtil::pack_timestamp2(ts, (uchar*)t->new_row, t->n_new);
+
+  return t->new_row;
+}
+
 // ----------------------------------------------------------------------
 // conversion rules
 // ----------------------------------------------------------------------
@@ -265,6 +554,67 @@ BackupRestore::m_allowed_promotion_attrs[] = {
    convert_array< Hlongvarbinary, Hvarbinary >},
   {NDBCOL::Longvarbinary,  NDBCOL::Longvarbinary,  check_compat_sizes,
    convert_array< Hlongvarbinary, Hlongvarbinary >},
+
+  // char to binary promotions/demotions
+  {NDBCOL::Char,           NDBCOL::Binary,         check_compat_char_binary,
+   convert_array< Hchar, Hbinary >},
+  {NDBCOL::Char,           NDBCOL::Varbinary,      check_compat_char_binary,
+   convert_array< Hchar, Hvarbinary >},
+  {NDBCOL::Char,           NDBCOL::Longvarbinary,  check_compat_char_binary,
+   convert_array< Hchar, Hlongvarbinary >},
+  {NDBCOL::Varchar,        NDBCOL::Binary,         check_compat_char_binary,
+   convert_array< Hvarchar, Hbinary >},
+  {NDBCOL::Varchar,        NDBCOL::Varbinary,      check_compat_char_binary,
+   convert_array< Hvarchar, Hvarbinary >},
+  {NDBCOL::Varchar,        NDBCOL::Longvarbinary,  check_compat_char_binary,
+   convert_array< Hvarchar, Hlongvarbinary >},
+  {NDBCOL::Longvarchar,    NDBCOL::Binary,         check_compat_char_binary,
+   convert_array< Hlongvarchar, Hbinary >},
+  {NDBCOL::Longvarchar,    NDBCOL::Varbinary,      check_compat_char_binary,
+   convert_array< Hlongvarchar, Hvarbinary >},
+  {NDBCOL::Longvarchar,    NDBCOL::Longvarbinary,  check_compat_char_binary,
+   convert_array< Hlongvarchar, Hlongvarbinary >},
+
+  // binary to char promotions/demotions
+  {NDBCOL::Binary,         NDBCOL::Char,           check_compat_char_binary,
+   convert_array< Hbinary, Hchar >},
+  {NDBCOL::Binary,         NDBCOL::Varchar,        check_compat_char_binary,
+   convert_array< Hbinary, Hvarchar >},
+  {NDBCOL::Binary,         NDBCOL::Longvarchar,    check_compat_char_binary,
+   convert_array< Hbinary, Hlongvarchar >},
+  {NDBCOL::Varbinary,      NDBCOL::Char,           check_compat_char_binary,
+   convert_array< Hvarbinary, Hchar >},
+  {NDBCOL::Varbinary,      NDBCOL::Varchar,        check_compat_char_binary,
+   convert_array< Hvarbinary, Hvarchar >},
+  {NDBCOL::Varbinary,      NDBCOL::Longvarchar,    check_compat_char_binary,
+   convert_array< Hvarbinary, Hlongvarchar >},
+  {NDBCOL::Longvarbinary,  NDBCOL::Char,           check_compat_char_binary,
+   convert_array< Hlongvarbinary, Hchar >},
+  {NDBCOL::Longvarbinary,  NDBCOL::Varchar,        check_compat_char_binary,
+   convert_array< Hlongvarbinary, Hvarchar >},
+  {NDBCOL::Longvarbinary,  NDBCOL::Longvarchar,    check_compat_char_binary,
+   convert_array< Hlongvarbinary, Hlongvarchar >},
+ 
+  // char to text promotions (uses staging table)
+  {NDBCOL::Char,           NDBCOL::Text,           check_compat_char_to_text,
+   NULL},
+  {NDBCOL::Varchar,        NDBCOL::Text,           check_compat_char_to_text,
+   NULL},
+  {NDBCOL::Longvarchar,    NDBCOL::Text,           check_compat_char_to_text,
+   NULL},
+ 
+  // text to char promotions (uses staging table)
+  {NDBCOL::Text,           NDBCOL::Char,           check_compat_text_to_char,
+   NULL},
+  {NDBCOL::Text,           NDBCOL::Varchar,        check_compat_text_to_char,
+   NULL},
+  {NDBCOL::Text,           NDBCOL::Longvarchar,    check_compat_text_to_char,
+   NULL},
+
+  // text to text promotions (uses staging table)
+  // required when part lengths of text columns are not equal 
+  {NDBCOL::Text,           NDBCOL::Text,           check_compat_text_to_text,
+   NULL},
 
   // integral promotions
   {NDBCOL::Tinyint,        NDBCOL::Smallint,       check_compat_promotion,
@@ -456,6 +806,26 @@ BackupRestore::m_allowed_promotion_attrs[] = {
   {NDBCOL::Bigunsigned,    NDBCOL::Int,            check_compat_lossy,
    convert_integral< Huint64, Hint32>},
 
+  // times with fractional seconds
+  {NDBCOL::Time,           NDBCOL::Time2,          check_compat_precision,
+   convert_time_time2},
+  {NDBCOL::Time2,          NDBCOL::Time,           check_compat_precision,
+   convert_time2_time},
+  {NDBCOL::Time2,          NDBCOL::Time2,          check_compat_precision,
+   convert_time2_time2},
+  {NDBCOL::Datetime,       NDBCOL::Datetime2,      check_compat_precision,
+   convert_datetime_datetime2},
+  {NDBCOL::Datetime2,      NDBCOL::Datetime,       check_compat_precision,
+   convert_datetime2_datetime},
+  {NDBCOL::Datetime2,      NDBCOL::Datetime2,      check_compat_precision,
+   convert_datetime2_datetime2},
+  {NDBCOL::Timestamp,      NDBCOL::Timestamp2,     check_compat_precision,
+   convert_timestamp_timestamp2},
+  {NDBCOL::Timestamp2,     NDBCOL::Timestamp,      check_compat_precision,
+   convert_timestamp2_timestamp},
+  {NDBCOL::Timestamp2,     NDBCOL::Timestamp2,     check_compat_precision,
+   convert_timestamp2_timestamp2},
+
   {NDBCOL::Undefined,      NDBCOL::Undefined,      NULL,                  NULL}
 };
 
@@ -577,6 +947,28 @@ dissect_table_name(const char * qualified_table_name,
 }
 
 /**
+ * Similar method for index, only last component is relevant.
+ */
+static
+bool
+dissect_index_name(const char * qualified_index_name,
+                   BaseString & db_name,
+                   BaseString & schema_name,
+                   BaseString & index_name) {
+  Vector<BaseString> split;
+  BaseString tmp(qualified_index_name);
+  if (tmp.split(split, "/") != 4) {
+    err << "Invalid index name format `" << qualified_index_name
+        << "`" << endl;
+    return false;
+  }
+  db_name = split[0];
+  schema_name = split[1];
+  index_name = split[3];
+  return true;
+}
+
+/**
  * Assigns the new name for a database, if and only if to be rewritten.
  */
 static
@@ -588,7 +980,8 @@ check_rewrite_database(BaseString & db_name) {
 }
 
 const NdbDictionary::Table*
-BackupRestore::get_table(const NdbDictionary::Table* tab){
+BackupRestore::get_table(const TableS & tableS){
+  const NdbDictionary::Table * tab = tableS.m_dictTable;
   if(m_cache.m_old_table == tab)
     return m_cache.m_new_table;
   m_cache.m_old_table = tab;
@@ -606,9 +999,18 @@ BackupRestore::get_table(const NdbDictionary::Table* tab){
                         db, schema, &id1, &id2)) == 4){
     m_ndb->setDatabaseName(db);
     m_ndb->setSchemaName(schema);
+
+    assert(tableS.getMainTable() != NULL);
+    const TableS & mainTableS = *tableS.getMainTable();
+
+    int mainColumnId = (int)tableS.getMainColumnId();
+    assert(mainColumnId >= 0 && mainColumnId < mainTableS.getNoOfAttributes());
+
+    const AttributeDesc & attr_desc =
+      *mainTableS.getAttributeDesc(mainColumnId);
     
     BaseString::snprintf(db, sizeof(db), "NDB$BLOB_%d_%d", 
-			 m_new_tables[id1]->getTableId(), id2);
+			 m_new_tables[id1]->getTableId(), attr_desc.attrId);
     
     m_cache.m_new_table = m_ndb->getDictionary()->getTable(db);
     
@@ -619,6 +1021,223 @@ BackupRestore::get_table(const NdbDictionary::Table* tab){
   return m_cache.m_new_table;
 }
 
+// create staging table
+bool
+BackupRestore::prepare_staging(const TableS & tableS)
+{
+  NdbDictionary::Dictionary* dict = m_ndb->getDictionary();
+
+  NdbDictionary::Table* stagingTable = tableS.m_stagingTable;
+  const BaseString& stagingName = tableS.m_stagingName;
+
+  const char* tablename = stagingName.c_str();
+  BaseString db_name, schema_name, table_name;
+  if (!dissect_table_name(tablename, db_name, schema_name, table_name)) {
+    return false;
+  }
+  stagingTable->setName(table_name.c_str());
+
+  // using defaults
+  const Ndb_move_data::Opts::Tries ot;
+  int createtries = 0;
+  int createdelay = 0;
+  while (1)
+  {
+    if (!(ot.maxtries == 0 || createtries < ot.maxtries))
+    {
+      err << "Create table " << tablename
+          << ": too many temporary errors: " << createtries << endl;
+      return false;
+    }
+    createtries++;
+
+    m_ndb->setDatabaseName(db_name.c_str());
+    m_ndb->setSchemaName(schema_name.c_str());
+    if (dict->createTable(*stagingTable) != 0)
+    {
+      const NdbError& error = dict->getNdbError();
+      if (error.status != NdbError::TemporaryError)
+      {
+        err << "Error: Failed to create staging source " << tablename
+            << ": " << error << endl;
+        return false;
+      }
+      err << "Temporary: Failed to create staging source " << tablename
+          << ": " << error << endl;
+
+      createdelay *= 2;
+      if (createdelay < ot.mindelay)
+        createdelay = ot.mindelay;
+      if (createdelay > ot.maxdelay)
+        createdelay = ot.maxdelay;
+
+      info << "Sleeping " << createdelay << "ms" << endl;
+      NdbSleep_MilliSleep(createdelay);
+      continue;
+    }
+    info << "Created staging source " << tablename << endl;
+    break;
+  }
+
+  const NdbDictionary::Table* tab = dict->getTable(table_name.c_str());
+  if (tab == NULL)
+  {
+    err << "Unable to find table '" << tablename << "'"
+        << " error : " << dict->getNdbError() << endl;
+  }
+
+  const NdbDictionary::Table* null = 0;
+  m_new_tables.fill(tableS.m_dictTable->getTableId(), null);
+  m_new_tables[tableS.m_dictTable->getTableId()] = tab;
+  m_n_tables++; //??
+  return true;
+}
+
+// move rows from staging to real and drop staging
+bool
+BackupRestore::finalize_staging(const TableS & tableS)
+{
+  NdbDictionary::Dictionary* dict = m_ndb->getDictionary();
+
+  const NdbDictionary::Table* source = 0;
+  const NdbDictionary::Table* target = 0;
+
+  const char* stablename = tableS.m_stagingName.c_str();
+  BaseString sdb_name, sschema_name, stable_name;
+  if (!dissect_table_name(stablename, sdb_name, sschema_name, stable_name)) {
+    return false;
+  }
+  m_ndb->setDatabaseName(sdb_name.c_str());
+  m_ndb->setSchemaName(sschema_name.c_str());
+  source = dict->getTable(stable_name.c_str());
+  if (source == 0)
+  {
+    err << "Failed to find staging source " << stablename
+        << ": " << dict->getNdbError() << endl;
+    return false;
+  }
+
+  const char* ttablename = tableS.getTableName();
+  BaseString tdb_name, tschema_name, ttable_name;
+  if (!dissect_table_name(ttablename, tdb_name, tschema_name, ttable_name)) {
+    return false;
+  }
+  m_ndb->setDatabaseName(tdb_name.c_str());
+  m_ndb->setSchemaName(tschema_name.c_str());
+  target = dict->getTable(ttable_name.c_str());
+  if (target == 0)
+  {
+    err << "Failed to find staging target " << ttablename
+        << ": " << dict->getNdbError() << endl;
+    return false;
+  }
+
+  Ndb_move_data md;
+  const Ndb_move_data::Stat& stat = md.get_stat();
+
+  if (md.init(source, target) != 0)
+  {
+    const Ndb_move_data::Error& error = md.get_error();
+    err << "Move data " << stablename << " to " << ttablename
+        << ": " << error << endl;
+    return false;
+  }
+
+  md.set_opts_flags(tableS.m_stagingFlags);
+
+  // using defaults
+  const Ndb_move_data::Opts::Tries ot;
+  int tries = 0;
+  int delay = 0;
+  while (1)
+  {
+    if (!(ot.maxtries == 0 || tries < ot.maxtries))
+    {
+      err << "Move data " << stablename << " to " << ttablename
+          << ": too many temporary errors: " << tries << endl;
+      return false;
+    }
+    tries++;
+
+    if (md.move_data(m_ndb) != 0)
+    {
+      const Ndb_move_data::Error& error = md.get_error();
+      err
+          << "Move data " << stablename << " to " << ttablename << " "
+          << (error.is_temporary() ? "temporary error" : "permanent error")
+          << " at try " << tries // default is no limit
+          << " at rows moved " << stat.rows_moved
+          << " total " << stat.rows_total
+          << ": " << error << endl;
+
+      if (!error.is_temporary())
+        return false;
+
+      if (stat.rows_moved == 0) // this try
+        delay *= 2;
+      else
+        delay /= 2;
+      if (delay < ot.mindelay)
+        delay = ot.mindelay;
+      if (delay > ot.maxdelay)
+        delay = ot.maxdelay;
+
+      info << "Sleeping " << delay << "ms" << endl;
+      NdbSleep_MilliSleep(delay);
+      continue;
+    }
+
+    info << "Successfully staged " << ttablename << ","
+         << " moved all " << stat.rows_total << " rows" << endl;
+    if ((tableS.m_stagingFlags & Ndb_move_data::Opts::MD_ATTRIBUTE_DEMOTION)
+        || stat.truncated != 0) // just in case
+      info << "Truncated " << stat.truncated << " attribute values" << endl;
+    break;
+  }
+
+  int droptries = 0;
+  int dropdelay = 0;
+  while (1)
+  {
+    if (!(ot.maxtries == 0 || droptries < ot.maxtries))
+    {
+      err << "Drop table " << stablename
+          << ": too many temporary errors: " << droptries << endl;
+      return false;
+    }
+    droptries++;
+
+    // dropTable(const Table&) is not defined ...
+    m_ndb->setDatabaseName(sdb_name.c_str());
+    m_ndb->setSchemaName(sschema_name.c_str());
+    if (dict->dropTable(stable_name.c_str()) != 0)
+    {
+      const NdbError& error = dict->getNdbError();
+      if (error.status != NdbError::TemporaryError)
+      {
+        err << "Error: Failed to drop staging source " << stablename
+            << ": " << error << endl;
+        return false;
+      }
+      err << "Temporary: Failed to drop staging source " << stablename
+          << ": " << error << endl;
+
+      dropdelay *= 2;
+      if (dropdelay < ot.mindelay)
+        dropdelay = ot.mindelay;
+      if (dropdelay > ot.maxdelay)
+        dropdelay = ot.maxdelay;
+
+      info << "Sleeping " << dropdelay << "ms" << endl;
+      NdbSleep_MilliSleep(dropdelay);
+      continue;
+    }
+    info << "Dropped staging source " << stablename << endl;
+    break;
+  }
+  return true;
+}
+
 bool
 BackupRestore::finalize_table(const TableS & table){
   bool ret= true;
@@ -626,12 +1245,15 @@ BackupRestore::finalize_table(const TableS & table){
     return ret;
   if (!table.have_auto_inc())
     return ret;
+  // no point for staging table and below code as such would crash
+  if (table.m_staging)
+    return ret;
 
   Uint64 max_val= table.get_max_auto_val();
   do
   {
     Uint64 auto_val = ~(Uint64)0;
-    int r= m_ndb->readAutoIncrementValue(get_table(table.m_dictTable), auto_val);
+    int r= m_ndb->readAutoIncrementValue(get_table(table), auto_val);
     if (r == -1 && m_ndb->getNdbError().status == NdbError::TemporaryError)
     {
       NdbSleep_MilliSleep(50);
@@ -644,7 +1266,7 @@ BackupRestore::finalize_table(const TableS & table){
     else if ((r == -1 && m_ndb->getNdbError().code == 626) ||
              max_val+1 > auto_val || auto_val == ~(Uint64)0)
     {
-      r= m_ndb->setAutoIncrementValue(get_table(table.m_dictTable),
+      r= m_ndb->setAutoIncrementValue(get_table(table),
                                       max_val+1, false);
       if (r == -1 &&
             m_ndb->getNdbError().status == NdbError::TemporaryError)
@@ -663,7 +1285,7 @@ BackupRestore::rebuild_indexes(const TableS& table)
 {
   const char *tablename = table.getTableName();
 
-  const NdbDictionary::Table * tab = get_table(table.m_dictTable);
+  const NdbDictionary::Table * tab = get_table(table);
   Uint32 id = tab->getObjectId();
   if (m_index_per_table.size() <= id)
     return true;
@@ -679,12 +1301,12 @@ BackupRestore::rebuild_indexes(const TableS& table)
   NdbDictionary::Dictionary* dict = m_ndb->getDictionary();
 
   Vector<NdbDictionary::Index*> & indexes = m_index_per_table[id];
-  for(size_t i = 0; i<indexes.size(); i++)
+  for(unsigned i = 0; i<indexes.size(); i++)
   {
     const NdbDictionary::Index * const idx = indexes[i];
     const char * const idx_name = idx->getName();
     const char * const tab_name = idx->getTable();
-    Uint64 start = NdbTick_CurrentMillisecond();
+    const NDB_TICKS start = NdbTick_getCurrentTicks();
     info << "Rebuilding index `" << idx_name << "` on table `"
       << tab_name << "` ..." << flush;
     if ((dict->getIndex(idx_name, tab_name) == NULL)
@@ -697,8 +1319,9 @@ BackupRestore::rebuild_indexes(const TableS& table)
 
       return false;
     }
-    Uint64 stop = NdbTick_CurrentMillisecond();
-    info << "OK (" << ((stop - start)/1000) << "s)" <<endl;
+    const NDB_TICKS stop = NdbTick_getCurrentTicks();
+    const Uint64 elapsed = NdbTick_Elapsed(start,stop).seconds();
+    info << "OK (" << elapsed << "s)" <<endl;
   }
 
   return true;
@@ -818,7 +1441,7 @@ bool BackupRestore::search_replace(char *search_str, char **new_data,
                                    const char **data, const char *end_data,
                                    uint *new_data_len)
 {
-  uint search_str_len = strlen(search_str);
+  uint search_str_len = (uint)strlen(search_str);
   uint inx = 0;
   bool in_delimiters = FALSE;
   bool escape_char = FALSE;
@@ -969,7 +1592,7 @@ bool BackupRestore::translate_frm(NdbDictionary::Table *table)
   {
     DBUG_RETURN(TRUE);
   }
-  if (map_in_frm(new_data, (const char*)data, data_len, &new_data_len))
+  if (map_in_frm(new_data, (const char*)data, (uint)data_len, &new_data_len))
   {
     free(new_data);
     DBUG_RETURN(TRUE);
@@ -1174,6 +1797,10 @@ BackupRestore::object(Uint32 type, const void * ptr)
 	<< errobj << endl;
 
     return false;
+  }
+  case DictTabInfo::ForeignKey: // done after tables
+  {
+    return true;
   }
   default:
   {
@@ -1528,8 +2155,63 @@ BackupRestore::column_compatible_check(const char* tableName,
   return similarEnough;
 }
 
+bool is_array(NDBCOL::Type type)
+{
+  if (type == NDBCOL::Char ||
+      type == NDBCOL::Binary ||
+      type == NDBCOL::Varchar ||
+      type == NDBCOL::Varbinary ||
+      type == NDBCOL::Longvarchar ||
+      type == NDBCOL::Longvarbinary)
+  {
+    return true;
+  }
+  return false;
+ 
+}
+
 bool
-BackupRestore::table_compatible_check(const TableS & tableS)
+BackupRestore::check_blobs(TableS & tableS)
+{
+  /**
+   * For blob tables, check if there is a conversion on any PK of the main table.
+   * If there is, the blob table PK needs the same conversion as the main table PK.
+   * Copy the conversion to the blob table. 
+   */
+  if(match_blob(tableS.getTableName()) == -1)
+    return true;
+
+  int mainColumnId = tableS.getMainColumnId();
+  const TableS *mainTableS = tableS.getMainTable();
+  if(mainTableS->m_dictTable->getColumn(mainColumnId)->getBlobVersion() == NDB_BLOB_V1)
+    return true; /* only to make old ndb_restore_compat* tests on v1 blobs pass */
+
+  /* check all PK columns in v2 blob table */
+  for(int i=0; i<tableS.m_dictTable->getNoOfColumns(); i++)
+  {
+    NDBCOL *col = tableS.m_dictTable->getColumn(i);
+    AttributeDesc *attrDesc = tableS.getAttributeDesc(col->getAttrId());
+  
+    /* get corresponding pk column in main table */
+    NDBCOL *mainCol = mainTableS->m_dictTable->getColumn(col->getName());
+    if(!mainCol || !mainCol->getPrimaryKey()) 
+      return true; /* no more PKs */
+
+    int mainTableAttrId = mainCol->getAttrId();
+    AttributeDesc *mainTableAttrDesc = mainTableS->getAttributeDesc(mainTableAttrId);
+    if(mainTableAttrDesc->convertFunc)
+    {
+      /* copy convertFunc from main table PK to blob table PK */
+      attrDesc->convertFunc = mainTableAttrDesc->convertFunc;     
+      attrDesc->parameter = malloc(mainTableAttrDesc->parameterSz);
+      memcpy(attrDesc->parameter, mainTableAttrDesc->parameter, mainTableAttrDesc->parameterSz);
+    }
+  }
+  return true;
+}
+
+bool
+BackupRestore::table_compatible_check(TableS & tableS)
 {
   if (!m_restore)
     return true;
@@ -1563,7 +2245,8 @@ BackupRestore::table_compatible_check(const TableS & tableS)
   NdbDictionary::Dictionary* dict = m_ndb->getDictionary();
   const NdbDictionary::Table* tab = dict->getTable(table_name.c_str());
   if(tab == 0){
-    err << "Unable to find table: " << table_name << endl;
+    err << "Unable to find table: " << table_name 
+        << " error: " << dict->getNdbError().code << endl;
     return false;
   }
 
@@ -1647,6 +2330,7 @@ BackupRestore::table_compatible_check(const TableS & tableS)
   for(int i = 0; i<tableS.m_dictTable->getNoOfColumns(); i++)
   {
     AttributeDesc * attr_desc = tableS.getAttributeDesc(i);
+    attr_desc->staging = false;
     if (attr_desc->m_exclude)
       continue;
 
@@ -1695,6 +2379,32 @@ BackupRestore::table_compatible_check(const TableS & tableS)
         return false;
       }
       break;
+    case ACT_STAGING_PRESERVING:
+      if ((m_tableChangesMask & TCM_ATTRIBUTE_PROMOTION) == 0)
+      {
+        err << "Table: "<< tablename
+            << " column: " << col_in_backup->getName()
+            << " promotable to kernel's definition via staging but option"
+            << " promote-attributes not specified" << endl;
+        return false;
+      }
+      attr_desc->staging = true;
+      tableS.m_staging = true;
+      tableS.m_stagingFlags |= Ndb_move_data::Opts::MD_ATTRIBUTE_PROMOTION;
+      break;
+    case ACT_STAGING_LOSSY:
+      if ((m_tableChangesMask & TCM_ATTRIBUTE_DEMOTION) == 0)
+      {
+        err << "Table: "<< tablename
+            << " column: " << col_in_backup->getName()
+            << " convertable to kernel's definition via staging but option"
+            << " lossy-conversions not specified" << endl;
+        return false;
+      }
+      attr_desc->staging = true;
+      tableS.m_staging = true;
+      tableS.m_stagingFlags |= Ndb_move_data::Opts::MD_ATTRIBUTE_DEMOTION;
+      break;
     default:
       err << "internal error: illegal value of compat = " << compat << endl;
       assert(false);
@@ -1728,6 +2438,28 @@ BackupRestore::table_compatible_check(const TableS & tableS)
       s->n_new = m_attrSize * m_arraySize;
       memset(s->new_row, 0 , m_attrSize * m_arraySize + 2);
       attr_desc->parameter = s;
+      attr_desc->parameterSz = size + 2;
+    }
+    else if (type_in_backup == NDBCOL::Time ||
+             type_in_backup == NDBCOL::Datetime ||
+             type_in_backup == NDBCOL::Timestamp ||
+             type_in_backup == NDBCOL::Time2 ||
+             type_in_backup == NDBCOL::Datetime2 ||
+             type_in_backup == NDBCOL::Timestamp2)
+    {
+      const unsigned int maxdata = 8;
+      unsigned int size = sizeof(struct char_n_padding_struct) + maxdata;
+      struct char_n_padding_struct *s = (struct char_n_padding_struct *)
+        malloc(size);
+      if (!s)
+      {
+        err << "No more memory available!" << endl;
+        exitHandler();
+      }
+      s->n_old = col_in_backup->getPrecision();
+      s->n_new = col_in_kernel->getPrecision();
+      memset(s->new_row, 0 , maxdata);
+      attr_desc->parameter = s;
     }
     else
     {
@@ -1739,12 +2471,104 @@ BackupRestore::table_compatible_check(const TableS & tableS)
         exitHandler();
       }
       memset(attr_desc->parameter, 0, size + 2);
+      attr_desc->parameterSz = size + 2;
     }
 
     info << "Data for column "
          << tablename << "."
          << col_in_backup->getName()
          << " will be converted from Backup type into DB type." << endl;
+  }
+
+  if (tableS.m_staging)
+  {
+    // fully qualified name, dissected at createTable()
+    BaseString& stagingName = tableS.m_stagingName;
+    stagingName.assfmt("%s%s%d", tableS.getTableName(),
+                       NDB_RESTORE_STAGING_SUFFIX, m_backup_nodeid);
+
+    NdbDictionary::Table* stagingTable = new NdbDictionary::Table;
+
+    // handle very many rows
+    stagingTable->setFragmentType(tab->getFragmentType());
+    // XXX not sure about this
+    if (tab->getFragmentType() == NdbDictionary::Table::HashMapPartition &&
+        !tab->getDefaultNoPartitionsFlag())
+    {
+      stagingTable->setDefaultNoPartitionsFlag(false);
+      stagingTable->setFragmentCount(tab->getFragmentCount());
+      stagingTable->setFragmentData(0, 0);
+    }
+
+    // if kernel is DD, staging will be too
+    bool kernel_is_dd = false;
+    Uint32 ts_id = ~(Uint32)0;
+    if (tab->getTablespace(&ts_id))
+    {
+      // must be an initialization
+      NdbDictionary::Tablespace ts = dict->getTablespace(ts_id);
+      const char* ts_name = ts.getName();
+      // how to detect error?
+      if (strlen(ts_name) == 0)
+      {
+        err << "Kernel table " << tablename
+            << ": Failed to fetch tablespace id=" << ts_id
+            << ": " << dict->getNdbError() << endl;
+        return false;
+      }
+      info << "Kernel table " << tablename
+           << " tablespace " << ts_name << endl;
+      stagingTable->setTablespaceName(ts_name);
+      kernel_is_dd = true;
+    }
+
+    /*
+     * Staging table is the table in backup, omit excluded columns.
+     * Reset column mappings and convert methods.
+     */
+    int j = 0;
+    for (int i = 0; i < tableS.m_dictTable->getNoOfColumns(); i++)
+    {
+      AttributeDesc * attr_desc = tableS.getAttributeDesc(i);
+      const NDBCOL * col_in_backup = tableS.m_dictTable->getColumn(i);
+      if (attr_desc->m_exclude)
+        continue;
+      attr_desc->attrId = (uint32)(j++);
+      if(attr_desc->convertFunc)
+      {
+        const NDBCOL * col_in_kernel = tab->getColumn(col_in_backup->getName());
+       
+        // Skip built-in conversions from smaller array types 
+        // to larger array types so that they are handled by staging.
+        // This prevents staging table from growing too large and
+        // causing ndb_restore to fail with error 738: record too big.
+        NDBCOL::Type type_in_backup = col_in_backup->getType();
+        NDBCOL::Type type_in_kernel = col_in_kernel->getType();
+        if(is_array(type_in_backup) && is_array(type_in_kernel) && 
+           col_in_kernel->getLength() > col_in_backup->getLength()) 
+        {
+          stagingTable->addColumn(*col_in_backup);
+          attr_desc->convertFunc = NULL;
+        }
+        else
+        {
+          // Add column of destination type to staging table so that
+          // built-in conversion is done while loading data into
+          // staging table. 
+          stagingTable->addColumn(*col_in_kernel);
+        }
+      } 
+      else 
+      {
+        stagingTable->addColumn(*col_in_backup);
+        attr_desc->convertFunc = NULL;
+      }
+    }
+
+    if (m_tableChangesMask & TCM_EXCLUDE_MISSING_COLUMNS)
+      tableS.m_stagingFlags |= Ndb_move_data::Opts::MD_EXCLUDE_MISSING_COLUMNS;
+
+    tableS.m_stagingTable = stagingTable;
   }
 
   return true;  
@@ -1933,7 +2757,8 @@ BackupRestore::table(const TableS & table){
   
   const NdbDictionary::Table* tab = dict->getTable(table_name.c_str());
   if(tab == 0){
-    err << "Unable to find table: `" << table_name << "`" << endl;
+    err << "Unable to find table: `" << table_name << "`" 
+        << " error : " << dict->getNdbError().code << endl;
     return false;
   }
   if(m_restore_meta)
@@ -1992,12 +2817,37 @@ BackupRestore::table(const TableS & table){
 }
 
 bool
+BackupRestore::fk(Uint32 type, const void * ptr)
+{
+  if (!m_restore_meta && !m_rebuild_indexes && !m_disable_indexes)
+    return true;
+
+  // only record FKs, create in endOfTables()
+  switch (type){
+  case DictTabInfo::ForeignKey:
+  {
+    const NdbDictionary::ForeignKey* fk_ptr =
+      (const NdbDictionary::ForeignKey*)ptr;
+    m_fks.push_back(fk_ptr);
+    info << "Save FK " << fk_ptr->getName() << endl;
+    return true;
+    break;
+  }
+  default:
+  {
+    break;
+  }
+  }
+  return true;
+}
+
+bool
 BackupRestore::endOfTables(){
   if(!m_restore_meta && !m_rebuild_indexes && !m_disable_indexes)
     return true;
 
   NdbDictionary::Dictionary* dict = m_ndb->getDictionary();
-  for(size_t i = 0; i<m_indexes.size(); i++){
+  for(unsigned i = 0; i<m_indexes.size(); i++){
     NdbTableImpl & indtab = NdbTableImpl::getImpl(* m_indexes[i]);
 
     BaseString db_name, schema_name, table_name;
@@ -2074,6 +2924,174 @@ BackupRestore::endOfTables(){
   return true;
 }
 
+bool
+BackupRestore::endOfTablesFK()
+{
+  if (!m_restore_meta && !m_rebuild_indexes && !m_disable_indexes)
+    return true;
+
+  NdbDictionary::Dictionary* dict = m_ndb->getDictionary();
+  info << "Create foreign keys" << endl;
+  for (unsigned i = 0; i < m_fks.size(); i++)
+  {
+    const NdbDictionary::ForeignKey& fkinfo = *m_fks[i];
+
+    // full name is e.g. 10/14/fk1 where 10,14 are old table ids
+    const char* fkname = 0;
+    Vector<BaseString> splitname;
+    BaseString tmpname(fkinfo.getName());
+    int n = tmpname.split(splitname, "/");
+    // may get these from ndbapi-created FKs prior to bug#18824753
+    if (n == 1)
+      fkname = splitname[0].c_str();
+    else if (n == 3)
+      fkname = splitname[2].c_str();
+    else
+    {
+      err << "Invalid foreign key name " << tmpname.c_str() << endl;
+      return false;
+    }
+
+    // retrieve fk parent and child
+    const NdbDictionary::Table* pTab = 0;
+    const NdbDictionary::Index* pInd = 0;
+    const NdbDictionary::Table* cTab = 0;
+    const NdbDictionary::Index* cInd = 0;
+    // parent and child info - db.table.index
+    char pInfo[512] = "?";
+    char cInfo[512] = "?";
+    {
+      BaseString db_name, dummy2, table_name;
+      if (!dissect_table_name(fkinfo.getParentTable(),
+                              db_name, dummy2, table_name))
+        return false;
+      m_ndb->setDatabaseName(db_name.c_str());
+      pTab = dict->getTable(table_name.c_str());
+      if (pTab == 0)
+      {
+        err << "Foreign key " << fkname << " parent table "
+            << db_name.c_str() << "." << table_name.c_str()
+            << " not found: " << dict->getNdbError() << endl;
+        return false;
+      }
+      if (fkinfo.getParentIndex() != 0)
+      {
+        BaseString dummy1, dummy2, index_name;
+        if (!dissect_index_name(fkinfo.getParentIndex(),
+                                dummy1, dummy2, index_name))
+          return false;
+        pInd = dict->getIndex(index_name.c_str(), table_name.c_str());
+        if (pInd == 0)
+        {
+          err << "Foreign key " << fkname << " parent index "
+              << db_name.c_str() << "." << table_name.c_str()
+              << "." << index_name.c_str()
+              << " not found: " << dict->getNdbError() << endl;
+          return false;
+        }
+      }
+      BaseString::snprintf(pInfo, sizeof(pInfo), "%s.%s.%s",
+          db_name.c_str(), table_name.c_str(),
+          pInd ? pInd->getName() : "PK");
+    }
+    {
+      BaseString db_name, dummy2, table_name;
+      if (!dissect_table_name(fkinfo.getChildTable(),
+                              db_name, dummy2, table_name))
+        return false;
+      m_ndb->setDatabaseName(db_name.c_str());
+      cTab = dict->getTable(table_name.c_str());
+      if (cTab == 0)
+      {
+        err << "Foreign key " << fkname << " child table "
+            << db_name.c_str() << "." << table_name.c_str()
+            << " not found: " << dict->getNdbError() << endl;
+        return false;
+      }
+      if (fkinfo.getChildIndex() != 0)
+      {
+        BaseString dummy1, dummy2, index_name;
+        if (!dissect_index_name(fkinfo.getChildIndex(),
+                                dummy1, dummy2, index_name))
+          return false;
+        cInd = dict->getIndex(index_name.c_str(), table_name.c_str());
+        if (cInd == 0)
+        {
+          err << "Foreign key " << fkname << " child index "
+              << db_name.c_str() << "." << table_name.c_str()
+              << "." << index_name.c_str()
+              << " not found: " << dict->getNdbError() << endl;
+          return false;
+        }
+      }
+      BaseString::snprintf(cInfo, sizeof(cInfo), "%s.%s.%s",
+          db_name.c_str(), table_name.c_str(),
+          cInd ? cInd->getName() : "PK");
+    }
+
+    // define the fk
+    NdbDictionary::ForeignKey fk;
+    fk.setName(fkname);
+    static const int MaxAttrs = MAX_ATTRIBUTES_IN_INDEX;
+    {
+      const NdbDictionary::Column* cols[MaxAttrs+1]; // NULL terminated
+      const int n = fkinfo.getParentColumnCount();
+      int i = 0;
+      while (i < n)
+      {
+        int j = fkinfo.getParentColumnNo(i);
+        const NdbDictionary::Column* pCol = pTab->getColumn(j);
+        if (pCol == 0)
+        {
+          err << "Foreign key " << fkname << " fk column " << i
+              << " parent column " << j << " out of range" << endl;
+          return false;
+        }
+        cols[i++] = pCol;
+      }
+      cols[i] = 0;
+      fk.setParent(*pTab, pInd, cols);
+    }
+    {
+      const NdbDictionary::Column* cols[MaxAttrs+1]; // NULL terminated
+      const int n = fkinfo.getChildColumnCount();
+      int i = 0;
+      while (i < n)
+      {
+        int j = fkinfo.getChildColumnNo(i);
+        const NdbDictionary::Column* cCol = cTab->getColumn(j);
+        if (cCol == 0)
+        {
+          err << "Foreign key " << fkname << " fk column " << i
+              << " child column " << j << " out of range" << endl;
+          return false;
+        }
+        cols[i++] = cCol;
+      }
+      cols[i] = 0;
+      fk.setChild(*cTab, cInd, cols);
+    }
+    fk.setOnUpdateAction(fkinfo.getOnUpdateAction());
+    fk.setOnDeleteAction(fkinfo.getOnDeleteAction());
+
+    // create
+    if (dict->createForeignKey(fk) != 0)
+    {
+      err << "Failed to create foreign key " << fkname
+          << " parent " << pInfo
+          << " child " << cInfo
+          << ": " << dict->getNdbError() << endl;
+      return false;
+    }
+    info << "Successfully created foreign key " << fkname
+         << " parent " << pInfo
+         << " child " << cInfo
+         << endl;
+  }
+  info << "Create foreign keys done" << endl;
+  return true;
+}
+
 void BackupRestore::tuple(const TupleS & tup, Uint32 fragmentId)
 {
   const TableS * tab = tup.getTable();
@@ -2131,7 +3149,7 @@ void BackupRestore::tuple_a(restore_callback_t *cb)
     } // if
     
     const TupleS &tup = cb->tup;
-    const NdbDictionary::Table * table = get_table(tup.getTable()->m_dictTable);
+    const NdbDictionary::Table * table = get_table(*tup.getTable());
 
     NdbOperation * op = cb->connection->getNdbOperation(table);
     
@@ -2150,6 +3168,9 @@ void BackupRestore::tuple_a(restore_callback_t *cb)
       err << "Error defining op: " << cb->connection->getNdbError() << endl;
       exitHandler();
     } // if
+
+    // XXX until NdbRecord is used
+    op->set_disable_fk();
 
     n_bytes= 0;
 
@@ -2226,7 +3247,9 @@ void BackupRestore::tuple_a(restore_callback_t *cb)
                                                     truncated);
             if (!dataPtr)
             {
-              err << "Error: Convert data failed when restoring tuples!" << endl;
+              const char* tabname = tup.getTable()->m_dictTable->getName();
+              err << "Error: Convert data failed when restoring tuples!"
+                  << " Data part, table " << tabname << endl;
               exitHandler();
             }
             if (truncated)
@@ -2340,6 +3363,28 @@ int BackupRestore::restoreAutoIncrement(restore_callback_t *cb,
     }
   }
   return result;
+}
+
+bool BackupRestore::isMissingTable(const TableS& table)
+{
+  NdbDictionary::Dictionary* dict = m_ndb->getDictionary();
+  const char* tablename = table.getTableName();
+  BaseString db_name, schema_name, table_name;
+  Vector<BaseString> split;
+  BaseString tmp(tablename);
+  if (tmp.split(split, "/") != 3) {
+    return false;
+  }
+  db_name = split[0];
+  schema_name = split[1];
+  table_name = split[2];
+  m_ndb->setDatabaseName(db_name.c_str());
+  m_ndb->setSchemaName(schema_name.c_str());
+
+  const NdbDictionary::Table* tab = dict->getTable(table_name.c_str());
+
+  /* 723 == NoSuchTableExisted */
+  return ((tab == NULL) && (dict->getNdbError().code == 723));
 }
 
 void BackupRestore::cback(int result, restore_callback_t *cb)
@@ -2526,7 +3571,7 @@ retry:
   } // if
   
   TransGuard g(trans);
-  const NdbDictionary::Table * table = get_table(tup.m_table->m_dictTable);
+  const NdbDictionary::Table * table = get_table(*tup.m_table);
   NdbOperation * op = trans->getNdbOperation(table);
   if (op == NULL) 
   {
@@ -2588,7 +3633,8 @@ retry:
     const Uint32 length = (size / 8) * arraySize;
     n_bytes+= length;
 
-    if (attr->Desc->convertFunc)
+    if (attr->Desc->convertFunc &&
+        dataPtr != NULL) // NULL will not be converted
     {
       bool truncated = true; // assume data truncation until overridden
       dataPtr = (char*)attr->Desc->convertFunc(dataPtr,
@@ -2596,7 +3642,10 @@ retry:
                                                truncated);
       if (!dataPtr)
       {
-        err << "Error: Convert data failed when restoring tuples!" << endl;
+        const char* tabname = tup.m_table->m_dictTable->getName();
+        err << "Error: Convert data failed when restoring tuples!"
+            << " Log part, table " << tabname
+            << ", entry type " << tup.m_type << endl;
         exitHandler();
       }            
       if (truncated)
@@ -2782,6 +3831,79 @@ BackupRestore::check_compat_sizes(const NDBCOL &old_col,
   return ACT_PRESERVING;
 }
 
+AttrConvType
+BackupRestore::check_compat_precision(const NDBCOL &old_col,
+                                      const NDBCOL &new_col)
+{
+  Uint32 new_prec = new_col.getPrecision();
+  Uint32 old_prec = old_col.getPrecision();
+
+  if (new_prec < old_prec)
+    return ACT_LOSSY;
+  return ACT_PRESERVING;
+}
+
+AttrConvType
+BackupRestore::check_compat_char_binary(const NDBCOL &old_col,
+                                           const NDBCOL &new_col)
+{
+  // as in check_compat_sizes
+  assert(old_col.getSize() == 1 && new_col.getSize() == 1);
+  Uint32 new_length = new_col.getLength();
+  Uint32 old_length = old_col.getLength();
+
+  if (new_length < old_length) {
+    return ACT_LOSSY;
+  }
+  return ACT_PRESERVING;
+}
+
+AttrConvType
+BackupRestore::check_compat_char_to_text(const NDBCOL &old_col,
+                                         const NDBCOL &new_col)
+{
+  if (new_col.getPrimaryKey()) {
+    // staging will refuse this so detect early
+    info << "convert of TEXT to primary key column not supported" << endl;
+    return ACT_UNSUPPORTED;
+  }
+  return ACT_STAGING_PRESERVING;
+}
+
+AttrConvType
+BackupRestore::check_compat_text_to_char(const NDBCOL &old_col,
+                                         const NDBCOL &new_col)
+{
+  if (old_col.getPrimaryKey()) {
+    // staging will refuse this so detect early
+    info << "convert of primary key column to TEXT not supported" << endl;
+    return ACT_UNSUPPORTED;
+  }
+  return ACT_STAGING_LOSSY;
+}
+
+AttrConvType
+BackupRestore::check_compat_text_to_text(const NDBCOL &old_col,
+                                         const NDBCOL &new_col)
+{
+  if(old_col.getCharset() != new_col.getCharset()) 
+  {
+    info << "convert to field with different charset not supported" << endl; 
+    return ACT_UNSUPPORTED;
+  }
+  if(old_col.getPartSize() > new_col.getPartSize()) 
+  {
+   // TEXT/MEDIUMTEXT/LONGTEXT to TINYTEXT conversion is potentially lossy at the 
+   // Ndb level because there is a hard limit on the TINYTEXT size.
+   // TEXT/MEDIUMTEXT/LONGTEXT is not lossy at the Ndb level, but can be at the 
+   // MySQL level.
+   // Both conversions require the lossy switch, but they are not lossy in the same way.
+    return ACT_STAGING_LOSSY;
+  }
+  return ACT_STAGING_PRESERVING;
+}
+
+
 // ----------------------------------------------------------------------
 // explicit template instantiations
 // ----------------------------------------------------------------------
@@ -2815,6 +3937,28 @@ template void * BackupRestore::convert_array< Hvarbinary, Hlongvarbinary >(const
 template void * BackupRestore::convert_array< Hlongvarbinary, Hbinary >(const void *, void *, bool &);
 template void * BackupRestore::convert_array< Hlongvarbinary, Hvarbinary >(const void *, void *, bool &);
 template void * BackupRestore::convert_array< Hlongvarbinary, Hlongvarbinary >(const void *, void *, bool &);
+
+// char to binary promotions/demotions
+template void * BackupRestore::convert_array< Hchar, Hbinary >(const void *, void *, bool &);
+template void * BackupRestore::convert_array< Hchar, Hvarbinary >(const void *, void *, bool &);
+template void * BackupRestore::convert_array< Hchar, Hlongvarbinary >(const void *, void *, bool &);
+template void * BackupRestore::convert_array< Hvarchar, Hbinary >(const void *, void *, bool &);
+template void * BackupRestore::convert_array< Hvarchar, Hvarbinary >(const void *, void *, bool &);
+template void * BackupRestore::convert_array< Hvarchar, Hlongvarbinary >(const void *, void *, bool &);
+template void * BackupRestore::convert_array< Hlongvarchar, Hbinary >(const void *, void *, bool &);
+template void * BackupRestore::convert_array< Hlongvarchar, Hvarbinary >(const void *, void *, bool &);
+template void * BackupRestore::convert_array< Hlongvarchar, Hlongvarbinary >(const void *, void *, bool &);
+
+// binary array to char array promotions/demotions
+template void * BackupRestore::convert_array< Hbinary, Hchar >(const void *, void *, bool &);
+template void * BackupRestore::convert_array< Hbinary, Hvarchar >(const void *, void *, bool &);
+template void * BackupRestore::convert_array< Hbinary, Hlongvarchar >(const void *, void *, bool &);
+template void * BackupRestore::convert_array< Hvarbinary, Hchar >(const void *, void *, bool &);
+template void * BackupRestore::convert_array< Hvarbinary, Hvarchar >(const void *, void *, bool &);
+template void * BackupRestore::convert_array< Hvarbinary, Hlongvarchar >(const void *, void *, bool &);
+template void * BackupRestore::convert_array< Hlongvarbinary, Hchar >(const void *, void *, bool &);
+template void * BackupRestore::convert_array< Hlongvarbinary, Hvarchar >(const void *, void *, bool &);
+template void * BackupRestore::convert_array< Hlongvarbinary, Hlongvarchar >(const void *, void *, bool &);
 
 // integral promotions
 template void * BackupRestore::convert_integral<Hint8, Hint16>(const void *, void *, bool &);

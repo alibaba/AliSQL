@@ -1,13 +1,25 @@
-/* Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -50,11 +62,11 @@ char _dig_vec_lower[] =
 */
   
 char *
-int2str(register long int val, register char *dst, register int radix, 
+int2str(long int val, char *dst, int radix, 
         int upcase)
 {
   char buffer[65];
-  register char *p;
+  char *p;
   long int new_val;
   char *dig_vec= upcase ? _dig_vec_upper : _dig_vec_lower;
   ulong uval= (ulong) val;
@@ -66,7 +78,7 @@ int2str(register long int val, register char *dst, register int radix,
     if (val < 0)
     {
       *dst++ = '-';
-      /* Avoid integer overflow in (-val) for LONGLONG_MIN (BUG#31799). */
+      /* Avoid integer overflow in (-val) for LLONG_MIN (BUG#31799). */
       uval = (ulong)0 - uval;
     }
     radix = -radix;
@@ -91,7 +103,6 @@ int2str(register long int val, register char *dst, register int radix,
   new_val= uval / (ulong) radix;
   *--p = dig_vec[(uchar) (uval- (ulong) new_val*(ulong) radix)];
   val = new_val;
-#ifdef HAVE_LDIV
   while (val != 0)
   {
     ldiv_t res;
@@ -99,14 +110,6 @@ int2str(register long int val, register char *dst, register int radix,
     *--p = dig_vec[res.rem];
     val= res.quot;
   }
-#else
-  while (val != 0)
-  {
-    new_val=val/radix;
-    *--p = dig_vec[(uchar) (val-new_val*radix)];
-    val= new_val;
-  }
-#endif
   while ((*dst++ = *p++) != 0) ;
   return dst-1;
 }
@@ -133,7 +136,7 @@ int2str(register long int val, register char *dst, register int radix,
 char *int10_to_str(long int val,char *dst,int radix)
 {
   char buffer[65];
-  register char *p;
+  char *p;
   long int new_val;
   unsigned long int uval = (unsigned long int) val;
 
@@ -142,7 +145,7 @@ char *int10_to_str(long int val,char *dst,int radix)
     if (val < 0)
     {
       *dst++ = '-';
-      /* Avoid integer overflow in (-val) for LONGLONG_MIN (BUG#31799). */
+      /* Avoid integer overflow in (-val) for LLONG_MIN (BUG#31799). */
       uval = (unsigned long int)0 - uval;
     }
   }

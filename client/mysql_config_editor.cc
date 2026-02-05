@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2012, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -112,7 +119,10 @@ struct my_command_data {
 /* mysql_config_editor utility options. */
 static struct my_option my_program_long_options[]=
 {
-#ifndef DBUG_OFF
+#ifdef NDEBUG
+  {"debug", '#', "This is a non-debug version. Catch this and exit.",
+  0, 0, 0, GET_DISABLED, OPT_ARG, 0, 0, 0, 0, 0, 0},
+#else
   {"debug", '#', "Output debug log. Often this is 'd:t:o,filename'.",
    0, 0, 0, GET_STR, OPT_ARG, 0, 0, 0, 0, 0, 0},
 #endif
@@ -372,7 +382,7 @@ int main(int argc, char *argv[])
   if (command > -1)
     rc= execute_commands(command);
 
-  if (rc == -1)
+  if (rc != 0)
   {
     my_perror("operation failed.");
     DBUG_RETURN(1);
@@ -404,7 +414,8 @@ static int do_handle_options(int argc, char *argv[])
     exit(1);
   }
 
-  if (!(ptr= (char *) my_malloc((argc + 2) * sizeof(char *),
+  if (!(ptr= (char *) my_malloc(PSI_NOT_INSTRUMENTED,
+                                (argc + 2) * sizeof(char *),
                                 MYF(MY_WME))))
     goto error;
 
@@ -416,7 +427,7 @@ static int do_handle_options(int argc, char *argv[])
   command_list[i]= NULL;
 
   if ((rc= my_handle_options(&argc, &argv, my_program_long_options,
-                             my_program_get_one_option, command_list)))
+                             my_program_get_one_option, command_list, FALSE)))
     exit(rc);
 
   if (argc == 0)                                /* No command specified. */
@@ -504,9 +515,9 @@ static int execute_commands(int command)
       exit(1);
   }
 
+done:
   my_close(g_fd, MYF(MY_WME));
 
-done:
   DBUG_RETURN(rc);
 }
 
@@ -702,8 +713,8 @@ error:
 
   @param void
 
-  @return -1              Error
-           0              Success
+  @return  TRUE           Error
+           FALSE          Success
 */
 
 static my_bool check_and_create_login_file(void)
@@ -746,7 +757,7 @@ static my_bool check_and_create_login_file(void)
 
     dirname_part(login_dir, my_login_file, &size);
     /* Remove the trailing '\' */
-    if (login_dir[-- size] == FN_LIBCHAR)
+    if (is_directory_separator(login_dir[-- size]))
       login_dir[size]= 0;
 
     /* Now check if directory exists? */
@@ -800,7 +811,7 @@ static my_bool check_and_create_login_file(void)
   {
     verbose_msg("File does not exist.\nCreating login file.\n");
     if ((g_fd= my_create(my_login_file, create_mode, access_flag,
-                       MYF(MY_WME)) == -1))
+                       MYF(MY_WME))) == -1)
     {
       my_perror("couldn't create the login file");
       goto error;
@@ -808,6 +819,7 @@ static my_bool check_and_create_login_file(void)
     else
     {
       verbose_msg("Login file created.\n");
+      my_close(g_fd, MYF(MY_WME));
       verbose_msg("Opening the file.\n");
 
       if((g_fd= my_open(my_login_file, access_flag, MYF(MY_WME))) == -1)
@@ -831,10 +843,10 @@ static my_bool check_and_create_login_file(void)
       goto error;
   }
 
-  DBUG_RETURN(0);
+  DBUG_RETURN(FALSE);
 
 error:
-  DBUG_RETURN(-1);
+  DBUG_RETURN(TRUE);
 }
 
 
@@ -973,10 +985,11 @@ static void remove_option(DYNAMIC_STRING *file_buf, const char *path_name,
 
   char *start= NULL, *end= NULL;
   char *search_str;
-  int search_len, shift_len;
+  size_t search_len, shift_len;
   bool option_found= FALSE;
 
-  search_str= (char *) my_malloc((uint) strlen(option_name) + 2, MYF(MY_WME));
+  search_str= (char *) my_malloc(PSI_NOT_INSTRUMENTED,
+                                 (uint) strlen(option_name) + 2, MYF(MY_WME));
   sprintf(search_str, "\n%s", option_name);
 
   if ((start= locate_login_path(file_buf, path_name)) == NULL)
@@ -1054,7 +1067,7 @@ static void remove_login_path(DYNAMIC_STRING *file_buf, const char *path_name)
   {
     end ++;                                     /* Move past '\n' */
     len= ((diff= (start - end)) > 0) ? diff : - diff;
-    to_move= file_buf->length - (end - file_buf->str);
+    to_move= file_buf->length - (end - file_buf->str) ;
   }
   else
   {

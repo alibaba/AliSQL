@@ -1,13 +1,25 @@
-/* Copyright (c) 2004, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2004, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -17,13 +29,48 @@
 /* thus to get the current time we should use the system function
    with the highest possible resolution */
 
-/* 
-   TODO: in functions my_micro_time() and my_micro_time_and_time() there
-   exists some common code that should be merged into a function.
-*/
-
 #include "mysys_priv.h"
 #include "my_static.h"
+
+#if HAVE_SYS_TIME_H
+#include <sys/time.h>
+#endif
+
+#if defined(_WIN32)
+#include "my_sys.h" /* for my_printf_error */
+typedef VOID(WINAPI *time_fn)(LPFILETIME);
+static time_fn my_get_system_time_as_file_time= GetSystemTimeAsFileTime;
+
+/**
+Initialise highest available time resolution API on Windows
+@return Initialization result
+@retval FALSE Success
+@retval TRUE  Error. Couldn't initialize environment
+*/
+my_bool win_init_get_system_time_as_file_time()
+{
+  DWORD error;
+  HMODULE h;
+  h= LoadLibrary("kernel32.dll");
+  if (h != NULL)
+  {
+    time_fn pfn= (time_fn) GetProcAddress(h, "GetSystemTimePreciseAsFileTime");
+    if (pfn)
+      my_get_system_time_as_file_time= pfn;
+
+    return FALSE;
+  }
+
+  error= GetLastError();
+  my_printf_error(0,
+    "LoadLibrary(\"kernel32.dll\") failed: GetLastError returns %lu",
+    MYF(0),
+    error);
+
+  return TRUE;
+}
+#endif
+
 
 /**
   Get high-resolution time.
@@ -61,49 +108,6 @@ ulonglong my_getsystime()
 #endif
 }
 
-/*
-  return number of nanoseconds since unspecified (but always the same)
-  point in the past
-
-  NOTE:
-  Thus to get the current time we should use the system function
-  with the highest possible resolution
-
-  The value is not anchored to any specific point in time (e.g.epoch) nor
-  is it subject to resetting or drifting by way of adjtime() or settimeofday(),
-  and thus it is *NOT* appropriate for getting the current timestamp. It can be
-  used for calculating time intervals, though.
-*/
-ulonglong my_interval_timer()
-{
-#ifdef HAVE_CLOCK_GETTIME
-  struct timespec tp;
-  clock_gettime(CLOCK_MONOTONIC, &tp);
-  return tp.tv_sec*1000000000ULL+tp.tv_nsec;
-#elif defined(HAVE_GETHRTIME)
-  return gethrtime();
-#elif defined(__WIN__)
-  LARGE_INTEGER t_cnt;
-  if (query_performance_frequency)
-  {
-    QueryPerformanceCounter(&t_cnt);
-    return (t_cnt.QuadPart / query_performance_frequency * 1000000000ULL) +
-            ((t_cnt.QuadPart % query_performance_frequency) * 1000000000ULL /
-             query_performance_frequency);
-  }
-  else
-  {
-    ulonglong newtime;
-    GetSystemTimeAsFileTime((FILETIME*)&newtime);
-    return newtime*100ULL;
-  }
-#else
-  /* TODO: check for other possibilities for hi-res timestamping */
-  struct timeval tv;
-  gettimeofday(&tv,NULL);
-  return tv.tv_sec*1000000000ULL+tv.tv_usec*1000ULL;
-#endif
-}
 
 /**
   Return current time.
@@ -116,11 +120,16 @@ ulonglong my_interval_timer()
 time_t my_time(myf flags)
 {
   time_t t;
-  /* The following loop is here beacuse time() may fail on some systems */
+  /*
+    The following loop is here beacuse time() may fail on some systems.
+    We're using a hardcoded my_message_stderr() here rather than going
+    through the hook in my_message_local() because it's far too easy to
+    come full circle with any logging function that writes timestamps ...
+  */
   while ((t= time(0)) == (time_t) -1)
   {
     if (flags & MY_WME)
-      fprintf(stderr, "%s: Warning: time() call failed\n", my_progname);
+      my_message_stderr(0, "time() call failed", MYF(0));
   }
   return t;
 }
@@ -132,18 +141,16 @@ time_t my_time(myf flags)
   Return time in microseconds.
 
   @remark This function is to be used to measure performance in
-          micro seconds. As it's not defined whats the start time
-          for the clock, this function us only useful to measure
-          time between two moments.
+  micro seconds.
 
-  @retval Value in microseconds from some undefined point in time.
+  @retval Number of microseconds since the Epoch, 1970-01-01 00:00:00 +0000 (UTC)
 */
 
 ulonglong my_micro_time()
 {
 #ifdef _WIN32
   ulonglong newtime;
-  GetSystemTimeAsFileTime((FILETIME*)&newtime);
+  my_get_system_time_as_file_time((FILETIME*)&newtime);
   newtime-= OFFSET_TO_EPOCH;
   return (newtime/10);
 #else
@@ -156,72 +163,6 @@ ulonglong my_micro_time()
   {}
   newtime= (ulonglong)t.tv_sec * 1000000 + t.tv_usec;
   return newtime;
-#endif
-}
-
-
-/**
-  Return time in seconds and timer in microseconds (not different start!)
-
-  @param  time_arg  Will be set to seconds since epoch.
-
-  @remark This function is to be useful when we need both the time and
-          microtime. For example in MySQL this is used to get the query
-          time start of a query and to measure the time of a query (for
-          the slow query log)
-
-  @remark The time source is the same as for my_micro_time(), meaning
-          that time values returned by both functions can be intermixed
-          in meaningful ways (i.e. for comparison purposes).
-
-  @retval Value in microseconds from some undefined point in time.
-*/
-
-/* Difference between GetSystemTimeAsFileTime() and now() */
-
-ulonglong my_micro_time_and_time(time_t *time_arg)
-{
-#ifdef _WIN32
-  ulonglong newtime;
-  GetSystemTimeAsFileTime((FILETIME*)&newtime);
-  *time_arg= (time_t) ((newtime - OFFSET_TO_EPOCH) / 10000000);
-  return (newtime/10);
-#else
-  ulonglong newtime;
-  struct timeval t;
-  /*
-    The following loop is here because gettimeofday may fail on some systems
-  */
-  while (gettimeofday(&t, NULL) != 0)
-  {}
-  *time_arg= t.tv_sec;
-  newtime= (ulonglong)t.tv_sec * 1000000 + t.tv_usec;
-  return newtime;
-#endif
-}
-
-
-/**
-  Returns current time.
-
-  @param  microtime Value from very recent my_micro_time().
-
-  @remark This function returns the current time. The microtime argument
-          is only used if my_micro_time() uses a function that can safely
-          be converted to the current time.
-
-  @retval current time.
-*/
-
-time_t my_time_possible_from_micro(ulonglong microtime MY_ATTRIBUTE((unused)))
-{
-#ifdef _WIN32
-  time_t t;
-  while ((t= time(0)) == (time_t) -1)
-  {}
-  return t;
-#else
-  return (time_t) (microtime / 1000000);
 #endif
 }
 

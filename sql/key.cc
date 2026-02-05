@@ -1,13 +1,20 @@
-/* Copyright (c) 2000, 2014, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -16,8 +23,6 @@
 
 /* Functions to handle keys and fields in forms */
 
-#include "sql_priv.h"
-#include "unireg.h"                     // REQUIRED: by includes later
 #include "key.h"                                // key_rec_cmp
 #include "field.h"                              // Field
 
@@ -54,8 +59,8 @@ using std::max;
 int find_ref_key(KEY *key, uint key_count, uchar *record, Field *field,
                  uint *key_length, uint *keypart)
 {
-  reg2 int i;
-  reg3 KEY *key_info;
+  int i;
+  KEY *key_info;
   uint fieldpos;
 
   fieldpos= field->offset(record);
@@ -140,7 +145,7 @@ void key_copy(uchar *to_key, uchar *from_record, KEY *key_info,
       length= min<uint>(key_length, key_part->length);
       Field *field= key_part->field;
       const CHARSET_INFO *cs= field->charset();
-      uint bytes= field->get_key_image(to_key, length, Field::itRAW);
+      size_t bytes= field->get_key_image(to_key, length, Field::itRAW);
       if (bytes < length)
         cs->cset->fill(cs, (char*) to_key + bytes, length - bytes, ' ');
     }
@@ -319,7 +324,7 @@ bool key_cmp_if_same(TABLE *table,const uchar *key,uint idx,uint key_length)
                                 FIELDFLAG_PACK)))
     {
       const CHARSET_INFO *cs= key_part->field->charset();
-      uint char_length= key_part->length / cs->mbmaxlen;
+      size_t char_length= key_part->length / cs->mbmaxlen;
       const uchar *pos= table->record[0] + key_part->offset;
       if (length > char_length)
       {
@@ -327,8 +332,8 @@ bool key_cmp_if_same(TABLE *table,const uchar *key,uint idx,uint key_length)
         set_if_smaller(char_length, length);
       }
       if (cs->coll->strnncollsp(cs,
-                                (const uchar*) key, length,
-                                (const uchar*) pos, char_length, 0))
+                                key, length,
+                                pos, char_length, 0))
         return 1;
       continue;
     }
@@ -385,14 +390,14 @@ void field_unpack(String *to, Field *field, const uchar *rec, uint max_length,
         which can break a multi-byte characters in the middle.
         Align, returning not more than "char_length" characters.
       */
-      uint charpos, char_length= max_length / cs->mbmaxlen;
+      size_t charpos, char_length= max_length / cs->mbmaxlen;
       if ((charpos= my_charpos(cs, tmp.ptr(),
                                tmp.ptr() + tmp.length(),
                                char_length)) < tmp.length())
         tmp.length(charpos);
     }
     if (max_length < field->pack_length())
-      tmp.length(min(tmp.length(),max_length));
+      tmp.length(min(tmp.length(), static_cast<size_t>(max_length)));
     ErrConvString err(&tmp);
     to->append(err.ptr());
   }
@@ -467,7 +472,11 @@ bool is_key_used(TABLE *table, uint idx, const MY_BITMAP *fields)
 {
   bitmap_clear_all(&table->tmp_set);
   table->mark_columns_used_by_index_no_reset(idx, &table->tmp_set);
-  if (bitmap_is_overlapping(&table->tmp_set, fields))
+  const bool overlapping= bitmap_is_overlapping(&table->tmp_set, fields);
+  
+  // Clear tmp_set so it can be used elsewhere
+  bitmap_clear_all(&table->tmp_set);
+  if (overlapping)
     return 1;
 
   /*
@@ -509,7 +518,7 @@ int key_cmp(KEY_PART_INFO *key_part, const uchar *key, uint key_length)
     if (key_part->null_bit)
     {
       /* This key part allows null values; NULL is lower than everything */
-      register bool field_is_null= key_part->field->is_null();
+      bool field_is_null= key_part->field->is_null();
       if (*key)                                 // If range key is null
       {
 	/* the range is expecting a null value */
@@ -557,8 +566,8 @@ int key_cmp2(KEY_PART_INFO *key_part,
                  const uchar *key1, uint key1_length,
                  const uchar *key2, uint key2_length)
 {
-  DBUG_ASSERT(key_part && key1 && key2);
-  DBUG_ASSERT((key1_length == key2_length) && key1_length != 0 );
+  assert(key_part && key1 && key2);
+  assert((key1_length == key2_length) && key1_length != 0 );
   uint store_length;
 
   /* Compare all the subkeys (if it is a composite key) */
@@ -645,9 +654,8 @@ int key_cmp2(KEY_PART_INFO *key_part,
     @retval +1                  first_rec is greater than second_rec
 */
 
-int key_rec_cmp(void *key_p, uchar *first_rec, uchar *second_rec)
+int key_rec_cmp(KEY **key, uchar *first_rec, uchar *second_rec)
 {
-  KEY **key= (KEY**) key_p;
   KEY *key_info= *(key++);                     // Start with first key
   uint key_parts, key_part_num;
   KEY_PART_INFO *key_part= key_info->key_part;
@@ -658,8 +666,8 @@ int key_rec_cmp(void *key_p, uchar *first_rec, uchar *second_rec)
   DBUG_ENTER("key_rec_cmp");
 
   /* Assert that at least the first key part is read. */
-  DBUG_ASSERT(bitmap_is_set(key_info->table->read_set,
-                            key_info->key_part->field->field_index));
+  assert(bitmap_is_set(key_info->table->read_set,
+                       key_info->key_part->field->field_index));
   /* loop over all given keys */
   do
   {
@@ -723,3 +731,4 @@ next_loop:
   } while (key_info); /* no more keys to test */
   DBUG_RETURN(0);
 }
+

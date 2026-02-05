@@ -1,3 +1,12 @@
+# This testcase throws following error when run with InnoDB as Default
+# Unknown/unsupported storage engine: InnoDB
+# All tests are required to run with MyISAM
+# MTR starts mysqld with MyISAM as default
+
+--source include/force_myisam_default.inc
+--source include/have_myisam.inc
+
+SET SQL_MODE='';
 #
 # Test bugs in the MyISAM code with blobs
 #
@@ -36,8 +45,9 @@ drop table t1;
 
 CREATE TABLE t1 (data BLOB) ENGINE=myisam;
 INSERT INTO t1 (data) VALUES (NULL);
-UPDATE t1 set data=repeat('a',18*1024*1024);
+UPDATE IGNORE t1 set data=repeat('a',18*1024*1024);
 select length(data) from t1;
 drop table t1;
 
+SET SQL_MODE=default;
 # End of 4.1 tests

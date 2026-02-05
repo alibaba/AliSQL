@@ -1,13 +1,20 @@
-/* Copyright (c) 2008, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation; version 2 of the License.
+  it under the terms of the GNU General Public License, version 2.0,
+  as published by the Free Software Foundation.
+
+  This program is also distributed with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an additional
+  permission to link the program and your derivative works with the
+  separately licensed software that they have included with MySQL.
 
   This program is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
+  GNU General Public License, version 2.0, for more details.
 
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software Foundation,
@@ -19,10 +26,11 @@
 */
 
 #include "my_global.h"
-#include "my_pthread.h"
+#include "my_thread.h"
 #include "table_performance_timers.h"
 #include "pfs_timer.h"
 #include "pfs_global.h"
+#include "field.h"
 
 THR_LOCK table_performance_timers::m_table_lock;
 
@@ -55,25 +63,37 @@ TABLE_FIELD_DEF
 table_performance_timers::m_field_def=
 { 4, field_types };
 
+PFS_engine_table_share_state
+table_performance_timers::m_share_state = {
+  false /* m_checked */
+};
+
 PFS_engine_table_share
 table_performance_timers::m_share=
 {
   { C_STRING_WITH_LEN("performance_timers") },
   &pfs_readonly_acl,
-  &table_performance_timers::create,
+  table_performance_timers::create,
   NULL, /* write_row */
   NULL, /* delete_all_rows */
-  NULL, /* get_row_count */
-  COUNT_TIMER_NAME, /* records */
+  table_performance_timers::get_row_count,
   sizeof(PFS_simple_index), /* ref length */
   &m_table_lock,
   &m_field_def,
-  false /* checked */
+  false, /* m_perpetual */
+  false, /* m_optional */
+  &m_share_state
 };
 
 PFS_engine_table* table_performance_timers::create(void)
 {
   return new table_performance_timers();
+}
+
+ha_rows
+table_performance_timers::get_row_count(void)
+{
+  return COUNT_TIMER_NAME;
 }
 
 table_performance_timers::table_performance_timers()
@@ -133,7 +153,7 @@ int table_performance_timers::rnd_next(void)
 int table_performance_timers::rnd_pos(const void *pos)
 {
   set_position(pos);
-  DBUG_ASSERT(m_pos.m_index < COUNT_TIMER_NAME);
+  assert(m_pos.m_index < COUNT_TIMER_NAME);
   m_row= &m_data[m_pos.m_index];
   return 0;
 }
@@ -145,10 +165,10 @@ int table_performance_timers::read_row_values(TABLE *table,
 {
   Field *f;
 
-  DBUG_ASSERT(m_row);
+  assert(m_row);
 
   /* Set the null bits */
-  DBUG_ASSERT(table->s->null_bytes == 1);
+  assert(table->s->null_bytes == 1);
   buf[0]= 0;
 
   for (; (f= *fields) ; fields++)
@@ -179,7 +199,7 @@ int table_performance_timers::read_row_values(TABLE *table,
           f->set_null();
         break;
       default:
-        DBUG_ASSERT(false);
+        assert(false);
       }
     }
   }

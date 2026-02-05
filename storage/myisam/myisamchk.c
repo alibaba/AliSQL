@@ -1,13 +1,20 @@
-/* Copyright (c) 2000, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -22,9 +29,6 @@
 #include <stdarg.h>
 #include <my_getopt.h>
 #include <my_bit.h>
-#ifdef HAVE_SYS_VADVICE_H
-#include <sys/vadvise.h>
-#endif
 #ifdef HAVE_SYS_MMAN_H
 #include <sys/mman.h>
 #endif
@@ -64,8 +68,8 @@ static void get_options(int *argc,char * * *argv);
 static void print_version(void);
 static void usage(void);
 static int myisamchk(MI_CHECK *param, char *filename);
-static void descript(MI_CHECK *param, register MI_INFO *info, char * name);
-static int mi_sort_records(MI_CHECK *param, register MI_INFO *info,
+static void descript(MI_CHECK *param, MI_INFO *info, char * name);
+static int mi_sort_records(MI_CHECK *param, MI_INFO *info,
                            char * name, uint sort_key,
 			   my_bool write_info, my_bool update_index);
 static int sort_record_index(MI_SORT_PARAM *sort_param, MI_INFO *info,
@@ -75,12 +79,26 @@ static int sort_record_index(MI_SORT_PARAM *sort_param, MI_INFO *info,
 
 MI_CHECK check_param;
 
+/* myisamchk can create multiple threads (see sort.c) */
+extern st_keycache_thread_var *keycache_thread_var()
+{
+  return (st_keycache_thread_var*)my_get_thread_local(keycache_tls_key);
+}
+
 	/* Main program */
 
 int main(int argc, char **argv)
 {
   int error;
   MY_INIT(argv[0]);
+
+  memset(&main_thread_keycache_var, 0, sizeof(st_keycache_thread_var));
+  mysql_cond_init(PSI_NOT_INSTRUMENTED,
+                  &main_thread_keycache_var.suspend);
+
+  (void)my_create_thread_local_key(&keycache_tls_key, NULL);
+  my_set_thread_local(keycache_tls_key, &main_thread_keycache_var);
+
   my_progname_short= my_progname+dirname_length(my_progname);
 
   myisamchk_init(&check_param);
@@ -130,10 +148,10 @@ int main(int argc, char **argv)
   free_tmpdir(&myisamchk_tmpdir);
   ft_free_stopwords();
   my_end(check_param.testflag & T_INFO ? MY_CHECK_ERROR | MY_GIVE_INFO : MY_CHECK_ERROR);
+  mysql_cond_destroy(&main_thread_keycache_var.suspend);
+  my_delete_thread_local_key(keycache_tls_key);
   exit(error);
-#ifndef _lint
   return 0;				/* No compiler warning */
-#endif
 } /* main */
 
 enum options_mc {
@@ -169,7 +187,10 @@ static struct my_option my_long_options[] =
   {"correct-checksum", OPT_CORRECT_CHECKSUM,
    "Correct checksum information for table.",
    0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
-#ifndef DBUG_OFF
+#ifdef NDEBUG
+  {"debug", '#', "This is a non-debug version. Catch this and exit.",
+   0, 0, 0, GET_DISABLED, OPT_ARG, 0, 0, 0, 0, 0, 0},
+#else
   {"debug", '#',
    "Output debug log. Often this is 'd:t:o,filename'.",
    0, 0, 0, GET_STR, OPT_ARG, 0, 0, 0, 0, 0, 0},
@@ -209,7 +230,7 @@ static struct my_option my_long_options[] =
    "Skip rows bigger than this if myisamchk can't allocate memory to hold it",
    &check_param.max_record_length,
    &check_param.max_record_length,
-   0, GET_ULL, REQUIRED_ARG, LONGLONG_MAX, 0, LONGLONG_MAX, 0, 0, 0},
+   0, GET_ULL, REQUIRED_ARG, LLONG_MAX, 0, LLONG_MAX, 0, 0, 0},
   {"medium-check", 'm',
    "Faster than extend-check, but only finds 99.99% of all errors. Should be good enough for most cases.",
    0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
@@ -220,9 +241,6 @@ static struct my_option my_long_options[] =
    0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"recover", 'r',
    "Can fix almost anything except unique keys that aren't unique.",
-   0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
-  {"parallel-recover", 'p',
-   "Same as '-r' but creates all the keys in parallel.",
    0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"safe-recover", 'o',
    "Uses old recovery method; Slower than '-r' but can handle a couple of cases where '-r' reports that it can't fix the data file.",
@@ -350,7 +368,7 @@ static void usage(void)
   puts("Used without options all tables on the command will be checked for errors");
   printf("Usage: %s [OPTIONS] tables[.MYI]\n", my_progname_short);
   printf("\nGlobal options:\n");
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   printf("\
   -#, --debug=...     Output debug log. Often this is 'd:t:o,filename'.\n");
 #endif
@@ -359,7 +377,7 @@ static void usage(void)
   -?, --help          Display this help and exit.\n\
   -t, --tmpdir=path   Path for temporary files. Multiple paths can be\n\
                       specified, separated by ");
-#if defined( __WIN__)
+#if defined(_WIN32)
    printf("semicolon (;)");
 #else
    printf("colon (:)");
@@ -411,9 +429,6 @@ static void usage(void)
                       unique.\n\
   -n, --sort-recover  Forces recovering with sorting even if the temporary\n\
 		      file would be very big.\n\
-  -p, --parallel-recover\n\
-                      Uses the same technique as '-r' and '-n', but creates\n\
-                      all the keys in parallel, in different threads.\n\
   -o, --safe-recover  Uses old recovery method; Slower than '-r' but can\n\
 		      handle a couple of cases where '-r' reports that it\n\
 		      can't fix the data file.\n\
@@ -478,7 +493,7 @@ get_one_option(int optid,
     break;
   case 'A':
     if (argument)
-      check_param.auto_increment_value= strtoull(argument, NULL, 0);
+      check_param.auto_increment_value= my_strtoull(argument, NULL, 0);
     else
       check_param.auto_increment_value= 0;	/* Set to max used value */
     check_param.testflag|= T_AUTO_INC;
@@ -505,7 +520,7 @@ get_one_option(int optid,
       check_param.testflag|= T_CHECK | T_CHECK_ONLY_CHANGED;
     break;
   case 'D':
-    check_param.max_data_file_length=strtoll(argument, NULL, 10);
+    check_param.max_data_file_length= my_strtoll(argument, NULL, 10);
     break;
   case 's':				/* silent */
     if (argument == disabled_my_option)
@@ -561,7 +576,7 @@ get_one_option(int optid,
       check_param.testflag|= T_FAST;
     break;
   case 'k':
-    check_param.keys_in_use= (ulonglong) strtoll(argument, NULL, 10);
+    check_param.keys_in_use= (ulonglong) my_strtoll(argument, NULL, 10);
     break;
   case 'm':
     if (argument == disabled_my_option)
@@ -574,18 +589,12 @@ get_one_option(int optid,
     if (argument != disabled_my_option)
       check_param.testflag|= T_REP_BY_SORT;
     break;
-  case 'p':
-    check_param.testflag&= ~T_REP_ANY;
-    if (argument != disabled_my_option)
-      check_param.testflag|= T_REP_PARALLEL;
-    break;
   case 'o':
     check_param.testflag&= ~T_REP_ANY;
     check_param.force_sort= 0;
     if (argument != disabled_my_option)
     {
       check_param.testflag|= T_REP;
-      my_disable_async_io= 1;		/* More safety */
     }
     break;
   case 'n':
@@ -679,7 +688,7 @@ get_one_option(int optid,
   case OPT_STATS_METHOD:
   {
     int method;
-    enum_mi_stats_method UNINIT_VAR(method_conv);
+    enum_mi_stats_method method_conv= 0;
     myisam_stats_method_str= argument;
     if ((method= find_type(argument, &myisam_stats_method_typelib,
                            FIND_TYPE_BASIC)) <= 0)
@@ -704,7 +713,7 @@ get_one_option(int optid,
   }
 #ifdef DEBUG					/* Only useful if debugging */
   case OPT_START_CHECK_POS:
-    check_param.start_check_pos= strtoull(argument, NULL, 0);
+    check_param.start_check_pos= my_strtoull(argument, NULL, 0);
     break;
 #endif
   case 'H':
@@ -718,7 +727,7 @@ get_one_option(int optid,
 }
 
 
-static void get_options(register int *argc,register char ***argv)
+static void get_options(int *argc,char ***argv)
 {
   int ho_error;
 
@@ -740,7 +749,7 @@ static void get_options(register int *argc,register char ***argv)
   if (*argc == 0)
   {
     usage();
-    exit(-1);
+    exit(1);
   }
 
   if ((check_param.testflag & T_UNPACK) &&
@@ -806,7 +815,7 @@ static int myisamchk(MI_CHECK *param, char * filename)
   {
     /* Avoid twice printing of isam file name */
     param->error_printed=1;
-    switch (my_errno) {
+    switch (my_errno()) {
     case HA_ERR_CRASHED:
       mi_check_print_error(param,"'%s' doesn't have a correct index definition. You need to recreate it before you can do a repair",filename);
       break;
@@ -836,7 +845,7 @@ static int myisamchk(MI_CHECK *param, char * filename)
       break;
     default:
       mi_check_print_error(param,"%d when opening MyISAM-table '%s'",
-		  my_errno,filename);
+                           my_errno(),filename);
       break;
     }
     DBUG_RETURN(1);
@@ -884,7 +893,7 @@ static int myisamchk(MI_CHECK *param, char * filename)
       if (mi_close(info))
       {
 	mi_check_print_error(param,"%d when closing MyISAM-table '%s'",
-			     my_errno,filename);
+			     my_errno(),filename);
 	DBUG_RETURN(1);
       }
       DBUG_RETURN(0);
@@ -913,7 +922,7 @@ static int myisamchk(MI_CHECK *param, char * filename)
       (void) fprintf(stderr,
 		   "MyISAM-table '%s' is not fixed because of errors\n",
 	      filename);
-      return(-1);
+      DBUG_RETURN(-1);
     }
     recreate=1;
     if (!(param->testflag & T_REP_ANY))
@@ -949,7 +958,7 @@ static int myisamchk(MI_CHECK *param, char * filename)
     if (_mi_readinfo(info,lock_type,0))
     {
       mi_check_print_error(param,"Can't lock indexfile of '%s', error: %d",
-		  filename,my_errno);
+                           filename,my_errno());
       param->error_printed=0;
       goto end2;
     }
@@ -987,21 +996,22 @@ static int myisamchk(MI_CHECK *param, char * filename)
       }
       if (!error)
       {
-	if ((param->testflag & (T_REP_BY_SORT | T_REP_PARALLEL)) &&
+	if ((param->testflag & T_REP_BY_SORT) &&
 	    (mi_is_any_key_active(share->state.key_map) ||
 	     (rep_quick && !param->keys_in_use && !recreate)) &&
 	    mi_test_if_sort_rep(info, info->state->records,
 				info->s->state.key_map,
 				param->force_sort))
 	{
-          if (param->testflag & T_REP_BY_SORT)
-            error=mi_repair_by_sort(param,info,filename,rep_quick);
-          else
-            error=mi_repair_parallel(param,info,filename,rep_quick);
+          /*
+            The new file might not be created with the right stats depending
+            on how myisamchk is run, so we must copy file stats from old to new.
+          */
+          error= mi_repair_by_sort(param, info, filename, rep_quick, FALSE);
 	  state_updated=1;
 	}
 	else if (param->testflag & T_REP_ANY)
-	  error=mi_repair(param, info,filename,rep_quick);
+	  error= mi_repair(param, info, filename, rep_quick, FALSE);
       }
       if (!error && param->testflag & T_SORT_RECORDS)
       {
@@ -1009,7 +1019,6 @@ static int myisamchk(MI_CHECK *param, char * filename)
 	  The data file is nowadays reopened in the repair code so we should
 	  soon remove the following reopen-code
 	*/
-#ifndef TO_BE_REMOVED
 	if (param->out_flag & O_NEW_DATA)
 	{			/* Change temp file to org file */
 	  (void) my_close(info->dfile,MYF(MY_WME)); /* Close new file */
@@ -1019,7 +1028,6 @@ static int myisamchk(MI_CHECK *param, char * filename)
 	  param->out_flag&= ~O_NEW_DATA; /* We are using new datafile */
 	  param->read_cache.file=info->dfile;
 	}
-#endif
 	if (! error)
 	{
 	  uint key;
@@ -1030,7 +1038,10 @@ static int myisamchk(MI_CHECK *param, char * filename)
 	  my_bool update_index=1;
 	  for (key=0 ; key < share->base.keys; key++)
 	    if (share->keyinfo[key].flag & (HA_BINARY_PACK_KEY|HA_FULLTEXT))
-	      update_index=0;
+            {
+              update_index=0;
+              break;
+            }
 
 	  error=mi_sort_records(param,info,filename,param->opt_sort_key,
                              /* what is the following parameter for ? */
@@ -1041,12 +1052,12 @@ static int myisamchk(MI_CHECK *param, char * filename)
 	  {
 	    if (param->verbose)
 	      puts("Table had a compressed index;  We must now recreate the index");
-	    error=mi_repair_by_sort(param,info,filename,1);
+	    error= mi_repair_by_sort(param, info, filename, 1, FALSE);
 	  }
 	}
       }
       if (!error && param->testflag & T_SORT_INDEX)
-	error=mi_sort_index(param,info,filename);
+	error= mi_sort_index(param, info, filename, FALSE);
       if (!error)
 	share->state.changed&= ~(STATE_CHANGED | STATE_CRASHED |
 				 STATE_CRASHED_ON_REPAIR);
@@ -1082,7 +1093,7 @@ static int myisamchk(MI_CHECK *param, char * filename)
       {
 	if (param->testflag & (T_EXTEND | T_MEDIUM))
 	  (void) init_key_cache(dflt_key_cache,opt_key_cache_block_size,
-                              param->use_buffers, 0, 0);
+                                (size_t)param->use_buffers, 0, 0);
 	(void) init_io_cache(&param->read_cache,datafile,
 			   (uint) param->read_buffer_length,
 			   READ_CACHE,
@@ -1137,7 +1148,7 @@ static int myisamchk(MI_CHECK *param, char * filename)
 end2:
   if (mi_close(info))
   {
-    mi_check_print_error(param,"%d when closing MyISAM-table '%s'",my_errno,filename);
+    mi_check_print_error(param,"%d when closing MyISAM-table '%s'",my_errno(),filename);
     DBUG_RETURN(1);
   }
   if (error == 0)
@@ -1179,12 +1190,12 @@ end2:
 
 	 /* Write info about table */
 
-static void descript(MI_CHECK *param, register MI_INFO *info, char * name)
+static void descript(MI_CHECK *param, MI_INFO *info, char * name)
 {
   uint key,keyseg_nr,field,start;
-  reg3 MI_KEYDEF *keyinfo;
-  reg2 HA_KEYSEG *keyseg;
-  reg4 const char *text;
+  MI_KEYDEF *keyinfo;
+  HA_KEYSEG *keyseg;
+  const char *text;
   char buff[160],length[10],*pos,*end;
   enum en_fieldtype type;
   MYISAM_SHARE *share=info->s;
@@ -1219,21 +1230,21 @@ static void descript(MI_CHECK *param, register MI_INFO *info, char * name)
     }
     pos=buff;
     if (share->state.changed & STATE_CRASHED)
-      strmov(buff,"crashed");
+      my_stpcpy(buff,"crashed");
     else
     {
       if (share->state.open_count)
-	pos=strmov(pos,"open,");
+	pos=my_stpcpy(pos,"open,");
       if (share->state.changed & STATE_CHANGED)
-	pos=strmov(pos,"changed,");
+	pos=my_stpcpy(pos,"changed,");
       else
-	pos=strmov(pos,"checked,");
+	pos=my_stpcpy(pos,"checked,");
       if (!(share->state.changed & STATE_NOT_ANALYZED))
-	pos=strmov(pos,"analyzed,");
+	pos=my_stpcpy(pos,"analyzed,");
       if (!(share->state.changed & STATE_NOT_OPTIMIZED_KEYS))
-	pos=strmov(pos,"optimized keys,");
+	pos=my_stpcpy(pos,"optimized keys,");
       if (!(share->state.changed & STATE_NOT_SORTED_PAGES))
-	pos=strmov(pos,"sorted index pages,");
+	pos=my_stpcpy(pos,"sorted index pages,");
       pos[-1]=0;				/* Remove extra ',' */
     }      
     printf("Status:              %s\n",buff);
@@ -1257,9 +1268,6 @@ static void descript(MI_CHECK *param, register MI_INFO *info, char * name)
 
   if (param->testflag & T_VERBOSE)
   {
-#ifdef USE_RELOC
-    printf("Init-relocation:     %13s\n",llstr(share->base.reloc,llbuff));
-#endif
     printf("Datafile parts:      %13s  Deleted data:       %13s\n",
 	   llstr(share->state.split,llbuff),
 	   llstr(info->state->empty,llbuff2));
@@ -1306,19 +1314,19 @@ static void descript(MI_CHECK *param, register MI_INFO *info, char * name)
     pos=buff;
     if (keyseg->flag & HA_REVERSE_SORT)
       *pos++ = '-';
-    pos=strmov(pos,type_names[keyseg->type]);
+    pos=my_stpcpy(pos,type_names[keyseg->type]);
     *pos++ = ' ';
     *pos=0;
     if (keyinfo->flag & HA_PACK_KEY)
-      pos=strmov(pos,prefix_packed_txt);
+      pos=my_stpcpy(pos,prefix_packed_txt);
     if (keyinfo->flag & HA_BINARY_PACK_KEY)
-      pos=strmov(pos,bin_packed_txt);
+      pos=my_stpcpy(pos,bin_packed_txt);
     if (keyseg->flag & HA_SPACE_PACK)
-      pos=strmov(pos,diff_txt);
+      pos=my_stpcpy(pos,diff_txt);
     if (keyseg->flag & HA_BLOB_PART)
-      pos=strmov(pos,blob_txt);
+      pos=my_stpcpy(pos,blob_txt);
     if (keyseg->flag & HA_NULL_PART)
-      pos=strmov(pos,null_txt);
+      pos=my_stpcpy(pos,null_txt);
     *pos=0;
 
     printf("%-4d%-6ld%-3d %-8s%-21s",
@@ -1337,14 +1345,14 @@ static void descript(MI_CHECK *param, register MI_INFO *info, char * name)
       pos=buff;
       if (keyseg->flag & HA_REVERSE_SORT)
 	*pos++ = '-';
-      pos=strmov(pos,type_names[keyseg->type]);
+      pos=my_stpcpy(pos,type_names[keyseg->type]);
       *pos++= ' ';
       if (keyseg->flag & HA_SPACE_PACK)
-	pos=strmov(pos,diff_txt);
+	pos=my_stpcpy(pos,diff_txt);
       if (keyseg->flag & HA_BLOB_PART)
-	pos=strmov(pos,blob_txt);
+	pos=my_stpcpy(pos,blob_txt);
       if (keyseg->flag & HA_NULL_PART)
-	pos=strmov(pos,null_txt);
+	pos=my_stpcpy(pos,null_txt);
       *pos=0;
       printf("    %-6ld%-3d         %-21s",
 	     (long) keyseg->start+1,keyseg->length,buff);
@@ -1362,7 +1370,7 @@ static void descript(MI_CHECK *param, register MI_INFO *info, char * name)
 	 key < share->state.header.uniques; key++, uniqueinfo++)
     {
       my_bool new_row=0;
-      char null_bit[8],null_pos[8];
+      char null_bit[8],null_pos[16];
       printf("%-8d%-5d",key+1,uniqueinfo->key+1);
       for (keyseg=uniqueinfo->seg ; keyseg->type != HA_KEYTYPE_END ; keyseg++)
       {
@@ -1396,13 +1404,13 @@ static void descript(MI_CHECK *param, register MI_INFO *info, char * name)
 	type=share->rec[field].base_type;
       else
 	type=(enum en_fieldtype) share->rec[field].type;
-      end=strmov(buff,field_pack[type]);
+      end=my_stpcpy(buff,field_pack[type]);
       if (share->options & HA_OPTION_COMPRESS_RECORD)
       {
 	if (share->rec[field].pack_type & PACK_TYPE_SELECTED)
-	  end=strmov(end,", not_always");
+	  end=my_stpcpy(end,", not_always");
 	if (share->rec[field].pack_type & PACK_TYPE_SPACE_FIELDS)
-	  end=strmov(end,", no empty");
+	  end=my_stpcpy(end,", no empty");
 	if (share->rec[field].pack_type & PACK_TYPE_ZERO_FILL)
 	{
 	  sprintf(end,", zerofill(%d)",share->rec[field].space_length_bits);
@@ -1410,7 +1418,7 @@ static void descript(MI_CHECK *param, register MI_INFO *info, char * name)
 	}
       }
       if (buff[0] == ',')
-	strmov(buff,buff+2);
+	my_stpcpy(buff,buff+2);
       int10_to_str((long) share->rec[field].length,length,10);
       null_bit[0]=null_pos[0]=0;
       if (share->rec[field].null_bit)
@@ -1438,7 +1446,7 @@ static void descript(MI_CHECK *param, register MI_INFO *info, char * name)
 	/* Sort records according to one key */
 
 static int mi_sort_records(MI_CHECK *param,
-			   register MI_INFO *info, char * name,
+			   MI_INFO *info, char * name,
 			   uint sort_key,
 			   my_bool write_info,
 			   my_bool update_index)
@@ -1597,10 +1605,6 @@ err:
     (void) my_close(new_file,MYF(MY_WME));
     (void) my_delete(param->temp_filename, MYF(MY_WME));
   }
-  if (temp_buff)
-  {
-    my_afree((uchar*) temp_buff);
-  }
   my_free(mi_get_rec_buff_ptr(info, sort_param.record));
   info->opt_flag&= ~(READ_CACHE_USED | WRITE_CACHE_USED);
   (void) end_io_cache(&info->rec_cache);
@@ -1667,7 +1671,7 @@ static int sort_record_index(MI_SORT_PARAM *sort_param,MI_INFO *info,
 
     if ((*info->s->read_rnd)(info,sort_param->record,rec_pos,0))
     {
-      mi_check_print_error(param,"%d when reading datafile",my_errno);
+      mi_check_print_error(param,"%d when reading datafile",my_errno());
       goto err;
     }
     if (rec_pos != sort_param->filepos && update_index)
@@ -1677,7 +1681,7 @@ static int sort_record_index(MI_SORT_PARAM *sort_param,MI_INFO *info,
       if (movepoint(info,sort_param->record,rec_pos,sort_param->filepos,
 		    sort_key))
       {
-	mi_check_print_error(param,"%d when updating key-pointers",my_errno);
+	mi_check_print_error(param,"%d when updating key-pointers",my_errno());
 	goto err;
       }
     }
@@ -1689,15 +1693,11 @@ static int sort_record_index(MI_SORT_PARAM *sort_param,MI_INFO *info,
   if (my_pwrite(info->s->kfile,(uchar*) buff,(uint) keyinfo->block_length,
 		page,param->myf_rw))
   {
-    mi_check_print_error(param,"%d when updating keyblock",my_errno);
+    mi_check_print_error(param,"%d when updating keyblock",my_errno());
     goto err;
   }
-  if (temp_buff)
-    my_afree((uchar*) temp_buff);
   DBUG_RETURN(0);
 err:
-  if (temp_buff)
-    my_afree((uchar*) temp_buff);
   DBUG_RETURN(1);
 } /* sort_record_index */
 

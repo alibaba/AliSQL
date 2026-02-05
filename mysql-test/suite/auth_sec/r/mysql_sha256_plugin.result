@@ -25,8 +25,10 @@ select (select plugin from mysql.user where User='Tanjotuser2' and Host='127.0.0
 ERROR 28000: Access denied for user 'Tanjotuser1'@'localhost' (using password: )
 ERROR 28000: Access denied for user 'Tanjotuser2'@'localhost' (using password: )
 set @@session.old_passwords=2;
-SET PASSWORD FOR 'Tanjotuser1'@'localhost'=PASSWORD('abc');
-SET PASSWORD FOR 'Tanjotuser2'@'127.0.0.1'=PASSWORD('abc');
+Warnings:
+Warning	1681	'old_passwords' is deprecated and will be removed in a future release.
+SET PASSWORD FOR 'Tanjotuser1'@'localhost'='abc';
+SET PASSWORD FOR 'Tanjotuser2'@'127.0.0.1'='abc';
 **** connecting Tanjotuser1 with server 
 @@session.old_passwords
 2
@@ -51,14 +53,6 @@ SET PASSWORD FOR 'Tanjotuser2'@'127.0.0.1'=PASSWORD('abc');
 @@session.old_passwords
 2
 2 Expected
-**** connecting Tanjotuser1 with server 
-@@session.old_passwords
-2
-2 Expected
-**** connecting Tanjotuser2 with server 
-@@session.old_passwords
-2
-2 Expected
 ERROR 28000: Access denied for user 'Tanjotuser1'@'localhost' (using password: )
 ERROR 28000: Access denied for user 'Tanjotuser2'@'localhost' (using password: )
 ERROR 28000: Access denied for user 'Tanjotuser1'@'localhost' (using password: )
@@ -69,17 +63,6 @@ ERROR 28000: Access denied for user 'Tanjotuser1'@'localhost' (using password: )
 ERROR 28000: Access denied for user 'Tanjotuser2'@'localhost' (using password: )
 ERROR 28000: Access denied for user 'Tanjotuser1'@'localhost' (using password: )
 ERROR 28000: Access denied for user 'Tanjotuser2'@'localhost' (using password: )
-ERROR 28000: Access denied for user 'Tanjotuser1'@'localhost' (using password: )
-ERROR 28000: Access denied for user 'Tanjotuser2'@'localhost' (using password: )
-ERROR 28000: Access denied for user 'Tanjotuser1'@'localhost' (using password: )
-ERROR 28000: Access denied for user 'Tanjotuser2'@'localhost' (using password: )
-ERROR 28000: Access denied for user 'Tanjotuser1'@'localhost' (using password: )
-ERROR 28000: Access denied for user 'Tanjotuser2'@'localhost' (using password: )
-select @@global.secure_auth;
-@@global.secure_auth
-1
-1 Expected
-set @@global.secure_auth=0;
 ERROR 28000: Access denied for user 'Tanjotuser1'@'localhost' (using password: )
 ERROR 28000: Access denied for user 'Tanjotuser2'@'localhost' (using password: )
 ERROR 28000: Access denied for user 'Tanjotuser1'@'localhost' (using password: )
@@ -97,10 +80,10 @@ checking the integrity of long password (more than 40 chars) using sha256_passwo
 CREATE USER 'Tanjotuser1'@'localhost' IDENTIFIED WITH 'sha256_password';
 CREATE USER 'Tanjotuser2'@'127.0.0.1' IDENTIFIED WITH 'sha256_password';
 SET @@session.old_passwords=2;
-SET PASSWORD FOR 'Tanjotuser1'@'localhost'=PASSWORD('$$$$$$$$$$^^^^^^^^^^&&&&&&&&&&**********((((((((((##########!!!!!!!!!!@@@@@@@@@@          @@@@@@@@@@__________');
-SET PASSWORD FOR 'Tanjotuser2'@'127.0.0.1'=PASSWORD('$$$$$$$$$$^^^^^^^^^^&&&&&&&&&&**********((((((((((##########!!!!!!!!!!@@@@@@@@@@          @@@@@@@@@@__________');
-set @@global.secure_auth=0;
-set @@global.secure_auth=1;
+Warnings:
+Warning	1681	'old_passwords' is deprecated and will be removed in a future release.
+SET PASSWORD FOR 'Tanjotuser1'@'localhost'='$$$$$$$$$$^^^^^^^^^^&&&&&&&&&&**********((((((((((##########!!!!!!!!!!@@@@@@@@@@          @@@@@@@@@@__________';
+SET PASSWORD FOR 'Tanjotuser2'@'127.0.0.1'='$$$$$$$$$$^^^^^^^^^^&&&&&&&&&&**********((((((((((##########!!!!!!!!!!@@@@@@@@@@          @@@@@@@@@@__________';
 ERROR 28000: Access denied for user 'Tanjotuser1'@'localhost' (using password: )
 ERROR 28000: Access denied for user 'Tanjotuser2'@'localhost' (using password: )
 ERROR 28000: Access denied for user 'Tanjotuser1'@'localhost' (using password: )
@@ -139,8 +122,10 @@ select (select plugin from mysql.user where User='Tanjotuser2' and Host='127.0.0
 ERROR 28000: Access denied for user 'Tanjotuser1'@'localhost' (using password: )
 ERROR 28000: Access denied for user 'Tanjotuser2'@'localhost' (using password: )
 SET @@session.old_passwords=2;
-SET PASSWORD FOR 'Tanjotuser1'@'localhost'=PASSWORD('abc');
-SET PASSWORD FOR 'Tanjotuser2'@'127.0.0.1'=PASSWORD('abc');
+Warnings:
+Warning	1681	'old_passwords' is deprecated and will be removed in a future release.
+SET PASSWORD FOR 'Tanjotuser1'@'localhost'='abc';
+SET PASSWORD FOR 'Tanjotuser2'@'127.0.0.1'='abc';
 **** connecting Tanjotuser1 with server 
 @@session.old_passwords
 2
@@ -157,22 +142,6 @@ SET PASSWORD FOR 'Tanjotuser2'@'127.0.0.1'=PASSWORD('abc');
 @@session.old_passwords
 2
 2 Expected
-**** connecting Tanjotuser1 with server 
-@@session.old_passwords
-2
-2 Expected
-**** connecting Tanjotuser2 with server 
-@@session.old_passwords
-2
-2 Expected
-**** connecting Tanjotuser1 with server 
-@@session.old_passwords
-2
-2 Expected
-**** connecting Tanjotuser2 with server 
-@@session.old_passwords
-2
-2 Expected
 ERROR 28000: Access denied for user 'Tanjotuser1'@'localhost' (using password: )
 ERROR 28000: Access denied for user 'Tanjotuser2'@'localhost' (using password: )
 ERROR 28000: Access denied for user 'Tanjotuser1'@'localhost' (using password: )
@@ -183,17 +152,6 @@ ERROR 28000: Access denied for user 'Tanjotuser1'@'localhost' (using password: )
 ERROR 28000: Access denied for user 'Tanjotuser2'@'localhost' (using password: )
 ERROR 28000: Access denied for user 'Tanjotuser1'@'localhost' (using password: )
 ERROR 28000: Access denied for user 'Tanjotuser2'@'localhost' (using password: )
-ERROR 28000: Access denied for user 'Tanjotuser1'@'localhost' (using password: )
-ERROR 28000: Access denied for user 'Tanjotuser2'@'localhost' (using password: )
-ERROR 28000: Access denied for user 'Tanjotuser1'@'localhost' (using password: )
-ERROR 28000: Access denied for user 'Tanjotuser2'@'localhost' (using password: )
-ERROR 28000: Access denied for user 'Tanjotuser1'@'localhost' (using password: )
-ERROR 28000: Access denied for user 'Tanjotuser2'@'localhost' (using password: )
-select @@global.secure_auth;
-@@global.secure_auth
-1
-1 Expected
-set @@global.secure_auth=0;
 ERROR 28000: Access denied for user 'Tanjotuser1'@'localhost' (using password: )
 ERROR 28000: Access denied for user 'Tanjotuser2'@'localhost' (using password: )
 ERROR 28000: Access denied for user 'Tanjotuser1'@'localhost' (using password: )
@@ -211,10 +169,10 @@ checking the integrity of long password (more than 40 chars) using sha256_passwo
 CREATE USER 'Tanjotuser1'@'localhost' IDENTIFIED WITH 'sha256_password';
 CREATE USER 'Tanjotuser2'@'127.0.0.1' IDENTIFIED WITH 'sha256_password';
 SET @@session.old_passwords=2;
-SET PASSWORD FOR 'Tanjotuser1'@'localhost'=PASSWORD('$$$$$$$$$$^^^^^^^^^^&&&&&&&&&&**********((((((((((##########!!!!!!!!!!@@@@@@@@@@          @@@@@@@@@@__________');
-SET PASSWORD FOR 'Tanjotuser2'@'127.0.0.1'=PASSWORD('$$$$$$$$$$^^^^^^^^^^&&&&&&&&&&**********((((((((((##########!!!!!!!!!!@@@@@@@@@@          @@@@@@@@@@__________');
-set @@global.secure_auth=0;
-set @@global.secure_auth=1;
+Warnings:
+Warning	1681	'old_passwords' is deprecated and will be removed in a future release.
+SET PASSWORD FOR 'Tanjotuser1'@'localhost'='$$$$$$$$$$^^^^^^^^^^&&&&&&&&&&**********((((((((((##########!!!!!!!!!!@@@@@@@@@@          @@@@@@@@@@__________';
+SET PASSWORD FOR 'Tanjotuser2'@'127.0.0.1'='$$$$$$$$$$^^^^^^^^^^&&&&&&&&&&**********((((((((((##########!!!!!!!!!!@@@@@@@@@@          @@@@@@@@@@__________';
 ERROR 28000: Access denied for user 'Tanjotuser1'@'localhost' (using password: )
 ERROR 28000: Access denied for user 'Tanjotuser2'@'localhost' (using password: )
 ERROR 28000: Access denied for user 'Tanjotuser1'@'localhost' (using password: )
@@ -225,6 +183,9 @@ ERROR 28000: Access denied for user 'Tanjotuser1'@'localhost' (using password: )
 ERROR 28000: Access denied for user 'Tanjotuser2'@'localhost' (using password: )
 DROP USER 'Tanjotuser1'@'localhost';
 DROP USER 'Tanjotuser2'@'127.0.0.1';
-SET @@global.secure_auth=default;
 SET @@global.old_passwords=default;
+Warnings:
+Warning	1681	'old_passwords' is deprecated and will be removed in a future release.
 SET @@session.old_passwords=default;
+Warnings:
+Warning	1681	'old_passwords' is deprecated and will be removed in a future release.

@@ -1,13 +1,20 @@
-/* Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2012, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -52,9 +59,9 @@ class Mock_field_new_decimal : public Field_new_decimal
   void initialize()
   {
     ptr= buffer;
-    null_ptr= &null_byte;
     memset(buffer, 0, MAX_FIELD_WIDTH);
     null_byte= '\0';
+    set_null_ptr(&null_byte, 1);
   }
 
 public:
@@ -73,6 +80,7 @@ public:
   }
 
   void make_writable() { bitmap_set_bit(table->write_set, field_index); }
+  void make_readable() { bitmap_set_bit(table->read_set, field_index); }
 
   void test_store_string(const char *store_value, const int length,
                          const char *expected_string_result,
@@ -88,6 +96,7 @@ public:
     Mock_error_handler error_handler(table->in_use, expected_error_no);
     type_conversion_status err= store(store_value, length, &my_charset_latin1);
     val_str(&str, &unused);
+  
     EXPECT_STREQ(expected_string_result, str.ptr());
     EXPECT_EQ(expected_int_result, val_int());
     EXPECT_EQ(expected_real_result, val_real());
@@ -107,6 +116,7 @@ TEST_F(FieldNewDecimalTest, StoreLegalStringValues)
   Fake_TABLE table(&field_dec);
   table.in_use= thd();
   field_dec.make_writable();
+  field_dec.make_readable();
   thd()->count_cuted_fields= CHECK_FIELD_WARN;
 
   {
@@ -129,6 +139,7 @@ TEST_F(FieldNewDecimalTest, StoreIllegalStringValues)
   Fake_TABLE table(&field_dec);
   table.in_use= thd();
   field_dec.make_writable();
+  field_dec.make_readable();
   thd()->count_cuted_fields= CHECK_FIELD_WARN;
 
   // Truncated (precision beyond 3 decimals is lost)
@@ -201,6 +212,7 @@ TEST_F(FieldNewDecimalTest, storeInternalWithErrorCheckLegalValues)
   Fake_TABLE table(&field_dec);
   table.in_use= thd();
   field_dec.make_writable();
+  field_dec.make_readable();
   thd()->count_cuted_fields= CHECK_FIELD_WARN;
 
   my_decimal d10_01;
@@ -256,6 +268,7 @@ TEST_F(FieldNewDecimalTest, storeInternalWithErrorCheckOutOfRange)
   Fake_TABLE table(&field_dec);
   table.in_use= thd();
   field_dec.make_writable();
+  field_dec.make_readable();
   thd()->count_cuted_fields= CHECK_FIELD_WARN;
 
   my_decimal dTooHigh;
@@ -295,6 +308,7 @@ TEST_F(FieldNewDecimalTest, storeInternalWithErrorCheckEDecOverflow)
   Fake_TABLE table(&field_dec);
   table.in_use= thd();
   field_dec.make_writable();
+  field_dec.make_readable();
   thd()->count_cuted_fields= CHECK_FIELD_WARN;
 
   my_decimal d10_01;
@@ -365,6 +379,7 @@ TEST_F(FieldNewDecimalTest, storeInternalWithErrorCheckEDecTrunkated)
   Fake_TABLE table(&field_dec);
   table.in_use= thd();
   field_dec.make_writable();
+  field_dec.make_readable();
   thd()->count_cuted_fields= CHECK_FIELD_WARN;
 
   my_decimal d10_01;
@@ -433,6 +448,7 @@ TEST_F(FieldNewDecimalTest, storeInternalWithErrorCheckRestOfParams)
   Fake_TABLE table(&field_dec);
   table.in_use= thd();
   field_dec.make_writable();
+  field_dec.make_readable();
   thd()->count_cuted_fields= CHECK_FIELD_WARN;
 
   my_decimal d10_01;

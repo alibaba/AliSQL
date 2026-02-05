@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -58,11 +65,18 @@ CPCD::findUniqueId() {
     id = rand() % 8192; /* Don't want so big numbers */
 
     if(id == 0)
+    {
       ok = false;
+      continue;
+    }
 
-    for(size_t i = 0; i<m_processes.size(); i++) {
+    for(unsigned i = 0; i<m_processes.size(); i++)
+    {
       if(m_processes[i]->m_id == id)
+      {
 	ok = false;
+        break;
+      }
     }
   }
   m_processes.unlock();
@@ -76,7 +90,7 @@ CPCD::defineProcess(RequestStatus * rs, Process * arg){
 
   Guard tmp(m_processes);
 
-  for(size_t i = 0; i<m_processes.size(); i++) {
+  for(unsigned i = 0; i<m_processes.size(); i++) {
     Process * proc = m_processes[i];
     
     if((strcmp(arg->m_name.c_str(), proc->m_name.c_str()) == 0) && 
@@ -106,7 +120,7 @@ CPCD::undefineProcess(CPCD::RequestStatus *rs, int id) {
   Guard tmp(m_processes);
 
   Process * proc = 0;
-  size_t i;
+  unsigned i;
   for(i = 0; i < m_processes.size(); i++) {
     if(m_processes[i]->m_id == id) {
       proc = m_processes[i];
@@ -142,7 +156,7 @@ CPCD::startProcess(CPCD::RequestStatus *rs, int id) {
 
     Guard tmp(m_processes);
     
-    for(size_t i = 0; i < m_processes.size(); i++) {
+    for(unsigned i = 0; i < m_processes.size(); i++) {
       if(m_processes[i]->m_id == id) {
 	proc = m_processes[i];
 	break;
@@ -185,7 +199,7 @@ CPCD::stopProcess(CPCD::RequestStatus *rs, int id) {
   Guard tmp(m_processes);
 
   Process * proc = 0;
-  for(size_t i = 0; i < m_processes.size(); i++) {
+  for(unsigned i = 0; i < m_processes.size(); i++) {
     if(m_processes[i]->m_id == id) {
       proc = m_processes[i];
       break;
@@ -264,7 +278,7 @@ CPCD::saveProcessList(){
     return false;
   }
 
-  for(size_t i = 0; i<m_processes.size(); i++){
+  for(unsigned i = 0; i<m_processes.size(); i++){
     m_processes[i]->print(f);
     fprintf(f, "\n");
 
@@ -362,12 +376,17 @@ CPCD::loadProcessList(){
     }
   }
 
+/*
+  File is ignored anyways, so don't load it,
+  kept for future use of config file.
+
   CPCDAPISession sess(f, *this);
-  fclose(f);
   sess.loadFile();
+*/
+  fclose(f);
   loadingProcessList = false;
 
-  size_t i;
+  unsigned i;
   Vector<int> temporary;
   for(i = 0; i<m_processes.size(); i++){
     Process * proc = m_processes[i];

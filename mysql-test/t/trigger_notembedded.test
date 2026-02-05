@@ -1,3 +1,8 @@
+# The include statement below is a temp one for tests that are yet to
+#be ported to run with InnoDB,
+#but needs to be kept for tests that would need MyISAM in future.
+--source include/force_myisam_default.inc
+
 # Test case(s) in this file contain(s) GRANT/REVOKE statements, which are not
 # supported in embedded server. So, this test should not be run on embedded
 # server.
@@ -324,6 +329,7 @@ INSERT INTO t1 VALUES(6);
 # Check that SHOW TRIGGERS statement provides "Definer" column.
 #
 
+--replace_column 6 #
 SHOW TRIGGERS;
 
 #
@@ -382,6 +388,7 @@ SELECT trigger_name, definer FROM INFORMATION_SCHEMA.TRIGGERS ORDER BY trigger_n
 
 --echo
 
+--replace_column 17 #
 SELECT * FROM INFORMATION_SCHEMA.TRIGGERS ORDER BY trigger_name;
 
 #
@@ -946,7 +953,10 @@ DROP DATABASE IF EXISTS mysqltest_db1;
 CREATE DATABASE mysqltest_db1;
 USE mysqltest_db1;
 
+set @orig_sql_mode= @@sql_mode;
+set sql_mode= (select replace(@@sql_mode,'NO_AUTO_CREATE_USER',''));
 GRANT ALL ON mysqltest_db1.* TO mysqltest_u1@localhost;
+set sql_mode= @orig_sql_mode;
 
 --connect(con1,localhost,mysqltest_u1,,mysqltest_db1)
 
@@ -981,3 +991,62 @@ DROP USER mysqltest_u1@localhost;
 USE test;
 
 --echo End of 5.1 tests.
+
+--echo #
+--echo # WL#2284: Increase the length of a user name
+--echo #
+
+CREATE DATABASE test1;
+CREATE TABLE test1.t1 (
+  int_field INTEGER UNSIGNED NOT NULL,
+  char_field CHAR(10),
+  INDEX(`int_field`)
+);
+
+use test;
+
+CREATE USER user_name_len_22_01234@localhost;
+CREATE USER user_name_len_32_012345678901234@localhost;
+
+REVOKE ALL PRIVILEGES, GRANT OPTION FROM user_name_len_22_01234@localhost;
+REVOKE ALL PRIVILEGES, GRANT OPTION FROM user_name_len_32_012345678901234@localhost;
+
+--echo # Check that user_name_len_22_01234 has no SELECT permission ON t1
+connect (con_user_22,localhost,user_name_len_22_01234,,test);
+--error ER_TABLEACCESS_DENIED_ERROR
+SELECT * FROM test1.t1;
+
+--echo # Check that user_name_len_32_012345678901234 has no SELECT permission ON t1
+connect (con_user_32,localhost,user_name_len_32_012345678901234,,test);
+--error ER_TABLEACCESS_DENIED_ERROR
+SELECT * FROM test1.t1;
+
+connection default;
+
+GRANT ALL ON test1.* TO user_name_len_32_012345678901234@localhost;
+
+CREATE DEFINER=user_name_len_32_012345678901234@localhost
+  TRIGGER test1.t1_ai AFTER INSERT ON test1.t1 FOR EACH ROW SET @a = (SELECT COUNT(*) FROM test1.t1);
+
+GRANT INSERT ON test1.t1 TO user_name_len_22_01234@localhost;
+
+--echo # Now user_name_len_22_01234 should be able to "SELECT" COUNT(*) FROM
+--echo # test1.t1 by using the trigger
+
+connection con_user_22;
+set @a:=0;
+INSERT INTO test1.t1 VALUES (1,'haha');
+SELECT @a;
+
+connection default;
+
+--error ER_WRONG_STRING_LENGTH
+CREATE DEFINER=user_name_len_33_0123456789012345@localhost
+  TRIGGER test1.t1_bi BEFORE INSERT ON test1.t1 FOR EACH ROW SET @a = (SELECT COUNT(*) FROM test1.t1);
+
+#Cleanup
+DROP DATABASE test1;
+
+DROP USER user_name_len_22_01234@localhost;
+DROP USER user_name_len_32_012345678901234@localhost;
+

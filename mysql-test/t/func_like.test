@@ -1,3 +1,8 @@
+# The include statement below is a temp one for tests that are yet to
+#be ported to run with InnoDB,
+#but needs to be kept for tests that would need MyISAM in future.
+--source include/force_myisam_default.inc
+
 #
 # Test of like
 #
@@ -17,7 +22,7 @@ select * from t1 where a like "test%";
 select * from t1 where a like "te_t";
 
 #
-# The following will test the Turbo Boyer-Moore code
+# The following will test the Boyer-Moore code
 #
 select * from t1 where a like "%a%";
 select * from t1 where a like "%abcd%";
@@ -121,7 +126,7 @@ select _cp1251'andre%' like convert('andre %' using cp1251)  escape ' ';
 --echo #
 CREATE TABLE t1(a SET('a') NOT NULL, UNIQUE KEY(a));
 CREATE TABLE t2(b INT PRIMARY KEY);
-INSERT INTO t1 VALUES ();
+INSERT IGNORE INTO t1 VALUES ();
 INSERT INTO t2 VALUES (1), (2), (3);
 SELECT 1 FROM t2 JOIN t1 ON 1 LIKE a GROUP BY a;
 DROP TABLE t1, t2;
@@ -133,3 +138,75 @@ DROP TABLE t1, t2;
 SELECT '' LIKE '1' ESCAPE COUNT(1);
 
 --echo End of 5.1 tests
+
+--echo #
+--echo # Bug #18114294	 CRASH IN ITEM_FUNC_LIKE::BM_MATCHES
+--echo #
+
+select 0x0000000001020003F03F40408484040ADDE40 like 0x256F3B38312A7725;
+select 0x003c8793403032 like '%-112%';
+select 0x903f645a8c507dd79178 like '%-128%';
+select 0xac14aa84f000d276d66ed9 like '%-107%';
+select 0xf0be117400d02a20b8e049da3e74 like '%-123%';
+select 0x961838f6fc3c7f9ec17b5d900410d8aa like '%-113%';
+select 0x6a8473fc1c64ce4f2684c05a400c5e7ca4a01a like '%emailin%';
+select 0x00b25278956e0044683dfc180cd886aeff2f5bc3fc18 like '%-122%';
+select 0xbc24421ce6194ab5c260e80af647ae58fdbfca18a19dc8411424 like '%-106%';
+
+--echo #
+--echo # Bug#19931126 VALGRIND REPORTS USE OF UNINITIALIZED VALUE IN
+--echo #              MY_WILDCMP_BIN_IMPL
+--echo #
+
+CREATE TABLE t1(x CHAR(1)) ENGINE=InnoDB;
+
+# The escape string is null and defaults to '\'.
+SELECT ('a%b' LIKE 'a\%b' ESCAPE (SELECT x FROM t1));
+SELECT ('a%b' LIKE 'ax%b' ESCAPE (SELECT x FROM t1));
+
+# The escape string is 'x'.
+INSERT INTO t1 VALUES ('x');
+SELECT ('a%b' LIKE 'a\%b' ESCAPE (SELECT x FROM t1));
+SELECT ('a%b' LIKE 'ax%b' ESCAPE (SELECT x FROM t1));
+
+# The escape string cannot have more than one character.
+--error ER_WRONG_ARGUMENTS
+SELECT ('a%b' LIKE 'ax%b' ESCAPE (SELECT 'xy' FROM t1));
+
+# The subquery cannot return more than one row.
+INSERT INTO t1 VALUES ('y');
+--error ER_SUBQUERY_NO_1_ROW
+SELECT ('a%b' LIKE 'ax%b' ESCAPE (SELECT x FROM t1));
+DELETE FROM t1 WHERE x = 'y';
+
+# The escape clause must have exactly one column.
+--error ER_OPERAND_COLUMNS
+SELECT ('a%b' LIKE 'ax%b' ESCAPE (SELECT x, x FROM t1));
+--error ER_OPERAND_COLUMNS
+SELECT ('a%b' LIKE 'ax%b' ESCAPE ('x', 'y'));
+
+# The escape clause needs to be constant during execution.
+--error ER_WRONG_ARGUMENTS
+SELECT ('a%b' LIKE 'ax%b' ESCAPE x) FROM t1;
+
+# Also test on an indexed column to exercise the range optimizer.
+# (The range optimizer will give up because it doesn't know the
+# value of the escape character, so the query execution plan will
+# not actually use range optimization.)
+CREATE TABLE t2(x int, y varchar(100)) ENGINE=InnoDB;
+CREATE INDEX idx ON t2(y);
+INSERT INTO t2 VALUES (1, 'abcd'), (2, 'ab%cde');
+ANALYZE TABLE t2;
+let $query=
+SELECT * FROM t2 WHERE y LIKE 'abc%%' ESCAPE (SELECT 'c' FROM t1) ORDER BY y;
+eval EXPLAIN $query;
+eval $query;
+
+DROP TABLE t1, t2;
+
+--echo # Bug#20035071: Out of range error in subselect lead to assertion failed
+
+CREATE TABLE t1(a INTEGER) engine=innodb;
+--error ER_DATA_OUT_OF_RANGE
+SELECT 1 FROM t1 HAVING (SELECT 1 FROM t1) LIKE EXP(NOW());
+DROP TABLE t1;

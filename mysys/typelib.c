@@ -1,13 +1,25 @@
-/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -16,6 +28,7 @@
 /* Functions to handle typelib */
 
 #include "mysys_priv.h"
+#include "my_sys.h"
 #include <m_string.h>
 #include <m_ctype.h>
 
@@ -68,14 +81,14 @@ int find_type_or_exit(const char *x, TYPELIB *typelib, const char *option)
 int find_type(const char *x, const TYPELIB *typelib, uint flags)
 {
   int find,pos;
-  int UNINIT_VAR(findpos);                       /* guarded by find */
+  int findpos= 0;                       /* guarded by find */
   const char *i;
   const char *j;
   DBUG_ENTER("find_type");
   DBUG_PRINT("enter",("x: '%s'  lib: 0x%lx", x, (long) typelib));
 
-  DBUG_ASSERT(!(flags & ~(FIND_TYPE_NO_PREFIX | FIND_TYPE_ALLOW_NUMBER |
-                          FIND_TYPE_NO_OVERWRITE | FIND_TYPE_COMMA_TERM)));
+  assert(!(flags & ~(FIND_TYPE_NO_PREFIX | FIND_TYPE_ALLOW_NUMBER |
+                     FIND_TYPE_NO_OVERWRITE | FIND_TYPE_COMMA_TERM)));
   if (!typelib->count)
   {
     DBUG_PRINT("exit",("no count"));
@@ -128,14 +141,14 @@ int find_type(const char *x, const TYPELIB *typelib, uint flags)
   first type is 1, 0 = empty field
 */
 
-void make_type(register char * to, register uint nr,
-	       register TYPELIB *typelib)
+void make_type(char * to, uint nr,
+	       TYPELIB *typelib)
 {
   DBUG_ENTER("make_type");
   if (!nr)
     to[0]=0;
   else
-    (void) strmov(to,get_type(typelib,nr-1));
+    (void) my_stpcpy(to,get_type(typelib,nr-1));
   DBUG_VOID_RETURN;
 } /* make_type */
 
@@ -193,7 +206,7 @@ my_ulonglong find_typeset(char *x, TYPELIB *lib, int *err)
       x++;
     if ((find= find_type(i, lib, FIND_TYPE_COMMA_TERM) - 1) < 0)
       DBUG_RETURN(0);
-    result|= (ULL(1) << find);
+    result|= (1ULL << find);
   }
   *err= 0;
   DBUG_RETURN(result);
@@ -375,7 +388,7 @@ my_ulonglong find_set_from_flags(const TYPELIB *lib, uint default_name,
       continue;
    err:
       *err_pos= (char*)start;
-      *err_len= end - start;
+      *err_len= (uint)(end - start);
       break;
     }
   }

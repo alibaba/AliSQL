@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -27,9 +34,15 @@
 #include <NdbSleep.h>
 #include "ObjectMap.hpp"
 #include "NdbUtil.hpp"
+#include <NdbEnv.h>
 
 #include <EventLogger.hpp>
 extern EventLogger * g_eventLogger;
+
+#ifdef VM_TRACE
+static bool g_first_create_ndb = true;
+static bool g_force_short_signals = false;
+#endif
 
 Ndb::Ndb( Ndb_cluster_connection *ndb_cluster_connection,
 	  const char* aDataBase , const char* aSchema)
@@ -61,7 +74,8 @@ void Ndb::setup(Ndb_cluster_connection *ndb_cluster_connection,
   theMinNoOfEventsToWakeUp= 0;
   theTransactionList= NULL;
   theConnectionArray= NULL;
-  the_last_check_time= 0;
+  theConnectionArrayLast= NULL;
+  the_last_check_time = NdbTick_CurrentMillisecond();
   theFirstTransId= 0;
   theRestartGCI= 0;
   theNdbBlockNumber= -1;
@@ -83,13 +97,15 @@ void Ndb::setup(Ndb_cluster_connection *ndb_cluster_connection,
   theError.code = 0;
 
   theConnectionArray = new NdbConnection * [MAX_NDB_NODES];
+  theConnectionArrayLast = new NdbConnection * [MAX_NDB_NODES];
   theCommitAckSignal = NULL;
   theCachedMinDbNodeVersion = 0;
   
   int i;
   for (i = 0; i < MAX_NDB_NODES ; i++) {
     theConnectionArray[i] = NULL;
-  }//forg
+    theConnectionArrayLast[i] = NULL;
+  }//for
   m_sys_tab_0 = NULL;
 
   theImpl->m_dbname.assign(aDataBase);
@@ -125,6 +141,14 @@ Ndb::~Ndb()
   DBUG_ENTER("Ndb::~Ndb()");
   DBUG_PRINT("enter",("this: 0x%lx", (long) this));
 
+  if (theImpl == NULL)
+  {
+    /* Help users find their bugs */
+    g_eventLogger->warning("Deleting Ndb-object @%p which is already deleted?",
+                           this);
+    DBUG_VOID_RETURN;
+  }
+
   if (m_sys_tab_0)
     getDictionary()->removeTableGlobal(*m_sys_tab_0, 0);
 
@@ -154,10 +178,14 @@ Ndb::~Ndb()
   theImpl->close();
 
   delete theEventBuffer;
+  theEventBuffer = NULL;
 
   releaseTransactionArrays();
 
   delete []theConnectionArray;
+  theConnectionArray = NULL;
+  delete []theConnectionArrayLast;
+  theConnectionArrayLast = NULL;
   if(theCommitAckSignal != NULL){
     delete theCommitAckSignal; 
     theCommitAckSignal = NULL;
@@ -166,6 +194,7 @@ Ndb::~Ndb()
   theImpl->m_ndb_cluster_connection.unlink_ndb_object(this);
 
   delete theImpl;
+  theImpl = NULL;
 
 #ifdef POORMANSPURIFY
 #ifdef POORMANSGUI
@@ -190,6 +219,7 @@ NdbWaiter::NdbWaiter(trp_client* clnt)
 
 NdbWaiter::~NdbWaiter()
 {
+  m_clnt = NULL;
 }
 
 NdbImpl::NdbImpl(Ndb_cluster_connection *ndb_cluster_connection,
@@ -204,8 +234,10 @@ NdbImpl::NdbImpl(Ndb_cluster_connection *ndb_cluster_connection,
     theNdbObjectIdMap(1024,1024),
     theNoOfDBnodes(0),
     theWaiter(this),
+    wakeHandler(0),
     m_ev_op(0),
-    customDataPtr(0)
+    customData(0),
+    send_TC_COMMIT_ACK_immediate_flag(false)
 {
   int i;
   for (i = 0; i < MAX_NDB_NODES; i++) {
@@ -218,9 +250,19 @@ NdbImpl::NdbImpl(Ndb_cluster_connection *ndb_cluster_connection,
 			NDB_SYSTEM_SCHEMA, table_name_separator);
 
   forceShortRequests = false;
-  const char* f= getenv("NDB_FORCE_SHORT_REQUESTS");
-  if (f != 0 && *f != 0 && *f != '0' && *f != 'n' && *f != 'N')
-    forceShortRequests = true;
+
+#ifdef VM_TRACE
+  if (g_first_create_ndb)
+  {
+    g_first_create_ndb = false;
+    const char* f= NdbEnv_GetEnv("NDB_FORCE_SHORT_REQUESTS", (char*)0, 0);
+    if (f != 0 && *f != 0 && *f != '0' && *f != 'n' && *f != 'N')
+    {
+      g_force_short_signals = true;
+    }
+  }
+  forceShortRequests = g_force_short_signals;
+#endif
 
   for (i = 0; i < Ndb::NumClientStatistics; i++)
     clientStats[i] = 0;
@@ -228,5 +270,10 @@ NdbImpl::NdbImpl(Ndb_cluster_connection *ndb_cluster_connection,
 
 NdbImpl::~NdbImpl()
 {
+  m_next_ndb_object = NULL;
+  m_prev_ndb_object = NULL;
+  theWaiter = NULL;
+  wakeHandler = NULL;
+  m_ev_op = NULL;
 }
 

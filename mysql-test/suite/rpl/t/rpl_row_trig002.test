@@ -48,10 +48,10 @@ INSERT INTO test.t3 VALUES ('Yes', 1, NULL, 'spamfilter','scan_incoming');
 INSERT INTO test.t2 VALUES ('Yes', 1, NULL, 'spamfilter','scan_incoming');
 
 select * from test.t2;
-select * from test.t3;
+select * from test.t3 order by value;
 --source include/sync_slave_sql_with_master.inc
 select * from test.t2;
-select * from test.t3;
+select * from test.t3 order by value;
 connection master;
 
 DELETE FROM test.t1 WHERE id = 1;

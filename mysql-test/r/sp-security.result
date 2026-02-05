@@ -1,5 +1,15 @@
+set @orig_sql_mode_session= @@SESSION.sql_mode;
+set @orig_sql_mode_global= @@GLOBAL.sql_mode;
+set GLOBAL sql_mode= (select replace(@@GLOBAL.sql_mode,'NO_AUTO_CREATE_USER',''));
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+set SESSION sql_mode= (select replace(@@SESSION.sql_mode,'NO_AUTO_CREATE_USER',''));
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 use test;
 grant usage on *.* to user1@localhost;
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
 flush privileges;
 drop table if exists t1;
 drop database if exists db1_secret;
@@ -32,8 +42,12 @@ select db();
 db()
 test
 grant execute on procedure db1_secret.stamp to user1@'%';
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
 grant execute on function db1_secret.db to user1@'%';
 grant execute on procedure db1_secret.stamp to ''@'%';
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
 grant execute on function db1_secret.db to ''@'%';
 call db1_secret.stamp(2);
 select db1_secret.db();
@@ -104,6 +118,8 @@ insert into t2 values (0);
 grant usage on db2.* to user1@localhost;
 grant select on db2.* to user1@localhost;
 grant usage on db2.* to user2@localhost;
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
 grant select,insert,update,delete,create routine on db2.* to user2@localhost;
 grant create routine on db2.* to user1@localhost;
 flush privileges;
@@ -157,8 +173,14 @@ delete from mysql.procs_priv where user='' and host='%';
 delete from mysql.db where user='user2';
 flush privileges;
 grant usage on *.* to usera@localhost;
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
 grant usage on *.* to userb@localhost;
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
 grant usage on *.* to userc@localhost;
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
 create database sptest;
 create table t1 ( u varchar(64), i int );
 create procedure sptest.p1(i int) insert into test.t1 values (user(), i);
@@ -224,6 +246,8 @@ create database mysqltest//
 use mysqltest//
 create table t1 (s1 int)//
 grant select on t1 to user1@localhost//
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
 create function bug_9503 () returns int sql security invoker begin declare v int;
 select min(s1) into v from t1; return v; end//
 use mysqltest;
@@ -267,6 +291,8 @@ begin
 select 1 from dual;
 end//
 grant usage on *.* to mysqltest_1@localhost;
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
 call mysqltest_1.p1();
 ERROR 42000: execute command denied to user 'mysqltest_1'@'localhost' for routine 'mysqltest_1.p1'
 call mysqltest_1.p1();
@@ -366,19 +392,19 @@ Note	1449	The user specified as a definer ('a @ b @ c'@'localhost') does not exi
 USE mysqltest;
 SHOW CREATE PROCEDURE wl2897_p1;
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
-wl2897_p1	NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`mysqltest_2`@`localhost` PROCEDURE `wl2897_p1`()
+wl2897_p1	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`mysqltest_2`@`localhost` PROCEDURE `wl2897_p1`()
 SELECT 1	latin1	latin1_swedish_ci	latin1_swedish_ci
 SHOW CREATE PROCEDURE wl2897_p3;
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
-wl2897_p3	NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`a @ b @ c`@`localhost` PROCEDURE `wl2897_p3`()
+wl2897_p3	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`a @ b @ c`@`localhost` PROCEDURE `wl2897_p3`()
 SELECT 3	latin1	latin1_swedish_ci	latin1_swedish_ci
 SHOW CREATE FUNCTION wl2897_f1;
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
-wl2897_f1	NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`mysqltest_2`@`localhost` FUNCTION `wl2897_f1`() RETURNS int(11)
+wl2897_f1	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`mysqltest_2`@`localhost` FUNCTION `wl2897_f1`() RETURNS int(11)
 RETURN 1	latin1	latin1_swedish_ci	latin1_swedish_ci
 SHOW CREATE FUNCTION wl2897_f3;
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
-wl2897_f3	NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`a @ b @ c`@`localhost` FUNCTION `wl2897_f3`() RETURNS int(11)
+wl2897_f3	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`a @ b @ c`@`localhost` FUNCTION `wl2897_f3`() RETURNS int(11)
 RETURN 3	latin1	latin1_swedish_ci	latin1_swedish_ci
 DROP USER mysqltest_1@localhost;
 DROP USER mysqltest_2@localhost;
@@ -428,10 +454,12 @@ ERROR HY000: The user specified as a definer ('mysqltest_1'@'localhost') does no
 DROP USER mysqltest_2@localhost;
 DROP DATABASE mysqltest;
 GRANT USAGE ON *.* TO user19857@localhost IDENTIFIED BY 'meow';
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
 GRANT SELECT, INSERT, UPDATE, DELETE, CREATE ROUTINE, ALTER ROUTINE ON test.* TO
 user19857@localhost;
-SELECT Host,User,Password FROM mysql.user WHERE User='user19857';
-Host	User	Password
+SELECT Host,User,authentication_string FROM mysql.user WHERE User='user19857';
+Host	User	authentication_string
 localhost	user19857	*82DC221D557298F6CE9961037DB1C90604792F5C
 
 ---> connection: mysqltest_2_con
@@ -444,7 +472,7 @@ SELECT a;
 END //
 SHOW CREATE PROCEDURE test.sp19857;
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
-sp19857	NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`user19857`@`localhost` PROCEDURE `sp19857`()
+sp19857	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`user19857`@`localhost` PROCEDURE `sp19857`()
     DETERMINISTIC
 BEGIN
 DECLARE a INT;
@@ -454,8 +482,8 @@ END	latin1	latin1_swedish_ci	latin1_swedish_ci
 DROP PROCEDURE IF EXISTS test.sp19857;
 
 ---> connection: root
-SELECT Host,User,Password FROM mysql.user WHERE User='user19857';
-Host	User	Password
+SELECT Host,User,authentication_string FROM mysql.user WHERE User='user19857';
+Host	User	authentication_string
 localhost	user19857	*82DC221D557298F6CE9961037DB1C90604792F5C
 DROP USER user19857@localhost;
 use test;
@@ -612,7 +640,7 @@ GRANT SELECT ON mysql.proc TO user2@localhost;
 # This should work
 SHOW CREATE PROCEDURE db1.p1;
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
-p1	NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` PROCEDURE `p1`()
+p1	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` PROCEDURE `p1`()
 SELECT 1	latin1	latin1_swedish_ci	latin1_swedish_ci
 # Connection default
 DROP USER user2@localhost;
@@ -647,3 +675,9 @@ ERROR 42000: execute command denied to user 'bug12602983_user'@'localhost' for r
 # Connection 'default'.
 drop user bug12602983_user@localhost;
 drop database mysqltest_db;
+set GLOBAL sql_mode= @orig_sql_mode_global;
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+set SESSION sql_mode= @orig_sql_mode_session;
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.

@@ -1,23 +1,29 @@
-/* Copyright (c) 2010, 2015, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "sql_reload.h"
-#include "sql_priv.h"
 #include "mysqld.h"      // select_errors
 #include "sql_class.h"   // THD
-#include "sql_acl.h"     // acl_reload
+#include "auth_common.h" // acl_reload, grant_reload
 #include "sql_servers.h" // servers_reload
 #include "sql_connect.h" // reset_mqh
 #include "sql_base.h"    // close_cached_tables
@@ -27,7 +33,11 @@
 #include "rpl_slave.h"   // reset_slave
 #include "rpl_rli.h"     // rotate_relay_log
 #include "rpl_mi.h"
+#include "rpl_msr.h"     /* multisource replication */
 #include "debug_sync.h"
+#include "connection_handler_impl.h"
+#include "opt_costconstantcache.h"     // reload_optimizer_cost_constants
+#include "log.h"         // query_logger
 #include "des_key_file.h"
 
 
@@ -61,7 +71,7 @@ bool reload_acl_and_cache(THD *thd, unsigned long options,
   select_errors=0;				/* Write if more errors */
   int tmp_write_to_binlog= *write_to_binlog= 1;
 
-  DBUG_ASSERT(!thd || !thd->in_sub_stmt);
+  assert(!thd || !thd->in_sub_stmt);
 
 #ifndef NO_EMBEDDED_ACCESS_CHECKS
   if (options & REFRESH_GRANT)
@@ -97,8 +107,6 @@ bool reload_acl_and_cache(THD *thd, unsigned long options,
     if (tmp_thd)
     {
       delete tmp_thd;
-      /* Remember that we don't have a THD */
-      my_pthread_setspecific_ptr(THR_THD,  0);
       thd= 0;
     }
     reset_mqh((LEX_USER *)NULL, TRUE);
@@ -121,21 +129,16 @@ bool reload_acl_and_cache(THD *thd, unsigned long options,
   }
 
   if (options & REFRESH_ERROR_LOG)
-    if (flush_error_log())
-    {
-      /*
-        When flush_error_log() failed, my_error() has not been called.
-        So, we have to do it here to keep the protocol.
-      */
-      my_error(ER_UNKNOWN_ERROR, MYF(0));
+    if (reopen_error_log())
       result= 1;
-    }
 
   if ((options & REFRESH_SLOW_LOG) && opt_slow_log)
-    logger.flush_slow_log();
+    if (query_logger.reopen_log_file(QUERY_LOG_SLOW))
+      result= 1;
 
-  if ((options & REFRESH_GENERAL_LOG) && opt_log)
-    logger.flush_general_log();
+  if ((options & REFRESH_GENERAL_LOG) && opt_general_log)
+    if (query_logger.reopen_log_file(QUERY_LOG_GENERAL))
+      result= 1;
 
   if (options & REFRESH_ENGINE_LOG)
     if (ha_flush_logs(NULL))
@@ -171,26 +174,18 @@ bool reload_acl_and_cache(THD *thd, unsigned long options,
     if (options & REFRESH_RELAY_LOG)
     {
 #ifdef HAVE_REPLICATION
-      mysql_mutex_lock(&LOCK_active_mi);
-      if (active_mi != NULL)
-      {
-        mysql_mutex_lock(&active_mi->data_lock);
-        if (rotate_relay_log(active_mi))
-          *write_to_binlog= -1;
-        mysql_mutex_unlock(&active_mi->data_lock);
-      }
-      mysql_mutex_unlock(&LOCK_active_mi);
+      if (flush_relay_logs_cmd(thd))
+        *write_to_binlog= -1;
 #endif
     }
     if (tmp_thd)
     {
       delete tmp_thd;
       /* Remember that we don't have a THD */
-      my_pthread_setspecific_ptr(THR_THD,  0);
+      my_thread_set_THR_THD(NULL);
       thd= 0;
     }
   }
-#ifdef HAVE_QUERY_CACHE
   if (options & REFRESH_QUERY_CACHE_FREE)
   {
     query_cache.pack();				// FLUSH QUERY CACHE
@@ -200,12 +195,13 @@ bool reload_acl_and_cache(THD *thd, unsigned long options,
   {
     query_cache.flush();			// RESET QUERY CACHE
   }
-#endif /*HAVE_QUERY_CACHE*/
 
-  DBUG_ASSERT(!thd || thd->locked_tables_mode ||
-              !thd->mdl_context.has_locks() ||
-              thd->handler_tables_hash.records ||
-              thd->global_read_lock.is_acquired());
+  assert(!thd || thd->locked_tables_mode ||
+         !thd->mdl_context.has_locks() ||
+         thd->handler_tables_hash.records ||
+         thd->mdl_context.has_locks(MDL_key::USER_LEVEL_LOCK) ||
+         thd->mdl_context.has_locks(MDL_key::LOCKING_SERVICE) ||
+         thd->global_read_lock.is_acquired());
 
   /*
     Note that if REFRESH_READ_LOCK bit is set then REFRESH_TABLES is set too
@@ -274,8 +270,8 @@ bool reload_acl_and_cache(THD *thd, unsigned long options,
             global read lock.
           */
           if (thd->open_tables &&
-              !thd->mdl_context.is_lock_owner(MDL_key::GLOBAL, "", "",
-                                              MDL_INTENTION_EXCLUSIVE))
+              !thd->mdl_context.owns_equal_or_stronger_lock(MDL_key::GLOBAL,
+                                  "", "", MDL_INTENTION_EXCLUSIVE))
           {
             my_error(ER_TABLE_NOT_LOCKED_FOR_WRITE, MYF(0),
                      thd->open_tables->s->table_name.str);
@@ -312,12 +308,14 @@ bool reload_acl_and_cache(THD *thd, unsigned long options,
     hostname_cache_refresh();
   if (thd && (options & REFRESH_STATUS))
     refresh_status(thd);
+#ifndef EMBEDDED_LIBRARY
   if (options & REFRESH_THREADS)
-    kill_blocked_pthreads();
+    Per_thread_connection_handler::kill_blocked_pthreads();
+#endif
 #ifdef HAVE_REPLICATION
   if (options & REFRESH_MASTER)
   {
-    DBUG_ASSERT(thd);
+    assert(thd);
     tmp_write_to_binlog= 0;
     if (reset_master(thd))
     {
@@ -336,22 +334,17 @@ bool reload_acl_and_cache(THD *thd, unsigned long options,
      }
    }
 #endif
+  if (options & REFRESH_OPTIMIZER_COSTS)
+    reload_optimizer_cost_constants();
 #ifdef HAVE_REPLICATION
  if (options & REFRESH_SLAVE)
  {
    tmp_write_to_binlog= 0;
-   mysql_mutex_lock(&LOCK_active_mi);
-   if (active_mi != NULL && reset_slave(thd, active_mi))
+   if (reset_slave_cmd(thd))
    {
-     /* NOTE: my_error() has been already called by reset_slave(). */
+     /*NOTE: my_error() has been already called by reset_slave() */
      result= 1;
    }
-   else if (active_mi == NULL)
-   {
-     result= 1;
-     my_error(ER_SLAVE_CONFIGURATION, MYF(0));
-   }
-   mysql_mutex_unlock(&LOCK_active_mi);
  }
 #endif
  if (options & REFRESH_USER_RESOURCES)
@@ -488,8 +481,7 @@ bool flush_tables_with_read_lock(THD *thd, TABLE_LIST *all_tables)
     acquire SNW locks to ensure that they can be locked for
     read without further waiting.
   */
-  if (open_and_lock_tables(thd, all_tables, FALSE,
-                           MYSQL_OPEN_SKIP_SCOPED_MDL_LOCK,
+  if (open_and_lock_tables(thd, all_tables, MYSQL_OPEN_SKIP_SCOPED_MDL_LOCK,
                            &lock_tables_prelocking_strategy) ||
       thd->locked_tables_list.init_locked_tables(thd))
   {
@@ -548,9 +540,12 @@ bool flush_tables_for_export(THD *thd, TABLE_LIST *all_tables)
     Acquire SNW locks on tables to be exported. Don't acquire
     global IX as this will make this statement incompatible
     with FLUSH TABLES WITH READ LOCK.
+    We can't acquire SRO locks instead of SNW locks as it will
+    make two concurrent FLUSH TABLE ... FOR EXPORT statements
+    for the same table possible, which creates race between
+    creation/deletion of metadata file.
   */
-  if (open_and_lock_tables(thd, all_tables, false,
-                           MYSQL_OPEN_SKIP_SCOPED_MDL_LOCK,
+  if (open_and_lock_tables(thd, all_tables, MYSQL_OPEN_SKIP_SCOPED_MDL_LOCK,
                            &lock_tables_prelocking_strategy))
   {
     return true;

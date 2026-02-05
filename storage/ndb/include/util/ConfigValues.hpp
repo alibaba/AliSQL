@@ -1,15 +1,21 @@
 /*
-   Copyright (C) 2004-2006 MySQL AB
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2004, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -27,6 +33,8 @@ class ConfigValues {
   ConfigValues(Uint32 sz, Uint32 data);
 
 public:
+  static ConfigValues* constructInPlace(Uint32 keys, Uint32 data, void* place, size_t size);
+  static size_t sizeInBytes(Uint32 keys, Uint32 data);
   ~ConfigValues();
   
   enum ValueType {
@@ -47,6 +55,19 @@ public:
     };
   };
   
+  /**
+    This class is used for accessing indvidual ConfigValues::Entry objects
+    within a ConfigValues instance. Despite the name, this is *not* an 
+    iterator. Instead, it provides two-step associative lookup:
+    - First call openSection() to choose a section type (e.g. CFG_SECTION_NODE)
+      and an instance (0..n) of that section type. (_paramId of each 
+      ConfigInfo::m_ParamInfo element with _type==ConfigInfo::CI_SECTION is 
+      a section type identifier.)
+     - Then access config values within that section instance using 
+       get(key,...)
+    After that, possibly call closeSection() and start again if you want to
+    read values from a different section.
+   */
   class ConstIterator {
     friend class ConfigValuesFactory;
     const ConfigValues & m_cfg;
@@ -54,9 +75,18 @@ public:
     Uint32 m_currentSection;
     ConstIterator(const ConfigValues&c) : m_cfg(c) { m_currentSection = 0;}
     
+    /** 
+      Set section and section instance. Return false if no matching section
+      or instance was found.
+    */
     bool openSection(Uint32 key, Uint32 no);
+
+    /** Close current section so that you can open another.*/
     bool closeSection();
 
+    /** 
+      Get entry within current section. Return false if 'key' was not found.
+     */
     bool get(Uint32 key, Entry *) const;
     
     bool get(Uint32 key, Uint32 * value) const;
@@ -100,8 +130,18 @@ private:
   Uint32 m_stringCount;
   Uint32 m_int64Count;
 
+  /**
+   * ConfigValues are constructed with different sizes.
+   * If we used dynamicly sized arrays the end of the
+   * class would look like:
+   *   struct alignas(8) { Uint32 key; Uint32 value_or_index; } m_values[m_size];
+   *   Uint64 alignas(8) m_data[m_int64Count];
+   *   char              m_free[m_dataSize - m_int64Count*8 - m_stringCount*sizeof(char*)];
+   *   char * alignas(sizeof(char *)) m_dataString[m_stringCount];
+   * Where m_dataString grows from top and down with index 0 on top.
+   * But now we only have a place holder for the first entry.
+   */
   Uint32 m_values[1];
-  void * m_data[1];
 };
 
 class ConfigValuesFactory {
@@ -112,7 +152,7 @@ public:
   Uint32 m_freeData;
 
 public:
-  ConfigValuesFactory(Uint32 keys = 50, Uint32 data = 10); // Initial
+  ConfigValuesFactory(Uint32 keys = 50, Uint32 data = 16); // Initial
   ConfigValuesFactory(ConfigValues * m_cfg);        //
   ~ConfigValuesFactory();
 

@@ -1,13 +1,20 @@
-/* Copyright (c) 2005, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2005, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
@@ -16,19 +23,42 @@
 #ifndef RPL_RLI_H
 #define RPL_RLI_H
 
-#include "sql_priv.h"
-#include "rpl_info.h"
-#include "rpl_utility.h"
-#include "rpl_tblmap.h"
-#include "rpl_reporting.h"
-#include "rpl_utility.h"
-#include "log.h"                         /* LOG_INFO */
-#include "binlog.h"                      /* MYSQL_BIN_LOG */
-#include "sql_class.h"                   /* THD */
+#include "my_global.h"
+
+#include "binlog.h"            // MYSQL_BIN_LOG
+#include "prealloced_array.h"  // Prealloced_array
+#include "rpl_gtid.h"          // Gtid_set
+#include "rpl_info.h"          // Rpl_info
+#include "rpl_mts_submode.h"   // enum_mts_parallel_type
+#include "rpl_tblmap.h"        // table_mapping
+#include "rpl_utility.h"       // Deferred_log_events
+#include "sql_class.h"         // THD
+
+#include <string>
+#include <vector>
 
 struct RPL_TABLE_LIST;
 class Master_info;
+class Mts_submode;
+class Commit_order_manager;
+class Slave_committed_queue;
+typedef struct st_db_worker_hash_entry db_worker_hash_entry;
 extern uint sql_slave_skip_counter;
+
+extern my_bool duckdb_multi_trx_in_batch;
+
+extern ulonglong duckdb_multi_trx_timeout;
+
+extern my_bool duckdb_commit_multi_trx_due_to_rotate;
+
+typedef Prealloced_array<Slave_worker*, 4> Slave_worker_array;
+
+typedef struct slave_job_item
+{
+  Log_event *data;
+  uint relay_number;
+  my_off_t relay_pos;
+} Slave_job_item;
 
 /*******************************************************************************
 Replication SQL Thread
@@ -126,10 +156,24 @@ public:
   */
   inline bool belongs_to_client()
   {
-    DBUG_ASSERT(info_thd);
+    assert(info_thd);
     return !info_thd->slave_thread;
   }
-
+/* Instrumentation key for performance schema for mts_temp_table_LOCK */
+#ifdef HAVE_PSI_INTERFACE
+  PSI_mutex_key m_key_mts_temp_table_LOCK;
+#endif
+  /*
+     Lock to protect race condition while transferring temporary table from
+     worker thread to coordinator thread and vice-versa
+   */
+  mysql_mutex_t mts_temp_table_LOCK;
+  /*
+     Lock to acquire by methods that concurrently update lwm of committed
+     transactions and the min waited timestamp and its index.
+  */
+  mysql_mutex_t mts_gaq_LOCK;
+  mysql_cond_t  logical_clock_cond;
   /*
     If true, events with the same server id should be replicated. This
     field is set on creation of a relay log info structure by copying
@@ -138,6 +182,16 @@ public:
     where the BINLOG statement can be used to execute "raw" events.
    */
   bool replicate_same_server_id;
+
+  /*
+    The gtid (or anonymous) of the currently executing transaction, or
+    of the last executing transaction if no transaction is currently
+    executing.  This is used to fill the last_seen_transaction
+    column
+    of the table
+    performance_schema.replication_applier_status_by_worker.
+  */
+  Gtid_specification currently_executing_gtid;
 
   /*** The following variables can only be read when protect by data lock ****/
   /*
@@ -180,6 +234,9 @@ public:
   /* parent Master_info structure */
   Master_info *mi;
 
+  /* number of temporary tables open in this channel */
+  Atomic_int32 channel_open_temp_tables;
+
   /*
     Needed to deal properly with cur_log getting closed and re-opened with
     a different log under our feet
@@ -192,9 +249,6 @@ public:
     SLAVE must be executed and the problem fixed manually.
    */
   bool error_on_rli_init_info;
-
-  /* MTS distributing mode, see enum_slave_pr_mode */
-  ulong pr_mode;
 
   /*
     Let's call a group (of events) :
@@ -218,9 +272,13 @@ protected:
   char group_relay_log_name[FN_REFLEN];
   ulonglong group_relay_log_pos;
   char event_relay_log_name[FN_REFLEN];
+  /* The suffix number of relay log name */
+  uint event_relay_log_number;
   ulonglong event_relay_log_pos;
   ulonglong future_event_relay_log_pos;
 
+  /* current event's start position in relay log */
+  my_off_t event_start_pos;
   /*
      Original log name and position of the group we're currently executing
      (whose coordinates are group_relay_log_name/pos in the relay log)
@@ -236,42 +294,135 @@ protected:
   char group_master_log_name[FN_REFLEN];
   volatile my_off_t group_master_log_pos;
 
-  /*
-    When it commits, InnoDB internally stores the master log position it has
-    processed so far; the position to store is the one of the end of the
-    committing event (the COMMIT query event, or the event if in autocommit
-    mode).
-  */
-#if MYSQL_VERSION_ID < 40100
-  ulonglong future_master_log_pos;
-#else
-  ulonglong future_group_master_log_pos;
-#endif
-
 private:
   Gtid_set gtid_set;
-  /* Last gtid retrieved by IO thread */
-  Gtid last_retrieved_gtid;
+  Gtid_set tcle_gtid_set;
+  /*
+    Identifies when this object belongs to the SQL thread and was not
+    created for a client thread or some other purpose including
+    Slave_worker instance initializations. Ends up serving the same
+    purpose as the belongs_to_client method, but its value is set
+    earlier on in the class constructor.
+  */
+  bool rli_fake;
+  /* Flag that ensures the retrieved GTID set is initialized only once. */
+  bool gtid_retrieved_initialized;
+
+  /*
+    In non-batch mode:
+    The number of transactions that have been replayed idempotently.
+    When it is set to MTS_MAX_WORKERS, the Coodinator thread will stop
+    replaying transactions idempotently.
+  */
+  int m_duckdb_idempotent_cnt;
+
+  /*
+    In non-batch mode:
+    Set to True only when the Slave Worker need to replay idempotently.
+  */
+  bool m_duckdb_idempotent_flag;
+
+  /*
+    In batch mode:
+    The SQL Thread will stop replaying transactions idempotently when it
+    encounters the first Rotate Event (From Master).
+  */
+  bool m_duckdb_idempotent_batch;
+
+  /* Set to True when the transaction only has inserts */
+  bool m_duckdb_insert_only_flag;
+
+  /* Length in Bytes of current transaction */
+  ulonglong m_transaction_length;
+
+  /* Whether parallel replay is possible, disabled for Multi-Trx Batch */
+  bool parallel_for_duckdb = true;
 
 public:
-  Gtid *get_last_retrieved_gtid() { return &last_retrieved_gtid; }
-  void set_last_retrieved_gtid(Gtid gtid) { last_retrieved_gtid= gtid; }
-  int add_logged_gtid(rpl_sidno sidno, rpl_gno gno)
-  {
-    int ret= 0;
-    global_sid_lock->assert_some_lock();
-    DBUG_ASSERT(sidno <= global_sid_map->get_max_sidno());
-    gtid_set.ensure_sidno(sidno);
-    if (gtid_set._add_gtid(sidno, gno) != RETURN_STATUS_OK)
-      ret= 1;
-    return ret;
+
+  void set_duckdb_idempotent_cnt(int duckdb_idempotent_cnt) {
+    m_duckdb_idempotent_cnt = duckdb_idempotent_cnt;
   }
+
+  int get_duckdb_idempotent_cnt() { return m_duckdb_idempotent_cnt; }
+
+  void set_duckdb_idempotent_flag(bool duckdb_idempotent_flag)
+  {
+    m_duckdb_idempotent_flag = duckdb_idempotent_flag;
+  }
+
+  bool get_duckdb_idempotent_flag() const { return m_duckdb_idempotent_flag; }
+
+  void set_duckdb_idempotent_batch(bool duckdb_idempotent_batch) {
+    m_duckdb_idempotent_batch = duckdb_idempotent_batch;
+  }
+
+  bool get_duckdb_idempotent_batch() const { return m_duckdb_idempotent_batch; }
+
+  void set_duckdb_insert_only_flag(bool duckdb_insert_only_flag)
+  {
+    m_duckdb_insert_only_flag = duckdb_insert_only_flag;
+  }
+
+  bool get_duckdb_insert_only_flag() const { return m_duckdb_insert_only_flag; }
+
+  void set_transaction_length(ulonglong transaction_length)
+  {
+    m_transaction_length = transaction_length;
+  }
+
+  ulonglong get_transaction_length() const { return m_transaction_length; }
+
+  void add_logged_gtid(rpl_sidno sidno, rpl_gno gno)
+  {
+    global_sid_lock->assert_some_lock();
+    assert(sidno <= global_sid_map->get_max_sidno());
+    gtid_set.ensure_sidno(sidno);
+    gtid_set._add_gtid(sidno, gno);
+  }
+
+  /**
+    Adds a GTID set to received GTID set.
+
+    @param gtid_set the gtid_set to add
+
+    @return RETURN_STATUS_OK or RETURN_STATUS_REPORTED_ERROR.
+  */
+  enum_return_status add_gtid_set(const Gtid_set *gtid_set);
+
   const Gtid_set *get_gtid_set() const { return &gtid_set; }
+
+  enum_return_status add_tcle_gtid_set(const Gtid_set *gtid_set);
+
+  const Gtid_set *get_tcle_gtid_set() const { return &tcle_gtid_set; }
+
+  void clear_tcle_gtid_set() {
+    global_sid_lock->wrlock();
+    tcle_gtid_set.clear();
+    global_sid_lock->unlock();
+  }
 
   int init_relay_log_pos(const char* log,
                          ulonglong pos, bool need_data_lock,
                          const char** errmsg,
                          bool keep_looking_for_fd);
+
+  /*
+    Update the error number, message and timestamp fields. This function is
+    different from va_report() as va_report() also logs the error message in the
+    log apart from updating the error fields.
+  */
+  void fill_coord_err_buf(loglevel level, int err_code,
+                          const char *buff_coord) const;
+
+
+  /*
+    Flag that the group_master_log_pos is invalid. This may occur
+    (for example) after CHANGE MASTER TO RELAY_LOG_POS.  This will
+    be unset after the first event has been executed and the
+    group_master_log_pos is valid again.
+   */
+  bool is_group_master_log_pos_invalid;
 
   /*
     Handling of the relay_log_space_limit optional constraint.
@@ -322,11 +473,17 @@ public:
      notify_*_log_name_updated() methods. (They need to be called only if SQL
      thread is running).
    */
-  enum {UNTIL_NONE= 0, UNTIL_MASTER_POS, UNTIL_RELAY_POS,
-        UNTIL_SQL_BEFORE_GTIDS, UNTIL_SQL_AFTER_GTIDS,
-        UNTIL_SQL_AFTER_MTS_GAPS, UNTIL_DONE
-}
-    until_condition;
+  enum
+  {
+    UNTIL_NONE= 0,
+    UNTIL_MASTER_POS,
+    UNTIL_RELAY_POS,
+    UNTIL_SQL_BEFORE_GTIDS,
+    UNTIL_SQL_AFTER_GTIDS,
+    UNTIL_SQL_AFTER_MTS_GAPS,
+    UNTIL_SQL_VIEW_ID,
+    UNTIL_DONE
+  } until_condition;
   char until_log_name[FN_REFLEN];
   ulonglong until_log_pos;
   /* extension extracted from log_name and converted to int */
@@ -354,6 +511,26 @@ public:
   } until_log_names_cmp_result;
 
   char cached_charset[6];
+
+  /*
+    View_id until which UNTIL_SQL_VIEW_ID condition will wait.
+  */
+  std::string until_view_id;
+  /*
+    Flag used to indicate that view_id identified by 'until_view_id'
+    was found on the current UNTIL_SQL_VIEW_ID condition.
+    It is set to false on the beginning of the UNTIL_SQL_VIEW_ID
+    condition, and set to true when view_id is found.
+  */
+  bool until_view_id_found;
+  /*
+    Flag used to indicate that commit event after view_id identified
+    by 'until_view_id' was found on the current UNTIL_SQL_VIEW_ID condition.
+    It is set to false on the beginning of the UNTIL_SQL_VIEW_ID
+    condition, and set to true when commit event after view_id is found.
+  */
+  bool until_view_id_commit_found;
+
   /*
     trans_retries varies between 0 to slave_transaction_retries and counts how
     many times the slave has retried the present transaction; gets reset to 0
@@ -415,9 +592,12 @@ public:
   int inc_group_relay_log_pos(ulonglong log_pos,
                               bool need_data_lock);
 
-  int wait_for_pos(THD* thd, String* log_name, longlong log_pos, 
-		   longlong timeout);
-  int wait_for_gtid_set(THD* thd, String* gtid, longlong timeout);
+  int wait_for_pos(THD* thd, String* log_name, longlong log_pos,
+                   double timeout);
+  int wait_for_gtid_set(THD* thd, String* gtid, double timeout);
+  int wait_for_gtid_set(THD* thd, const Gtid_set* wait_gtid_set,
+                        double timeout);
+
   void close_temporary_tables();
 
   /* Check if UNTIL condition is satisfied. See slave.cc for more. */
@@ -436,7 +616,7 @@ public:
 
   bool get_table_data(TABLE *table_arg, table_def **tabledef_var, TABLE **conv_table_var) const
   {
-    DBUG_ASSERT(tabledef_var && conv_table_var);
+    assert(tabledef_var && conv_table_var);
     for (TABLE_LIST *ptr= tables_to_lock ; ptr != NULL ; ptr= ptr->next_global)
       if (ptr->table == table_arg)
       {
@@ -463,7 +643,8 @@ public:
   void cleanup_context(THD *, bool);
   void slave_close_thread_tables(THD *);
   void clear_tables_to_lock();
-  int purge_relay_logs(THD *thd, bool just_reset, const char** errmsg);
+  int purge_relay_logs(THD *thd, bool just_reset, const char** errmsg,
+                       bool delete_only= false);
 
   /*
     Used to defer stopping the SQL thread to give it a chance
@@ -493,7 +674,38 @@ public:
     W  - Worker;
     WQ - Worker Queue containing event assignments
   */
-  DYNAMIC_ARRAY workers; // number's is determined by global slave_parallel_workers
+  // number's is determined by global slave_parallel_workers
+  Slave_worker_array workers;
+
+  HASH mapping_db_to_worker; // To map a database to a worker
+  bool inited_hash_workers; //  flag to check if mapping_db_to_worker is inited
+
+  mysql_mutex_t slave_worker_hash_lock; // for mapping_db_to_worker
+  mysql_cond_t  slave_worker_hash_cond;// for mapping_db_to_worker
+
+  /*
+    For the purpose of reporting the worker status in performance schema table,
+    we need to preserve the workers array after worker thread was killed. So, we
+    copy this array into the below vector which is used for reporting
+    until next init_workers(). Note that we only copy those attributes that
+    would be useful in reporting worker status. We only use a few attributes in
+    this object as of now but still save the whole object. The idea is
+    to be future proof. We will extend performance schema tables in future
+    and then we would use a good number of attributes from this object.
+  */
+
+  std::vector<Slave_worker*> workers_copy_pfs;
+
+  /*
+    This flag is turned ON when the workers array is initialized.
+    Before destroying the workers array we check this flag to make sure
+    we are not destroying an unitilized array. For the purpose of reporting the
+    worker status in performance schema table, we need to preserve the workers
+    array after worker thread was killed. So, we copy this array into
+    workers_copy_pfs array which is used for reporting until next init_workers().
+  */
+  bool workers_array_initialized;
+
   volatile ulong pending_jobs;
   mysql_mutex_t pending_jobs_lock;
   mysql_cond_t pending_jobs_cond;
@@ -511,8 +723,11 @@ public:
   /*
     Container for references of involved partitions for the current event group
   */
-  DYNAMIC_ARRAY curr_group_assigned_parts;
-  DYNAMIC_ARRAY curr_group_da;  // deferred array to hold partition-info-free events
+  // CGAP dynarray holds id:s of partitions of the Current being executed Group
+  Prealloced_array<db_worker_hash_entry*, 4, true> curr_group_assigned_parts;
+  // deferred array to hold partition-info-free events
+  Prealloced_array<Slave_job_item, 8, true> curr_group_da;  
+
   bool curr_group_seen_gtid;   // current group started with Gtid-event or not
   bool curr_group_seen_begin;   // current group started with B-event or not
   bool curr_group_isolated;     // current group requires execution in isolation
@@ -553,14 +768,14 @@ public:
             V                            |
     MTS_NOT_IN_GROUP =>                  |
         {MTS_IN_GROUP => MTS_END_GROUP --+} while (!killed) => MTS_KILLED_GROUP
-      
+
     MTS_END_GROUP has `->' loop breaking link to MTS_NOT_IN_GROUP when
     Coordinator synchronizes with Workers by demanding them to
     complete their assignments.
   */
   enum
   {
-    /* 
+    /*
        no new events were scheduled after last synchronization,
        includes Single-Threaded-Slave case.
     */
@@ -579,20 +794,81 @@ public:
   volatile ulong mts_wq_overrun_cnt; // counter of all mts_wq_excess_cnt increments
   ulong wq_size_waits_cnt;    // number of times C slept due to WQ:s oversize
   /*
-    a counter for sleeps due to Coordinator 
-    experienced waiting when Workers get hungry again
+    Counter of how many times Coordinator saw Workers are filled up
+    "enough" with assignements. The enough definition depends on
+    the scheduler type.
   */
   ulong mts_wq_no_underrun_cnt;
+  longlong mts_total_wait_overlap; // Waiting time corresponding to above
+  /*
+    Stats to compute Coordinator waiting time for any Worker available,
+    applies solely to the Commit-clock scheduler.
+  */
+  ulonglong mts_total_wait_worker_avail;
   ulong mts_wq_overfill_cnt;  // counter of C waited due to a WQ queue was full
-  /* 
+  /*
+    Statistics (todo: replace with WL5631) applies to either Coordinator and Worker.
+    The exec time in the Coordinator case means scheduling.
+    The read time in the Worker case means getting an event out of Worker queue
+  */
+  ulonglong stats_exec_time;
+  ulonglong stats_read_time;
+  struct timespec ts_exec[2];  // per event pre- and post- exec timestamp
+  struct timespec stats_begin; // applier's bootstrap time
+
+  /*
      A sorted array of the Workers' current assignement numbers to provide
      approximate view on Workers loading.
-     The first row of the least occupied Worker is queried at assigning 
+     The first row of the least occupied Worker is queried at assigning
      a new partition. Is updated at checkpoint commit to the main RLI.
   */
-  DYNAMIC_ARRAY least_occupied_workers;
+  Prealloced_array<ulong, 16> least_occupied_workers;
   time_t mts_last_online_stat;
   /* end of MTS statistics */
+
+  /* Returns the number of elements in workers array/vector. */
+  inline size_t get_worker_count()
+  {
+    if (workers_array_initialized)
+      return workers.size();
+    else
+      return workers_copy_pfs.size();
+  }
+
+  /*
+    Returns a pointer to the worker instance at index n in workers
+    array/vector.
+  */
+  Slave_worker* get_worker(size_t n)
+  {
+    if (workers_array_initialized)
+    {
+      if (n >= workers.size())
+        return NULL;
+
+      return workers[n];
+    }
+    else if (workers_copy_pfs.size())
+    {
+      if (n >= workers_copy_pfs.size())
+        return NULL;
+
+      return workers_copy_pfs[n];
+    }
+    else
+      return NULL;
+  }
+
+  /*Channel defined mts submode*/
+  enum_mts_parallel_type channel_mts_submode;
+  /* MTS submode  */
+  Mts_submode* current_mts_submode;
+
+  /*
+    Slave side local seq_no identifying a parent group that being
+    the scheduled transaction is considered to be dependent
+   */
+  ulonglong mts_last_known_parent_group_id;
 
   /* most of allocation in the coordinator rli is there */
   void init_workers(ulong);
@@ -624,12 +900,15 @@ public:
   */
   inline bool is_parallel_exec() const
   {
-    bool ret= (slave_parallel_workers > 0) && !is_mts_recovery();
+    bool ret = parallel_for_duckdb && (slave_parallel_workers > 0) &&
+               !is_mts_recovery();
 
-    DBUG_ASSERT(!ret || workers.elements > 0);
+    assert(!ret || !workers.empty());
 
     return ret;
   }
+
+  void decide_parallel_for_duckdb();
 
   /**
      returns true if Coordinator is scheduling events belonging to
@@ -653,7 +932,9 @@ public:
      Coordinator notifies Workers about this event. Coordinator and Workers
      maintain a bitmap of executed group that is reset with a new checkpoint. 
   */
-  void reset_notified_checkpoint(ulong, time_t, bool);
+  void reset_notified_checkpoint(ulong count, time_t new_ts,
+                                 bool need_data_lock,
+                                 bool update_timestamp= false);
 
   /**
      Called when gaps execution is ended so it is crash-safe
@@ -724,22 +1005,71 @@ public:
     m_flags &= ~(1UL << flag);
   }
 
+private:
   /**
-     Is the replication inside a group?
+    Auxiliary function used by is_in_group.
 
-     Replication is inside a group if either:
-     - The OPTION_BEGIN flag is set, meaning we're inside a transaction
-     - The RLI_IN_STMT flag is set, meaning we're inside a statement
-     - There is an GTID owned by the thd, meaning we've passed a SET GTID_NEXT
+    The execute thread is in the middle of a statement in the
+    following cases:
+    - User_var/Intvar/Rand events have been processed, but the
+      corresponding Query_log_event has not been processed.
+    - Table_map or Row events have been processed, and the last Row
+      event did not have the STMT_END_F set.
 
-     @retval true Replication thread is currently inside a group
-     @retval false Replication thread is currently not inside a group
+    @retval true Replication thread is inside a statement.
+    @retval false Replication thread is not inside a statement.
    */
-  bool is_in_group() const {
-    return (info_thd->variables.option_bits & OPTION_BEGIN) ||
-      (m_flags & (1UL << IN_STMT)) ||
-      /* If a SET GTID_NEXT was issued we are inside of a group */
-      info_thd->owned_gtid.sidno;
+  bool is_in_stmt() const
+  {
+    bool ret= (m_flags & (1UL << IN_STMT));
+    DBUG_PRINT("info", ("is_in_stmt()=%d", ret));
+    return ret;
+  }
+  /**
+    Auxiliary function used by is_in_group.
+
+    @retval true The execute thread is inside a statement or a
+    transaction, i.e., either a BEGIN has been executed or we are in
+    the middle of a statement.
+    @retval false The execute thread thread is not inside a statement
+    or a transaction.
+  */
+  bool is_in_trx_or_stmt() const
+  {
+    bool ret= is_in_stmt() || (info_thd->variables.option_bits & OPTION_BEGIN);
+    DBUG_PRINT("info", ("is_in_trx_or_stmt()=%d", ret));
+    return ret;
+  }
+public:
+  /**
+    A group is defined as the entire range of events that constitute
+    a transaction or auto-committed statement. It has one of the
+    following forms:
+
+    (Gtid)? Query(BEGIN) ... (Query(COMMIT) | Query(ROLLBACK) | Xid)
+    (Gtid)? (Rand | User_var | Int_var)* Query(DDL)
+
+    Thus, to check if the execute thread is in a group, there are
+    two cases:
+
+    - If the master generates Gtid events (5.7.5 or later, or 5.6 or
+      later with GTID_MODE=ON), then is_in_group is the same as
+      info_thd->owned_gtid.sidno != 0, since owned_gtid.sidno is set
+      to non-zero by the Gtid_log_event and cleared to zero at commit
+      or rollback.
+
+    - If the master does not generate Gtid events (i.e., master is
+      pre-5.6, or pre-5.7.5 with GTID_MODE=OFF), then is_in_group is
+      the same as is_in_trx_or_stmt().
+
+    @retval true Replication thread is inside a group.
+    @retval false Replication thread is not inside a group.
+  */
+  bool is_in_group() const
+  {
+    bool ret= is_in_trx_or_stmt() || info_thd->owned_gtid.sidno != 0;
+    DBUG_PRINT("info", ("is_in_group()=%d", ret));
+    return ret;
   }
 
   int count_relay_log_space();
@@ -786,12 +1116,30 @@ public:
   inline ulonglong get_event_relay_log_pos() { return event_relay_log_pos; }
   inline void set_event_relay_log_name(const char *log_file_name)
   {
-     strmake(event_relay_log_name,log_file_name, sizeof(event_relay_log_name)-1);
+    strmake(event_relay_log_name,log_file_name, sizeof(event_relay_log_name)-1);
+    set_event_relay_log_number(relay_log_name_to_number(log_file_name));
   }
-  inline void set_event_relay_log_name(const char *log_file_name, size_t len)
+
+  uint get_event_relay_log_number() { return event_relay_log_number; }
+  void set_event_relay_log_number(uint number)
   {
-     strmake(event_relay_log_name,log_file_name, len);
+    event_relay_log_number= number;
   }
+
+  /**
+    Given the extension number of the relay log, gets the full
+    relay log path. Currently used in Slave_worker::retry_transaction()
+
+    @param [in]   number      extension number of relay log
+    @param[in, out] name      The full path of the relay log (per-channel)
+                              to be read by the slave worker.
+  */
+  void relay_log_number_to_name(uint number, char name[FN_REFLEN+1]);
+  uint relay_log_name_to_number(const char *name);
+
+  void set_event_start_pos(my_off_t pos) { event_start_pos= pos; }
+  my_off_t get_event_start_pos() { return event_start_pos; }
+
   inline void set_event_relay_log_pos(ulonglong log_pos)
   {
     event_relay_log_pos= log_pos;
@@ -800,16 +1148,6 @@ public:
   {
     return (group_master_log_name[0] ? group_master_log_name : "FIRST");
   }
-
-#if MYSQL_VERSION_ID < 40100
-  inline ulonglong get_future_master_log_pos() { return future_master_log_pos; }
-#else
-  inline ulonglong get_future_group_master_log_pos() { return future_group_master_log_pos; }
-  inline void set_future_group_master_log_pos(ulonglong log_pos)
-  {
-    future_group_master_log_pos= log_pos;
-  }
-#endif
 
   static size_t get_number_info_rli_fields();
 
@@ -831,7 +1169,8 @@ public:
     THD_STAGE_INFO(info_thd, stage_sql_thd_waiting_until_delay);
   }
 
-  int32 get_sql_delay() { return sql_delay; }
+  /* Note that this is cast to uint32 in show_slave_status(). */
+  time_t get_sql_delay() { return sql_delay; }
   void set_sql_delay(time_t _sql_delay) { sql_delay= _sql_delay; }
   time_t get_sql_delay_end() { return sql_delay_end; }
 
@@ -840,12 +1179,13 @@ public:
                  ,PSI_mutex_key *param_key_info_run_lock,
                  PSI_mutex_key *param_key_info_data_lock,
                  PSI_mutex_key *param_key_info_sleep_lock,
+                 PSI_mutex_key *param_key_info_thd_lock,
                  PSI_mutex_key *param_key_info_data_cond,
                  PSI_mutex_key *param_key_info_start_cond,
                  PSI_mutex_key *param_key_info_stop_cond,
                  PSI_mutex_key *param_key_info_sleep_cond
 #endif
-                 , uint param_id
+                 , uint param_id, const char* param_channel, bool is_rli_fake
                 );
   virtual ~Relay_log_info();
 
@@ -912,7 +1252,9 @@ public:
   /**
     adaptation for the slave applier to specific master versions.
   */
-  void adapt_to_master_version(Format_description_log_event *fdle);
+  ulong adapt_to_master_version(Format_description_log_event *fdle);
+  ulong adapt_to_master_version_updown(ulong master_version,
+                                       ulong current_version);
   uchar slave_version_split[3]; // bytes of the slave server version
   /*
     relay log info repository should be updated on relay log
@@ -926,10 +1268,40 @@ public:
   */
   bool force_flush_postponed_due_to_split_trans;
 
+  Commit_order_manager *get_commit_order_manager()
+  {
+    return commit_order_mngr;
+  }
+
+  void set_commit_order_manager(Commit_order_manager *mngr)
+  {
+    commit_order_mngr= mngr;
+  }
+
+  bool set_info_search_keys(Rpl_info_handler *to);
+
+  /**
+    Get coordinator's RLI. Especially used get the rli from
+    a slave thread, like this: thd->rli_slave->get_c_rli();
+    thd could be a SQL thread or a worker thread
+  */
+  virtual Relay_log_info* get_c_rli()
+  {
+    return this;
+  }
+
+  virtual const char* get_for_channel_str(bool upper_case= false) const;
+
 protected:
   Format_description_log_event *rli_description_event;
 
 private:
+  /*
+    Commit order manager to order commits made by its workers. In context of
+    Multi Source Replication each worker will be ordered by the coresponding
+    corrdinator's order manager.
+   */
+  Commit_order_manager* commit_order_mngr;
 
   /**
     Delay slave SQL thread by this amount, compared to master (in
@@ -942,7 +1314,7 @@ private:
     slave SQL thread is running, since the SQL thread reads it without
     a lock when executing flush_info().
   */
-  int sql_delay;
+  time_t sql_delay;
 
   /**
     During a delay, specifies the point in time when the delay ends.
@@ -973,6 +1345,11 @@ private:
   */
   static const int LINES_IN_RELAY_LOG_INFO_WITH_ID= 7;
 
+  /*
+    Add a channel in the slave relay log info
+  */
+  static const int LINES_IN_RELAY_LOG_INFO_WITH_CHANNEL= 8;
+
   bool read_info(Rpl_info_handler *from);
   bool write_info(Rpl_info_handler *to);
 
@@ -986,9 +1363,110 @@ private:
   time_t row_stmt_start_timestamp;
   bool long_find_row_note_printed;
 
+
+ /**
+   sets the suffix required for relay log names
+   in multisource replication.
+   The extension is "-relay-bin-<channel_name>"
+   @param[in, out]  buff       buffer to store the complete relay log file name
+   @param[in]       buff_size  size of buffer buff
+   @param[in]       base_name  the base name of the relay log file
+ */
+  const char* add_channel_to_relay_log_name(char *buff, uint buff_size,
+                                            const char *base_name);
+
+  /*
+    Applier thread InnoDB priority.
+    When two transactions conflict inside InnoDB, the one with
+    greater priority wins.
+    Priority must be set before applier thread start so that all
+    executed transactions have the same priority.
+  */
+  int thd_tx_priority;
+
+  /**
+    If the SQL thread should or not ignore the set limit for
+    write set collection
+   */
+  bool m_ignore_write_set_memory_limit;
+
+  /**
+    Even if a component says all transactions require write sets,
+    this variable says the SQL thread transactions can drop them
+  */
+  bool m_allow_drop_write_set;
+
+public:
+  /*
+    The boolean is set to true when the binlog (rli_fake) or slave
+    (rli_slave) applier thread detaches any engine ha_data
+    it has dealt with at time of XA START processing.
+    The boolean is reset to false at the end of XA PREPARE,
+    XA COMMIT ONE PHASE for the binlog applier, and
+    at internal rollback of the slave applier at the same time with
+    the engine ha_data re-attachment.
+  */
+  bool is_engine_ha_data_detached;
+
+  void set_thd_tx_priority(int priority)
+  {
+    thd_tx_priority= priority;
+  }
+
+  int get_thd_tx_priority()
+  {
+    return thd_tx_priority;
+  }
+
+  void set_ignore_write_set_memory_limit(bool ignore_limit) {
+    m_ignore_write_set_memory_limit = ignore_limit;
+  }
+
+  bool get_ignore_write_set_memory_limit() {
+    return m_ignore_write_set_memory_limit;
+  }
+
+  void set_allow_drop_write_set(bool does_not_require_ws) {
+    m_allow_drop_write_set = does_not_require_ws;
+  }
+
+  bool get_allow_drop_write_set() { return m_allow_drop_write_set; }
+
+  /**
+    Detaches the engine ha_data from THD. The fact
+    is memorized in @c is_engine_ha_detached flag.
+
+    @param  thd a reference to THD
+  */
+  void detach_engine_ha_data(THD *thd);
+  /**
+    Reattaches the engine ha_data to THD. The fact
+    is memorized in @c is_engine_ha_detached flag.
+
+    @param  thd a reference to THD
+  */
+  void reattach_engine_ha_data(THD *thd);
+  /**
+    Drops the engine ha_data flag when it is up.
+    The method is run at execution points of the engine ha_data
+    re-attachment.
+
+    @return true   when THD has detached the engine ha_data,
+            false  otherwise
+  */
+  bool unflag_detached_engine_ha_data()
+  {
+    bool rc= false;
+
+    if (is_engine_ha_data_detached)
+      rc= !(is_engine_ha_data_detached= false); // return the old value
+
+    return rc;
+  }
 };
 
 bool mysql_show_relaylog_events(THD* thd);
+
 
 /**
    @param  thd a reference to THD
@@ -999,4 +1477,9 @@ inline bool is_mts_worker(const THD *thd)
   return thd->system_thread == SYSTEM_THREAD_SLAVE_WORKER;
 }
 
+
+/**
+ Auxiliary function to check if we have a db partitioned MTS
+ */
+bool is_mts_db_partitioned(Relay_log_info * rli);
 #endif /* RPL_RLI_H */

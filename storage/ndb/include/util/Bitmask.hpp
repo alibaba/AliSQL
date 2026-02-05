@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -20,7 +27,7 @@
 
 #include <ndb_global.h>
 
-#ifdef HAVE__BITSCANFORWARD
+#if defined(HAVE__BITSCANFORWARD) || defined(HAVE__BITSCANREVERSE)
 #include <intrin.h>
 #endif
 
@@ -34,8 +41,14 @@ public:
 
   /**
    * get - Check if bit n is set.
+   *       assert(n < (32 * size))
    */
   static bool get(unsigned size, const Uint32 data[], unsigned n);
+
+  /**
+   * safe_get - Check if bit N is set, accept any value for N
+   */
+  static bool safe_get(unsigned size, const Uint32 data[], unsigned n);
 
   /**
    * set - Set bit n to given value (true/false).
@@ -78,7 +91,7 @@ public:
    */
   static void clear_range(unsigned size, Uint32 data[], unsigned start, unsigned last);
 
-  static Uint32 getWord(unsigned size, Uint32 data[], unsigned word_pos);
+  static Uint32 getWord(unsigned size, const Uint32 data[], unsigned word_pos);
   static void setWord(unsigned size, Uint32 data[],
                       unsigned word_pos, Uint32 new_word);
   /**
@@ -93,10 +106,28 @@ public:
   static unsigned count(unsigned size, const Uint32 data[]);
 
   /**
+   * return count trailing zero bits inside a word
+   * undefined behaviour if non set
+   */
+  static unsigned ctz(Uint32 x);
+
+  /**
+   * return count leading zero bits inside a word
+   * undefined behaviour if non set
+   */
+  static unsigned clz(Uint32 x);
+
+  /**
    * return index of first bit set inside a word
    * undefined behaviour if non set
    */
   static unsigned ffs(Uint32 x);
+
+  /**
+   * return index of last bit set inside a word
+   * undefined behaviour if non set
+   */
+  static unsigned fls(Uint32 x);
 
   /**
    * find - Find first set bit, starting from 0
@@ -105,10 +136,22 @@ public:
   static unsigned find_first(unsigned size, const Uint32 data[]);
 
   /**
+   * find - Find last set bit, starting from 0
+   * Returns NotFound when not found.
+   */
+  static unsigned find_last(unsigned size, const Uint32 data[]);
+
+  /**
    * find - Find first set bit, starting at given position.
    * Returns NotFound when not found.
    */
   static unsigned find_next(unsigned size, const Uint32 data[], unsigned n);
+
+  /**
+   * find - Find last set bit, starting at given position.
+   * Returns NotFound when not found.
+   */
+  static unsigned find_prev(unsigned size, const Uint32 data[], unsigned n);
 
   /**
    * find - Find first set bit, starting at given position.
@@ -154,12 +197,12 @@ public:
   /**
    * contains - Check if all bits set in data2 are set in data
    */
-  static bool contains(unsigned size, Uint32 data[], const Uint32 data2[]);
+  static bool contains(unsigned size, const Uint32 data[], const Uint32 data2[]);
 
   /**
    * overlaps - Check if any bit set in data is set in data2
    */
-  static bool overlaps(unsigned size, Uint32 data[], const Uint32 data2[]);
+  static bool overlaps(unsigned size, const Uint32 data[], const Uint32 data2[]);
 
   /**
    * getField - Get bitfield at given position and length (max 32 bits)
@@ -219,6 +262,16 @@ BitmaskImpl::get(unsigned size, const Uint32 data[], unsigned n)
 {
   assert(n < (size << 5));
   return (data[n >> 5] & (1 << (n & 31))) != 0;
+}
+
+inline bool
+BitmaskImpl::safe_get(unsigned size, const Uint32 data[], unsigned n)
+{
+  if (n < (size << 5))
+  {
+    return (data[n >> 5] & (1 << (n & 31))) != 0;
+  }
+  return false;
 }
 
 inline void
@@ -324,7 +377,7 @@ BitmaskImpl::clear_range(unsigned size, Uint32 data[],
 
 inline
 Uint32
-BitmaskImpl::getWord(unsigned size, Uint32 data[], unsigned word_pos)
+BitmaskImpl::getWord(unsigned size, const Uint32 data[], unsigned word_pos)
 {
   return data[word_pos];
 }
@@ -358,6 +411,68 @@ BitmaskImpl::count(unsigned size, const Uint32 data[])
 }
 
 /**
+ * return count trailing zero bits inside a word
+ * undefined behaviour if non set
+ */
+inline
+Uint32
+BitmaskImpl::ctz(Uint32 x)
+{
+  return ffs(x);
+}
+
+/**
+ * return count leading bits inside a word
+ * undefined behaviour if non set
+ */
+inline
+Uint32
+BitmaskImpl::clz(Uint32 x)
+{
+#if defined HAVE___BUILTIN_CLZ
+  return __builtin_clz(x);
+#elif defined(__GNUC__) && (defined(__x86_64__) || defined (__i386__))
+  asm("bsr %1,%0"
+      : "=r" (x)
+      : "rm" (x));
+  return 31 - x;
+#elif defined HAVE__BITSCANREVERSE
+  unsigned long r;
+  unsigned char res = _BitScanReverse(&r, (unsigned long)x);
+  assert(res > 0);
+  return 31 - (Uint32)r;
+#else
+  int b = 0;
+  if (!(x & 0xffff0000))
+  {
+    x <<= 16;
+    b += 16;
+  }
+  if (!(x & 0xff000000))
+  {
+    x <<= 8;
+    b += 8;
+  }
+  if (!(x & 0xf0000000))
+  {
+    x <<= 4;
+    b += 4;
+  }
+  if (!(x & 0xc0000000))
+  {
+    x <<= 2;
+    b += 2;
+  }
+  if (!(x & 0x80000000))
+  {
+    x <<= 1;
+    b += 1;
+  }
+  return b;
+#endif
+}
+
+/**
  * return index of first bit set inside a word
  * undefined behaviour if non set
  */
@@ -365,7 +480,9 @@ inline
 Uint32
 BitmaskImpl::ffs(Uint32 x)
 {
-#if defined(__GNUC__) && (defined(__x86_64__) || defined (__i386__))
+#if defined HAVE___BUILTIN_CTZ
+  return __builtin_ctz(x);
+#elif defined(__GNUC__) && (defined(__x86_64__) || defined (__i386__))
   asm("bsf %1,%0"
       : "=r" (x)
       : "rm" (x));
@@ -413,6 +530,57 @@ BitmaskImpl::ffs(Uint32 x)
 #endif
 }
 
+/**
+ * return index of last bit set inside a word
+ * undefined behaviour if non set
+ */
+inline
+Uint32
+BitmaskImpl::fls(Uint32 x)
+{
+#if defined(__GNUC__) && (defined(__x86_64__) || defined (__i386__))
+  asm("bsr %1,%0"
+      : "=r" (x)
+      : "rm" (x));
+  return x;
+#elif defined HAVE___BUILTIN_CLZ
+  return 31 - __builtin_clz(x);
+#elif defined HAVE__BITSCANREVERSE
+  unsigned long r;
+  unsigned char res = _BitScanReverse(&r, (unsigned long)x);
+  assert(res > 0);
+  return (Uint32)r;
+#else
+  int b = 31;
+  if (!(x & 0xffff0000))
+  {
+    x <<= 16;
+    b -= 16;
+  }
+  if (!(x & 0xff000000))
+  {
+    x <<= 8;
+    b -= 8;
+  }
+  if (!(x & 0xf0000000))
+  {
+    x <<= 4;
+    b -= 4;
+  }
+  if (!(x & 0xc0000000))
+  {
+    x <<= 2;
+    b -= 2;
+  }
+  if (!(x & 0x80000000))
+  {
+    x <<= 1;
+    b -= 1;
+  }
+  return b;
+#endif
+}
+
 inline unsigned
 BitmaskImpl::find_first(unsigned size, const Uint32 data[])
 {
@@ -430,8 +598,29 @@ BitmaskImpl::find_first(unsigned size, const Uint32 data[])
 }
 
 inline unsigned
+BitmaskImpl::find_last(unsigned size, const Uint32 data[])
+{
+  if (size == 0)
+    return NotFound;
+  Uint32 n = (size << 5) - 1;
+  do
+  {
+    Uint32 val = data[n >> 5];
+    if (val)
+    {
+      return n - clz(val);
+    }
+    n -= 32;
+  } while (n != 0xffffffff);
+ return NotFound;
+}
+
+inline unsigned
 BitmaskImpl::find_next(unsigned size, const Uint32 data[], unsigned n)
 {
+  assert(n <= (size << 5));
+  if (n == (size << 5)) // allow one step utside for easier use
+    return NotFound;
   Uint32 val = data[n >> 5];
   Uint32 b = n & 31;
   if (b)
@@ -452,6 +641,35 @@ BitmaskImpl::find_next(unsigned size, const Uint32 data[], unsigned n)
       return n + ffs(val);
     }
     n += 32;
+  }
+  return NotFound;
+}
+
+inline unsigned
+BitmaskImpl::find_prev(unsigned size, const Uint32 data[], unsigned n)
+{
+  if (n >= (Uint32) 0xffffffff /* -1 */) // allow one bit outside array for easier use
+    return NotFound;
+  assert(n < (size << 5));
+  Uint32 val = data[n >> 5];
+  Uint32 b = n & 31;
+  if (b < 31)
+  {
+    val <<= 31 - b;
+    if (val)
+    {
+      return n - clz(val);
+    }
+    n -= b + 1;
+  }
+
+  while (n != NotFound) {
+    val = data[n >> 5];
+    if (val)
+    {
+      return n - clz(val);
+    }
+    n -= 32;
   }
   return NotFound;
 }
@@ -521,7 +739,7 @@ BitmaskImpl::bitNOT(unsigned size, Uint32 data[])
 }
 
 inline bool
-BitmaskImpl::contains(unsigned size, Uint32 data[], const Uint32 data2[])
+BitmaskImpl::contains(unsigned size, const Uint32 data[], const Uint32 data2[])
 {
   for (unsigned int i = 0; i < size; i++)
     if ((data[i] & data2[i]) != data2[i])
@@ -530,7 +748,7 @@ BitmaskImpl::contains(unsigned size, Uint32 data[], const Uint32 data2[])
 }
 
 inline bool
-BitmaskImpl::overlaps(unsigned size, Uint32 data[], const Uint32 data2[])
+BitmaskImpl::overlaps(unsigned size, const Uint32 data[], const Uint32 data2[])
 {
   for (unsigned int i = 0; i < size; i++)
     if ((data[i] & data2[i]) != 0)
@@ -666,11 +884,18 @@ public:
   /**
    * start of static members
    */
+
   /**
    * get - Check if bit n is set.
    */
   static bool get(const Uint32 data[], unsigned n);
   bool get(unsigned n) const;
+
+  /**
+   * safe_get - Check if bit N is set, accept any value for N
+   */
+  static bool safe_get(const Uint32 data[], unsigned n);
+  bool safe_get(unsigned n) const;
 
   /**
    * set - Set bit n to given value (true/false).
@@ -711,7 +936,7 @@ public:
   /**
    * Get and set words of bits
    */
-  Uint32 getWord(unsigned word_pos);
+  Uint32 getWord(unsigned word_pos) const;
   void setWord(unsigned word_pos, Uint32 new_word);
   
   /**
@@ -740,6 +965,20 @@ public:
    */
   static unsigned find_next(const Uint32 data[], unsigned n);
   unsigned find_next(unsigned n) const;
+
+  /**
+   * find - Find last set bit, starting at 0
+   * Returns NotFound when not found.
+   */
+  static unsigned find_last(const Uint32 data[]);
+  unsigned find_last() const;
+
+  /**
+   * find - Find previous set bit, starting at n
+   * Returns NotFound when not found.
+   */
+  static unsigned find_prev(const Uint32 data[], unsigned n);
+  unsigned find_prev(unsigned n) const;
 
   /**
    * find - Find first set bit, starting at given position.
@@ -793,14 +1032,14 @@ public:
   /**
    * contains - Check if all bits set in data2 (that) are also set in data (this)
    */
-  static bool contains(Uint32 data[], const Uint32 data2[]);
-  bool contains(BitmaskPOD<size> that);
+  static bool contains(const Uint32 data[], const Uint32 data2[]);
+  bool contains(BitmaskPOD<size> that) const;
 
   /**
    * overlaps - Check if any bit set in this BitmaskPOD (data) is also set in that (data2)
    */
-  static bool overlaps(Uint32 data[], const Uint32 data2[]);
-  bool overlaps(BitmaskPOD<size> that);
+  static bool overlaps(const Uint32 data[], const Uint32 data2[]);
+  bool overlaps(BitmaskPOD<size> that) const;
 
   /**
    * getText - Return as hex-digits (only for debug routines).
@@ -866,6 +1105,20 @@ inline bool
 BitmaskPOD<size>::get(unsigned n) const
 {
   return BitmaskPOD<size>::get(rep.data, n);
+}
+
+template <unsigned size>
+inline bool
+BitmaskPOD<size>::safe_get(const Uint32 data[], unsigned n)
+{
+  return BitmaskImpl::safe_get(size, data, n);
+}
+
+template <unsigned size>
+inline bool
+BitmaskPOD<size>::safe_get(unsigned n) const
+{
+  return BitmaskPOD<size>::safe_get(rep.data, n);
 }
 
 template <unsigned size>
@@ -955,7 +1208,7 @@ BitmaskPOD<size>::clear()
 
 template <unsigned size>
 inline Uint32
-BitmaskPOD<size>::getWord(unsigned word_pos)
+BitmaskPOD<size>::getWord(unsigned word_pos) const
 {
   return BitmaskImpl::getWord(size, rep.data, word_pos);
 }
@@ -1021,6 +1274,34 @@ inline unsigned
 BitmaskPOD<size>::find_next(unsigned n) const
 {
   return BitmaskPOD<size>::find_next(rep.data, n);
+}
+
+template <unsigned size>
+inline unsigned
+BitmaskPOD<size>::find_last(const Uint32 data[])
+{
+  return BitmaskImpl::find_last(size, data);
+}
+
+template <unsigned size>
+inline unsigned
+BitmaskPOD<size>::find_last() const
+{
+  return BitmaskPOD<size>::find_last(rep.data);
+}
+
+template <unsigned size>
+inline unsigned
+BitmaskPOD<size>::find_prev(const Uint32 data[], unsigned n)
+{
+  return BitmaskImpl::find_prev(size, data, n);
+}
+
+template <unsigned size>
+inline unsigned
+BitmaskPOD<size>::find_prev(unsigned n) const
+{
+  return BitmaskPOD<size>::find_prev(rep.data, n);
 }
 
 template <unsigned size>
@@ -1157,28 +1438,28 @@ BitmaskPOD<size>::getText(char* buf) const
 
 template <unsigned size>
 inline bool
-BitmaskPOD<size>::contains(Uint32 data[], const Uint32 data2[])
+BitmaskPOD<size>::contains(const Uint32 data[], const Uint32 data2[])
 {
   return BitmaskImpl::contains(size, data, data2);
 }
 
 template <unsigned size>
 inline bool
-BitmaskPOD<size>::contains(BitmaskPOD<size> that)
+BitmaskPOD<size>::contains(BitmaskPOD<size> that) const
 {
   return BitmaskPOD<size>::contains(this->rep.data, that.rep.data);
 }
 
 template <unsigned size>
 inline bool
-BitmaskPOD<size>::overlaps(Uint32 data[], const Uint32 data2[])
+BitmaskPOD<size>::overlaps(const Uint32 data[], const Uint32 data2[])
 {
   return BitmaskImpl::overlaps(size, data, data2);
 }
 
 template <unsigned size>
 inline bool
-BitmaskPOD<size>::overlaps(BitmaskPOD<size> that)
+BitmaskPOD<size>::overlaps(BitmaskPOD<size> that) const
 {
   return BitmaskPOD<size>::overlaps(this->rep.data, that.rep.data);
 }

@@ -1,14 +1,21 @@
-# Copyright (c) 2006, 2016, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2006, 2023, Oracle and/or its affiliates.
 # 
 # This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; version 2 of the License.
-# 
+# it under the terms of the GNU General Public License, version 2.0,
+# as published by the Free Software Foundation.
+#
+# This program is also distributed with certain software (including
+# but not limited to OpenSSL) that is licensed under separate terms,
+# as designated in a particular file or component or in included license
+# documentation.  The authors of MySQL hereby grant you an additional
+# permission to link the program and your derivative works with the
+# separately licensed software that they have included with MySQL.
+#
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-# 
+# GNU General Public License, version 2.0, for more details.
+#
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
@@ -20,17 +27,12 @@ INCLUDE_DIRECTORIES(
   ${CMAKE_SOURCE_DIR}/sql
   ${CMAKE_SOURCE_DIR}/strings
   ${SSL_INCLUDE_DIRS}
-  ${SSL_INTERNAL_INCLUDE_DIRS}
-  ${ZLIB_INCLUDE_DIR})
+  ${SSL_INTERNAL_INCLUDE_DIRS})
 ADD_DEFINITIONS(${SSL_DEFINES})
 
 SET(CLIENT_API_FUNCTIONS
-get_tty_password
-handle_options
-load_defaults
 mysql_thread_end
 mysql_thread_init
-myodbc_remove_escape
 mysql_affected_rows
 mysql_autocommit
 mysql_stmt_bind_param
@@ -84,9 +86,11 @@ mysql_stmt_param_metadata
 mysql_ping
 mysql_stmt_result_metadata
 mysql_query
+# We need to have document for this api
 mysql_read_query_result
 mysql_real_connect
 mysql_real_escape_string
+mysql_real_escape_string_quote
 mysql_real_query
 mysql_refresh
 mysql_rollback
@@ -94,6 +98,7 @@ mysql_row_seek
 mysql_row_tell
 mysql_select_db
 mysql_stmt_send_long_data
+# We need to have document for this api
 mysql_send_query
 mysql_shutdown
 mysql_ssl_set
@@ -125,12 +130,12 @@ mysql_stmt_attr_set
 mysql_stmt_field_count
 mysql_set_local_infile_default
 mysql_set_local_infile_handler
-mysql_embedded
 mysql_server_init
 mysql_server_end
 mysql_set_character_set
 mysql_get_character_set_info
 mysql_stmt_next_result
+# Since its already documented we will keep it. FR will be created to redesign.
 my_init
 mysql_client_find_plugin
 mysql_client_register_plugin
@@ -138,23 +143,62 @@ mysql_load_plugin
 mysql_load_plugin_v
 mysql_options4
 mysql_plugin_options
+mysql_reset_connection
+mysql_get_option
+mysql_session_track_get_first
+mysql_session_track_get_next
 
 CACHE INTERNAL "Functions exported by client API"
 
 )
 
+# Below lists will have all the undocumented C API symbols but still exported.
+# Once the decision is taken to have documentation we need to move them to
+# CLIENT_API_FUNCTIONS list.
+SET(CLIENT_API_FUNCTIONS_UNDOCUMENTED_20_0
+get_tty_password
+# my_load_defaults is a wrapper for load_defaults and it is not documented. We
+# will have a FR to replace this for decent name/functionality and document it.
+my_load_defaults
+handle_options
+
+CACHE INTERNAL "Undocumented functions exported by client API in version 20.0"
+
+)
+
+SET(CLIENT_API_FUNCTIONS_UNDOCUMENTED_20_3
+  # pure-ftpd 1.0.42 needs either my_make_scrambled_password (preferred)
+  # or make_scrambled_password.
+  my_make_scrambled_password
+
+  CACHE INTERNAL "Undocumented functions exported by client API in version 20.3"
+
+)
+
+SET(CLIENT_API_FUNCTIONS_UNDOCUMENTED
+  ${CLIENT_API_FUNCTIONS_UNDOCUMENTED_20_0}
+  ${CLIENT_API_FUNCTIONS_UNDOCUMENTED_20_3}
+
+  CACHE INTERNAL "Undocumented functions exported by client API"
+
+)
+
 SET(CLIENT_SOURCES
-  get_password.c 
   libmysql.c
   errmsg.c
   ../sql-common/client.c 
   ../sql-common/my_time.c 
   ../sql-common/client_plugin.c 
   ../sql-common/client_authentication.cc
+  ../sql-common/get_password.c
   ../sql/net_serv.cc
   ../sql-common/pack.c 
-  ../sql/password.c
+  ../sql/auth/password.c
+  ../sql/auth/sha2_password_common.cc
 )
+
+DOWNGRADE_OPENSSL3_DEPRECATION_WARNINGS(
+    ../sql-common/client_authentication.cc)
 
 IF (WIN32 AND OPENSSL_APPLINK_C)
   SET_SOURCE_FILES_PROPERTIES(
@@ -163,11 +207,52 @@ IF (WIN32 AND OPENSSL_APPLINK_C)
   )
 ENDIF()
 
+#
+# Include protocol tracing infrastructure and the test
+# trace plugin if enabled by build options.
+#
+IF (WITH_CLIENT_PROTOCOL_TRACING)
+
+  LIST(APPEND CLIENT_SOURCES mysql_trace.c)
+  ADD_DEFINITIONS(-D CLIENT_PROTOCOL_TRACING)
+
+  IF (WITH_TEST_TRACE_PLUGIN)
+    MESSAGE(STATUS "Client library contains the test trace plugin")
+    LIST(APPEND CLIENT_SOURCES test_trace_plugin.cc)
+    ADD_DEFINITIONS(-D TEST_TRACE_PLUGIN)
+  ENDIF (WITH_TEST_TRACE_PLUGIN)
+
+ENDIF (WITH_CLIENT_PROTOCOL_TRACING)
+
 ADD_CONVENIENCE_LIBRARY(clientlib ${CLIENT_SOURCES})
 DTRACE_INSTRUMENT(clientlib)
 ADD_DEPENDENCIES(clientlib GenError)
 
-SET(LIBS clientlib dbug strings vio mysys mysys_ssl ${ZLIB_LIBRARY} ${SSL_LIBRARIES} ${LIBDL})
+SET(LIBS_TO_MERGE
+  clientlib dbug strings vio mysys mysys_ssl
+  )
+SET(LIBS_TO_LINK ${LIBDL})
+
+IF(WITH_ZLIB STREQUAL "bundled")
+  LIST(APPEND LIBS_TO_MERGE ${ZLIB_LIBRARY})
+ELSE()
+  LIST(APPEND LIBS_TO_LINK ${ZLIB_LIBRARY})
+ENDIF()
+
+IF(WIN32)
+  OPTION(LINK_DYNAMIC_OPENSSL "On Windows link OpenSSL dynamically" OFF)
+ENDIF()
+IF(WITH_SSL STREQUAL "system" OR LINK_DYNAMIC_OPENSSL)
+  LIST(APPEND LIBS_TO_LINK ${SSL_LIBRARIES})
+  IF(WIN32)
+    LIST(APPEND LIBS_TO_LINK crypt32)
+  ENDIF()
+ELSE()
+  LIST(APPEND LIBS_TO_MERGE ${SSL_LIBRARIES})
+  IF(WIN32)
+    LIST(APPEND LIBS_TO_MERGE crypt32)
+  ENDIF()
+ENDIF()
 
 #
 # On Windows platform client library includes the client-side 
@@ -176,23 +261,31 @@ SET(LIBS clientlib dbug strings vio mysys mysys_ssl ${ZLIB_LIBRARY} ${SSL_LIBRAR
 IF(WIN32)
   ADD_DEFINITIONS(-DAUTHENTICATION_WIN)
   ADD_SUBDIRECTORY(authentication_win)
-  LIST(APPEND LIBS auth_win_client)
+  LIST(APPEND LIBS_TO_MERGE auth_win_client)
 ENDIF()
 
+# LDAP authentication SASL client plugin
+MESSAGE(STATUS "Creating LDAP authentication SASL client library.")
+ADD_SUBDIRECTORY(authentication_ldap)
+  
 # Merge several convenience libraries into one big mysqlclient
-MERGE_LIBRARIES(mysqlclient STATIC ${LIBS} COMPONENT Development)
+MERGE_CONVENIENCE_LIBRARIES(mysqlclient ${LIBS_TO_MERGE} COMPONENT Development)
+TARGET_LINK_LIBRARIES(mysqlclient ${LIBS_TO_LINK})
 
 # Visual Studio users need debug  static library for debug projects
 IF(MSVC)
- INSTALL_DEBUG_TARGET(mysqlclient DESTINATION ${INSTALL_LIBDIR}/debug)
- INSTALL_DEBUG_TARGET(clientlib DESTINATION ${INSTALL_LIBDIR}/debug)
-ENDIF()
+  INSTALL_DEBUG_TARGET(mysqlclient DESTINATION ${INSTALL_LIBDIR}/debug)
 
-MACRO(GET_TARGET_NAME target out_name)
-  GET_TARGET_PROPERTY(location ${target} LOCATION)
-  GET_FILENAME_COMPONENT(name ${location} NAME)
-  SET(${out_name} ${name})
-ENDMACRO()
+  INSTALL_DEBUG_TARGET(auth_win_client DESTINATION ${INSTALL_LIBDIR}/debug)
+  INSTALL_DEBUG_TARGET(clientlib DESTINATION ${INSTALL_LIBDIR}/debug)
+  INSTALL_DEBUG_TARGET(mysys DESTINATION ${INSTALL_LIBDIR}/debug)
+  INSTALL_DEBUG_TARGET(mysys_ssl DESTINATION ${INSTALL_LIBDIR}/debug)
+  INSTALL_DEBUG_TARGET(strings DESTINATION ${INSTALL_LIBDIR}/debug)
+  INSTALL_DEBUG_TARGET(vio DESTINATION ${INSTALL_LIBDIR}/debug)
+  IF(WITH_ZLIB STREQUAL "bundled")
+    INSTALL_DEBUG_TARGET(zlib DESTINATION ${INSTALL_LIBDIR}/debug)
+  ENDIF()
+ENDIF()
 
 IF(UNIX)
   MACRO(GET_VERSIONED_LIBNAME LIBNAME EXTENSION VERSION OUTNAME)
@@ -208,40 +301,45 @@ IF(UNIX)
   ENDMACRO()
 ENDIF()
 
-IF(UNIX)
-  GET_TARGET_NAME(mysqlclient lib_name)
-  INSTALL_SYMLINK(mysqlclient
-    ${lib_name} ${CMAKE_STATIC_LIBRARY_PREFIX}mysqlclient_r.a
-    ${INSTALL_LIBDIR} Development)
+# I we build client-only, we may be using libstlport which will
+# be injected into the build tree by the Sun Studio part of the build.
+
+IF(CMAKE_SYSTEM_NAME MATCHES "SunOS" AND DEFINED ENV{PB2WORKDIR})
+  INSTALL(FILES ${CMAKE_BINARY_DIR}/libstlport.so
+                ${CMAKE_BINARY_DIR}/libstlport.so.1
+          DESTINATION ${INSTALL_LIBDIR} COMPONENT SharedLibraries OPTIONAL)
 ENDIF()
 
 IF(NOT DISABLE_SHARED)
   # Merge several convenience libraries into one big mysqlclient
   # and link them together into shared library.
-  MERGE_LIBRARIES(libmysql SHARED ${LIBS}
-    EXPORTS ${CLIENT_API_FUNCTIONS}
+  MERGE_LIBRARIES_SHARED(libmysql ${LIBS_TO_MERGE}
+    EXPORTS ${CLIENT_API_FUNCTIONS} ${CLIENT_API_FUNCTIONS_UNDOCUMENTED}
     COMPONENT SharedLibraries)
+  TARGET_LINK_LIBRARIES(libmysql ${LIBS_TO_LINK})
   IF(UNIX)
     # libtool compatability
     IF(CMAKE_SYSTEM_NAME MATCHES "FreeBSD" OR APPLE)
       SET(OS_SHARED_LIB_VERSION "${SHARED_LIB_MAJOR_VERSION}")
     ELSE()
       SET(OS_SHARED_LIB_VERSION
-        "${SHARED_LIB_MAJOR_VERSION}.${SHARED_LIB_MINOR_VERSION}.0")
+        "${SHARED_LIB_MAJOR_VERSION}.${SHARED_LIB_MINOR_VERSION}.${SHARED_LIB_PATCH_VERSION}")
     ENDIF()
     # Name of shared library is mysqlclient on Unix
     SET_TARGET_PROPERTIES(libmysql PROPERTIES 
       OUTPUT_NAME mysqlclient 
       VERSION "${OS_SHARED_LIB_VERSION}" 
       SOVERSION "${SHARED_LIB_MAJOR_VERSION}")
-    IF(WITH_SYMVER16)
-      CONFIGURE_FILE(libmysql.ver16.in ${CMAKE_CURRENT_BINARY_DIR}/libmysql.ver)
-    ELSE()
-      CONFIGURE_FILE(libmysql.ver.in ${CMAKE_CURRENT_BINARY_DIR}/libmysql.ver)
+    CONFIGURE_FILE(libmysql.ver.in ${CMAKE_CURRENT_BINARY_DIR}/libmysql.ver)
+
+    IF(APPLE)
+      SET_TARGET_PROPERTIES(libmysql PROPERTIES
+        INSTALL_NAME_DIR "${CMAKE_INSTALL_PREFIX}/${INSTALL_LIBDIR}"
+      )
     ENDIF()
 
     GET_TARGET_PROPERTY(libmysql_link_flags libmysql LINK_FLAGS)
-    IF(NOT libmysql_link_flag)
+    IF(NOT libmysql_link_flags)
       SET(libmysql_link_flags)
     ENDIF()
     SET(libmysql_link_flags
@@ -253,7 +351,7 @@ IF(NOT DISABLE_SHARED)
       SET(libmysql_link_flags
         "${libmysql_link_flags} ${LINK_FLAG_NO_UNDEFINED}")
       SET(libmysql_link_flags
-        "${libmysql_link_flags} -Wl,--version-script=libmysql.ver")
+        "${libmysql_link_flags} -Wl,--version-script=${CMAKE_CURRENT_BINARY_DIR}/libmysql.ver")
       SET_TARGET_PROPERTIES(libmysql
         PROPERTIES LINK_FLAGS "${libmysql_link_flags}")
     ENDIF() 
@@ -262,31 +360,47 @@ IF(NOT DISABLE_SHARED)
     SET_TARGET_PROPERTIES(mysqlclient PROPERTIES CLEAN_DIRECT_OUTPUT 1)
     SET_TARGET_PROPERTIES(libmysql PROPERTIES CLEAN_DIRECT_OUTPUT 1)
 
-    # Install links to libmysqlclient.so (client_r)
-    GET_VERSIONED_LIBNAME(
-      "${CMAKE_SHARED_LIBRARY_PREFIX}mysqlclient_r"
-      "${CMAKE_SHARED_LIBRARY_SUFFIX}"
-      ""
-      linkname)
-    GET_TARGET_NAME(libmysql lib_name)
-    GET_FILENAME_COMPONENT(lib_name_we ${lib_name} NAME_WE)
-    INSTALL_SYMLINK(libmysql
-      ${lib_name} ${linkname}
-      ${INSTALL_LIBDIR} SharedLibraries)
-    SET(OS_SHARED_LIB_SYMLINKS
-      "${SHARED_LIB_MAJOR_VERSION}" "${OS_SHARED_LIB_VERSION}")
-    LIST(REMOVE_DUPLICATES OS_SHARED_LIB_SYMLINKS)
-    FOREACH(ver ${OS_SHARED_LIB_SYMLINKS})
-      GET_VERSIONED_LIBNAME(
-        "${CMAKE_SHARED_LIBRARY_PREFIX}mysqlclient_r"
-        "${CMAKE_SHARED_LIBRARY_SUFFIX}"
-        "${ver}"
-        linkname)
-      GET_VERSIONED_LIBNAME(
-        ${lib_name_we} "${CMAKE_SHARED_LIBRARY_SUFFIX}" "${ver}" lib_name_ver)
-      INSTALL_SYMLINK(libmysql
-        ${lib_name_ver} ${linkname}
-        ${INSTALL_LIBDIR} SharedLibraries)
-    ENDFOREACH()
   ENDIF()
 ENDIF()
+
+#
+#  Basic application for testing linking against dynamic client library.
+#
+
+#
+# Generate a comma separated list of C API functions which is used
+# to initialize api_calls[] array in api_test.c
+#
+SET(CLIENT_API_FUNCTION_LIST "")
+FOREACH(api ${CLIENT_API_FUNCTIONS})
+  SET(CLIENT_API_FUNCTION_LIST "${CLIENT_API_FUNCTION_LIST} ${api},")
+ENDFOREACH()
+
+#
+# Generate api_test.c source, substituting @CLIENT_API_FUNCTION_LIST@
+# with the list of API functions.
+#
+CONFIGURE_FILE(api_test.c.in ${CMAKE_CURRENT_BINARY_DIR}/api_test.c)
+
+#
+# Note: Compiling this test application will fail if not all symbols
+# from @CLIENT_API_FUNCTIONS@ are declared by <mysql.h>. It will fail
+# to run if not all of these symbols are exported by the library.
+#
+ADD_EXECUTABLE(libmysql_api_test ${CMAKE_CURRENT_BINARY_DIR}/api_test.c)
+SET_TARGET_PROPERTIES(libmysql_api_test PROPERTIES LINKER_LANGUAGE CXX)
+IF(LIBRT)
+  TARGET_LINK_LIBRARIES(libmysql_api_test ${LIBRT})
+ENDIF()
+
+IF(DISABLE_SHARED)
+  TARGET_LINK_LIBRARIES(libmysql_api_test ${LIBS_TO_MERGE})
+ELSE()
+  TARGET_LINK_LIBRARIES(libmysql_api_test libmysql)
+ENDIF()
+
+# Verify that libmysql_api_test runs OK
+ADD_CUSTOM_COMMAND(TARGET libmysql_api_test POST_BUILD
+  COMMAND $<TARGET_FILE:libmysql_api_test>
+  > ${CMAKE_CURRENT_BINARY_DIR}/libmysql_api_test.out
+  )

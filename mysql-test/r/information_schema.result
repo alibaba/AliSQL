@@ -1,3 +1,7 @@
+set @orig_sql_mode= @@sql_mode;
+set sql_mode= (select replace(@@sql_mode,'NO_AUTO_CREATE_USER',''));
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 DROP TABLE IF EXISTS t0,t1,t2,t3,t4,t5;
 DROP VIEW IF EXISTS v1;
 #
@@ -12,7 +16,11 @@ show variables where variable_name like "skip_show_database";
 Variable_name	Value
 skip_show_database	OFF
 grant select, update, execute on test.* to mysqltest_2@localhost;
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
 grant select, update on test.* to mysqltest_1@localhost;
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
 create user mysqltest_3@localhost;
 create user mysqltest_3;
 select * from information_schema.SCHEMATA where schema_name > 'm';
@@ -20,6 +28,7 @@ CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_P
 def	mtr	latin1	latin1_swedish_ci	NULL
 def	mysql	latin1	latin1_swedish_ci	NULL
 def	performance_schema	utf8	utf8_general_ci	NULL
+def	sys	utf8	utf8_general_ci	NULL
 def	test	latin1	latin1_swedish_ci	NULL
 select schema_name from information_schema.schemata;
 schema_name
@@ -27,6 +36,7 @@ information_schema
 mtr
 mysql
 performance_schema
+sys
 test
 show databases like 't%';
 Database (t%)
@@ -37,6 +47,7 @@ information_schema
 mtr
 mysql
 performance_schema
+sys
 test
 show databases where `database` = 't%';
 Database
@@ -76,7 +87,6 @@ SCHEMATA
 SCHEMA_PRIVILEGES
 SESSION_STATUS
 SESSION_VARIABLES
-SQL_FILTER_INFO
 STATISTICS
 TABLES
 TABLESPACES
@@ -85,20 +95,13 @@ TABLE_PRIVILEGES
 TRIGGERS
 USER_PRIVILEGES
 VIEWS
-TABLE_STATISTICS
-INDEX_STATISTICS
-THREAD_GROUP_STATUS
-TokuDB_file_map
-TokuDB_trx
-TokuDB_locks
-TokuDB_lock_waits
-TokuDB_fractal_tree_block_map
-TokuDB_fractal_tree_info
 columns_priv
 db
+engine_cost
 event
 func
 general_log
+gtid_executed
 help_category
 help_keyword
 help_relation
@@ -107,6 +110,7 @@ plugin
 proc
 procs_priv
 proxies_priv
+server_cost
 servers
 slave_master_info
 slave_relay_log_info
@@ -134,14 +138,6 @@ TABLESPACES	TABLESPACES
 TABLE_CONSTRAINTS	TABLE_CONSTRAINTS
 TABLE_PRIVILEGES	TABLE_PRIVILEGES
 TRIGGERS	TRIGGERS
-TABLE_STATISTICS	TABLE_STATISTICS
-THREAD_GROUP_STATUS	THREAD_GROUP_STATUS
-TokuDB_file_map	TokuDB_file_map
-TokuDB_trx	TokuDB_trx
-TokuDB_locks	TokuDB_locks
-TokuDB_lock_waits	TokuDB_lock_waits
-TokuDB_fractal_tree_block_map	TokuDB_fractal_tree_block_map
-TokuDB_fractal_tree_info	TokuDB_fractal_tree_info
 tables_priv	tables_priv
 time_zone	time_zone
 time_zone_leap_second	time_zone_leap_second
@@ -162,14 +158,6 @@ TABLESPACES	TABLESPACES
 TABLE_CONSTRAINTS	TABLE_CONSTRAINTS
 TABLE_PRIVILEGES	TABLE_PRIVILEGES
 TRIGGERS	TRIGGERS
-TABLE_STATISTICS	TABLE_STATISTICS
-THREAD_GROUP_STATUS	THREAD_GROUP_STATUS
-TokuDB_file_map	TokuDB_file_map
-TokuDB_trx	TokuDB_trx
-TokuDB_locks	TokuDB_locks
-TokuDB_lock_waits	TokuDB_lock_waits
-TokuDB_fractal_tree_block_map	TokuDB_fractal_tree_block_map
-TokuDB_fractal_tree_info	TokuDB_fractal_tree_info
 tables_priv	tables_priv
 time_zone	time_zone
 time_zone_leap_second	time_zone_leap_second
@@ -190,14 +178,6 @@ TABLESPACES	TABLESPACES
 TABLE_CONSTRAINTS	TABLE_CONSTRAINTS
 TABLE_PRIVILEGES	TABLE_PRIVILEGES
 TRIGGERS	TRIGGERS
-TABLE_STATISTICS	TABLE_STATISTICS
-THREAD_GROUP_STATUS	THREAD_GROUP_STATUS
-TokuDB_file_map	TokuDB_file_map
-TokuDB_trx	TokuDB_trx
-TokuDB_locks	TokuDB_locks
-TokuDB_lock_waits	TokuDB_lock_waits
-TokuDB_fractal_tree_block_map	TokuDB_fractal_tree_block_map
-TokuDB_fractal_tree_info	TokuDB_fractal_tree_info
 tables_priv	tables_priv
 time_zone	time_zone
 time_zone_leap_second	time_zone_leap_second
@@ -215,11 +195,11 @@ table_name
 t1
 t4
 select * from information_schema.STATISTICS where TABLE_SCHEMA = "mysqltest";
-TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	NON_UNIQUE	INDEX_SCHEMA	INDEX_NAME	SEQ_IN_INDEX	COLUMN_NAME	COLLATION	CARDINALITY	SUB_PART	PACKED	NULLABLE	INDEX_TYPE	COMMENT	INDEX_COMMENT	IS_VISIBLE
-def	mysqltest	t1	1	mysqltest	string_data	1	b	A	NULL	NULL	NULL	YES	BTREE			YES
+TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	NON_UNIQUE	INDEX_SCHEMA	INDEX_NAME	SEQ_IN_INDEX	COLUMN_NAME	COLLATION	CARDINALITY	SUB_PART	PACKED	NULLABLE	INDEX_TYPE	COMMENT	INDEX_COMMENT
+def	mysqltest	t1	1	mysqltest	string_data	1	b	A	NULL	NULL	NULL	YES	BTREE		
 show keys from t3 where Key_name = "a_data";
-Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible
-t3	1	a_data	1	a	A	NULL	NULL	NULL	YES	BTREE			YES
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment
+t3	1	a_data	1	a	A	NULL	NULL	NULL	YES	BTREE		
 show tables like 't%';
 Tables_in_test (t%)
 t2
@@ -242,8 +222,8 @@ Field	Type	Collation	Null	Key	Default	Extra	Privileges	Comment
 c	varchar(64)	utf8_general_ci	NO				select,insert,update,references	
 select * from information_schema.COLUMNS where table_name="t1"
 and column_name= "a";
-TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	ORDINAL_POSITION	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	CHARACTER_MAXIMUM_LENGTH	CHARACTER_OCTET_LENGTH	NUMERIC_PRECISION	NUMERIC_SCALE	DATETIME_PRECISION	CHARACTER_SET_NAME	COLLATION_NAME	COLUMN_TYPE	COLUMN_KEY	EXTRA	PRIVILEGES	COLUMN_COMMENT
-def	mysqltest	t1	a	1	NULL	YES	int	NULL	NULL	10	0	NULL	NULL	NULL	int(11)			select,insert,update,references	
+TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	ORDINAL_POSITION	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	CHARACTER_MAXIMUM_LENGTH	CHARACTER_OCTET_LENGTH	NUMERIC_PRECISION	NUMERIC_SCALE	DATETIME_PRECISION	CHARACTER_SET_NAME	COLLATION_NAME	COLUMN_TYPE	COLUMN_KEY	EXTRA	PRIVILEGES	COLUMN_COMMENT	GENERATION_EXPRESSION
+def	mysqltest	t1	a	1	NULL	YES	int	NULL	NULL	10	0	NULL	NULL	NULL	int(11)			select,insert,update,references		
 show columns from mysqltest.t1 where field like "%a%";
 Field	Type	Null	Key	Default	Extra
 a	int(11)	YES		NULL	
@@ -348,9 +328,11 @@ sub1
 explain select a.ROUTINE_NAME from information_schema.ROUTINES a,
 information_schema.SCHEMATA b where
 a.ROUTINE_SCHEMA = b.SCHEMA_NAME;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	#	ALL	NULL	NULL	NULL	NULL	NULL	NULL
-1	SIMPLE	#	ALL	NULL	NULL	NULL	NULL	NULL	Using where; Using join buffer (Block Nested Loop)
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	#	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+1	SIMPLE	#	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	Using where; Using join buffer (Block Nested Loop)
+Warnings:
+Note	1003	#
 select a.ROUTINE_NAME, b.name from information_schema.ROUTINES a,
 mysql.proc b where a.ROUTINE_NAME = convert(b.name using utf8) AND a.ROUTINE_SCHEMA='test' order by 1;
 ROUTINE_NAME	name
@@ -388,13 +370,13 @@ sub1	NULL
 sub2	return i+1
 show create procedure sel2;
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
-sel2	NO_ENGINE_SUBSTITUTION	NULL	latin1	latin1_swedish_ci	latin1_swedish_ci
+sel2	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	NULL	latin1	latin1_swedish_ci	latin1_swedish_ci
 show create function sub1;
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
-sub1	NO_ENGINE_SUBSTITUTION	NULL	latin1	latin1_swedish_ci	latin1_swedish_ci
+sub1	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	NULL	latin1	latin1_swedish_ci	latin1_swedish_ci
 show create function sub2;
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
-sub2	NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`mysqltest_1`@`localhost` FUNCTION `sub2`(i int) RETURNS int(11)
+sub2	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`mysqltest_1`@`localhost` FUNCTION `sub2`(i int) RETURNS int(11)
 return i+1	latin1	latin1_swedish_ci	latin1_swedish_ci
 show function status like "sub2";
 Db	Name	Type	Definer	Modified	Created	Security_type	Comment	character_set_client	collation_connection	Database Collation
@@ -402,7 +384,7 @@ test	sub2	FUNCTION	mysqltest_1@localhost	#	#	DEFINER		latin1	latin1_swedish_ci	l
 drop function sub2;
 show create procedure sel2;
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
-sel2	NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` PROCEDURE `sel2`()
+sel2	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` PROCEDURE `sel2`()
 begin
 select * from t1;
 select * from t2;
@@ -414,10 +396,13 @@ information_schema
 mtr
 mysql
 performance_schema
+sys
 test
 explain select * from v0;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	#	ALL	NULL	NULL	NULL	NULL	NULL	NULL
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	#	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+Warnings:
+Note	1003	#
 create view v1 (c) as select table_name from information_schema.tables
 where table_name="v1";
 select * from v1;
@@ -446,8 +431,8 @@ latin1_general_ci
 latin1_general_cs
 latin1_spanish_ci
 show keys from v4;
-Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible
-select * from information_schema.views where TABLE_NAME like "v%";
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment
+select * from information_schema.views where TABLE_SCHEMA != 'sys' and TABLE_NAME like "v%";
 TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	VIEW_DEFINITION	CHECK_OPTION	IS_UPDATABLE	DEFINER	SECURITY_TYPE	CHARACTER_SET_CLIENT	COLLATION_CONNECTION
 def	test	v0	select `information_schema`.`schemata`.`SCHEMA_NAME` AS `c` from `information_schema`.`schemata`	NONE	NO	root@localhost	DEFINER	latin1	latin1_swedish_ci
 def	test	v1	select `information_schema`.`tables`.`TABLE_NAME` AS `c` from `information_schema`.`tables` where (`information_schema`.`tables`.`TABLE_NAME` = 'v1')	NONE	NO	root@localhost	DEFINER	latin1	latin1_swedish_ci
@@ -499,18 +484,18 @@ delete from mysql.tables_priv where user like 'mysqltest%';
 delete from mysql.columns_priv where user like 'mysqltest%';
 flush privileges;
 drop table t1;
-create table t1 (a int null, primary key(a));
+create table t1 (a int not null, primary key(a));
 alter table t1 add constraint constraint_1 unique (a);
 alter table t1 add constraint unique key_1(a);
 Warnings:
-Note	1831	Duplicate index 'key_1' defined on the table 'test.t1'. This is deprecated and will be disallowed in a future release.
+Warning	1831	Duplicate index 'key_1' defined on the table 'test.t1'. This is deprecated and will be disallowed in a future release.
 alter table t1 add constraint constraint_2 unique key_2(a);
 Warnings:
-Note	1831	Duplicate index 'key_2' defined on the table 'test.t1'. This is deprecated and will be disallowed in a future release.
+Warning	1831	Duplicate index 'key_2' defined on the table 'test.t1'. This is deprecated and will be disallowed in a future release.
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `a` int(11) NOT NULL DEFAULT '0',
+  `a` int(11) NOT NULL,
   PRIMARY KEY (`a`),
   UNIQUE KEY `constraint_1` (`a`),
   UNIQUE KEY `key_1` (`a`),
@@ -523,7 +508,7 @@ def	test	PRIMARY	test	t1	PRIMARY KEY
 def	test	constraint_1	test	t1	UNIQUE
 def	test	key_1	test	t1	UNIQUE
 def	test	key_2	test	t1	UNIQUE
-select * from information_schema.KEY_COLUMN_USAGE where
+select * from information_schema.key_column_usage where
 TABLE_SCHEMA= "test";
 CONSTRAINT_CATALOG	CONSTRAINT_SCHEMA	CONSTRAINT_NAME	TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	ORDINAL_POSITION	POSITION_IN_UNIQUE_CONSTRAINT	REFERENCED_TABLE_SCHEMA	REFERENCED_TABLE_NAME	REFERENCED_COLUMN_NAME
 def	test	PRIMARY	def	test	t1	a	1	NULL	NULL	NULL	NULL
@@ -536,7 +521,7 @@ t1
 select table_name,column_name from information_schema.COLUMNS where table_schema like "test%";
 table_name	column_name
 t1	a
-select ROUTINE_NAME from information_schema.ROUTINES;
+select ROUTINE_NAME from information_schema.ROUTINES where ROUTINE_SCHEMA != 'sys';
 ROUTINE_NAME
 sel2
 sub1
@@ -548,16 +533,18 @@ create table t1(a int);
 create view v1 (c) as select a from t1 with check option;
 create view v2 (c) as select a from t1 WITH LOCAL CHECK OPTION;
 create view v3 (c) as select a from t1 WITH CASCADED CHECK OPTION;
-select * from information_schema.views;
+select * from information_schema.views where table_schema != 'sys';
 TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	VIEW_DEFINITION	CHECK_OPTION	IS_UPDATABLE	DEFINER	SECURITY_TYPE	CHARACTER_SET_CLIENT	COLLATION_CONNECTION
 def	test	v1	select `test`.`t1`.`a` AS `c` from `test`.`t1`	CASCADED	YES	root@localhost	DEFINER	latin1	latin1_swedish_ci
 def	test	v2	select `test`.`t1`.`a` AS `c` from `test`.`t1`	LOCAL	YES	root@localhost	DEFINER	latin1	latin1_swedish_ci
 def	test	v3	select `test`.`t1`.`a` AS `c` from `test`.`t1`	CASCADED	YES	root@localhost	DEFINER	latin1	latin1_swedish_ci
 grant select (a) on test.t1 to joe@localhost with grant option;
-select * from INFORMATION_SCHEMA.COLUMN_PRIVILEGES;
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
+select * from INFORMATION_SCHEMA.COLUMN_PRIVILEGES WHERE table_schema != 'sys';
 GRANTEE	TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	PRIVILEGE_TYPE	IS_GRANTABLE
 'joe'@'localhost'	def	test	t1	a	SELECT	YES
-select * from INFORMATION_SCHEMA.TABLE_PRIVILEGES;
+select * from INFORMATION_SCHEMA.TABLE_PRIVILEGES WHERE table_schema NOT IN ('sys','mysql');
 GRANTEE	TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	PRIVILEGE_TYPE	IS_GRANTABLE
 drop view v1, v2, v3;
 drop table t1;
@@ -579,6 +566,7 @@ information_schema.tables) union select version from
 information_schema.tables;
 s1
 10
+NULL
 drop table t1;
 SHOW CREATE TABLE INFORMATION_SCHEMA.character_sets;
 Table	Create Table
@@ -647,7 +635,7 @@ proc	security_type	enum('INVOKER','DEFINER')
 proc	param_list	blob
 proc	returns	longblob
 proc	body	longblob
-proc	definer	char(77)
+proc	definer	char(93)
 proc	created	timestamp
 proc	modified	timestamp
 proc	sql_mode	set('REAL_AS_FLOAT','PIPES_AS_CONCAT','ANSI_QUOTES','IGNORE_SPACE','NOT_USED','ONLY_FULL_GROUP_BY','NO_UNSIGNED_SUBTRACTION','NO_DIR_IN_CREATE','POSTGRESQL','ORACLE','MSSQL','DB2','MAXDB','NO_KEY_OPTIONS','NO_TABLE_OPTIONS','NO_FIELD_OPTIONS','MYSQL323','MYSQL40','ANSI','NO_AUTO_VALUE_ON_ZERO','NO_BACKSLASH_ESCAPES','STRICT_TRANS_TABLES','STRICT_ALL_TABLES','NO_ZERO_IN_DATE','NO_ZERO_DATE','INVALID_DATES','ERROR_FOR_DIVISION_BY_ZERO','TRADITIONAL','NO_AUTO_CREATE_USER','HIGH_NOT_PRECEDENCE','NO_ENGINE_SUBSTITUTION','PAD_CHAR_TO_FULL_LENGTH')
@@ -670,11 +658,11 @@ user
 drop view v1;
 create view vo as select 'a' union select 'a';
 show index from vo;
-Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment
 select * from information_schema.TABLE_CONSTRAINTS where
 TABLE_NAME= "vo";
 CONSTRAINT_CATALOG	CONSTRAINT_SCHEMA	CONSTRAINT_NAME	TABLE_SCHEMA	TABLE_NAME	CONSTRAINT_TYPE
-select * from information_schema.KEY_COLUMN_USAGE where
+select * from information_schema.key_column_usage where
 TABLE_NAME= "vo";
 CONSTRAINT_CATALOG	CONSTRAINT_SCHEMA	CONSTRAINT_NAME	TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	ORDINAL_POSITION	POSITION_IN_UNIQUE_CONSTRAINT	REFERENCED_TABLE_SCHEMA	REFERENCED_TABLE_NAME	REFERENCED_COLUMN_NAME
 drop view vo;
@@ -691,14 +679,6 @@ TABLESPACES
 TABLE_CONSTRAINTS
 TABLE_PRIVILEGES
 TRIGGERS
-TABLE_STATISTICS
-THREAD_GROUP_STATUS
-TokuDB_file_map
-TokuDB_trx
-TokuDB_locks
-TokuDB_lock_waits
-TokuDB_fractal_tree_block_map
-TokuDB_fractal_tree_info
 create database information_schema;
 ERROR 42000: Access denied for user 'root'@'localhost' to database 'information_schema'
 use information_schema;
@@ -709,14 +689,6 @@ TABLESPACES	SYSTEM VIEW
 TABLE_CONSTRAINTS	SYSTEM VIEW
 TABLE_PRIVILEGES	SYSTEM VIEW
 TRIGGERS	SYSTEM VIEW
-TABLE_STATISTICS	SYSTEM VIEW
-THREAD_GROUP_STATUS	SYSTEM VIEW
-TokuDB_file_map	SYSTEM VIEW
-TokuDB_trx	SYSTEM VIEW
-TokuDB_locks	SYSTEM VIEW
-TokuDB_lock_waits	SYSTEM VIEW
-TokuDB_fractal_tree_block_map	SYSTEM VIEW
-TokuDB_fractal_tree_info	SYSTEM VIEW
 create table t1(a int);
 ERROR 42000: Access denied for user 'root'@'localhost' to database 'information_schema'
 use test;
@@ -730,14 +702,6 @@ TABLESPACES
 TABLE_CONSTRAINTS
 TABLE_PRIVILEGES
 TRIGGERS
-TABLE_STATISTICS
-THREAD_GROUP_STATUS
-TokuDB_file_map
-TokuDB_trx
-TokuDB_locks
-TokuDB_lock_waits
-TokuDB_fractal_tree_block_map
-TokuDB_fractal_tree_info
 select table_name from tables where table_name='user';
 table_name
 user
@@ -745,7 +709,6 @@ select column_name, privileges from columns
 where table_name='user' and column_name like '%o%';
 column_name	privileges
 Host	select,insert,update,references
-Password	select,insert,update,references
 Drop_priv	select,insert,update,references
 Reload_priv	select,insert,update,references
 Shutdown_priv	select,insert,update,references
@@ -760,6 +723,9 @@ max_connections	select,insert,update,references
 max_user_connections	select,insert,update,references
 authentication_string	select,insert,update,references
 password_expired	select,insert,update,references
+password_last_changed	select,insert,update,references
+password_lifetime	select,insert,update,references
+account_locked	select,insert,update,references
 use test;
 create function sub1(i int) returns int
 return i+1;
@@ -794,7 +760,7 @@ where table_schema='test';
 constraint_name
 show create view v2;
 View	Create View	character_set_client	collation_connection
-v2	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v2` AS select `test`.`t1`.`f1` AS `c` from `t1`	latin1	latin1_swedish_ci
+v2	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v2` AS select `t1`.`f1` AS `c` from `t1`	latin1	latin1_swedish_ci
 Warnings:
 Warning	1356	View 'test.v2' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
 show create table v3;
@@ -847,11 +813,12 @@ count(*)
 drop view a2, a1;
 drop table t_crashme;
 select table_schema, table_name, column_name from information_schema.columns
-where table_schema not like 'performance_schema'
-  and data_type = 'longtext';
+where table_schema not in ('performance_schema', 'sys')
+and data_type = 'longtext';
 table_schema	table_name	column_name
 information_schema	COLUMNS	COLUMN_DEFAULT
 information_schema	COLUMNS	COLUMN_TYPE
+information_schema	COLUMNS	GENERATION_EXPRESSION
 information_schema	EVENTS	EVENT_DEFINITION
 information_schema	OPTIMIZER_TRACE	QUERY
 information_schema	OPTIMIZER_TRACE	TRACE
@@ -868,8 +835,8 @@ information_schema	TRIGGERS	ACTION_CONDITION
 information_schema	TRIGGERS	ACTION_STATEMENT
 information_schema	VIEWS	VIEW_DEFINITION
 select table_name, column_name, data_type from information_schema.columns
-where table_schema not like 'performance_schema'
-  and data_type = 'datetime'
+where table_schema not in ('performance_schema', 'sys')
+and data_type = 'datetime'
   and table_name not like 'innodb_%';
 table_name	column_name	data_type
 EVENTS	EXECUTE_AT	datetime
@@ -927,13 +894,14 @@ x_float	NULL	NULL
 x_double_precision	NULL	NULL
 drop table t1;
 grant select on test.* to mysqltest_4@localhost;
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
 SELECT TABLE_NAME, COLUMN_NAME, PRIVILEGES FROM INFORMATION_SCHEMA.COLUMNS
 where COLUMN_NAME='TABLE_NAME' ORDER BY TABLE_NAME;
 TABLE_NAME	COLUMN_NAME	PRIVILEGES
 COLUMNS	TABLE_NAME	select
 COLUMN_PRIVILEGES	TABLE_NAME	select
 FILES	TABLE_NAME	select
-INDEX_STATISTICS	TABLE_NAME	select
 INNODB_BUFFER_PAGE	TABLE_NAME	select
 INNODB_BUFFER_PAGE_LRU	TABLE_NAME	select
 INNODB_CMP_PER_INDEX	table_name	select
@@ -945,10 +913,6 @@ STATISTICS	TABLE_NAME	select
 TABLES	TABLE_NAME	select
 TABLE_CONSTRAINTS	TABLE_NAME	select
 TABLE_PRIVILEGES	TABLE_NAME	select
-TABLE_STATISTICS	TABLE_NAME	select
-TokuDB_file_map	table_name	select
-TokuDB_fractal_tree_block_map	table_name	select
-TokuDB_fractal_tree_info	table_name	select
 VIEWS	TABLE_NAME	select
 delete from mysql.user where user='mysqltest_4';
 delete from mysql.db where user='mysqltest_4';
@@ -958,8 +922,8 @@ table_schema IN ('mysql', 'INFORMATION_SCHEMA', 'test', 'mysqltest')
 AND table_name not like 'ndb%' AND table_name not like 'innodb_%'
 GROUP BY TABLE_SCHEMA;
 table_schema	count(*)
-information_schema	41
-mysql	25
+information_schema	31
+mysql	28
 create table t1 (i int, j int);
 create trigger trg1 before insert on t1 for each row
 begin
@@ -985,34 +949,34 @@ trg1	INSERT	t1	begin
 if new.j > 10 then
 set new.j := 10;
 end if;
-end	BEFORE	NULL	NO_ENGINE_SUBSTITUTION	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
+end	BEFORE	#	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
 trg2	UPDATE	t1	begin
 if old.i % 2 = 0 then
 set new.j := -1;
 end if;
-end	BEFORE	NULL	NO_ENGINE_SUBSTITUTION	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
+end	BEFORE	#	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
 trg3	UPDATE	t1	begin
 if new.j = -1 then
 set @fired:= "Yes";
 end if;
-end	AFTER	NULL	NO_ENGINE_SUBSTITUTION	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
+end	AFTER	#	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
 select * from information_schema.triggers where trigger_schema in ('mysql', 'information_schema', 'test', 'mysqltest');
 TRIGGER_CATALOG	TRIGGER_SCHEMA	TRIGGER_NAME	EVENT_MANIPULATION	EVENT_OBJECT_CATALOG	EVENT_OBJECT_SCHEMA	EVENT_OBJECT_TABLE	ACTION_ORDER	ACTION_CONDITION	ACTION_STATEMENT	ACTION_ORIENTATION	ACTION_TIMING	ACTION_REFERENCE_OLD_TABLE	ACTION_REFERENCE_NEW_TABLE	ACTION_REFERENCE_OLD_ROW	ACTION_REFERENCE_NEW_ROW	CREATED	SQL_MODE	DEFINER	CHARACTER_SET_CLIENT	COLLATION_CONNECTION	DATABASE_COLLATION
-def	test	trg1	INSERT	def	test	t1	0	NULL	begin
+def	test	trg1	INSERT	def	test	t1	1	NULL	begin
 if new.j > 10 then
 set new.j := 10;
 end if;
-end	ROW	BEFORE	NULL	NULL	OLD	NEW	NULL	NO_ENGINE_SUBSTITUTION	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
-def	test	trg2	UPDATE	def	test	t1	0	NULL	begin
+end	ROW	BEFORE	NULL	NULL	OLD	NEW	#	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
+def	test	trg2	UPDATE	def	test	t1	1	NULL	begin
 if old.i % 2 = 0 then
 set new.j := -1;
 end if;
-end	ROW	BEFORE	NULL	NULL	OLD	NEW	NULL	NO_ENGINE_SUBSTITUTION	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
-def	test	trg3	UPDATE	def	test	t1	0	NULL	begin
+end	ROW	BEFORE	NULL	NULL	OLD	NEW	#	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
+def	test	trg3	UPDATE	def	test	t1	1	NULL	begin
 if new.j = -1 then
 set @fired:= "Yes";
 end if;
-end	ROW	AFTER	NULL	NULL	OLD	NEW	NULL	NO_ENGINE_SUBSTITUTION	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
+end	ROW	AFTER	NULL	NULL	OLD	NEW	#	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
 drop trigger trg1;
 drop trigger trg2;
 drop trigger trg3;
@@ -1021,9 +985,17 @@ create database mysqltest;
 create table mysqltest.t1 (f1 int, f2 int);
 create table mysqltest.t2 (f1 int);
 grant select (f1) on mysqltest.t1 to user1@localhost;
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
 grant select on mysqltest.t2 to user2@localhost;
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
 grant select on mysqltest.* to user3@localhost;
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
 grant select on *.* to user4@localhost;
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
 select * from information_schema.column_privileges order by grantee;
 GRANTEE	TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	PRIVILEGE_TYPE	IS_GRANTABLE
 'user1'@'localhost'	def	mysqltest	t1	f1	SELECT	NO
@@ -1071,14 +1043,14 @@ order by grantee;
 GRANTEE	TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	PRIVILEGE_TYPE	IS_GRANTABLE
 'user1'@'localhost'	def	mysqltest	t1	f1	SELECT	NO
 select * from information_schema.table_privileges where grantee like '%user%'
-order by grantee;
+and table_schema !='mysql' order by grantee;
 GRANTEE	TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	PRIVILEGE_TYPE	IS_GRANTABLE
 'user2'@'localhost'	def	mysqltest	t2	SELECT	NO
 select * from information_schema.schema_privileges where grantee like '%user%'
-order by grantee;
+and table_schema !='performance_schema' order by grantee;
 GRANTEE	TABLE_CATALOG	TABLE_SCHEMA	PRIVILEGE_TYPE	IS_GRANTABLE
 'user3'@'localhost'	def	mysqltest	SELECT	NO
-select * from information_schema.user_privileges where grantee like '%user%'
+select * from information_schema.user_privileges where grantee like '%user%' and grantee not like '%session%'
 order by grantee;
 GRANTEE	TABLE_CATALOG	PRIVILEGE_TYPE	IS_GRANTABLE
 'user1'@'localhost'	def	USAGE	NO
@@ -1096,7 +1068,7 @@ drop procedure if exists p2;
 create procedure p1 () modifies sql data set @a = 5;
 create procedure p2 () set @a = 5;
 select sql_data_access from information_schema.routines
-where specific_name like 'p%';
+where specific_name like 'p%' and ROUTINE_SCHEMA != 'sys';
 sql_data_access
 MODIFIES SQL DATA
 CONTAINS SQL
@@ -1219,8 +1191,8 @@ describe t1;
 Field	Type	Null	Key	Default	Extra
 f1	int(11)	YES	MUL	NULL	
 show indexes from t1;
-Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible
-t1	1	f1	1	f1	A	NULL	NULL	NULL	YES	BTREE			YES
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment
+t1	1	f1	1	f1	A	NULL	NULL	NULL	YES	BTREE		
 drop table t1;
 create table t1(f1 binary(32), f2 varbinary(64));
 select character_maximum_length, character_octet_length
@@ -1234,7 +1206,7 @@ INSERT INTO t1 SET f1 = 1, f2 = 'Schoenenbourg', f3 = 1;
 CREATE FUNCTION func2() RETURNS BIGINT RETURN 1;
 CREATE FUNCTION func1() RETURNS BIGINT
 BEGIN
-RETURN ( SELECT COUNT(*) FROM INFORMATION_SCHEMA.VIEWS);
+RETURN ( SELECT COUNT(*) FROM INFORMATION_SCHEMA.VIEWS WHERE TABLE_SCHEMA != 'sys');
 END//
 CREATE VIEW v1 AS SELECT 1 FROM t1
 WHERE f3 = (SELECT func2 ());
@@ -1254,7 +1226,7 @@ GROUP BY column_type ORDER BY num;
 column_type	GROUP_CONCAT(table_schema, '.', table_name)	num
 varchar(7)	information_schema.ROUTINES,information_schema.VIEWS	2
 varchar(30)	information_schema.COLUMNS,information_schema.PROFILING,information_schema.PROFILING	3
-varchar(20)	information_schema.FILES,information_schema.FILES,information_schema.FILES,information_schema.PLUGINS,information_schema.PLUGINS,information_schema.PLUGINS,information_schema.PROFILING,information_schema.TABLES	8
+varchar(20)	information_schema.FILES,information_schema.FILES,information_schema.PLUGINS,information_schema.PLUGINS,information_schema.PLUGINS,information_schema.PROFILING	6
 create table t1(f1 char(1) not null, f2 char(9) not null)
 default character set utf8;
 select CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH from
@@ -1273,6 +1245,8 @@ routine_name
 delete from proc where name='';
 use test;
 grant select on test.* to mysqltest_1@localhost;
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
 create table t1 (id int);
 create view v1 as select * from t1;
 create definer = mysqltest_1@localhost
@@ -1307,11 +1281,11 @@ f1	RETURN @a + 1
 p1	SET @a= 1
 SHOW CREATE PROCEDURE p1;
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
-p1	NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` PROCEDURE `p1`()
+p1	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` PROCEDURE `p1`()
 SET @a= 1	latin1	latin1_swedish_ci	latin1_swedish_ci
 SHOW CREATE FUNCTION f1;
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
-f1	NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` FUNCTION `f1`() RETURNS int(11)
+f1	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` FUNCTION `f1`() RETURNS int(11)
 RETURN @a + 1	latin1	latin1_swedish_ci	latin1_swedish_ci
 SELECT ROUTINE_NAME, ROUTINE_DEFINITION FROM INFORMATION_SCHEMA.ROUTINES WHERE ROUTINE_SCHEMA='test';
 ROUTINE_NAME	ROUTINE_DEFINITION
@@ -1319,10 +1293,10 @@ f1	NULL
 p1	NULL
 SHOW CREATE PROCEDURE p1;
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
-p1	NO_ENGINE_SUBSTITUTION	NULL	latin1	latin1_swedish_ci	latin1_swedish_ci
+p1	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	NULL	latin1	latin1_swedish_ci	latin1_swedish_ci
 SHOW CREATE FUNCTION f1;
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
-f1	NO_ENGINE_SUBSTITUTION	NULL	latin1	latin1_swedish_ci	latin1_swedish_ci
+f1	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	NULL	latin1	latin1_swedish_ci	latin1_swedish_ci
 CALL p1();
 SELECT f1();
 f1()
@@ -1358,12 +1332,15 @@ table_type   as object_type
 from information_schema.tables
 order by object_schema;
 explain select * from v1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	tables	ALL	NULL	NULL	NULL	NULL	NULL	Open_frm_only; Scanned all databases; Using filesort
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	tables	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	Open_frm_only; Scanned all databases; Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `information_schema`.`tables`.`TABLE_SCHEMA` AS `object_schema`,`information_schema`.`tables`.`TABLE_NAME` AS `object_name`,`information_schema`.`tables`.`TABLE_TYPE` AS `object_type` from `information_schema`.`tables` order by `information_schema`.`tables`.`TABLE_SCHEMA`
 explain select * from (select table_name from information_schema.tables) as a;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	PRIMARY	<derived2>	ALL	NULL	NULL	NULL	NULL	2	NULL
-2	DERIVED	tables	ALL	NULL	NULL	NULL	NULL	NULL	Skip_open_table; Scanned all databases
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	tables	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	Skip_open_table; Scanned all databases
+Warnings:
+Note	1003	/* select#1 */ select `information_schema`.`tables`.`TABLE_NAME` AS `table_name` from `information_schema`.`tables`
 drop view v1;
 create table t1 (f1 int(11));
 create table t2 (f1 int(11), f2 int(11));
@@ -1386,7 +1363,8 @@ count(*) as num1
 from information_schema.tables t
 inner join information_schema.columns c1
 on t.table_schema = c1.table_schema AND t.table_name = c1.table_name
-where t.table_schema = 'information_schema' and
+where t.table_name not like 'ndb%' and
+t.table_schema = 'information_schema' and
 c1.ordinal_position =
 (select isnull(c2.column_type) -
 isnull(group_concat(c2.table_schema, '.', c2.table_name)) +
@@ -1408,7 +1386,6 @@ EVENTS	information_schema.EVENTS	1
 FILES	information_schema.FILES	1
 GLOBAL_STATUS	information_schema.GLOBAL_STATUS	1
 GLOBAL_VARIABLES	information_schema.GLOBAL_VARIABLES	1
-INDEX_STATISTICS	information_schema.INDEX_STATISTICS	1
 KEY_COLUMN_USAGE	information_schema.KEY_COLUMN_USAGE	1
 OPTIMIZER_TRACE	information_schema.OPTIMIZER_TRACE	1
 PARAMETERS	information_schema.PARAMETERS	1
@@ -1422,20 +1399,11 @@ SCHEMATA	information_schema.SCHEMATA	1
 SCHEMA_PRIVILEGES	information_schema.SCHEMA_PRIVILEGES	1
 SESSION_STATUS	information_schema.SESSION_STATUS	1
 SESSION_VARIABLES	information_schema.SESSION_VARIABLES	1
-SQL_FILTER_INFO	information_schema.SQL_FILTER_INFO	1
 STATISTICS	information_schema.STATISTICS	1
 TABLES	information_schema.TABLES	1
 TABLESPACES	information_schema.TABLESPACES	1
 TABLE_CONSTRAINTS	information_schema.TABLE_CONSTRAINTS	1
 TABLE_PRIVILEGES	information_schema.TABLE_PRIVILEGES	1
-TABLE_STATISTICS	information_schema.TABLE_STATISTICS	1
-THREAD_GROUP_STATUS	information_schema.THREAD_GROUP_STATUS	1
-TokuDB_file_map	information_schema.TokuDB_file_map	1
-TokuDB_fractal_tree_block_map	information_schema.TokuDB_fractal_tree_block_map	1
-TokuDB_fractal_tree_info	information_schema.TokuDB_fractal_tree_info	1
-TokuDB_locks	information_schema.TokuDB_locks	1
-TokuDB_lock_waits	information_schema.TokuDB_lock_waits	1
-TokuDB_trx	information_schema.TokuDB_trx	1
 TRIGGERS	information_schema.TRIGGERS	1
 USER_PRIVILEGES	information_schema.USER_PRIVILEGES	1
 VIEWS	information_schema.VIEWS	1
@@ -1443,7 +1411,7 @@ create table t1(f1 int);
 create view v1 as select f1+1 as a from t1;
 create table t2 (f1 int, f2 int);
 create view v2 as select f1+1 as a, f2 as b from t2;
-select table_name, is_updatable from information_schema.views;
+select table_name, is_updatable from information_schema.views where table_schema != 'sys';
 table_name	is_updatable
 v1	NO
 v2	YES
@@ -1459,13 +1427,15 @@ create table mysqltest.t1(a int, b int, c int);
 create trigger mysqltest.t1_ai after insert on mysqltest.t1
 for each row set @a = new.a + new.b + new.c;
 grant select(b) on mysqltest.t1 to mysqltest_1@localhost;
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
 select trigger_name from information_schema.triggers
 where event_object_table='t1';
 trigger_name
 t1_ai
 show triggers from mysqltest;
 Trigger	Event	Table	Statement	Timing	Created	sql_mode	Definer	character_set_client	collation_connection	Database Collation
-t1_ai	INSERT	t1	set @a = new.a + new.b + new.c	AFTER	NULL	NO_ENGINE_SUBSTITUTION	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
+t1_ai	INSERT	t1	set @a = new.a + new.b + new.c	AFTER	#	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
 show columns from t1;
 Field	Type	Null	Key	Default	Extra
 b	int(11)	YES		NULL	
@@ -1530,6 +1500,8 @@ select * from information_schema.engines WHERE ENGINE="MyISAM";
 ENGINE	SUPPORT	COMMENT	TRANSACTIONS	XA	SAVEPOINTS
 MyISAM	DEFAULT	MyISAM storage engine	NO	NO	NO
 grant select on *.* to user3148@localhost;
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
 select user,db from information_schema.processlist;
 user	db
 user3148	test
@@ -1556,28 +1528,40 @@ DROP TABLE server_status;
 SET GLOBAL event_scheduler=0;
 explain select table_name from information_schema.views where
 table_schema='test' and table_name='v1';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	views	ALL	NULL	TABLE_SCHEMA,TABLE_NAME	NULL	NULL	NULL	Using where; Open_frm_only; Scanned 0 databases
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	views	NULL	ALL	NULL	TABLE_SCHEMA,TABLE_NAME	NULL	NULL	NULL	NULL	Using where; Open_frm_only; Scanned 0 databases
+Warnings:
+Note	1003	/* select#1 */ select `information_schema`.`views`.`TABLE_NAME` AS `table_name` from `information_schema`.`views` where ((`information_schema`.`views`.`TABLE_SCHEMA` = 'test') and (`information_schema`.`views`.`TABLE_NAME` = 'v1'))
 explain select * from information_schema.tables;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	tables	ALL	NULL	NULL	NULL	NULL	NULL	Open_full_table; Scanned all databases
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	tables	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	Open_full_table; Scanned all databases
+Warnings:
+Note	1003	/* select#1 */ select `information_schema`.`tables`.`TABLE_CATALOG` AS `TABLE_CATALOG`,`information_schema`.`tables`.`TABLE_SCHEMA` AS `TABLE_SCHEMA`,`information_schema`.`tables`.`TABLE_NAME` AS `TABLE_NAME`,`information_schema`.`tables`.`TABLE_TYPE` AS `TABLE_TYPE`,`information_schema`.`tables`.`ENGINE` AS `ENGINE`,`information_schema`.`tables`.`VERSION` AS `VERSION`,`information_schema`.`tables`.`ROW_FORMAT` AS `ROW_FORMAT`,`information_schema`.`tables`.`TABLE_ROWS` AS `TABLE_ROWS`,`information_schema`.`tables`.`AVG_ROW_LENGTH` AS `AVG_ROW_LENGTH`,`information_schema`.`tables`.`DATA_LENGTH` AS `DATA_LENGTH`,`information_schema`.`tables`.`MAX_DATA_LENGTH` AS `MAX_DATA_LENGTH`,`information_schema`.`tables`.`INDEX_LENGTH` AS `INDEX_LENGTH`,`information_schema`.`tables`.`DATA_FREE` AS `DATA_FREE`,`information_schema`.`tables`.`AUTO_INCREMENT` AS `AUTO_INCREMENT`,`information_schema`.`tables`.`CREATE_TIME` AS `CREATE_TIME`,`information_schema`.`tables`.`UPDATE_TIME` AS `UPDATE_TIME`,`information_schema`.`tables`.`CHECK_TIME` AS `CHECK_TIME`,`information_schema`.`tables`.`TABLE_COLLATION` AS `TABLE_COLLATION`,`information_schema`.`tables`.`CHECKSUM` AS `CHECKSUM`,`information_schema`.`tables`.`CREATE_OPTIONS` AS `CREATE_OPTIONS`,`information_schema`.`tables`.`TABLE_COMMENT` AS `TABLE_COMMENT` from `information_schema`.`tables`
 explain select * from information_schema.collations;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	collations	ALL	NULL	NULL	NULL	NULL	NULL	NULL
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	collations	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+Warnings:
+Note	1003	/* select#1 */ select `information_schema`.`collations`.`COLLATION_NAME` AS `COLLATION_NAME`,`information_schema`.`collations`.`CHARACTER_SET_NAME` AS `CHARACTER_SET_NAME`,`information_schema`.`collations`.`ID` AS `ID`,`information_schema`.`collations`.`IS_DEFAULT` AS `IS_DEFAULT`,`information_schema`.`collations`.`IS_COMPILED` AS `IS_COMPILED`,`information_schema`.`collations`.`SORTLEN` AS `SORTLEN` from `information_schema`.`collations`
 explain select * from information_schema.tables where
 table_schema='test' and table_name= 't1';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	tables	ALL	NULL	TABLE_SCHEMA,TABLE_NAME	NULL	NULL	NULL	Using where; Open_full_table; Scanned 0 databases
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	tables	NULL	ALL	NULL	TABLE_SCHEMA,TABLE_NAME	NULL	NULL	NULL	NULL	Using where; Open_full_table; Scanned 0 databases
+Warnings:
+Note	1003	/* select#1 */ select `information_schema`.`tables`.`TABLE_CATALOG` AS `TABLE_CATALOG`,`information_schema`.`tables`.`TABLE_SCHEMA` AS `TABLE_SCHEMA`,`information_schema`.`tables`.`TABLE_NAME` AS `TABLE_NAME`,`information_schema`.`tables`.`TABLE_TYPE` AS `TABLE_TYPE`,`information_schema`.`tables`.`ENGINE` AS `ENGINE`,`information_schema`.`tables`.`VERSION` AS `VERSION`,`information_schema`.`tables`.`ROW_FORMAT` AS `ROW_FORMAT`,`information_schema`.`tables`.`TABLE_ROWS` AS `TABLE_ROWS`,`information_schema`.`tables`.`AVG_ROW_LENGTH` AS `AVG_ROW_LENGTH`,`information_schema`.`tables`.`DATA_LENGTH` AS `DATA_LENGTH`,`information_schema`.`tables`.`MAX_DATA_LENGTH` AS `MAX_DATA_LENGTH`,`information_schema`.`tables`.`INDEX_LENGTH` AS `INDEX_LENGTH`,`information_schema`.`tables`.`DATA_FREE` AS `DATA_FREE`,`information_schema`.`tables`.`AUTO_INCREMENT` AS `AUTO_INCREMENT`,`information_schema`.`tables`.`CREATE_TIME` AS `CREATE_TIME`,`information_schema`.`tables`.`UPDATE_TIME` AS `UPDATE_TIME`,`information_schema`.`tables`.`CHECK_TIME` AS `CHECK_TIME`,`information_schema`.`tables`.`TABLE_COLLATION` AS `TABLE_COLLATION`,`information_schema`.`tables`.`CHECKSUM` AS `CHECKSUM`,`information_schema`.`tables`.`CREATE_OPTIONS` AS `CREATE_OPTIONS`,`information_schema`.`tables`.`TABLE_COMMENT` AS `TABLE_COMMENT` from `information_schema`.`tables` where ((`information_schema`.`tables`.`TABLE_SCHEMA` = 'test') and (`information_schema`.`tables`.`TABLE_NAME` = 't1'))
 explain select table_name, table_type from information_schema.tables
 where table_schema='test';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	tables	ALL	NULL	TABLE_SCHEMA	NULL	NULL	NULL	Using where; Open_frm_only; Scanned 1 database
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	tables	NULL	ALL	NULL	TABLE_SCHEMA	NULL	NULL	NULL	NULL	Using where; Open_frm_only; Scanned 1 database
+Warnings:
+Note	1003	/* select#1 */ select `information_schema`.`tables`.`TABLE_NAME` AS `table_name`,`information_schema`.`tables`.`TABLE_TYPE` AS `table_type` from `information_schema`.`tables` where (`information_schema`.`tables`.`TABLE_SCHEMA` = 'test')
 explain select b.table_name
 from information_schema.tables a, information_schema.columns b
 where a.table_name='t1' and a.table_schema='test' and b.table_name=a.table_name;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	a	ALL	NULL	TABLE_SCHEMA,TABLE_NAME	NULL	NULL	NULL	Using where; Skip_open_table; Scanned 0 databases
-1	SIMPLE	b	ALL	NULL	NULL	NULL	NULL	NULL	Using where; Open_frm_only; Scanned all databases; Using join buffer (Block Nested Loop)
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	a	NULL	ALL	NULL	TABLE_SCHEMA,TABLE_NAME	NULL	NULL	NULL	NULL	Using where; Skip_open_table; Scanned 0 databases
+1	SIMPLE	b	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	Using where; Open_frm_only; Scanned all databases; Using join buffer (Block Nested Loop)
+Warnings:
+Note	1003	/* select#1 */ select `b`.`TABLE_NAME` AS `table_name` from `information_schema`.`tables` `a` join `information_schema`.`columns` `b` where ((`b`.`TABLE_NAME` = `a`.`TABLE_NAME`) and (`a`.`TABLE_NAME` = 't1') and (`a`.`TABLE_SCHEMA` = 'test'))
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA
 WHERE SCHEMA_NAME = 'mysqltest';
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH
@@ -1616,12 +1600,12 @@ WHERE TABLE_SCHEMA='mysql' and TABLE_NAME= 'db';
 TABLE_COLLATION
 utf8_bin
 select * from information_schema.columns where table_schema = NULL;
-TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	ORDINAL_POSITION	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	CHARACTER_MAXIMUM_LENGTH	CHARACTER_OCTET_LENGTH	NUMERIC_PRECISION	NUMERIC_SCALE	DATETIME_PRECISION	CHARACTER_SET_NAME	COLLATION_NAME	COLUMN_TYPE	COLUMN_KEY	EXTRA	PRIVILEGES	COLUMN_COMMENT
+TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	ORDINAL_POSITION	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	CHARACTER_MAXIMUM_LENGTH	CHARACTER_OCTET_LENGTH	NUMERIC_PRECISION	NUMERIC_SCALE	DATETIME_PRECISION	CHARACTER_SET_NAME	COLLATION_NAME	COLUMN_TYPE	COLUMN_KEY	EXTRA	PRIVILEGES	COLUMN_COMMENT	GENERATION_EXPRESSION
 select * from `information_schema`.`COLUMNS` where `TABLE_NAME` = NULL;
-TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	ORDINAL_POSITION	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	CHARACTER_MAXIMUM_LENGTH	CHARACTER_OCTET_LENGTH	NUMERIC_PRECISION	NUMERIC_SCALE	DATETIME_PRECISION	CHARACTER_SET_NAME	COLLATION_NAME	COLUMN_TYPE	COLUMN_KEY	EXTRA	PRIVILEGES	COLUMN_COMMENT
-select * from `information_schema`.`KEY_COLUMN_USAGE` where `TABLE_SCHEMA` = NULL;
+TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	ORDINAL_POSITION	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	CHARACTER_MAXIMUM_LENGTH	CHARACTER_OCTET_LENGTH	NUMERIC_PRECISION	NUMERIC_SCALE	DATETIME_PRECISION	CHARACTER_SET_NAME	COLLATION_NAME	COLUMN_TYPE	COLUMN_KEY	EXTRA	PRIVILEGES	COLUMN_COMMENT	GENERATION_EXPRESSION
+select * from `information_schema`.`key_column_usage` where `TABLE_SCHEMA` = NULL;
 CONSTRAINT_CATALOG	CONSTRAINT_SCHEMA	CONSTRAINT_NAME	TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	ORDINAL_POSITION	POSITION_IN_UNIQUE_CONSTRAINT	REFERENCED_TABLE_SCHEMA	REFERENCED_TABLE_NAME	REFERENCED_COLUMN_NAME
-select * from `information_schema`.`KEY_COLUMN_USAGE` where `TABLE_NAME` = NULL;
+select * from `information_schema`.`key_column_usage` where `TABLE_NAME` = NULL;
 CONSTRAINT_CATALOG	CONSTRAINT_SCHEMA	CONSTRAINT_NAME	TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	ORDINAL_POSITION	POSITION_IN_UNIQUE_CONSTRAINT	REFERENCED_TABLE_SCHEMA	REFERENCED_TABLE_NAME	REFERENCED_COLUMN_NAME
 select * from `information_schema`.`PARTITIONS` where `TABLE_SCHEMA` = NULL;
 TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	PARTITION_NAME	SUBPARTITION_NAME	PARTITION_ORDINAL_POSITION	SUBPARTITION_ORDINAL_POSITION	PARTITION_METHOD	SUBPARTITION_METHOD	PARTITION_EXPRESSION	SUBPARTITION_EXPRESSION	PARTITION_DESCRIPTION	TABLE_ROWS	AVG_ROW_LENGTH	DATA_LENGTH	MAX_DATA_LENGTH	INDEX_LENGTH	DATA_FREE	CREATE_TIME	UPDATE_TIME	CHECK_TIME	CHECKSUM	PARTITION_COMMENT	NODEGROUP	TABLESPACE_NAME
@@ -1634,9 +1618,9 @@ CONSTRAINT_CATALOG	CONSTRAINT_SCHEMA	CONSTRAINT_NAME	UNIQUE_CONSTRAINT_CATALOG	U
 select * from information_schema.schemata where schema_name = NULL;
 CATALOG_NAME	SCHEMA_NAME	DEFAULT_CHARACTER_SET_NAME	DEFAULT_COLLATION_NAME	SQL_PATH
 select * from `information_schema`.`STATISTICS` where `TABLE_SCHEMA` = NULL;
-TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	NON_UNIQUE	INDEX_SCHEMA	INDEX_NAME	SEQ_IN_INDEX	COLUMN_NAME	COLLATION	CARDINALITY	SUB_PART	PACKED	NULLABLE	INDEX_TYPE	COMMENT	INDEX_COMMENT	IS_VISIBLE
+TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	NON_UNIQUE	INDEX_SCHEMA	INDEX_NAME	SEQ_IN_INDEX	COLUMN_NAME	COLLATION	CARDINALITY	SUB_PART	PACKED	NULLABLE	INDEX_TYPE	COMMENT	INDEX_COMMENT
 select * from `information_schema`.`STATISTICS` where `TABLE_NAME` = NULL;
-TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	NON_UNIQUE	INDEX_SCHEMA	INDEX_NAME	SEQ_IN_INDEX	COLUMN_NAME	COLLATION	CARDINALITY	SUB_PART	PACKED	NULLABLE	INDEX_TYPE	COMMENT	INDEX_COMMENT	IS_VISIBLE
+TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	NON_UNIQUE	INDEX_SCHEMA	INDEX_NAME	SEQ_IN_INDEX	COLUMN_NAME	COLLATION	CARDINALITY	SUB_PART	PACKED	NULLABLE	INDEX_TYPE	COMMENT	INDEX_COMMENT
 select * from information_schema.tables where table_schema = NULL;
 TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	TABLE_TYPE	ENGINE	VERSION	ROW_FORMAT	TABLE_ROWS	AVG_ROW_LENGTH	DATA_LENGTH	MAX_DATA_LENGTH	INDEX_LENGTH	DATA_FREE	AUTO_INCREMENT	CREATE_TIME	UPDATE_TIME	CHECK_TIME	TABLE_COLLATION	CHECKSUM	CREATE_OPTIONS	TABLE_COMMENT
 select * from information_schema.tables where table_catalog = NULL;
@@ -1656,9 +1640,10 @@ TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	VIEW_DEFINITION	CHECK_OPTION	IS_UPDATABLE	
 select * from `information_schema`.`VIEWS` where `TABLE_NAME` = NULL;
 TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	VIEW_DEFINITION	CHECK_OPTION	IS_UPDATABLE	DEFINER	SECURITY_TYPE	CHARACTER_SET_CLIENT	COLLATION_CONNECTION
 explain extended select 1 from information_schema.tables;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	SIMPLE	tables	ALL	NULL	NULL	NULL	NULL	NULL	NULL	Skip_open_table; Scanned all databases
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	tables	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	Skip_open_table; Scanned all databases
 Warnings:
+Warning	1681	'EXTENDED' is deprecated and will be removed in a future release.
 Note	1003	/* select#1 */ select 1 AS `1` from `information_schema`.`tables`
 use information_schema;
 show events;
@@ -1686,14 +1671,20 @@ drop function f1;
 select * from information_schema.tables where 1=sleep(100000);
 select * from information_schema.columns where 1=sleep(100000);
 explain select count(*) from information_schema.tables;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	tables	ALL	NULL	NULL	NULL	NULL	NULL	Skip_open_table; Scanned all databases
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	tables	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	Skip_open_table; Scanned all databases
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `information_schema`.`tables`
 explain select count(*) from information_schema.columns;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	columns	ALL	NULL	NULL	NULL	NULL	NULL	Open_frm_only; Scanned all databases
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	columns	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	Open_frm_only; Scanned all databases
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `information_schema`.`columns`
 explain select count(*) from information_schema.views;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	views	ALL	NULL	NULL	NULL	NULL	NULL	Open_frm_only; Scanned all databases
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	views	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	Open_frm_only; Scanned all databases
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `information_schema`.`views`
 set global init_connect="drop table if exists t1;drop table if exists t1;\
 drop table if exists t1;drop table if exists t1;\
 drop table if exists t1;drop table if exists t1;\
@@ -1739,7 +1730,8 @@ drop table if exists t1;drop table if exists t1;
 drop table if exists t1;drop table if exists t1;
 drop table if exists t1;drop table if exists
 Warnings:
-Warning	1265	Data truncated for column 'VARIABLE_VALUE' at row 1
+Warning	1287	'INFORMATION_SCHEMA.GLOBAL_VARIABLES' is deprecated and will be removed in a future release. Please use performance_schema.global_variables instead
+Warning	1406	Data too long for column 'VARIABLE_VALUE' at row 1
 set global init_connect="";
 create table t0 select * from information_schema.global_status where VARIABLE_NAME='COM_SELECT';
 SELECT 1;
@@ -1802,7 +1794,7 @@ FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='ubig';
 TABLE_NAME	COLUMN_NAME	NUMERIC_PRECISION
 ubig	a	19
 ubig	b	20
-INSERT INTO ubig VALUES (0xFFFFFFFFFFFFFFFF,0xFFFFFFFFFFFFFFFF);
+INSERT IGNORE INTO ubig VALUES (0xFFFFFFFFFFFFFFFF,0xFFFFFFFFFFFFFFFF);
 Warnings:
 Warning	1264	Out of range value for column 'a' at row 1
 SELECT length(CAST(b AS CHAR)) FROM ubig;
@@ -1871,24 +1863,34 @@ unlock tables;
 # Switching to connection 'con3726_2'
 # Switching to connection 'default'
 drop tables t1, t3;
-EXPLAIN SELECT * FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	KEY_COLUMN_USAGE	ALL	NULL	NULL	NULL	NULL	NULL	Open_full_table; Scanned all databases
-EXPLAIN SELECT * FROM INFORMATION_SCHEMA.PARTITIONS WHERE TABLE_NAME='t1';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	PARTITIONS	ALL	NULL	TABLE_NAME	NULL	NULL	NULL	Using where; Open_full_table; Scanned 1 database
-EXPLAIN SELECT * FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS
+EXPLAIN SELECT * FROM information_schema.key_column_usage;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	key_column_usage	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	Open_full_table; Scanned all databases
+Warnings:
+Note	1003	/* select#1 */ select `information_schema`.`key_column_usage`.`CONSTRAINT_CATALOG` AS `CONSTRAINT_CATALOG`,`information_schema`.`key_column_usage`.`CONSTRAINT_SCHEMA` AS `CONSTRAINT_SCHEMA`,`information_schema`.`key_column_usage`.`CONSTRAINT_NAME` AS `CONSTRAINT_NAME`,`information_schema`.`key_column_usage`.`TABLE_CATALOG` AS `TABLE_CATALOG`,`information_schema`.`key_column_usage`.`TABLE_SCHEMA` AS `TABLE_SCHEMA`,`information_schema`.`key_column_usage`.`TABLE_NAME` AS `TABLE_NAME`,`information_schema`.`key_column_usage`.`COLUMN_NAME` AS `COLUMN_NAME`,`information_schema`.`key_column_usage`.`ORDINAL_POSITION` AS `ORDINAL_POSITION`,`information_schema`.`key_column_usage`.`POSITION_IN_UNIQUE_CONSTRAINT` AS `POSITION_IN_UNIQUE_CONSTRAINT`,`information_schema`.`key_column_usage`.`REFERENCED_TABLE_SCHEMA` AS `REFERENCED_TABLE_SCHEMA`,`information_schema`.`key_column_usage`.`REFERENCED_TABLE_NAME` AS `REFERENCED_TABLE_NAME`,`information_schema`.`key_column_usage`.`REFERENCED_COLUMN_NAME` AS `REFERENCED_COLUMN_NAME` from `information_schema`.`key_column_usage`
+EXPLAIN SELECT * FROM information_schema.partitions WHERE TABLE_NAME='t1';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	partitions	NULL	ALL	NULL	TABLE_NAME	NULL	NULL	NULL	NULL	Using where; Open_full_table; Scanned 1 database
+Warnings:
+Note	1003	/* select#1 */ select `information_schema`.`partitions`.`TABLE_CATALOG` AS `TABLE_CATALOG`,`information_schema`.`partitions`.`TABLE_SCHEMA` AS `TABLE_SCHEMA`,`information_schema`.`partitions`.`TABLE_NAME` AS `TABLE_NAME`,`information_schema`.`partitions`.`PARTITION_NAME` AS `PARTITION_NAME`,`information_schema`.`partitions`.`SUBPARTITION_NAME` AS `SUBPARTITION_NAME`,`information_schema`.`partitions`.`PARTITION_ORDINAL_POSITION` AS `PARTITION_ORDINAL_POSITION`,`information_schema`.`partitions`.`SUBPARTITION_ORDINAL_POSITION` AS `SUBPARTITION_ORDINAL_POSITION`,`information_schema`.`partitions`.`PARTITION_METHOD` AS `PARTITION_METHOD`,`information_schema`.`partitions`.`SUBPARTITION_METHOD` AS `SUBPARTITION_METHOD`,`information_schema`.`partitions`.`PARTITION_EXPRESSION` AS `PARTITION_EXPRESSION`,`information_schema`.`partitions`.`SUBPARTITION_EXPRESSION` AS `SUBPARTITION_EXPRESSION`,`information_schema`.`partitions`.`PARTITION_DESCRIPTION` AS `PARTITION_DESCRIPTION`,`information_schema`.`partitions`.`TABLE_ROWS` AS `TABLE_ROWS`,`information_schema`.`partitions`.`AVG_ROW_LENGTH` AS `AVG_ROW_LENGTH`,`information_schema`.`partitions`.`DATA_LENGTH` AS `DATA_LENGTH`,`information_schema`.`partitions`.`MAX_DATA_LENGTH` AS `MAX_DATA_LENGTH`,`information_schema`.`partitions`.`INDEX_LENGTH` AS `INDEX_LENGTH`,`information_schema`.`partitions`.`DATA_FREE` AS `DATA_FREE`,`information_schema`.`partitions`.`CREATE_TIME` AS `CREATE_TIME`,`information_schema`.`partitions`.`UPDATE_TIME` AS `UPDATE_TIME`,`information_schema`.`partitions`.`CHECK_TIME` AS `CHECK_TIME`,`information_schema`.`partitions`.`CHECKSUM` AS `CHECKSUM`,`information_schema`.`partitions`.`PARTITION_COMMENT` AS `PARTITION_COMMENT`,`information_schema`.`partitions`.`NODEGROUP` AS `NODEGROUP`,`information_schema`.`partitions`.`TABLESPACE_NAME` AS `TABLESPACE_NAME` from `information_schema`.`partitions` where (`information_schema`.`partitions`.`TABLE_NAME` = 't1')
+EXPLAIN SELECT * FROM information_schema.referential_constraints
 WHERE CONSTRAINT_SCHEMA='test';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	REFERENTIAL_CONSTRAINTS	ALL	NULL	CONSTRAINT_SCHEMA	NULL	NULL	NULL	Using where; Open_full_table; Scanned 1 database
-EXPLAIN SELECT * FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	referential_constraints	NULL	ALL	NULL	CONSTRAINT_SCHEMA	NULL	NULL	NULL	NULL	Using where; Open_full_table; Scanned 1 database
+Warnings:
+Note	1003	/* select#1 */ select `information_schema`.`referential_constraints`.`CONSTRAINT_CATALOG` AS `CONSTRAINT_CATALOG`,`information_schema`.`referential_constraints`.`CONSTRAINT_SCHEMA` AS `CONSTRAINT_SCHEMA`,`information_schema`.`referential_constraints`.`CONSTRAINT_NAME` AS `CONSTRAINT_NAME`,`information_schema`.`referential_constraints`.`UNIQUE_CONSTRAINT_CATALOG` AS `UNIQUE_CONSTRAINT_CATALOG`,`information_schema`.`referential_constraints`.`UNIQUE_CONSTRAINT_SCHEMA` AS `UNIQUE_CONSTRAINT_SCHEMA`,`information_schema`.`referential_constraints`.`UNIQUE_CONSTRAINT_NAME` AS `UNIQUE_CONSTRAINT_NAME`,`information_schema`.`referential_constraints`.`MATCH_OPTION` AS `MATCH_OPTION`,`information_schema`.`referential_constraints`.`UPDATE_RULE` AS `UPDATE_RULE`,`information_schema`.`referential_constraints`.`DELETE_RULE` AS `DELETE_RULE`,`information_schema`.`referential_constraints`.`TABLE_NAME` AS `TABLE_NAME`,`information_schema`.`referential_constraints`.`REFERENCED_TABLE_NAME` AS `REFERENCED_TABLE_NAME` from `information_schema`.`referential_constraints` where (`information_schema`.`referential_constraints`.`CONSTRAINT_SCHEMA` = 'test')
+EXPLAIN SELECT * FROM information_schema.table_constraints
 WHERE TABLE_NAME='t1' and TABLE_SCHEMA='test';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	TABLE_CONSTRAINTS	ALL	NULL	TABLE_SCHEMA,TABLE_NAME	NULL	NULL	NULL	Using where; Open_full_table; Scanned 0 databases
-EXPLAIN SELECT * FROM INFORMATION_SCHEMA.TRIGGERS
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	table_constraints	NULL	ALL	NULL	TABLE_SCHEMA,TABLE_NAME	NULL	NULL	NULL	NULL	Using where; Open_full_table; Scanned 0 databases
+Warnings:
+Note	1003	/* select#1 */ select `information_schema`.`table_constraints`.`CONSTRAINT_CATALOG` AS `CONSTRAINT_CATALOG`,`information_schema`.`table_constraints`.`CONSTRAINT_SCHEMA` AS `CONSTRAINT_SCHEMA`,`information_schema`.`table_constraints`.`CONSTRAINT_NAME` AS `CONSTRAINT_NAME`,`information_schema`.`table_constraints`.`TABLE_SCHEMA` AS `TABLE_SCHEMA`,`information_schema`.`table_constraints`.`TABLE_NAME` AS `TABLE_NAME`,`information_schema`.`table_constraints`.`CONSTRAINT_TYPE` AS `CONSTRAINT_TYPE` from `information_schema`.`table_constraints` where ((`information_schema`.`table_constraints`.`TABLE_NAME` = 't1') and (`information_schema`.`table_constraints`.`TABLE_SCHEMA` = 'test'))
+EXPLAIN SELECT * FROM information_schema.triggers
 WHERE EVENT_OBJECT_SCHEMA='test';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	TRIGGERS	ALL	NULL	EVENT_OBJECT_SCHEMA	NULL	NULL	NULL	Using where; Open_frm_only; Scanned 1 database
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	triggers	NULL	ALL	NULL	EVENT_OBJECT_SCHEMA	NULL	NULL	NULL	NULL	Using where; Open_frm_only; Scanned 1 database
+Warnings:
+Note	1003	/* select#1 */ select `information_schema`.`triggers`.`TRIGGER_CATALOG` AS `TRIGGER_CATALOG`,`information_schema`.`triggers`.`TRIGGER_SCHEMA` AS `TRIGGER_SCHEMA`,`information_schema`.`triggers`.`TRIGGER_NAME` AS `TRIGGER_NAME`,`information_schema`.`triggers`.`EVENT_MANIPULATION` AS `EVENT_MANIPULATION`,`information_schema`.`triggers`.`EVENT_OBJECT_CATALOG` AS `EVENT_OBJECT_CATALOG`,`information_schema`.`triggers`.`EVENT_OBJECT_SCHEMA` AS `EVENT_OBJECT_SCHEMA`,`information_schema`.`triggers`.`EVENT_OBJECT_TABLE` AS `EVENT_OBJECT_TABLE`,`information_schema`.`triggers`.`ACTION_ORDER` AS `ACTION_ORDER`,`information_schema`.`triggers`.`ACTION_CONDITION` AS `ACTION_CONDITION`,`information_schema`.`triggers`.`ACTION_STATEMENT` AS `ACTION_STATEMENT`,`information_schema`.`triggers`.`ACTION_ORIENTATION` AS `ACTION_ORIENTATION`,`information_schema`.`triggers`.`ACTION_TIMING` AS `ACTION_TIMING`,`information_schema`.`triggers`.`ACTION_REFERENCE_OLD_TABLE` AS `ACTION_REFERENCE_OLD_TABLE`,`information_schema`.`triggers`.`ACTION_REFERENCE_NEW_TABLE` AS `ACTION_REFERENCE_NEW_TABLE`,`information_schema`.`triggers`.`ACTION_REFERENCE_OLD_ROW` AS `ACTION_REFERENCE_OLD_ROW`,`information_schema`.`triggers`.`ACTION_REFERENCE_NEW_ROW` AS `ACTION_REFERENCE_NEW_ROW`,`information_schema`.`triggers`.`CREATED` AS `CREATED`,`information_schema`.`triggers`.`SQL_MODE` AS `SQL_MODE`,`information_schema`.`triggers`.`DEFINER` AS `DEFINER`,`information_schema`.`triggers`.`CHARACTER_SET_CLIENT` AS `CHARACTER_SET_CLIENT`,`information_schema`.`triggers`.`COLLATION_CONNECTION` AS `COLLATION_CONNECTION`,`information_schema`.`triggers`.`DATABASE_COLLATION` AS `DATABASE_COLLATION` from `information_schema`.`triggers` where (`information_schema`.`triggers`.`EVENT_OBJECT_SCHEMA` = 'test')
 create table information_schema.t1 (f1 INT);
 ERROR 42000: Access denied for user 'root'@'localhost' to database 'information_schema'
 drop table information_schema.t1;
@@ -1934,12 +1936,12 @@ routine_name	routine_type
 f1	FUNCTION
 drop function f1;
 SELECT *
-FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+FROM INFORMATION_SCHEMA.key_column_usage
 LEFT JOIN INFORMATION_SCHEMA.COLUMNS
 USING (TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME)
 WHERE COLUMNS.TABLE_SCHEMA = 'test'
 AND COLUMNS.TABLE_NAME = 't1';
-TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	CONSTRAINT_CATALOG	CONSTRAINT_SCHEMA	CONSTRAINT_NAME	TABLE_CATALOG	ORDINAL_POSITION	POSITION_IN_UNIQUE_CONSTRAINT	REFERENCED_TABLE_SCHEMA	REFERENCED_TABLE_NAME	REFERENCED_COLUMN_NAME	TABLE_CATALOG	ORDINAL_POSITION	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	CHARACTER_MAXIMUM_LENGTH	CHARACTER_OCTET_LENGTH	NUMERIC_PRECISION	NUMERIC_SCALE	DATETIME_PRECISION	CHARACTER_SET_NAME	COLLATION_NAME	COLUMN_TYPE	COLUMN_KEY	EXTRA	PRIVILEGES	COLUMN_COMMENT
+TABLE_SCHEMA	TABLE_NAME	COLUMN_NAME	CONSTRAINT_CATALOG	CONSTRAINT_SCHEMA	CONSTRAINT_NAME	TABLE_CATALOG	ORDINAL_POSITION	POSITION_IN_UNIQUE_CONSTRAINT	REFERENCED_TABLE_SCHEMA	REFERENCED_TABLE_NAME	REFERENCED_COLUMN_NAME	TABLE_CATALOG	ORDINAL_POSITION	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	CHARACTER_MAXIMUM_LENGTH	CHARACTER_OCTET_LENGTH	NUMERIC_PRECISION	NUMERIC_SCALE	DATETIME_PRECISION	CHARACTER_SET_NAME	COLLATION_NAME	COLUMN_TYPE	COLUMN_KEY	EXTRA	PRIVILEGES	COLUMN_COMMENT	GENERATION_EXPRESSION
 #
 # A test case for Bug#56540 "Exception (crash) in sql_show.cc
 # during rqg_info_schema test on Windows"
@@ -1957,7 +1959,7 @@ lock table t1 read;
 # --> connection con1
 flush tables;
 # --> connection default
-select * from information_schema.views;
+select * from information_schema.views where table_schema != 'sys';
 TABLE_CATALOG	def
 TABLE_SCHEMA	test
 TABLE_NAME	v1
@@ -2187,5 +2189,105 @@ DROP TABLE t1;
 CREATE PROCEDURE information_schema.is() BEGIN END;
 ERROR 42000: Access denied for user 'root'@'localhost' to database 'information_schema'
 #
+# Bug#26877788 SELECT FROM INFORMATION_SCHEMA.FILES RETURNS NO RECORDS WHEN ORDER BY IS USED
+#
+SELECT ENGINE, SUPPORT, TRANSACTIONS FROM INFORMATION_SCHEMA.ENGINES
+WHERE
+SUPPORT IN (
+SELECT DISTINCT SUPPORT
+FROM INFORMATION_SCHEMA.ENGINES
+WHERE
+ENGINE IN (
+SELECT DISTINCT ENGINE FROM INFORMATION_SCHEMA.ENGINES
+WHERE ENGINE IN ('MEMORY')))
+ORDER BY ENGINE
+LIMIT 1;
+ENGINE	SUPPORT	TRANSACTIONS
+ARCHIVE	YES	NO
+#
 # End of 5.6 tests
 #
+#
+# Bug#19307777 ASSERTION `QEP_TAB->CONDITION() == QEP_TAB->CONDITION_OPTIM()' FAILED
+#
+EXPLAIN select * from
+information_schema . innodb_cmp as table1
+left outer join mysql . procs_priv as table2
+on ( table2 . routine_name = table1 . compress_time )
+where not table1 . compress_time <> '2006-09-03 10:11:37.046313'
+having  table2 . grantor <> '2008-02-28 22:17:05.025739' limit 9;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible HAVING noticed after reading const tables
+Warnings:
+Note	1003	/* select#1 */ select `table1`.`page_size` AS `page_size`,`table1`.`compress_ops` AS `compress_ops`,`table1`.`compress_ops_ok` AS `compress_ops_ok`,`table1`.`compress_time` AS `compress_time`,`table1`.`uncompress_ops` AS `uncompress_ops`,`table1`.`uncompress_time` AS `uncompress_time`,NULL AS `Host`,NULL AS `Db`,NULL AS `User`,NULL AS `Routine_name`,NULL AS `Routine_type`,NULL AS `Grantor`,NULL AS `Proc_priv`,NULL AS `Timestamp` from `information_schema`.`innodb_cmp` `table1` where (`table1`.`compress_time` = '2006-09-03 10:11:37.046313') having 0 limit 9
+select * from
+information_schema . innodb_cmp as table1
+left outer join mysql . procs_priv as table2
+on ( table2 . routine_name = table1 . compress_time )
+where not table1 . compress_time <> '2006-09-03 10:11:37.046313'
+having  table2 . grantor <> '2008-02-28 22:17:05.025739' limit 9;
+page_size	compress_ops	compress_ops_ok	compress_time	uncompress_ops	uncompress_time	Host	Db	User	Routine_name	Routine_type	Grantor	Proc_priv	Timestamp
+#
+# Bug#20665051 SQL_SHOW.CC:7764: ASSERTION `QEP_TAB->CONDITION() == QEP_TAB->CONDITION_OPTIM()
+#
+EXPLAIN SELECT 1
+FROM DUAL
+WHERE (SELECT 1 FROM information_schema.tables
+WHERE table_schema
+ORDER BY table_name
+LIMIT 1);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible WHERE
+2	SUBQUERY	tables	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	Using where; Skip_open_table; Scanned all databases; Using filesort
+Warnings:
+Note	1003	/* select#1 */ select 1 AS `1` from DUAL  where 0
+SELECT 1
+FROM DUAL
+WHERE (SELECT 1 FROM information_schema.tables
+WHERE table_schema
+ORDER BY table_name
+LIMIT 1);
+1
+EXPLAIN SELECT 1 AS F1 FROM information_schema.tables
+WHERE "CHARACTER_SETS"=
+(SELECT CAST(TABLE_NAME AS CHAR)
+FROM information_schema.tables
+WHERE table_schema != 'PERFORMANCE_SCHEMA'
+      ORDER BY table_name
+LIMIT 1)
+LIMIT 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible WHERE
+2	SUBQUERY	tables	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	Using where; Skip_open_table; Scanned all databases; Using filesort
+Warnings:
+Note	1003	/* select#1 */ select 1 AS `F1` from `information_schema`.`tables` where 0 limit 1
+SELECT 1 AS F1 FROM information_schema.tables
+WHERE "CHARACTER_SETS"=
+(SELECT CAST(TABLE_NAME AS CHAR)
+FROM information_schema.tables
+WHERE table_schema != 'PERFORMANCE_SCHEMA'
+      ORDER BY table_name
+LIMIT 1)
+LIMIT 1;
+F1
+1
+#
+# WL#2284: Increase the length of a user name
+#
+set names utf8;
+CREATE USER user_name_len_22_01234@localhost;
+GRANT SELECT ON *.* TO user_name_len_22_01234@localhost;
+SELECT user,db FROM information_schema.processlist;
+user	db
+user_name_len_22_01234	test
+CREATE USER очень_очень_очень_длинный_юзер__@localhost;
+GRANT SELECT ON *.* TO очень_очень_очень_длинный_юзер__@localhost;
+SELECT user,db FROM information_schema.processlist;
+user	db
+очень_очень_очень_длинный_юзер__	test
+DROP USER user_name_len_22_01234@localhost;
+DROP USER очень_очень_очень_длинный_юзер__@localhost;
+set names default;
+set sql_mode= @orig_sql_mode;
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.

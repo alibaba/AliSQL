@@ -1271,6 +1271,9 @@ ER_BAD_FIELD_ERROR 42S22 S0022
         spa "La columna '%-.192s' en %-.192s es desconocida"
         swe "Okänd kolumn '%-.192s' i %-.192s"
         ukr "Невідомий стовбець '%-.192s' у '%-.192s'"
+
+# When using this error code, please use ER(ER_WRONG_FIELD_WITH_GROUP_V2)
+# for the message string.
 ER_WRONG_FIELD_WITH_GROUP 42000 S1009
         cze "Použité '%-.192s' nebylo v group by"
         dan "Brugte '%-.192s' som ikke var i group by"
@@ -2362,7 +2365,7 @@ ER_BLOB_CANT_HAVE_DEFAULT 42000
         cze "Blob položka '%-.192s' nemůže mít defaultní hodnotu"
         dan "BLOB feltet '%-.192s' kan ikke have en standard værdi"
         nla "Blob veld '%-.192s' can geen standaardwaarde bevatten"
-        eng "BLOB/TEXT column '%-.192s' can't have a default value"
+        eng "BLOB, TEXT, GEOMETRY or JSON column '%-.192s' can't have a default value"
         est "BLOB-tüüpi tulp '%-.192s' ei saa omada vaikeväärtust"
         fre "BLOB '%-.192s' ne peut avoir de valeur par défaut"
         ger "BLOB/TEXT-Feld '%-.192s' darf keinen Vorgabewert (DEFAULT) haben"
@@ -3181,6 +3184,9 @@ ER_REGEXP_ERROR 42000
         spa "Obtenido error '%-.64s' de regexp"
         swe "Fick fel '%-.64s' från REGEXP"
         ukr "Отримано помилку '%-.64s' від регулярного виразу"
+
+# When using this error code, please use ER(ER_MIX_OF_GROUP_FUNC_AND_FIELDS_V2)
+# for the message string.
 ER_MIX_OF_GROUP_FUNC_AND_FIELDS 42000 
         cze "Pokud není žádná GROUP BY klauzule, není dovoleno současné použití GROUP položek (MIN(),MAX(),COUNT()...) s ne GROUP položkami"
         dan "Sammenblanding af GROUP kolonner (MIN(),MAX(),COUNT()...) uden GROUP kolonner er ikke tilladt, hvis der ikke er noget GROUP BY prædikat"
@@ -3385,44 +3391,10 @@ ER_SYNTAX_ERROR 42000
         spa "Algo está equivocado en su sintax"
         swe "Du har något fel i din syntax"
         ukr "У вас помилка у синтаксисі SQL"
-ER_DELAYED_CANT_CHANGE_LOCK  
-        cze "Zpožděný insert threadu nebyl schopen získat požadovaný zámek pro tabulku %-.192s"
-        dan "Forsinket indsættelse tråden (delayed insert thread) kunne ikke opnå lås på tabellen %-.192s"
-        nla "'Delayed insert' thread kon de aangevraagde 'lock' niet krijgen voor tabel %-.192s"
+ER_UNUSED1
         eng "Delayed insert thread couldn't get requested lock for table %-.192s"
-        est "INSERT DELAYED lõim ei suutnud saada soovitud lukku tabelile %-.192s"
-        fre "La tâche 'delayed insert' n'a pas pu obtenir le verrou démandé sur la table %-.192s"
-        ger "Verzögerter (DELAYED) Einfüge-Thread konnte die angeforderte Sperre für Tabelle '%-.192s' nicht erhalten"
-        hun "A kesleltetett beillesztes (delayed insert) thread nem kapott zatolast a %-.192s tablahoz"
-        ita "Il thread di inserimento ritardato non riesce ad ottenere il lock per la tabella %-.192s"
-        jpn "'Delayed insert'スレッドが表 '%-.192s' のロックを取得できませんでした。"
-        kor "지연된 insert 쓰레드가 테이블 %-.192s의 요구된 락킹을 처리할 수 없었습니다."
-        por "'Thread' de inserção retardada (atrasada) pois não conseguiu obter a trava solicitada para tabela '%-.192s'"
-        rum "Thread-ul pentru inserarea aminata nu a putut obtine lacatul (lock) pentru tabela %-.192s"
-        rus "Поток, обслуживающий отложенную вставку (delayed insert), не смог получить запрашиваемую блокировку на таблицу %-.192s"
-        serbian "Prolongirani 'INSERT' thread nije mogao da dobije traženo zaključavanje tabele '%-.192s'"
-        spa "Thread de inserción retarda no pudiendo bloquear para la tabla %-.192s"
-        swe "DELAYED INSERT-tråden kunde inte låsa tabell '%-.192s'"
-        ukr "Гілка для INSERT DELAYED не може отримати блокування для таблиці %-.192s"
-ER_TOO_MANY_DELAYED_THREADS  
-        cze "Příliš mnoho zpožděných threadů"
-        dan "For mange slettede tråde (threads) i brug"
-        nla "Te veel 'delayed' threads in gebruik"
+ER_UNUSED2
         eng "Too many delayed threads in use"
-        est "Liiga palju DELAYED lõimesid kasutusel"
-        fre "Trop de tâche 'delayed' en cours"
-        ger "Zu viele verzögerte (DELAYED) Threads in Verwendung"
-        hun "Tul sok kesletetett thread (delayed)"
-        ita "Troppi threads ritardati in uso"
-        jpn "'Delayed insert'スレッドが多すぎます。"
-        kor "너무 많은 지연 쓰레드를 사용하고 있습니다."
-        por "Excesso de 'threads' retardadas (atrasadas) em uso"
-        rum "Prea multe threaduri aminate care sint in uz"
-        rus "Слишком много потоков, обслуживающих отложенную вставку (delayed insert)"
-        serbian "Previše prolongiranih thread-ova je u upotrebi"
-        spa "Muchos threads retardados en uso"
-        swe "Det finns redan 'max_delayed_threads' trådar i använding"
-        ukr "Забагато затриманих гілок використовується"
 ER_ABORTING_CONNECTION 08S01 
         cze "Zrušeno spojení %ld do databáze: '%-.192s' uživatel: '%-.48s' (%-.64s)"
         dan "Afbrudt forbindelse %ld til database: '%-.192s' bruger: '%-.48s' (%-.64s)"
@@ -3671,30 +3643,8 @@ ER_TABLE_CANT_HANDLE_AUTO_INCREMENT 42000
         spa "El tipo de tabla usada no permite soporte para columnas AUTO_INCREMENT"
         swe "Den använda tabelltypen kan inte hantera AUTO_INCREMENT-kolumner"
         ukr "Використаний тип таблиці не підтримує AUTO_INCREMENT стовбці"
-ER_DELAYED_INSERT_TABLE_LOCKED  
-        cze "INSERT DELAYED není možno s tabulkou '%-.192s' použít, protože je zamčená pomocí LOCK TABLES"
-        dan "INSERT DELAYED kan ikke bruges med tabellen '%-.192s', fordi tabellen er låst med LOCK TABLES"
-        nla "INSERT DELAYED kan niet worden gebruikt bij table '%-.192s', vanwege een 'lock met LOCK TABLES"
+ER_UNUSED3
         eng "INSERT DELAYED can't be used with table '%-.192s' because it is locked with LOCK TABLES"
-        est "INSERT DELAYED ei saa kasutada tabeli '%-.192s' peal, kuna see on lukustatud LOCK TABLES käsuga"
-        fre "INSERT DELAYED ne peut être utilisé avec la table '%-.192s', car elle est verrouée avec LOCK TABLES"
-        ger "INSERT DELAYED kann für Tabelle '%-.192s' nicht verwendet werden, da sie mit LOCK TABLES gesperrt ist"
-        greek "INSERT DELAYED can't be used with table '%-.192s', because it is locked with LOCK TABLES"
-        hun "Az INSERT DELAYED nem hasznalhato a '%-.192s' tablahoz, mert a tabla zarolt (LOCK TABLES)"
-        ita "L'inserimento ritardato (INSERT DELAYED) non puo` essere usato con la tabella '%-.192s', perche` soggetta a lock da 'LOCK TABLES'"
-        jpn "表 '%-.192s' はLOCK TABLESでロックされているため、INSERT DELAYEDを使用できません。"
-        kor "INSERT DELAYED can't be used with table '%-.192s', because it is locked with LOCK TABLES"
-        nor "INSERT DELAYED can't be used with table '%-.192s', because it is locked with LOCK TABLES"
-        norwegian-ny "INSERT DELAYED can't be used with table '%-.192s', because it is locked with LOCK TABLES"
-        pol "INSERT DELAYED can't be used with table '%-.192s', because it is locked with LOCK TABLES"
-        por "INSERT DELAYED não pode ser usado com a tabela '%-.192s', porque ela está travada com LOCK TABLES"
-        rum "INSERT DELAYED nu poate fi folosit cu tabela '%-.192s', deoarece este locked folosing LOCK TABLES"
-        rus "Нельзя использовать INSERT DELAYED для таблицы '%-.192s', потому что она заблокирована с помощью LOCK TABLES"
-        serbian "Komanda 'INSERT DELAYED' ne može biti iskorištena u tabeli '%-.192s', zbog toga što je zaključana komandom 'LOCK TABLES'"
-        slo "INSERT DELAYED can't be used with table '%-.192s', because it is locked with LOCK TABLES"
-        spa "INSERT DELAYED no puede ser usado con tablas '%-.192s', porque esta bloqueada con LOCK TABLES"
-        swe "INSERT DELAYED kan inte användas med tabell '%-.192s', emedan den är låst med LOCK TABLES"
-        ukr "INSERT DELAYED не може бути використано з таблицею '%-.192s', тому що її заблоковано з LOCK TABLES"
 ER_WRONG_COLUMN_NAME 42000 
         cze "Nesprávné jméno sloupce '%-.100s'"
         dan "Forkert kolonnenavn '%-.100s'"
@@ -3875,22 +3825,22 @@ ER_NO_RAID_COMPILED
         swe "Denna version av MySQL är inte kompilerad med RAID"
         ukr "Ця версія MySQL не зкомпільована з підтримкою RAID"
 ER_UPDATE_WITHOUT_KEY_IN_SAFE_MODE  
-        cze "Update tabulky bez WHERE s klíčem není v módu bezpečných update dovoleno"
-        dan "Du bruger sikker opdaterings modus ('safe update mode') og du forsøgte at opdatere en tabel uden en WHERE klausul, der gør brug af et KEY felt"
-        nla "U gebruikt 'safe update mode' en u probeerde een tabel te updaten zonder een WHERE met een KEY kolom"
-        eng "You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column"
-        est "Katse muuta tabelit turvalises rezhiimis ilma WHERE klauslita"
-        fre "Vous êtes en mode 'safe update' et vous essayez de faire un UPDATE sans clause WHERE utilisant un index"
-        ger "MySQL läuft im sicheren Aktualisierungsmodus (safe update mode). Sie haben versucht, eine Tabelle zu aktualisieren, ohne in der WHERE-Klausel ein KEY-Feld anzugeben"
-        hun "On a biztonsagos update modot hasznalja, es        WHERE that uses a KEY column"
-        ita "In modalita` 'safe update' si e` cercato di aggiornare una tabella senza clausola WHERE su una chiave"
-        jpn "'safe update mode'で、索引を利用するWHERE句の無い更新処理を実行しようとしました。"
-        por "Você está usando modo de atualização seguro e tentou atualizar uma tabela sem uma cláusula WHERE que use uma coluna chave"
-        rus "Вы работаете в режиме безопасных обновлений (safe update mode) и попробовали изменить таблицу без использования ключевого столбца в части WHERE"
-        serbian "Vi koristite safe update mod servera, a probali ste da promenite podatke bez 'WHERE' komande koja koristi kolonu ključa"
-        spa "Tu estás usando modo de actualización segura y tentado actualizar una tabla sin un WHERE que usa una KEY columna"
-        swe "Du använder 'säker uppdateringsmod' och försökte uppdatera en tabell utan en WHERE-sats som använder sig av en nyckel"
-        ukr "Ви у режимі безпечного оновлення та намагаєтесь оновити таблицю без оператора WHERE, що використовує KEY стовбець"
+        cze "Update tabulky bez WHERE s klíčem není v módu bezpečných update dovoleno. %s"
+        dan "Du bruger sikker opdaterings modus ('safe update mode') og du forsøgte at opdatere en tabel uden en WHERE klausul, der gør brug af et KEY felt. %s"
+        nla "U gebruikt 'safe update mode' en u probeerde een tabel te updaten zonder een WHERE met een KEY kolom. %s"
+        eng "You are using safe update mode and you tried to update a table without a WHERE that uses a KEY column. %s"
+        est "Katse muuta tabelit turvalises rezhiimis ilma WHERE klauslita. %s"
+        fre "Vous êtes en mode 'safe update' et vous essayez de faire un UPDATE sans clause WHERE utilisant un index. %s"
+        ger "MySQL läuft im sicheren Aktualisierungsmodus (safe update mode). Sie haben versucht, eine Tabelle zu aktualisieren, ohne in der WHERE-Klausel ein KEY-Feld anzugeben. %s"
+        hun "On a biztonsagos update modot hasznalja, es        WHERE that uses a KEY column. %s"
+        ita "In modalita` 'safe update' si e` cercato di aggiornare una tabella senza clausola WHERE su una chiave. %s"
+        jpn "'safe update mode'で、索引を利用するWHERE句の無い更新処理を実行しようとしました。. %s"
+        por "Você está usando modo de atualização seguro e tentou atualizar uma tabela sem uma cláusula WHERE que use uma coluna chave. %s"
+        rus "Вы работаете в режиме безопасных обновлений (safe update mode) и попробовали изменить таблицу без использования ключевого столбца в части WHERE. %s"
+        serbian "Vi koristite safe update mod servera, a probali ste da promenite podatke bez 'WHERE' komande koja koristi kolonu ključa. %s"
+        spa "Tu estás usando modo de actualización segura y tentado actualizar una tabla sin un WHERE que usa una KEY columna. %s"
+        swe "Du använder 'säker uppdateringsmod' och försökte uppdatera en tabell utan en WHERE-sats som använder sig av en nyckel. %s"
+        ukr "Ви у режимі безпечного оновлення та намагаєтесь оновити таблицю без оператора WHERE, що використовує KEY стовбець. %s"
 ER_KEY_DOES_NOT_EXITS 42000 S1009
         cze "Klíč '%-.192s' v tabulce '%-.192s' neexistuje"
         dan "Nøglen '%-.192s' eksisterer ikke i tabellen '%-.192s'"
@@ -4035,21 +3985,21 @@ ER_ERROR_DURING_CHECKPOINT
         swe "Fick fel %d vid CHECKPOINT"
         ukr "Отримано помилку %d під час CHECKPOINT"
 ER_NEW_ABORTING_CONNECTION 08S01 
-        cze "Spojení %ld do databáze: '%-.192s' uživatel: '%-.48s' stroj: '%-.64s' (%-.64s) bylo přerušeno"
-        dan "Afbrød forbindelsen %ld til databasen '%-.192s' bruger: '%-.48s' vært: '%-.64s' (%-.64s)"
-        nla "Afgebroken verbinding %ld naar db: '%-.192s' gebruiker: '%-.48s' host: '%-.64s' (%-.64s)"
-        eng "Aborted connection %ld to db: '%-.192s' user: '%-.48s' host: '%-.64s' (%-.64s)"
-        est "Ühendus katkestatud %ld andmebaas: '%-.192s' kasutaja: '%-.48s' masin: '%-.64s' (%-.64s)"
-        fre "Connection %ld avortée vers la bd: '%-.192s' utilisateur: '%-.48s' hôte: '%-.64s' (%-.64s)"
-        ger "Abbruch der Verbindung %ld zur Datenbank '%-.192s'. Benutzer: '%-.48s', Host: '%-.64s' (%-.64s)"
-        ita "Interrotta la connessione %ld al db: ''%-.192s' utente: '%-.48s' host: '%-.64s' (%-.64s)"
-        jpn "接続 %ld が中断されました。データベース: '%-.192s' ユーザー: '%-.48s' ホスト: '%-.64s' (%-.64s)"
-        por "Conexão %ld abortada para banco de dados '%-.192s' - usuário '%-.48s' - 'host' '%-.64s' ('%-.64s')"
-        rus "Прервано соединение %ld к базе данных '%-.192s' пользователя '%-.48s' с хоста '%-.64s' (%-.64s)"
-        serbian "Prekinuta konekcija broj %ld ka bazi: '%-.192s' korisnik je bio: '%-.48s' a host: '%-.64s' (%-.64s)"
-        spa "Abortada conexión %ld para db: '%-.192s' usuario: '%-.48s' servidor: '%-.64s' (%-.64s)"
-        swe "Avbröt länken för tråd %ld till db '%-.192s', användare '%-.48s', host '%-.64s' (%-.64s)"
-        ukr "Перервано з'єднання %ld до бази данних: '%-.192s' користувач: '%-.48s' хост: '%-.64s' (%-.64s)"
+        cze "Spojení %u do databáze: '%-.192s' uživatel: '%-.48s' stroj: '%-.64s' (%-.64s) bylo přerušeno"
+        dan "Afbrød forbindelsen %u til databasen '%-.192s' bruger: '%-.48s' vært: '%-.64s' (%-.64s)"
+        nla "Afgebroken verbinding %u naar db: '%-.192s' gebruiker: '%-.48s' host: '%-.64s' (%-.64s)"
+        eng "Aborted connection %u to db: '%-.192s' user: '%-.48s' host: '%-.64s' (%-.64s)"
+        est "Ühendus katkestatud %u andmebaas: '%-.192s' kasutaja: '%-.48s' masin: '%-.64s' (%-.64s)"
+        fre "Connection %u avortée vers la bd: '%-.192s' utilisateur: '%-.48s' hôte: '%-.64s' (%-.64s)"
+        ger "Abbruch der Verbindung %u zur Datenbank '%-.192s'. Benutzer: '%-.48s', Host: '%-.64s' (%-.64s)"
+        ita "Interrotta la connessione %u al db: ''%-.192s' utente: '%-.48s' host: '%-.64s' (%-.64s)"
+        jpn "接続 %u が中断されました。データベース: '%-.192s' ユーザー: '%-.48s' ホスト: '%-.64s' (%-.64s)"
+        por "Conexão %u abortada para banco de dados '%-.192s' - usuário '%-.48s' - 'host' '%-.64s' ('%-.64s')"
+        rus "Прервано соединение %u к базе данных '%-.192s' пользователя '%-.48s' с хоста '%-.64s' (%-.64s)"
+        serbian "Prekinuta konekcija broj %u ka bazi: '%-.192s' korisnik je bio: '%-.48s' a host: '%-.64s' (%-.64s)"
+        spa "Abortada conexión %u para db: '%-.192s' usuario: '%-.48s' servidor: '%-.64s' (%-.64s)"
+        swe "Avbröt länken för tråd %u till db '%-.192s', användare '%-.48s', host '%-.64s' (%-.64s)"
+        ukr "Перервано з'єднання %u до бази данних: '%-.192s' користувач: '%-.48s' хост: '%-.64s' (%-.64s)"
 ER_DUMP_NOT_IMPLEMENTED  
         cze "Handler tabulky nepodporuje binární dump"
         dan "Denne tabeltype unserstøtter ikke binært tabeldump"
@@ -4713,15 +4663,15 @@ ER_NOT_SUPPORTED_YET 42000
         spa "Esta versión de MySQL no soporta todavia '%s'"
         swe "Denna version av MySQL kan ännu inte utföra '%s'"
 ER_MASTER_FATAL_ERROR_READING_BINLOG  
-        nla "Kreeg fatale fout %d: '%-.320s' van master tijdens lezen van data uit binaire log"
-        eng "Got fatal error %d from master when reading data from binary log: '%-.320s'"
-        ger "Schwerer Fehler %d: '%-.320s vom Master beim Lesen des binären Logs"
-        ita "Errore fatale %d: '%-.320s' dal master leggendo i dati dal log binario"
-        jpn "致命的なエラー %d: '%-.320s' がマスターでバイナリログ読み込み中に発生しました。"
-        por "Obteve fatal erro %d: '%-.320s' do master quando lendo dados do binary log"
-        rus "Получена неисправимая ошибка %d: '%-.320s' от головного сервера в процессе выборки данных из двоичного журнала"
-        spa "Recibió fatal error %d: '%-.320s' del master cuando leyendo datos del binary log"
-        swe "Fick fatalt fel %d: '%-.320s' från master vid läsning av binärloggen"
+        nla "Kreeg fatale fout %d: '%-.512s' van master tijdens lezen van data uit binaire log"
+        eng "Got fatal error %d from master when reading data from binary log: '%-.512s'"
+        ger "Schwerer Fehler %d: '%-.512s vom Master beim Lesen des binären Logs"
+        ita "Errore fatale %d: '%-.512s' dal master leggendo i dati dal log binario"
+        jpn "致命的なエラー %d: '%-.512s' がマスターでバイナリログ読み込み中に発生しました。"
+        por "Obteve fatal erro %d: '%-.512s' do master quando lendo dados do binary log"
+        rus "Получена неисправимая ошибка %d: '%-.512s' от головного сервера в процессе выборки данных из двоичного журнала"
+        spa "Recibió fatal error %d: '%-.512s' del master cuando leyendo datos del binary log"
+        swe "Fick fatalt fel %d: '%-.512s' från master vid läsning av binärloggen"
 ER_SLAVE_IGNORED_TABLE  
         eng "Slave SQL thread ignored the query because of replicate-*-table rules"
         ger "Slave-SQL-Thread hat die Abfrage aufgrund von replicate-*-table-Regeln ignoriert"
@@ -5319,7 +5269,8 @@ ER_NONUPDATEABLE_COLUMN
         ger "Feld '%-.192s' ist nicht aktualisierbar"
         rus "Столбец '%-.192s' не обновляемый"
         ukr "Стовбець '%-.192s' не може бути зминений"
-ER_VIEW_SELECT_DERIVED  
+# Unused since MySQL 5.8.0
+ER_VIEW_SELECT_DERIVED_UNUSED
         eng "View's SELECT contains a subquery in the FROM clause"
         ger "SELECT der View enthält eine Subquery in der FROM-Klausel"
         rus "View SELECT содержит подзапрос в конструкции FROM"
@@ -5578,7 +5529,7 @@ ER_TOO_BIG_SCALE 42000 S1009
         eng "Too big scale %d specified for column '%-.192s'. Maximum is %lu."
         ger "Zu großer Skalierungsfaktor %d für Feld '%-.192s' angegeben. Maximum ist %lu"
 ER_TOO_BIG_PRECISION 42000 S1009
-        eng "Too big precision %d specified for column '%-.192s'. Maximum is %lu."
+        eng "Too-big precision %d specified for '%-.192s'. Maximum is %lu."
         ger "Zu große Genauigkeit %d für Feld '%-.192s' angegeben. Maximum ist %lu"
 ER_M_BIGGER_THAN_D 42000 S1009
         eng "For float(M,D), double(M,D) or decimal(M,D), M must be >= D (column '%-.192s')."
@@ -5678,8 +5629,8 @@ ER_SP_WRONG_NAME 42000
         eng "Incorrect routine name '%-.192s'"
         ger "Ungültiger Routinenname '%-.192s'"
 ER_TABLE_NEEDS_UPGRADE
-        eng "Table upgrade required. Please do \"REPAIR TABLE `%-.32s`\" or dump/reload to fix it!"
-        ger "Tabellenaktualisierung erforderlich. Bitte zum Reparieren \"REPAIR TABLE `%-.32s`\" eingeben!"
+        eng "Table upgrade required. Please do \"REPAIR TABLE `%-.64s`\" or dump/reload to fix it!"
+        ger "Tabellenaktualisierung erforderlich. Bitte zum Reparieren \"REPAIR TABLE `%-.64s`\" eingeben!"
 ER_SP_NO_AGGREGATE 42000
         eng "AGGREGATE is not supported for stored functions"
         ger "AGGREGATE wird bei gespeicherten Funktionen nicht unterstützt"
@@ -5689,6 +5640,8 @@ ER_MAX_PREPARED_STMT_COUNT_REACHED 42000
 ER_VIEW_RECURSIVE
         eng "`%-.192s`.`%-.192s` contains view recursion"
         ger "`%-.192s`.`%-.192s` enthält View-Rekursion"
+
+# the one below is not used anymore:
 ER_NON_GROUPING_FIELD_USED 42000
         eng "Non-grouping field '%-.192s' is used in %-.64s clause"
         ger "In der %-.192s-Klausel wird das die Nicht-Gruppierungsspalte '%-.64s' verwendet"
@@ -5845,9 +5798,9 @@ ER_PARTITION_MGMT_ON_NONPARTITIONED
         ger "Partitionsverwaltung einer nicht partitionierten Tabelle ist nicht möglich"
         swe "Partitioneringskommando på en opartitionerad tabell är inte möjligt"
 ER_FOREIGN_KEY_ON_PARTITIONED
-        eng "Foreign key clause is not yet supported in conjunction with partitioning"
+        eng "Foreign keys are not yet supported in conjunction with partitioning"
         ger "Fremdschlüssel-Beschränkungen sind im Zusammenhang mit Partitionierung nicht zulässig"
-        swe "Foreign key klausul är inte ännu implementerad i kombination med partitionering"
+        swe "Foreign keys är inte ännu implementerad i kombination med partitionering"
 ER_DROP_PARTITION_NON_EXISTENT
         eng "Error in list of partitions to %-.64s"
         ger "Fehler in der Partitionsliste bei %-.64s"
@@ -6023,6 +5976,7 @@ ER_CANT_LOCK_LOG_TABLE
         ger "Log-Tabellen können nicht gesperrt werden."
 ER_FOREIGN_DUPLICATE_KEY_OLD_UNUSED 23000 S1009
         eng "Upholding foreign key constraints for table '%.192s', entry '%-.192s', key %d would lead to a duplicate entry"
+# OBSOLETE, USE ER_COL_COUNT_DOESNT_MATCH_PLEASE_UPDATE_V2
 ER_COL_COUNT_DOESNT_MATCH_PLEASE_UPDATE
         eng "Column count of mysql.%s is wrong. Expected %d, found %d. Created with MySQL %d, now running %d. Please use mysql_upgrade to fix this error."
         ger "Spaltenanzahl von mysql.%s falsch. %d erwartet, aber %d erhalten. Erzeugt mit MySQL %d, jetzt unter %d. Bitte benutzen Sie mysql_upgrade, um den Fehler zu beheben"
@@ -6107,8 +6061,8 @@ ER_WRONG_PARAMETERS_TO_NATIVE_FCT 42000
         eng "Incorrect parameters in the call to native function '%-.192s'"
         ger "Falscher Parameter beim Aufruf der nativen Funktion '%-.192s'"
 ER_WRONG_PARAMETERS_TO_STORED_FCT 42000  
-        eng "Incorrect parameters in the call to stored function '%-.192s'"
-        ger "Falsche Parameter beim Aufruf der gespeicherten Funktion '%-.192s'"
+        eng "Incorrect parameters in the call to stored function %-.192s"
+        ger "Falsche Parameter beim Aufruf der gespeicherten Funktion %-.192s"
 ER_NATIVE_FCT_NAME_COLLISION
         eng "This function '%-.192s' has the same name as a native function"
         ger "Die Funktion '%-.192s' hat denselben Namen wie eine native Funktion"
@@ -6148,8 +6102,8 @@ ER_EVENT_CANNOT_ALTER_IN_THE_PAST
   eng "Event execution time is in the past and ON COMPLETION NOT PRESERVE is set. The event was not changed. Specify a time in the future."
   ger "Execution Zeitpunkt des Ereignisses in der Vergangenheit liegt, und es war NACH ABSCHLUSS Set nicht erhalten. Die Veranstaltung wurde nicht verändert. Geben Sie einen Zeitpunkt in der Zukunft."
 ER_SLAVE_INCIDENT
-  eng "The incident %s occured on the master. Message: %-.64s"
-  ger "Der Vorfall %s passierte auf dem Master. Meldung: %-.64s"
+  eng "The incident %s occured on the master. Message: %s"
+  ger "Der Vorfall %s passierte auf dem Master. Meldung: %s"
 ER_NO_PARTITION_FOR_GIVEN_VALUE_SILENT
   eng "Table has no partition for some existing values"
   ger "Tabelle hat für einige bestehende Werte keine Partition"
@@ -6211,7 +6165,7 @@ ER_NO_FORMAT_DESCRIPTION_EVENT_BEFORE_BINLOG_STATEMENT
 ER_SLAVE_CORRUPT_EVENT
   eng "Corrupted replication event was detected"
   ger "Beschädigtes Replikationsereignis entdeckt"
-ER_LOAD_DATA_INVALID_COLUMN
+ER_LOAD_DATA_INVALID_COLUMN_UNUSED
   eng "Invalid column reference (%-.64s) in LOAD DATA"
   ger "Ungültige Spaltenreferenz (%-.64s) bei LOAD DATA"
 ER_LOG_PURGE_NO_FILE
@@ -6235,7 +6189,7 @@ WARN_NO_MASTER_INFO
 WARN_OPTION_IGNORED
   eng "<%-.64s> option ignored"
   ger "Option <%-.64s> ignoriert"
-WARN_PLUGIN_DELETE_BUILTIN
+ER_PLUGIN_DELETE_BUILTIN
   eng "Built-in plugins cannot be deleted"
   ger "Eingebaute Plugins können nicht gelöscht werden"
 WARN_PLUGIN_BUSY
@@ -6390,7 +6344,7 @@ ER_BINLOG_MULTIPLE_ENGINES_AND_SELF_LOGGING_ENGINE
 
 ER_BINLOG_UNSAFE_LIMIT
   eng "The statement is unsafe because it uses a LIMIT clause. This is unsafe because the set of rows included cannot be predicted."
-ER_BINLOG_UNSAFE_INSERT_DELAYED
+ER_UNUSED4
   eng "The statement is unsafe because it uses INSERT DELAYED. This is unsafe because the times when rows are inserted cannot be predicted."
 ER_BINLOG_UNSAFE_SYSTEM_TABLE
   eng "The statement is unsafe because it uses the general log, slow query log, or performance_schema table(s). This is unsafe because system tables may differ on slaves."
@@ -6518,7 +6472,7 @@ ER_MULTI_UPDATE_KEY_CONFLICT
 # When translating this error message make sure to include "ALTER TABLE" in the
 # message as mysqlcheck parses the error message looking for ALTER TABLE.
 ER_TABLE_NEEDS_REBUILD
-        eng "Table rebuild required. Please do \"ALTER TABLE `%-.32s` FORCE\" or dump/reload to fix it!"
+        eng "Table rebuild required. Please do \"ALTER TABLE `%-.64s` FORCE\" or dump/reload to fix it!"
 
 WARN_OPTION_BELOW_LIMIT
   eng "The value of '%s' should be no less than the value of '%s'"
@@ -6579,7 +6533,6 @@ ER_UNSUPPORTED_ENGINE
 
 ER_BINLOG_UNSAFE_AUTOINC_NOT_FIRST
   eng "INSERT into autoincrement field which is not the first part in the composed primary key is unsafe."
-
 #
 #  End of 5.5 error messages.
 #
@@ -6723,7 +6676,7 @@ ER_VARIABLE_NOT_SETTABLE_IN_TRANSACTION
 ER_GTID_NEXT_IS_NOT_IN_GTID_NEXT_LIST
   eng "The system variable @@SESSION.GTID_NEXT has the value %.200s, which is not listed in @@SESSION.GTID_NEXT_LIST."
 
-ER_CANT_CHANGE_GTID_NEXT_IN_TRANSACTION_WHEN_GTID_NEXT_LIST_IS_NULL
+ER_CANT_CHANGE_GTID_NEXT_IN_TRANSACTION
   eng "The system variable @@SESSION.GTID_NEXT cannot change inside a transaction."
 
 ER_SET_STATEMENT_CANNOT_INVOKE_FUNCTION
@@ -6745,22 +6698,22 @@ ER_MALFORMED_GTID_SPECIFICATION
   eng "Malformed GTID specification '%.200s'."
 
 ER_GNO_EXHAUSTED
-  eng "Impossible to generate Global Transaction Identifier: the integer component reached the maximal value. Restart the server with a new server_uuid."
+  eng "Impossible to generate GTID: the integer component reached the maximum value. Restart the server with a new server_uuid."
 
 ER_BAD_SLAVE_AUTO_POSITION
   eng "Parameters MASTER_LOG_FILE, MASTER_LOG_POS, RELAY_LOG_FILE and RELAY_LOG_POS cannot be set when MASTER_AUTO_POSITION is active."
 
-ER_AUTO_POSITION_REQUIRES_GTID_MODE_ON
-  eng "CHANGE MASTER TO MASTER_AUTO_POSITION = 1 can only be executed when @@GLOBAL.GTID_MODE = ON."
+ER_AUTO_POSITION_REQUIRES_GTID_MODE_NOT_OFF
+  eng "CHANGE MASTER TO MASTER_AUTO_POSITION = 1 cannot be executed because @@GLOBAL.GTID_MODE = OFF."
 
 ER_CANT_DO_IMPLICIT_COMMIT_IN_TRX_WHEN_GTID_NEXT_IS_SET
-  eng "Cannot execute statements with implicit commit inside a transaction when @@SESSION.GTID_NEXT != AUTOMATIC."
+  eng "Cannot execute statements with implicit commit inside a transaction when @@SESSION.GTID_NEXT == 'UUID:NUMBER'."
 
-ER_GTID_MODE_2_OR_3_REQUIRES_ENFORCE_GTID_CONSISTENCY_ON
-  eng "@@GLOBAL.GTID_MODE = ON or UPGRADE_STEP_2 requires @@GLOBAL.ENFORCE_GTID_CONSISTENCY = 1."
+ER_GTID_MODE_ON_REQUIRES_ENFORCE_GTID_CONSISTENCY_ON
+  eng "GTID_MODE = ON requires ENFORCE_GTID_CONSISTENCY = ON."
 
 ER_GTID_MODE_REQUIRES_BINLOG
-  eng "@@GLOBAL.GTID_MODE = ON or UPGRADE_STEP_1 or UPGRADE_STEP_2 requires --log-bin and --log-slave-updates."
+  eng "@@GLOBAL.GTID_MODE = ON or ON_PERMISSIVE or OFF_PERMISSIVE requires --log-bin and --log-slave-updates."
 
 ER_CANT_SET_GTID_NEXT_TO_GTID_WHEN_GTID_MODE_IS_OFF
   eng "@@SESSION.GTID_NEXT cannot be set to UUID:NUMBER when @@GLOBAL.GTID_MODE = OFF."
@@ -6771,23 +6724,23 @@ ER_CANT_SET_GTID_NEXT_TO_ANONYMOUS_WHEN_GTID_MODE_IS_ON
 ER_CANT_SET_GTID_NEXT_LIST_TO_NON_NULL_WHEN_GTID_MODE_IS_OFF
   eng "@@SESSION.GTID_NEXT_LIST cannot be set to a non-NULL value when @@GLOBAL.GTID_MODE = OFF."
 
-ER_FOUND_GTID_EVENT_WHEN_GTID_MODE_IS_OFF
-  eng "Found a Gtid_log_event or Previous_gtids_log_event when @@GLOBAL.GTID_MODE = OFF."
+ER_FOUND_GTID_EVENT_WHEN_GTID_MODE_IS_OFF__UNUSED
+  eng "Found a Gtid_log_event when @@GLOBAL.GTID_MODE = OFF."
 
 ER_GTID_UNSAFE_NON_TRANSACTIONAL_TABLE
-  eng "When @@GLOBAL.ENFORCE_GTID_CONSISTENCY = 1, updates to non-transactional tables can only be done in either autocommitted statements or single-statement transactions, and never in the same statement as updates to transactional tables."
+  eng "Statement violates GTID consistency: Updates to non-transactional tables can only be done in either autocommitted statements or single-statement transactions, and never in the same statement as updates to transactional tables."
 
 ER_GTID_UNSAFE_CREATE_SELECT
-  eng "CREATE TABLE ... SELECT is forbidden when @@GLOBAL.ENFORCE_GTID_CONSISTENCY = 1."
+  eng "Statement violates GTID consistency: CREATE TABLE ... SELECT."
 
 ER_GTID_UNSAFE_CREATE_DROP_TEMPORARY_TABLE_IN_TRANSACTION
- eng "When @@GLOBAL.ENFORCE_GTID_CONSISTENCY = 1, the statements CREATE TEMPORARY TABLE and DROP TEMPORARY TABLE can be executed in a non-transactional context only, and require that AUTOCOMMIT = 1. These statements are also not allowed in a function or trigger because functions and triggers are also considered to be multi-statement transactions."
+  eng "Statement violates GTID consistency: CREATE TEMPORARY TABLE and DROP TEMPORARY TABLE can only be executed outside transactional context.  These statements are also not allowed in a function or trigger because functions and triggers are also considered to be multi-statement transactions."
 
 ER_GTID_MODE_CAN_ONLY_CHANGE_ONE_STEP_AT_A_TIME
-  eng "The value of @@GLOBAL.GTID_MODE can only change one step at a time: OFF <-> UPGRADE_STEP_1 <-> UPGRADE_STEP_2 <-> ON. Also note that this value must be stepped up or down simultaneously on all servers; see the Manual for instructions." 
+  eng "The value of @@GLOBAL.GTID_MODE can only be changed one step at a time: OFF <-> OFF_PERMISSIVE <-> ON_PERMISSIVE <-> ON. Also note that this value must be stepped up or down simultaneously on all servers. See the Manual for instructions."
 
 ER_MASTER_HAS_PURGED_REQUIRED_GTIDS
-  eng "The slave is connecting using CHANGE MASTER TO MASTER_AUTO_POSITION = 1, but the master has purged binary logs containing GTIDs that the slave requires."
+  eng "The slave is connecting using CHANGE MASTER TO MASTER_AUTO_POSITION = 1, but the master has purged binary logs containing GTIDs that the slave requires. Replicate the missing transactions from elsewhere, or provision a new slave from backup. Consider increasing the master's binary log expiration period. %s."
 
 ER_CANT_SET_GTID_NEXT_WHEN_OWNING_GTID
   eng "@@SESSION.GTID_NEXT cannot be changed by a client that owns a GTID. The client owns %s. Ownership is released on COMMIT or ROLLBACK."
@@ -6858,10 +6811,10 @@ ER_IO_WRITE_ERROR
   eng "IO Write error: (%lu, %s) %s"
 
 ER_TABLESPACE_MISSING
-  eng "Tablespace is missing for table '%-.192s'"
+  eng "Tablespace is missing for table %s."
 
 ER_TABLESPACE_EXISTS
-  eng "Tablespace for table '%-.192s' exists. Please DISCARD the tablespace before IMPORT."
+  eng "Tablespace '%-.192s' exists."
 
 ER_TABLESPACE_DISCARDED
   eng "Tablespace has been discarded for table '%-.192s'"
@@ -6870,20 +6823,20 @@ ER_INTERNAL_ERROR
   eng "Internal error: %s"
 
 ER_INNODB_IMPORT_ERROR
-  eng "ALTER TABLE '%-.192s' IMPORT TABLESPACE failed with error %lu : '%s'"
+  eng "ALTER TABLE %-.192s IMPORT TABLESPACE failed with error %lu : '%s'"
 
 ER_INNODB_INDEX_CORRUPT
   eng "Index corrupt: %s"
 
 ER_INVALID_YEAR_COLUMN_LENGTH
-  eng "YEAR(%lu) column type is deprecated. Creating YEAR(4) column instead."
-  rus "Тип YEAR(%lu) более не поддерживается, вместо него будет создана колонка с типом YEAR(4)."
+  eng "Supports only YEAR or YEAR(4) column."
+  rus "Поддерживаются только типы колонок YEAR или YEAR(4)."
 
 ER_NOT_VALID_PASSWORD
   eng "Your password does not satisfy the current policy requirements"
 
 ER_MUST_CHANGE_PASSWORD
-  eng "You must SET PASSWORD before executing this statement"
+  eng "You must reset your password using ALTER USER statement before executing this statement."
   bgn "Трябва първо да си смените паролата със SET PASSWORD за да можете да изпълните тази команда"
 
 ER_FK_NO_INDEX_CHILD
@@ -6928,7 +6881,8 @@ ER_FK_COLUMN_CANNOT_CHANGE
 ER_FK_COLUMN_CANNOT_CHANGE_CHILD
   eng "Cannot change column '%-.192s': used in a foreign key constraint '%-.192s' of table '%-.192s'"
 
-ER_FK_CANNOT_DELETE_PARENT
+# No longer used as IGNORE support for ALTER TABLE was removed.
+ER_UNUSED5
   eng "Cannot delete rows from table which is parent in a foreign key constraint '%-.192s' of table '%-.192s'"
 
 ER_MALFORMED_PACKET
@@ -6982,7 +6936,8 @@ ER_ALTER_OPERATION_NOT_SUPPORTED_REASON_COLUMN_TYPE
 ER_ALTER_OPERATION_NOT_SUPPORTED_REASON_FK_CHECK
   eng "Adding foreign keys needs foreign_key_checks=OFF"
 
-ER_ALTER_OPERATION_NOT_SUPPORTED_REASON_IGNORE
+# No longer used as IGNORE support for ALTER TABLE was removed.
+ER_UNUSED6
   eng "Creating unique indexes with IGNORE requires COPY algorithm to remove duplicate rows"
 
 ER_ALTER_OPERATION_NOT_SUPPORTED_REASON_NOPK
@@ -7110,39 +7065,1036 @@ ER_GTID_UNSAFE_BINLOG_SPLITTABLE_STATEMENT_AND_GTID_GROUP
 ER_SLAVE_HAS_MORE_GTIDS_THAN_MASTER
   eng "Slave has more GTIDs than the master has, using the master's SERVER_UUID. This may indicate that the end of the binary log was truncated or that the last binary log file was lost, e.g., after a power or disk failure when sync_binlog != 1. The master may or may not have rolled back transactions that were already replicated to the slave. Suggest to replicate any transactions that master has rolled back from slave to master, and/or commit empty transactions on master to account for transactions that have been committed on master but are not included in GTID_EXECUTED."
 
-ER_RDS_SERVER_THREAD_RUNNING_TOO_HIGH
-  eng "MySQL Sever is too busy."
+ER_MISSING_KEY
+  eng "The table '%s.%s' does not have the necessary key(s) defined on it. Please check the table definition and create index(s) accordingly."
+
+WARN_NAMED_PIPE_ACCESS_EVERYONE
+  eng "Setting named_pipe_full_access_group='%s' is insecure. Consider using a Windows group with fewer members."
+
+ER_FOUND_MISSING_GTIDS
+  eng "Cannot replicate to server with server_uuid='%.36s' because the present server has purged required binary logs. The connecting server needs to replicate the missing transactions from elsewhere, or be replaced by a new server created from a more recent backup. To prevent this error in the future, consider increasing the binary log expiration period on the present server. %s."
+
 #
 #  End of 5.6 error messages.
 #
 
-ER_BLOB_KEY_WITH_COMPRESS
-  eng "Compressed BLOB/TEXT/VARCHAR/VARBINARY column '%-.192s' used in key list is not allowed"
+start-error-number 3000
 
-ER_DEFINED_COMPRESS_COLUMN
-  eng "Can not define column '%-.192s' in compressed format, silently change column_format to default"
+ER_FILE_CORRUPT
+  eng "File %s is corrupted"
 
-ER_UNMATCH_AFFECTED_ROWS
-  eng "The affected row number does not match that of user specified."
+ER_ERROR_ON_MASTER
+  eng "Query partially completed on the master (error on master: %d) and was aborted. There is a chance that your master is inconsistent at this point. If you are sure that your master is ok, run this query manually on the slave and then restart the slave with SET GLOBAL SQL_SLAVE_SKIP_COUNTER=1; START SLAVE;. Query:'%s'" 
 
-ER_SET_EXECUTED_GTID_SET_FAIL
-  eng "set executed_gtid_set fail, error: '%s'."
+ER_INCONSISTENT_ERROR
+  eng "Query caused different errors on master and slave. Error on master: message (format)='%s' error code=%d; Error on slave:actual message='%s', error code=%d. Default database:'%s'. Query:'%s'"
+
+ER_STORAGE_ENGINE_NOT_LOADED
+        eng "Storage engine for table '%s'.'%s' is not loaded."
+
+ER_GET_STACKED_DA_WITHOUT_ACTIVE_HANDLER 0Z002
+  eng "GET STACKED DIAGNOSTICS when handler not active"
+
+ER_WARN_LEGACY_SYNTAX_CONVERTED
+  eng "%s is no longer supported. The statement was converted to %s."
+
+ER_BINLOG_UNSAFE_FULLTEXT_PLUGIN
+  eng "Statement is unsafe because it uses a fulltext parser plugin which may not return the same value on the slave."
+
+ER_CANNOT_DISCARD_TEMPORARY_TABLE
+  eng "Cannot DISCARD/IMPORT tablespace associated with temporary table"
+
+ER_FK_DEPTH_EXCEEDED
+  eng "Foreign key cascade delete/update exceeds max depth of %d."
+
+ER_COL_COUNT_DOESNT_MATCH_PLEASE_UPDATE_V2
+        eng "Column count of %s.%s is wrong. Expected %d, found %d. Created with MySQL %d, now running %d. Please use mysql_upgrade to fix this error."
+        ger "Spaltenanzahl von %s.%s falsch. %d erwartet, aber %d erhalten. Erzeugt mit MySQL %d, jetzt unter %d. Bitte benutzen Sie mysql_upgrade, um den Fehler zu beheben"
+
+ER_WARN_TRIGGER_DOESNT_HAVE_CREATED
+  eng "Trigger %s.%s.%s does not have CREATED attribute."
+
+ER_REFERENCED_TRG_DOES_NOT_EXIST
+  eng "Referenced trigger '%s' for the given action time and event type does not exist."
+
+ER_EXPLAIN_NOT_SUPPORTED
+        eng "EXPLAIN FOR CONNECTION command is supported only for SELECT/UPDATE/INSERT/DELETE/REPLACE"
+ER_INVALID_FIELD_SIZE
+        eng "Invalid size for column '%-.192s'."
+
+ER_MISSING_HA_CREATE_OPTION
+        eng "Table storage engine '%-.64s' found required create option missing"
+
+ER_ENGINE_OUT_OF_MEMORY
+  eng "Out of memory in storage engine '%-.64s'."
+
+ER_PASSWORD_EXPIRE_ANONYMOUS_USER
+  eng "The password for anonymous user cannot be expired."
+
+ER_SLAVE_SQL_THREAD_MUST_STOP
+  eng "This operation cannot be performed with a running slave sql thread; run STOP SLAVE SQL_THREAD first"
+
+ER_NO_FT_MATERIALIZED_SUBQUERY
+  eng "Cannot create FULLTEXT index on materialized subquery"
+
+ER_INNODB_UNDO_LOG_FULL
+  eng "Undo Log error: %s"
+
+ER_INVALID_ARGUMENT_FOR_LOGARITHM 2201E
+  eng "Invalid argument for logarithm"
+
+ER_SLAVE_CHANNEL_IO_THREAD_MUST_STOP
+  eng "This operation cannot be performed with a running slave io thread; run STOP SLAVE IO_THREAD FOR CHANNEL '%s' first."
+
+ER_WARN_OPEN_TEMP_TABLES_MUST_BE_ZERO
+  eng "This operation may not be safe when the slave has temporary tables. The tables will be kept open until the server restarts or until the tables are deleted by any replicated DROP statement. Suggest to wait until slave_open_temp_tables = 0."
+
+ER_WARN_ONLY_MASTER_LOG_FILE_NO_POS
+  eng "CHANGE MASTER TO with a MASTER_LOG_FILE clause but no MASTER_LOG_POS clause may not be safe. The old position value may not be valid for the new binary log file."
+
+ER_QUERY_TIMEOUT 
+  eng "Query execution was interrupted, maximum statement execution time exceeded"
+
+ER_NON_RO_SELECT_DISABLE_TIMER
+  eng "Select is not a read only statement, disabling timer"
+
+ER_DUP_LIST_ENTRY
+  eng "Duplicate entry '%-.192s'."
+
+ER_SQL_MODE_NO_EFFECT
+  eng "'%s' mode no longer has any effect. Use STRICT_ALL_TABLES or STRICT_TRANS_TABLES instead."
+
+ER_AGGREGATE_ORDER_FOR_UNION
+  eng "Expression #%u of ORDER BY contains aggregate function and applies to a UNION"
+
+ER_AGGREGATE_ORDER_NON_AGG_QUERY
+  eng "Expression #%u of ORDER BY contains aggregate function and applies to the result of a non-aggregated query"
+
+ER_SLAVE_WORKER_STOPPED_PREVIOUS_THD_ERROR
+  eng "Slave worker has stopped after at least one previous worker encountered an error when slave-preserve-commit-order was enabled. To preserve commit order, the last transaction executed by this thread has not been committed. When restarting the slave after fixing any failed threads, you should fix this worker as well."
+
+ER_DONT_SUPPORT_SLAVE_PRESERVE_COMMIT_ORDER
+  eng "slave_preserve_commit_order is not supported %s."
+
+ER_SERVER_OFFLINE_MODE
+  eng "The server is currently in offline mode"
+
+ER_GIS_DIFFERENT_SRIDS
+  eng "Binary geometry function %s given two geometries of different srids: %u and %u, which should have been identical."
+
+ER_GIS_UNSUPPORTED_ARGUMENT
+  eng "Calling geometry function %s with unsupported types of arguments."
+
+ER_GIS_UNKNOWN_ERROR
+  eng "Unknown GIS error occured in function %s."
+
+ER_GIS_UNKNOWN_EXCEPTION
+  eng "Unknown exception caught in GIS function %s."
+
+ER_GIS_INVALID_DATA 22023
+  eng "Invalid GIS data provided to function %s."
+
+ER_BOOST_GEOMETRY_EMPTY_INPUT_EXCEPTION
+  eng "The geometry has no data in function %s."
+
+ER_BOOST_GEOMETRY_CENTROID_EXCEPTION
+  eng "Unable to calculate centroid because geometry is empty in function %s."
+
+ER_BOOST_GEOMETRY_OVERLAY_INVALID_INPUT_EXCEPTION
+  eng "Geometry overlay calculation error: geometry data is invalid in function %s."
+
+ER_BOOST_GEOMETRY_TURN_INFO_EXCEPTION
+  eng "Geometry turn info calculation error: geometry data is invalid in function %s."
+
+ER_BOOST_GEOMETRY_SELF_INTERSECTION_POINT_EXCEPTION
+  eng "Analysis procedures of intersection points interrupted unexpectedly in function %s."
+
+ER_BOOST_GEOMETRY_UNKNOWN_EXCEPTION
+  eng "Unknown exception thrown in function %s."
+
+ER_STD_BAD_ALLOC_ERROR
+  eng "Memory allocation error: %-.256s in function %s."
+
+ER_STD_DOMAIN_ERROR
+  eng "Domain error: %-.256s in function %s."
+
+ER_STD_LENGTH_ERROR
+  eng "Length error: %-.256s in function %s."
+
+ER_STD_INVALID_ARGUMENT
+  eng "Invalid argument error: %-.256s in function %s."
+
+ER_STD_OUT_OF_RANGE_ERROR
+  eng "Out of range error: %-.256s in function %s."
+
+ER_STD_OVERFLOW_ERROR
+  eng "Overflow error error: %-.256s in function %s."
+
+ER_STD_RANGE_ERROR
+  eng "Range error: %-.256s in function %s."
+
+ER_STD_UNDERFLOW_ERROR
+  eng "Underflow error: %-.256s in function %s."
+
+ER_STD_LOGIC_ERROR
+  eng "Logic error: %-.256s in function %s."
+
+ER_STD_RUNTIME_ERROR
+  eng "Runtime error: %-.256s in function %s."
+
+ER_STD_UNKNOWN_EXCEPTION
+  eng "Unknown exception: %-.384s in function %s."
+
+ER_GIS_DATA_WRONG_ENDIANESS
+  eng "Geometry byte string must be little endian."
+
+ER_CHANGE_MASTER_PASSWORD_LENGTH
+  eng "The password provided for the replication user exceeds the maximum length of 32 characters"
+
+ER_USER_LOCK_WRONG_NAME 42000
+        eng "Incorrect user-level lock name '%-.192s'."
+
+# Should be different from ER_LOCK_DEADLOCK since it doesn't cause implicit
+# rollback. Should not be mapped to SQLSTATE 40001 for the same reason.
+ER_USER_LOCK_DEADLOCK
+  eng "Deadlock found when trying to get user-level lock; try rolling back transaction/releasing locks and restarting lock acquisition."
+
+ER_REPLACE_INACCESSIBLE_ROWS
+  eng "REPLACE cannot be executed as it requires deleting rows that are not in the view"
+
+ER_ALTER_OPERATION_NOT_SUPPORTED_REASON_GIS
+  eng "Do not support online operation on table with GIS index"
+
+ER_ILLEGAL_USER_VAR 42000 S1009
+  eng "User variable name '%-.100s' is illegal"
+
+ER_GTID_MODE_OFF
+  eng "Cannot %s when GTID_MODE = OFF."
+
+ER_UNSUPPORTED_BY_REPLICATION_THREAD
+  eng "Cannot %s from a replication slave thread."
+
+ER_INCORRECT_TYPE
+  eng "Incorrect type for argument %s in function %s."
+
+ER_FIELD_IN_ORDER_NOT_SELECT
+  eng "Expression #%u of ORDER BY clause is not in SELECT list, references column '%-.192s' which is not in SELECT list; this is incompatible with %s"
+
+ER_AGGREGATE_IN_ORDER_NOT_SELECT
+  eng "Expression #%u of ORDER BY clause is not in SELECT list, contains aggregate function; this is incompatible with %s"
+
+ER_INVALID_RPL_WILD_TABLE_FILTER_PATTERN
+  eng "Supplied filter list contains a value which is not in the required format 'db_pattern.table_pattern'"
+
+ER_NET_OK_PACKET_TOO_LARGE 08S01
+  eng "OK packet too large"
+
+ER_INVALID_JSON_DATA
+  eng "Invalid JSON data provided to function %s: %s"
+
+ER_INVALID_GEOJSON_MISSING_MEMBER
+  eng "Invalid GeoJSON data provided to function %s: Missing required member '%s'"
+
+ER_INVALID_GEOJSON_WRONG_TYPE
+  eng "Invalid GeoJSON data provided to function %s: Member '%s' must be of type '%s'"
+
+ER_INVALID_GEOJSON_UNSPECIFIED
+  eng "Invalid GeoJSON data provided to function %s"
+
+ER_DIMENSION_UNSUPPORTED
+  eng "Unsupported number of coordinate dimensions in function %s: Found %u, expected %u"
+
+ER_SLAVE_CHANNEL_DOES_NOT_EXIST
+  eng "Slave channel '%s' does not exist."
+
+ER_SLAVE_MULTIPLE_CHANNELS_HOST_PORT
+  eng "A slave channel '%s' already exists for the given host and port combination."
+
+ER_SLAVE_CHANNEL_NAME_INVALID_OR_TOO_LONG
+  eng "Couldn't create channel: Channel name is either invalid or too long."
+
+ER_SLAVE_NEW_CHANNEL_WRONG_REPOSITORY
+  eng "To have multiple channels, repository cannot be of type FILE; Please check the repository configuration and convert them to TABLE."
+
+ER_SLAVE_CHANNEL_DELETE
+   eng "Cannot delete slave info objects for channel '%s'."
+
+ER_SLAVE_MULTIPLE_CHANNELS_CMD
+   eng "Multiple channels exist on the slave. Please provide channel name as an argument."
+
+ER_SLAVE_MAX_CHANNELS_EXCEEDED
+   eng "Maximum number of replication channels allowed exceeded."
+
+ER_SLAVE_CHANNEL_MUST_STOP
+   eng "This operation cannot be performed with running replication threads; run STOP SLAVE FOR CHANNEL '%s' first"
+
+ER_SLAVE_CHANNEL_NOT_RUNNING
+   eng "This operation requires running replication threads; configure slave and run START SLAVE FOR CHANNEL '%s'"
+
+ER_SLAVE_CHANNEL_WAS_RUNNING
+   eng "Replication thread(s) for channel '%s' are already runnning."
+
+ER_SLAVE_CHANNEL_WAS_NOT_RUNNING
+  eng "Replication thread(s) for channel '%s' are already stopped."
+
+ER_SLAVE_CHANNEL_SQL_THREAD_MUST_STOP
+  eng "This operation cannot be performed with a running slave sql thread; run STOP SLAVE SQL_THREAD FOR CHANNEL '%s' first."
+
+ER_SLAVE_CHANNEL_SQL_SKIP_COUNTER
+  eng "When sql_slave_skip_counter > 0, it is not allowed to start more than one SQL thread by using 'START SLAVE [SQL_THREAD]'. Value of sql_slave_skip_counter can only be used by one SQL thread at a time. Please use 'START SLAVE [SQL_THREAD] FOR CHANNEL' to start the SQL thread which will use the value of sql_slave_skip_counter."
+
+# When using this error message, use the ER_WRONG_FIELD_WITH_GROUP error code.
+ER_WRONG_FIELD_WITH_GROUP_V2
+  eng "Expression #%u of %s is not in GROUP BY clause and contains nonaggregated column '%-.192s' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by"
+
+# When using this error message, use the ER_MIX_OF_GROUP_FUNC_AND_FIELDS error code.
+ER_MIX_OF_GROUP_FUNC_AND_FIELDS_V2
+  eng "In aggregated query without GROUP BY, expression #%u of %s contains nonaggregated column '%-.192s'; this is incompatible with sql_mode=only_full_group_by"
+
+# When using this error message, use the ER_WARN_DEPRECATED_SYNTAX_NO_REPLACEMENT error code.
+ER_WARN_DEPRECATED_SYSVAR_UPDATE
+  eng "Updating '%s' is deprecated. It will be made read-only in a future release."
+
+# Use this error message to deprecate SQL MODES
+ER_WARN_DEPRECATED_SQLMODE
+  eng "Changing sql mode '%s' is deprecated. It will be removed in a future release."
+
+ER_CANNOT_LOG_PARTIAL_DROP_DATABASE_WITH_GTID
+  eng "DROP DATABASE failed; some tables may have been dropped but the database directory remains. The GTID has not been added to GTID_EXECUTED and the statement was not written to the binary log. Fix this as follows: (1) remove all files from the database directory %-.192s; (2) SET GTID_NEXT='%-.192s'; (3) DROP DATABASE `%-.192s`."
+
+ER_GROUP_REPLICATION_CONFIGURATION
+  eng "The server is not configured properly to be an active member of the group. Please see more details on error log."
+
+ER_GROUP_REPLICATION_RUNNING
+  eng "The START GROUP_REPLICATION command failed since the group is already running."
+
+ER_GROUP_REPLICATION_APPLIER_INIT_ERROR
+  eng "The START GROUP_REPLICATION command failed as the applier module failed to start."
+
+ER_GROUP_REPLICATION_STOP_APPLIER_THREAD_TIMEOUT
+  eng "The STOP GROUP_REPLICATION command execution is incomplete: The applier thread got the stop signal while it was busy. The applier thread will stop once the current task is complete."
+
+ER_GROUP_REPLICATION_COMMUNICATION_LAYER_SESSION_ERROR
+  eng "The START GROUP_REPLICATION command failed as there was an error when initializing the group communication layer."
+
+ER_GROUP_REPLICATION_COMMUNICATION_LAYER_JOIN_ERROR
+  eng "The START GROUP_REPLICATION command failed as there was an error when joining the communication group."
+
+ER_BEFORE_DML_VALIDATION_ERROR
+  eng "The table does not comply with the requirements by an external plugin."
+
+ER_PREVENTS_VARIABLE_WITHOUT_RBR
+  eng "Cannot change the value of variable %s without binary log format as ROW."
+
+ER_RUN_HOOK_ERROR
+  eng "Error on observer while running replication hook '%s'."
+
+ER_TRANSACTION_ROLLBACK_DURING_COMMIT
+  eng "Plugin instructed the server to rollback the current transaction."
+
+ER_GENERATED_COLUMN_FUNCTION_IS_NOT_ALLOWED
+  eng "Expression of generated column '%s' contains a disallowed function."
+
+ER_UNSUPPORTED_ALTER_INPLACE_ON_VIRTUAL_COLUMN
+  eng "INPLACE ADD or DROP of virtual columns cannot be combined with other ALTER TABLE actions"
+
+ER_WRONG_FK_OPTION_FOR_GENERATED_COLUMN
+  eng "Cannot define foreign key with %s clause on a generated column."
+
+ER_NON_DEFAULT_VALUE_FOR_GENERATED_COLUMN
+  eng "The value specified for generated column '%s' in table '%s' is not allowed."
+
+ER_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN
+  eng "'%s' is not supported for generated columns."
+
+ER_GENERATED_COLUMN_NON_PRIOR
+  eng "Generated column can refer only to generated columns defined prior to it."
+
+ER_DEPENDENT_BY_GENERATED_COLUMN
+  eng "Column '%s' has a generated column dependency."
+
+ER_GENERATED_COLUMN_REF_AUTO_INC,
+  eng "Generated column '%s' cannot refer to auto-increment column."
+
+ER_FEATURE_NOT_AVAILABLE
+  eng "The '%-.64s' feature is not available; you need to remove '%-.64s' or use MySQL built with '%-.64s'"
+
+ER_CANT_SET_GTID_MODE
+  eng "SET @@GLOBAL.GTID_MODE = %-.64s is not allowed because %-.384s."
+
+ER_CANT_USE_AUTO_POSITION_WITH_GTID_MODE_OFF
+  eng "The replication receiver thread%-.192s cannot start in AUTO_POSITION mode: this server uses @@GLOBAL.GTID_MODE = OFF."
+
+ER_CANT_REPLICATE_ANONYMOUS_WITH_AUTO_POSITION
+  eng "Cannot replicate anonymous transaction when AUTO_POSITION = 1, at file %.512s, position %lld."
+
+ER_CANT_REPLICATE_ANONYMOUS_WITH_GTID_MODE_ON
+  eng "Cannot replicate anonymous transaction when @@GLOBAL.GTID_MODE = ON, at file %.512s, position %lld."
+
+ER_CANT_REPLICATE_GTID_WITH_GTID_MODE_OFF
+  eng "Cannot replicate GTID-transaction when @@GLOBAL.GTID_MODE = OFF, at file %.512s, position %lld."
+
+ER_CANT_SET_ENFORCE_GTID_CONSISTENCY_ON_WITH_ONGOING_GTID_VIOLATING_TRANSACTIONS
+  eng "Cannot set ENFORCE_GTID_CONSISTENCY = ON because there are ongoing transactions that violate GTID consistency."
+
+ER_SET_ENFORCE_GTID_CONSISTENCY_WARN_WITH_ONGOING_GTID_VIOLATING_TRANSACTIONS
+  eng "There are ongoing transactions that violate GTID consistency."
+
+ER_ACCOUNT_HAS_BEEN_LOCKED
+  eng "Access denied for user '%-.48s'@'%-.64s'. Account is locked."
+  pol "Odmowa dostępu dla użytkownika '%-.48s'@'%-.64s'. Konto zablokowane."
+
+ER_WRONG_TABLESPACE_NAME 42000
+  eng "Incorrect tablespace name `%-.192s`"
+
+ER_TABLESPACE_IS_NOT_EMPTY
+  eng "Tablespace `%-.192s` is not empty."
+
+ER_WRONG_FILE_NAME
+  eng "Incorrect File Name '%s'."
+
+ER_BOOST_GEOMETRY_INCONSISTENT_TURNS_EXCEPTION
+  eng "Inconsistent intersection points."
+
+ER_WARN_OPTIMIZER_HINT_SYNTAX_ERROR
+  eng "Optimizer hint syntax error"
+
+ER_WARN_BAD_MAX_EXECUTION_TIME
+  eng "Unsupported MAX_EXECUTION_TIME"
+
+ER_WARN_UNSUPPORTED_MAX_EXECUTION_TIME
+  eng "MAX_EXECUTION_TIME hint is supported by top-level standalone SELECT statements only"
+
+ER_WARN_CONFLICTING_HINT
+  eng "Hint %s is ignored as conflicting/duplicated"
+
+ER_WARN_UNKNOWN_QB_NAME
+  eng "Query block name %s is not found for %s hint"
+
+ER_UNRESOLVED_HINT_NAME
+  eng "Unresolved name %s for %s hint"
+
+ER_WARN_ON_MODIFYING_GTID_EXECUTED_TABLE
+  eng "Please do not modify the %s table. This is a mysql internal system table to store GTIDs for committed transactions. Modifying it can lead to an inconsistent GTID state."
+
+ER_PLUGGABLE_PROTOCOL_COMMAND_NOT_SUPPORTED
+  eng "Command not supported by pluggable protocols"
+
+ER_LOCKING_SERVICE_WRONG_NAME 42000
+  eng "Incorrect locking service lock name '%-.192s'."
+
+# Should be different from ER_LOCK_DEADLOCK since it doesn't cause implicit
+# rollback. Should not be mapped to SQLSTATE 40001 for the same reason.
+ER_LOCKING_SERVICE_DEADLOCK
+  eng "Deadlock found when trying to get locking service lock; try releasing locks and restarting lock acquisition."
+
+ER_LOCKING_SERVICE_TIMEOUT
+  eng "Service lock wait timeout exceeded."
+
+ER_GIS_MAX_POINTS_IN_GEOMETRY_OVERFLOWED
+  eng "Parameter %s exceeds the maximum number of points in a geometry (%lu) in function %s."
+
+ER_SQL_MODE_MERGED
+  eng "'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release."
+
+ER_VTOKEN_PLUGIN_TOKEN_MISMATCH
+  eng "Version token mismatch for %.*s. Correct value %.*s"
+  bg "Клеймото за версия %.*s не съвпада. Правилната стойност е %.*s"
+
+ER_VTOKEN_PLUGIN_TOKEN_NOT_FOUND
+  eng "Version token %.*s not found."
+  bg "Не е намерено клеймо за версия %.*s"
+
+ER_CANT_SET_VARIABLE_WHEN_OWNING_GTID
+  eng "Variable %-.192s cannot be changed by a client that owns a GTID. The client owns %s. Ownership is released on COMMIT or ROLLBACK."
+
+ER_SLAVE_CHANNEL_OPERATION_NOT_ALLOWED
+   eng "%-.192s cannot be performed on channel '%-.192s'."
+
+ER_INVALID_JSON_TEXT 22032
+  eng "Invalid JSON text: \"%s\" at position %u in value for column '%-.200s'."
+
+# The last parameter is now always empty but kept for backward compatibility
+ER_INVALID_JSON_TEXT_IN_PARAM 22032
+  eng "Invalid JSON text in argument %u to function %s: \"%s\" at position %u.%-.0s"
+
+ER_INVALID_JSON_BINARY_DATA
+  eng "The JSON binary value contains invalid data."
+
+ER_INVALID_JSON_PATH 42000
+  eng "Invalid JSON path expression. The error is around character position %u.%-.200s"
+
+ER_INVALID_JSON_CHARSET 22032
+  eng "Cannot create a JSON value from a string with CHARACTER SET '%s'."
+
+ER_INVALID_JSON_CHARSET_IN_FUNCTION 22032
+  eng "Invalid JSON character data provided to function %s: '%s'; utf8 is required."
+
+ER_INVALID_TYPE_FOR_JSON 22032
+  eng "Invalid data type for JSON data in argument %u to function %s; a JSON string or JSON type is required."
+
+ER_INVALID_CAST_TO_JSON 22032
+  eng "Cannot CAST value to JSON."
+
+ER_INVALID_JSON_PATH_CHARSET 42000
+  eng "A path expression must be encoded in the utf8 character set. The path expression '%-.200s' is encoded in character set '%-.200s'."
+
+ER_INVALID_JSON_PATH_WILDCARD 42000
+  eng "In this situation, path expressions may not contain the * and ** tokens."
+
+ER_JSON_VALUE_TOO_BIG 22032
+  eng "The JSON value is too big to be stored in a JSON column."
+
+ER_JSON_KEY_TOO_BIG 22032
+  eng "The JSON object contains a key name that is too long."
+
+ER_JSON_USED_AS_KEY 42000
+  eng "JSON column '%-.192s' cannot be used in key specification."
+
+ER_JSON_VACUOUS_PATH 42000
+  eng "The path expression '$' is not allowed in this context."
+
+ER_JSON_BAD_ONE_OR_ALL_ARG 42000
+  eng "The oneOrAll argument to %s may take these values: 'one' or 'all'."
+
+# The second parameter is now always empty but kept for backward compatibility
+ER_NUMERIC_JSON_VALUE_OUT_OF_RANGE 22003
+  eng "Out of range JSON value for CAST to %s%-.0s from column %s at row %ld"
+
+# The second parameter is now always empty but kept for backward compatibility
+ER_INVALID_JSON_VALUE_FOR_CAST 22018
+  eng "Invalid JSON value for CAST to %s%-.0s from column %s at row %ld"
+
+ER_JSON_DOCUMENT_TOO_DEEP 22032
+  eng "The JSON document exceeds the maximum depth."
+
+ER_JSON_DOCUMENT_NULL_KEY 22032
+  eng "JSON documents may not contain NULL member names."
+
+ER_SECURE_TRANSPORT_REQUIRED
+  eng "Connections using insecure transport are prohibited while --require_secure_transport=ON."
+
+ER_NO_SECURE_TRANSPORTS_CONFIGURED
+  eng "No secure transports (SSL or Shared Memory) are configured, unable to set --require_secure_transport=ON."
+
+ER_DISABLED_STORAGE_ENGINE
+  eng "Storage engine %s is disabled (Table creation is disallowed)."
+
+ER_USER_DOES_NOT_EXIST
+  eng "User %s does not exist."
+
+ER_USER_ALREADY_EXISTS
+  eng "User %s already exists."
+
+ER_AUDIT_API_ABORT
+  eng "Aborted by Audit API ('%-.48s';%d)."
+
+ER_INVALID_JSON_PATH_ARRAY_CELL 42000
+  eng "A path expression is not a path to a cell in an array."
+
+ER_BUFPOOL_RESIZE_INPROGRESS
+  eng "Another buffer pool resize is already in progress."
+
+ER_FEATURE_DISABLED_SEE_DOC
+  eng "The '%s' feature is disabled; see the documentation for '%s'"
+
+ER_SERVER_ISNT_AVAILABLE
+  eng "Server isn't available"
+
+ER_SESSION_WAS_KILLED
+  eng "Session was killed"
+
+ER_CAPACITY_EXCEEDED
+  eng "Memory capacity of %llu bytes for '%s' exceeded. %s"
+
+ER_CAPACITY_EXCEEDED_IN_RANGE_OPTIMIZER
+  eng "Range optimization was not done for this query."
+
+ER_TABLE_NEEDS_UPG_PART
+  eng "Partitioning upgrade required. Please dump/reload to fix it or do: ALTER TABLE `%-.192s`.`%-.192s` UPGRADE PARTITIONING"
+
+ER_CANT_WAIT_FOR_EXECUTED_GTID_SET_WHILE_OWNING_A_GTID
+  eng "The client holds ownership of the GTID %s. Therefore, WAIT_FOR_EXECUTED_GTID_SET cannot wait for this GTID."
+
+ER_CANNOT_ADD_FOREIGN_BASE_COL_VIRTUAL
+  eng "Cannot add foreign key on the base column of indexed virtual column."
+
+ER_CANNOT_CREATE_VIRTUAL_INDEX_CONSTRAINT
+  eng "Cannot create index on virtual column whose base column has foreign constraint."
+
+ER_ERROR_ON_MODIFYING_GTID_EXECUTED_TABLE
+  eng "Please do not modify the %s table with an XA transaction. This is an internal system table used to store GTIDs for committed transactions. Although modifying it can lead to an inconsistent GTID state, if neccessary you can modify it with a non-XA transaction."
+
+ER_LOCK_REFUSED_BY_ENGINE
+  eng "Lock acquisition refused by storage engine."
+
+ER_UNSUPPORTED_ALTER_ONLINE_ON_VIRTUAL_COLUMN
+  eng "ADD COLUMN col...VIRTUAL, ADD INDEX(col)"
+
+ER_MASTER_KEY_ROTATION_NOT_SUPPORTED_BY_SE
+  eng "Master key rotation is not supported by storage engine."
+
+ER_MASTER_KEY_ROTATION_ERROR_BY_SE
+  eng "Encryption key rotation error reported by SE: %s"
+
+ER_MASTER_KEY_ROTATION_BINLOG_FAILED
+  eng "Write to binlog failed. However, master key rotation has been completed successfully."
+
+ER_MASTER_KEY_ROTATION_SE_UNAVAILABLE
+  eng "Storage engine is not available."
+
+ER_TABLESPACE_CANNOT_ENCRYPT
+  eng "This tablespace can't be encrypted."
+
+ER_INVALID_ENCRYPTION_OPTION
+  eng "Invalid encryption option."
+
+ER_CANNOT_FIND_KEY_IN_KEYRING
+  eng "Can't find master key from keyring, please check in the server log if a keyring plugin is loaded and initialized successfully."
+
+ER_CAPACITY_EXCEEDED_IN_PARSER
+  eng "Parser bailed out for this query."
+
+ER_UNSUPPORTED_ALTER_ENCRYPTION_INPLACE
+  eng "Cannot alter encryption attribute by inplace algorithm."
+
+ER_KEYRING_UDF_KEYRING_SERVICE_ERROR
+  eng "Function '%s' failed because underlying keyring service returned an error. Please check if a keyring plugin is installed and that provided arguments are valid for the keyring you are using."
+
+ER_USER_COLUMN_OLD_LENGTH
+  eng "It seems that your db schema is old. The %s column is 77 characters long and should be 93 characters long. Please run mysql_upgrade."
+
+ER_CANT_RESET_MASTER
+  eng "RESET MASTER is not allowed because %-.384s."
+
+ER_GROUP_REPLICATION_MAX_GROUP_SIZE
+  eng "The START GROUP_REPLICATION command failed since the group already has 9 members."
+
+ER_CANNOT_ADD_FOREIGN_BASE_COL_STORED
+  eng "Cannot add foreign key on the base column of stored column. "
+
+ER_TABLE_REFERENCED
+  eng "Cannot complete the operation because table is referenced by another connection."
+
+ER_PARTITION_ENGINE_DEPRECATED_FOR_TABLE
+  eng "The partition engine, used by table '%-.192s.%-.192s', is deprecated and will be removed in a future release. Please use native partitioning instead."
+
+ER_WARN_USING_GEOMFROMWKB_TO_SET_SRID_ZERO 01000
+  eng "%.192s(geometry) is deprecated and will be replaced by st_srid(geometry, 0) in a future version. Use %.192s(st_aswkb(geometry), 0) instead."
+
+ER_WARN_USING_GEOMFROMWKB_TO_SET_SRID 01000
+  eng "%.192s(geometry, srid) is deprecated and will be replaced by st_srid(geometry, srid) in a future version. Use %.192s(st_aswkb(geometry), srid) instead."
+
+ER_XA_RETRY
+  eng "The resource manager is not able to commit the transaction branch at this time. Please retry later."
+
+ER_KEYRING_AWS_UDF_AWS_KMS_ERROR
+  eng "Function %s failed due to: %s."
+
+ER_BINLOG_UNSAFE_XA
+  eng "Statement is unsafe because it is being used inside a XA transaction. Concurrent XA transactions may deadlock on slaves when replicated using statements."
+
+ER_UDF_ERROR
+  eng "%s UDF failed; %s"
+
+ER_KEYRING_MIGRATION_FAILURE
+  eng "Can not perform keyring migration : %s"
+
+ER_KEYRING_ACCESS_DENIED_ERROR 42000
+  eng "Access denied; you need %-.128s privileges for this operation"a
+
+ER_KEYRING_MIGRATION_STATUS
+  eng "Keyring migration %s."
+
+ER_PLUGIN_FAILED_TO_OPEN_TABLES
+  eng "Failed to open the %s filter tables."
+
+ER_PLUGIN_FAILED_TO_OPEN_TABLE
+  eng "Failed to open '%s.%s' %s table."
+
+ER_AUDIT_LOG_NO_KEYRING_PLUGIN_INSTALLED
+  eng "No keyring plugin installed."
+
+ER_AUDIT_LOG_ENCRYPTION_PASSWORD_HAS_NOT_BEEN_SET
+  eng "Audit log encryption password has not been set; it will be generated automatically. Use audit_log_encryption_password_get to obtain the password or audit_log_encryption_password_set to set a new one."
+
+ER_AUDIT_LOG_COULD_NOT_CREATE_AES_KEY
+  eng "Could not create AES key. OpenSSL's EVP_BytesToKey function failed."
+
+ER_AUDIT_LOG_ENCRYPTION_PASSWORD_CANNOT_BE_FETCHED
+  eng "Audit log encryption password cannot be fetched from the keyring. Password used so far is used for encryption."
+
+ER_AUDIT_LOG_JSON_FILTERING_NOT_ENABLED
+  eng "Audit Log filtering has not been installed."
+
+ER_AUDIT_LOG_UDF_INSUFFICIENT_PRIVILEGE
+  eng "Request ignored for '%s'@'%s'. SUPER_ACL needed to perform operation"
+
+ER_AUDIT_LOG_SUPER_PRIVILEGE_REQUIRED
+  eng "SUPER privilege required for '%s'@'%s' user."
+
+ER_COULD_NOT_REINITIALIZE_AUDIT_LOG_FILTERS
+  eng "Could not reinitialize audit log filters."
+
+ER_AUDIT_LOG_UDF_INVALID_ARGUMENT_TYPE
+  eng "Invalid argument type"
+
+ER_AUDIT_LOG_UDF_INVALID_ARGUMENT_COUNT
+  eng "Invalid argument count"
+
+ER_AUDIT_LOG_HAS_NOT_BEEN_INSTALLED
+  eng "audit_log plugin has not been installed using INSTALL PLUGIN syntax."
+
+ER_AUDIT_LOG_UDF_READ_INVALID_MAX_ARRAY_LENGTH_ARG_TYPE
+  eng "Invalid \"max_array_length\" argument type."
+
+ER_AUDIT_LOG_UDF_READ_INVALID_MAX_ARRAY_LENGTH_ARG_VALUE
+  eng "Invalid \"max_array_length\" argument value."
+
+ER_AUDIT_LOG_JSON_FILTER_PARSING_ERROR
+  eng "%s"
+
+ER_AUDIT_LOG_JSON_FILTER_NAME_CANNOT_BE_EMPTY
+  eng "Filter name cannot be empty."
+
+ER_AUDIT_LOG_JSON_USER_NAME_CANNOT_BE_EMPTY
+  eng "User cannot be empty."
+
+ER_AUDIT_LOG_JSON_FILTER_DOES_NOT_EXISTS
+  eng "Specified filter has not been found."
+
+ER_AUDIT_LOG_USER_FIRST_CHARACTER_MUST_BE_ALPHANUMERIC
+  eng "First character of the user name must be alphanumeric."
+
+ER_AUDIT_LOG_USER_NAME_INVALID_CHARACTER
+  eng "Invalid character in the user name."
+
+ER_AUDIT_LOG_HOST_NAME_INVALID_CHARACTER
+  eng "Invalid character in the host name."
+
+WARN_DEPRECATED_MAXDB_SQL_MODE_FOR_TIMESTAMP
+  eng "With the MAXDB SQL mode enabled, TIMESTAMP is identical with DATETIME. The MAXDB SQL mode is deprecated and will be removed in a future release. Please disable the MAXDB SQL mode and use DATETIME instead."
+
+ER_XA_REPLICATION_FILTERS
+  eng "The use of replication filters with XA transactions is not supported, and can lead to an undefined state in the replication slave."
+
+ER_CANT_OPEN_ERROR_LOG
+  eng "Could not open file '%s' for error logging%s%s"
+
+ER_GROUPING_ON_TIMESTAMP_IN_DST
+  eng "Grouping on temporal is non-deterministic for timezones having DST. Please consider switching to UTC for this query."
+
+ER_CANT_START_SERVER_NAMED_PIPE
+  eng "Can't start server : Named Pipe \"%s\" already in use."
+
+ER_WRITE_SET_EXCEEDS_LIMIT
+  eng "The size of writeset data for the current transaction exceeds a limit imposed by an external component. If using Group Replication check 'group_replication_transaction_size_limit'."
+
+ER_DEPRECATED_TLS_VERSION_SESSION
+  eng "Accepted a connection with deprecated protocol '%s' for account `%s`@`%s` from host `%s`. Client supplied username `%s`"
+
+ER_WARN_DEPRECATED_TLS_VERSION
+  eng "A deprecated TLS version %s is enabled. Please use TLSv1.2 or higher."
+
+ER_WARN_WRONG_NATIVE_TABLE_STRUCTURE
+  eng "Optional native table '%-.64s'.'%-.64s' has the wrong structure or is missing."
+
+ER_AES_INVALID_KDF_NAME
+  eng "KDF method name is not valid. Please use hkdf or pbkdf2_hmac method name"
+
+ER_AES_INVALID_KDF_ITERATIONS
+  eng "For KDF method pbkdf2_hmac iterations value less than 1000 or more than 65535 is not allowed due to security reasons. Please provide iterations >= 1000 and iterations < 65535"
+
+WARN_AES_KEY_SIZE
+  eng "AES key size should be %d bytes length or secure KDF methods hkdf or pbkdf2_hmac should be used, please provide exact AES key size or use KDF methods for better security."
+
+ER_AES_INVALID_KDF_OPTION_SIZE
+  eng "KDF option size is invalid, please provide valid size < %d bytes and not NULL"
+
+#
+#  End of 5.7 error messages.
+#
+
+#
+# Alibaba error messages section starts here
+#
+
+# Alibaba error numbers starts from 5000
+start-error-number 5000
+
+ER_RDS_DROP_TRIGGERS_ON_SYSTEM_SCHEMA
+  eng "Triggers created on system tables can not be dropped"
+
+ER_RDS_DENY_ACCESS_FOR_USERS_OR_PRIVILEGES
+  eng "Cannot modify reserved users or privileges"
+
+ER_RDS_DENY_ACCESS_FOR_RESERVED_DB
+  eng "Cannot modify reserved database"
+
+ER_RDS_SHOW_SLAVE_LAG_OFF
+  eng "show slave lag OFF, can't execute it!"
+
+ER_RDS_SET_CONNECTION_ID_OFF
+  eng "RDS connection id set is OFF, can't set! id: %lu"
+
+ER_RDS_SET_CONNECTION_ID_DENIED
+  eng "RDS connection id must in range [16777217(2^24 + 1),4294967295(2^32 - 1)] OR already exists, id: %lu"
+
+ER_RDS_BLOCK_UNSAFE_CONFIG
+  eng "Cannot modify sync_binlog/innodb_flush_log_at_trx_commit when RDS_INNER_BACKUP started!"
+
+ER_RDS_INNER_BACKUP
+  eng "Already in RDS_INNER_BACKUP, only one thread can start RDS_INNER_BACKUP!"
+
+ER_RDS_REQUEST_SWITCH_PLUGIN
+  eng "RDS request client switch plugin to %s"
+
+ER_ACCESS_DENY_BY_RDS_PRIV
+  eng "OPERATION need to be executed set by ADMIN."
+
+ER_RDS_SYNC_BINARY_LOGS
+  eng "sync binary logs failed due to: %s."
+
+ER_BAD_PROXY_PROTOCOL_HOST
+  eng "Invalid hostname or ip."
+
+ER_NATIVE_PROC_PARAMETER_MISMATCH
+  eng "The %dth parameter didn't match for native procedure %s"
+
+ER_TEMP_TABLE_PREVENTS_SWITCH_SESSION_BINLOG_FORMAT
+  eng "Changing @@session.binlog_format is disallowed when the session has open temporary table(s). You could wait until these temporary table(s) are dropped and try again."
+
+ER_TEMP_TABLE_PREVENTS_SWITCH_GLOBAL_BINLOG_FORMAT
+  eng "Changing @@global.binlog_format or @@persist.binlog_format is disallowed when any replication channel has open temporary table(s). You could wait until Slave_open_temp_tables = 0 and try again"
+
+ER_RUNNING_APPLIER_PREVENTS_SWITCH_GLOBAL_BINLOG_FORMAT
+  eng "Changing @@global.binlog_format or @@persist.binlog_format is disallowed when any replication channel applier thread is running. You could execute STOP SLAVE SQL_THREAD and try again."
+
+ER_GTID_UNSAFE_CREATE_DROP_TEMP_TABLE_IN_TRX_IN_SBR
+  eng "Statement violates GTID consistency: CREATE TEMPORARY TABLE and DROP TEMPORARY TABLE are not allowed inside a transaction or inside a procedure in a transactional context when @@session.binlog_format=STATEMENT."
+
+ER_LOCK_INSTANCE_REQUIRE_READ_ONLY,
+  eng "Lock instance %s require read only or super read only"
+
+ER_ROTATE_REQUIRE_LOG_TABLE
+   eng "Rotate command must be working on log table"
+
+ER_TCP_READ_WRITE
+  eng "TCP send or receive package exception : %s"
+
+ER_CANT_EXECUTE_WITH_BACKUP_LOCK
+  eng "Can't execute the query because you have a conflicting backup lock"
+  rus "Запрос не может быть выполнен из-за конфликтующей блокировки резервного копирования"
+
+ER_RDS_DATA_PROTECTION
+   eng "Operation rejected by RDS data protection policy"
+
+ER_CCL
+  eng "Concurrency control : %s"
+
+ER_CCL_TABLE_OP_FAILED
+  eng "The CCL table operation failed due to the following error from SE: errcode %d - %.256s"
+
+ER_CCL_INVALID_RULE
+  eng "Concurrency control rule %d is not valid when %s"
+
+ER_CCL_DUPLICATE_RULE
+  eng "Concurrency control rule %d is duplicate when %s"
+
+ER_CCL_RULE_NOT_FOUND
+  eng "Concurrency control rule %d is not found in %s"
+
+ER_CCL_UNAVAILABLE_SLOT
+  eng "Concurrency control rule %d cann't acquire available slot"
+
+ER_CCL_QUEUE_FIELD_NOT_FOUND
+  eng "Didn't found suitable field condition when apply ccl queue"
+
+ER_OUTLINE
+  eng "Statement outline : %s"
+
+ER_OUTLINE_TABLE_OP_FAILED
+  eng "The table operation failed due to the following error from SE: errcode %d - %.256s"
+
+ER_OUTLINE_INVALID
+  eng "Statement outline %d is not valid when %s since %s"
+
+ER_STATEMENT_DIGEST_PARSE
+  eng "Statement outline query parse error: %s"
+
+ER_OUTLINE_DIGEST_COMPUTE
+  eng "Statement outline digest compute error from %s"
+
+ER_OUTLINE_DIGEST_MISMATCH
+  eng "Statement outline digest didn't match between %s and %s"
+
+ER_OUTLINE_NOT_FOUND
+  eng "Statement outline %d is not found in %s"
+
+ER_OUTLINE_OPTIMIZER_HINT_PARSE
+  eng "Statement outline optimizer hint parse error: %s"
+
+ER_OUTLINE_SQL_DIGEST_TRUNCATED
+  eng "Statement outline sql text has been truncated when compute digest: %s"
+ER_IC_NOT_ALLOWED_IN_SUB_STMT
+  eng "Inventory transactional hints didn't alllowed in stored procedure"
+
+ER_IC_NOT_ALLOWED_IN_AUTOCOMMIT
+  eng "Inventory transactinal hints didn't allowed in autocommit mode"
+
+ER_IC_NOT_MATCH_TARGET
+  eng "Inventory conditional hints didn't match with result"
+
+ER_CCL_MAX_WAITING_COUNT
+  eng "Concurrency control waiting count exceed max waiting count"
+
+ER_CCL_REFUSE_QUERY
+  eng "Concurrency control refuse to execute query"
+
+ER_ENGINE_MONITOR_DELEGATE_INIT_FAILED
+  eng "Initialization of engine monitor delegate failed."
+
+ER_RECYCLE_BIN
+  eng "Recycle_bin : %s"
+
+ER_RECYCLE_SCHEDULER
+  eng "Recycle scheduler : %s"
+
+ER_PREPARE_RECYCLE_TABLE_ERROR
+  eng "Recycle table failed : %s"
 
 ER_SEQUENCE_RUN_OUT
   eng "Sequence '%-.192s.%-.192s' has run out."
+
 ER_SEQUENCE_INVALID
   eng "Sequence '%-.192s.%-.192s' structure or number is invalid."
-ER_SEQUENCE_ACCESS_ERROR
-  eng "Sequence '%-.192s.%-.192s' access error."
+
+ER_SEQUENCE_ACCESS_FAILURE
+  eng "Sequence '%-.192s.%-.192s' access failure."
+
 ER_SEQUENCE_BINLOG_FORMAT
-  eng "Sequence requires binlog_format= row"
+  eng "Sequence requires binlog_format = row"
+
+ER_SEQUENCE_NOT_DEFINED
+   eng "Sequence '%-.192s.%-.192s' is not yet defined in current session"
+
+ER_TABLE_IS_NOT_SEQUENCE
+   eng "Table '%-.192s.%-.192s' should be sequence"
+
+ER_BUFFER_POOL_RESIZE_IN_PROGRESS
+   eng "A buffer pool resize is in progress."
+
+ER_INNODB_BUFFER_POOL_RESIZE_CANCEL_FAILED
+   eng "Failed to cancel InnoDB buffer pool resize."
+
+ER_FAILED_BINLOG_CACHE_FREE_FLUSH
+   eng "Binlog cache free flush failed because %s"
+
+ER_MESSAGE_BINLOG_CACHE_FREE_FLUSH
+   eng "Binlog cache free flush message: %s"
+
+ER_COLUMN_FORMAT_TYPE_COMPRESSED
+   eng "Column format type 'COLUMN_FORMAT_TYPE_COMPRESSED' is not supported in RDS MySQL 5.7. [%s.%s]"
+
+ER_ENCDB_UDF_ERROR
+  eng "EncDB function \'%s\' failed with message \"%s\""
+
+ER_ENCDB_HOOK_ERROR
+  eng "EncDB function \'%s\' failed with message \"%s\""
+
+ER_REPLICATION_PRIVILEGE_CHECK_USER_ERROR
+  eng "Variable replica_applier_user set but %s, username: %s, host: localhost."
+
+WARN_DISABLE_SET_SQL_LOG_BIN
+  eng "User '%s' exist in disable_sql_log_bin_user_list can not set sql_log_bin = 1, reset sql_log_bin to 0."
+
+ER_RDS_DIAGNOSE
+  eng "[RDS Diagnose] %s."
+
+ER_WARN_ARGUMENT_INVALID
+  eng "Can't set %s for this variable."
+
+ER_CCL_DIGEST_COMPUTE
+  eng "Statement concurrency digest compute error from %s"
+
+ER_RDS_MAINTAIN_CHANNEL_REQUIRE_SUPER
+  eng "Access denied; you need the SUPER privilege to create replica channel 'alibaba_rds_maintain_channel'."
+
+ER_WARN_SQL_AFTER_MTS_GAPS_GAP_NOT_CALCULATED
+  eng "The until clause SQL_AFTER_MTS_GAPS is being used for channel '%.192s' when GTID_MODE = ON and SOURCE_AUTO_POSITION=1 meaning the server did not compute internally what gaps may exist in the relay log transaction execution. To close any execution gaps use either the SQL_BEFORE_GTIDS or SQL_AFTER_GTIDS until clause."
+
 ER_PK_INDEX_CANT_BE_INVISIBLE
   eng "A primary key index cannot be invisible"
-ER_SEQUENCE_NOT_DEFINED
-  eng "Sequence '%-.192s.%-.192s' is not yet defined in this session"
-ER_NOT_SEQUENCE
-  eng "'%-.192s.%-.192s' is not a SEQUENCE"
-ER_MALFORMED_MESSAGE
-  eng "Malformed message specification '%.200s'."
-ER_INTENTIONAL_ERROR
-  eng "user issue an error intentionally."
+
+ER_DDL_COMMON_MSG
+  eng "[DDL] %s"
+
+# RDS DuckDB error numbers starts from 7583
+start-error-number 7583
+
+ER_DUCKDB_CLIENT
+  eng "[DuckDB] %s."
+
+ER_DUCKDB_QUERY_ERROR
+  eng "[DuckDB] Execute sql failed. %s"
+
+ER_DUCKDB_TABLE_STRUCT_INVALID
+  eng "[DuckDB] DuckDB table structure is invalid. Reason: %s."
+
+ER_DUCKDB_TABLE_AUTO_INCREMENT_REMOVED
+  eng "[DuckDB] AUTO_INCREMENT of field '%s' is removed."
+
+ER_DUCKDB_TABLE_INDEX_REMOVED
+  eng "[DuckDB] Index '%s' is removed."
+
+ER_DUCKDB_TABLE_INDEX_UPGRADED
+  eng "[DuckDB] Index '%s' is upgraded to primary key."
+
+ER_DUCKDB_ALTER_OPERATION_NOT_SUPPORTED
+  eng "[DuckDB] %s is not supported for this operation."
+
+ER_DUCKDB_SETTING_SESSION_VARIABLE
+  eng "[DuckDB] Exception when setting duckdb session variables. %s"
+
+ER_DUCKDB_ALTER_FLAG_REMOVED
+  eng "[DuckDB] '%s' operation will not take effect."
+
+ER_DUCKDB_TABLE_ON_UPDATE_NOW_REMOVED
+  eng "[DuckDB] ON_UPDATE_NOW of field '%s' is removed."
+
+ER_DUCKDB_COMMIT_ERROR
+  eng "[DuckDB] DuckDB commit transaction error. %s"
+
+ER_DUCKDB_ROLLBACK_ERROR
+  eng "[DuckDB] DuckDB rollback transaction error. %s"
+
+ER_DUCKDB_SEND_RESULT_ERROR
+  eng "[DuckDB] DuckDB send result error. %s"
+
+ER_DUCKDB_APPENDER_ERROR
+  eng "[DuckDB] DuckDB appender error. %s"
+
+ER_DUCKDB_PREPARE_ERROR
+  eng "[DuckDB] DuckDB prepare transaction error. %s"
+
+ER_ACCESS_DENIED_DURING_DUCKDB_CONVERT
+  eng "Access denied for user '%-.48s'@'%-.64s'. DuckDB covnerting."
+
+ER_DUCKDB
+  eng "my_duckdb: %s"
+
+ER_SERVER_CONVERT_DUCKDB_TABLE
+  eng "[DuckDB] Converting '%s' table."
+
+ER_SERVER_CONVERT_DUCKDB_FAILED
+  eng "[DuckDB] Failed to convert all tables to DuckDB."
+
+ER_CHECKING_DB_BEFORE_CONVERT_DUCKDB
+  eng "[DuckDB] Checking '%s' schema."
+
+ER_CHECKING_TABLE_BEFORE_CONVERT_DUCKDB
+  eng "[DuckDB] Checking table:   '%s'"
+
+#
+#  End of RDS error message.
+#

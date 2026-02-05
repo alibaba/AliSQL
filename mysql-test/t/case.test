@@ -1,3 +1,8 @@
+# The include statement below is a temp one for tests that are yet to
+#be ported to run with InnoDB,
+#but needs to be kept for tests that would need MyISAM in future.
+--source include/force_myisam_default.inc
+
 
 # Testing of CASE
 #
@@ -5,6 +10,8 @@
 --disable_warnings
 drop table if exists t1, t2;
 --enable_warnings
+
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 
 select CASE "b" when "a" then 1 when "b" then 2 END;
 select CASE "c" when "a" then 1 when "b" then 2 END;
@@ -182,3 +189,17 @@ drop table t1, t2;
 CREATE TABLE t1(a YEAR);
 SELECT 1 FROM t1 WHERE a=1 AND CASE 1 WHEN a THEN 1 ELSE 1 END;
 DROP TABLE t1;
+
+SET sql_mode = default;
+
+--echo #
+--echo # Bug#19875294 ASSERTION `SRC' FAILED IN MY_STRNXFRM_UNICODE
+--echo #              (SIG 6 -STRINGS/CTYPE-UTF8.C:5151)
+--echo #
+
+set @@sql_mode='';
+CREATE TABLE t1(c1 SET('','')CHARACTER SET ucs2) engine=innodb;
+INSERT INTO t1 VALUES(990101.102);
+SELECT COALESCE(c1)FROM t1 ORDER BY 1;
+DROP TABLE t1;
+set @@sql_mode=default;

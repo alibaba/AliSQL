@@ -1,13 +1,20 @@
--- Copyright (c) 2008, 2013, Oracle and/or its affiliates. All rights reserved.
+-- Copyright (c) 2008, 2023, Oracle and/or its affiliates.
 --
 -- This program is free software; you can redistribute it and/or modify
--- it under the terms of the GNU General Public License as published by
--- the Free Software Foundation; version 2 of the License.
+-- it under the terms of the GNU General Public License, version 2.0,
+-- as published by the Free Software Foundation.
+--
+-- This program is also distributed with certain software (including
+-- but not limited to OpenSSL) that is licensed under separate terms,
+-- as designated in a particular file or component or in included license
+-- documentation.  The authors of MySQL hereby grant you an additional
+-- permission to link the program and your derivative works with the
+-- separately licensed software that they have included with MySQL.
 --
 -- This program is distributed in the hope that it will be useful,
 -- but WITHOUT ANY WARRANTY; without even the implied warranty of
 -- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
--- GNU General Public License for more details.
+-- GNU General Public License, version 2.0, for more details.
 --
 -- You should have received a copy of the GNU General Public License
 -- along with this program; if not, write to the Free Software Foundation,
@@ -63,7 +70,8 @@ BEGIN
   SELECT * FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES
     WHERE variable_name NOT IN ('timestamp', 'server_uuid',
                                 'innodb_file_format_max',
-                                'gtid_executed', 'gtid_purged')
+                                'gtid_executed', 'gtid_purged',
+                                'group_replication_group_name')
     ORDER BY VARIABLE_NAME;
 
   -- Dump all databases, there should be none
@@ -90,16 +98,32 @@ BEGIN
 
   -- Dump all events, there should be none
   SELECT * FROM INFORMATION_SCHEMA.EVENTS;
-  -- Dump all triggers except mtr internals, there should be none
-  SELECT * FROM INFORMATION_SCHEMA.TRIGGERS
-         WHERE TRIGGER_NAME NOT IN ('gs_insert', 'ts_insert');
-  -- Dump all created procedures, there should be none
-  SELECT * FROM INFORMATION_SCHEMA.ROUTINES;
+  -- Dump all triggers except mtr internals, only those in the sys schema should exist
+  -- do not select the CREATED column however, as tests like mysqldump.test / mysql_ugprade.test update this
+  SELECT TRIGGER_CATALOG, TRIGGER_SCHEMA, TRIGGER_NAME, EVENT_MANIPULATION,
+         EVENT_OBJECT_CATALOG, EVENT_OBJECT_SCHEMA, EVENT_OBJECT_TABLE, ACTION_ORDER, ACTION_CONDITION,
+         ACTION_STATEMENT, ACTION_ORIENTATION, ACTION_TIMING ACTION_REFERENCE_OLD_TABLE, ACTION_REFERENCE_NEW_TABLE,
+         ACTION_REFERENCE_OLD_ROW, ACTION_REFERENCE_NEW_ROW, SQL_MODE, DEFINER CHARACTER_SET_CLIENT,
+         COLLATION_CONNECTION, DATABASE_COLLATION
+    FROM INFORMATION_SCHEMA.TRIGGERS
+   WHERE TRIGGER_NAME NOT IN ('gs_insert', 'ts_insert');
+  -- Dump all created procedures, only those in the sys schema should exist
+  -- do not select the CREATED or LAST_ALTERED columns however, as tests like mysqldump.test / mysql_ugprade.test update this
+  SELECT SPECIFIC_NAME,ROUTINE_CATALOG,ROUTINE_SCHEMA,ROUTINE_NAME,ROUTINE_TYPE,DATA_TYPE,CHARACTER_MAXIMUM_LENGTH,
+         CHARACTER_OCTET_LENGTH,NUMERIC_PRECISION,NUMERIC_SCALE,DATETIME_PRECISION,CHARACTER_SET_NAME,COLLATION_NAME,
+         DTD_IDENTIFIER,ROUTINE_BODY,ROUTINE_DEFINITION,EXTERNAL_NAME,EXTERNAL_LANGUAGE,PARAMETER_STYLE,
+         IS_DETERMINISTIC,SQL_DATA_ACCESS,SQL_PATH,SECURITY_TYPE,SQL_MODE,ROUTINE_COMMENT,DEFINER,
+         CHARACTER_SET_CLIENT,COLLATION_CONNECTION,DATABASE_COLLATION
+    FROM INFORMATION_SCHEMA.ROUTINES;
+  -- Dump all views, only those in the sys schema should exist
+  SELECT * FROM INFORMATION_SCHEMA.VIEWS;
 
-  SHOW STATUS LIKE 'slave_open_temp_tables';
+  SHOW GLOBAL STATUS LIKE 'slave_open_temp_tables';
 
   -- Checksum system tables to make sure they have been properly
   -- restored after test
+  -- skip mysql.proc however, as created timestamps may have been updated by mysqldump.test / mysql_ugprade.test
+  -- the above SELECT on I_S.ROUTINES ensures consistency across runs instead
   checksum table
     mysql.columns_priv,
     mysql.db,
@@ -108,7 +132,6 @@ BEGIN
     mysql.help_keyword,
     mysql.help_relation,
     mysql.host,
-    mysql.proc,
     mysql.procs_priv,
     mysql.tables_priv,
     mysql.time_zone,

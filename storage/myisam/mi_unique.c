@@ -1,13 +1,20 @@
-/* Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -42,7 +49,7 @@ my_bool mi_check_unique(MI_INFO *info, MI_UNIQUEDEF *def, uchar *record,
     if (info->lastpos != disk_pos &&
 	!(*info->s->compare_unique)(info,def,record,info->lastpos))
     {
-      my_errno=HA_ERR_FOUND_DUPP_UNIQUE;
+      set_my_errno(HA_ERR_FOUND_DUPP_UNIQUE);
       info->errkey= (int) def->key;
       info->dupp_key_pos= info->lastpos;
       info->page_changed=1;			/* Can't optimize read next */
@@ -72,7 +79,8 @@ my_bool mi_check_unique(MI_INFO *info, MI_UNIQUEDEF *def, uchar *record,
 
 ha_checksum mi_unique_hash(MI_UNIQUEDEF *def, const uchar *record)
 {
-  const uchar *pos, *end;
+  uchar *pos;
+  const uchar *end;
   ha_checksum crc= 0;
   ulong seed1=0, seed2= 4;
   HA_KEYSEG *keyseg;
@@ -96,11 +104,11 @@ ha_checksum mi_unique_hash(MI_UNIQUEDEF *def, const uchar *record)
 	continue;
       }
     }
-    pos= record+keyseg->start;
+    pos= (uchar*)record+keyseg->start;
     if (keyseg->flag & HA_VAR_LENGTH_PART)
     {
       uint pack_length=  keyseg->bit_start;
-      uint tmp_length= (pack_length == 1 ? (uint) *(uchar*) pos :
+      uint tmp_length= (pack_length == 1 ? (uint) *pos :
                         uint2korr(pos));
       pos+= pack_length;			/* Skip VARCHAR length */
       set_if_smaller(length,tmp_length);
@@ -145,7 +153,8 @@ ha_checksum mi_unique_hash(MI_UNIQUEDEF *def, const uchar *record)
 int mi_unique_comp(MI_UNIQUEDEF *def, const uchar *a, const uchar *b,
 		   my_bool null_are_equal)
 {
-  const uchar *pos_a, *pos_b, *end;
+  uchar *pos_a, *pos_b;
+  const uchar *end;
   HA_KEYSEG *keyseg;
 
   for (keyseg=def->seg ; keyseg < def->end ; keyseg++)
@@ -168,15 +177,15 @@ int mi_unique_comp(MI_UNIQUEDEF *def, const uchar *a, const uchar *b,
 	continue;
       }
     }
-    pos_a= a+keyseg->start;
-    pos_b= b+keyseg->start;
+    pos_a= (uchar*)a+keyseg->start;
+    pos_b= (uchar*)b+keyseg->start;
     if (keyseg->flag & HA_VAR_LENGTH_PART)
     {
       uint pack_length= keyseg->bit_start;
       if (pack_length == 1)
       {
-        a_length= (uint) *(uchar*) pos_a++;
-        b_length= (uint) *(uchar*) pos_b++;
+        a_length= (uint) *pos_a++;
+        b_length= (uint) *pos_b++;
       }
       else
       {
@@ -209,8 +218,8 @@ int mi_unique_comp(MI_UNIQUEDEF *def, const uchar *a, const uchar *b,
     if (type == HA_KEYTYPE_TEXT || type == HA_KEYTYPE_VARTEXT1 ||
         type == HA_KEYTYPE_VARTEXT2)
     {
-      if (ha_compare_text(keyseg->charset, (uchar *) pos_a, a_length,
-                                           (uchar *) pos_b, b_length, 0, 1))
+      if (ha_compare_text(keyseg->charset, pos_a, a_length,
+                                           pos_b, b_length, 0, 1))
         return 1;
     }
     else

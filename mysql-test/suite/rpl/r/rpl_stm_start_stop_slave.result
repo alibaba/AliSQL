@@ -9,15 +9,6 @@ SET @old_innodb_flush_log_at_trx_commit= @@global.innodb_flush_log_at_trx_commit
 SET @@global.innodb_flush_log_at_trx_commit= 0;
 SET @@session.binlog_direct_non_transactional_updates= FALSE;
 call mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
-call mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
-create table t1(n int);
-stop slave;
-include/wait_for_slave_to_stop.inc
-start slave;
-stop slave io_thread;
-start slave io_thread;
-include/wait_for_slave_to_start.inc
-drop table t1;
 create table t1i(n int primary key) engine=innodb;
 create table t2m(n int primary key) engine=myisam;
 begin;
@@ -77,12 +68,18 @@ include/stop_slave.inc
 CHANGE MASTER TO master_log_pos=MASTER_POS;
 START SLAVE;
 include/wait_for_slave_param.inc [Last_IO_Errno]
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 Last_IO_Errno = '1236'
-Last_IO_Error = 'Got fatal error 1236 from master when reading data from binary log: 'Client requested master to start replication from position > file size; the first event 'master-bin.000001' at XXX, the last event read from './master-bin.000001' at XXX, the last byte read from './master-bin.000001' at XXX.''
+Last_IO_Error = 'Got fatal error 1236 from master when reading data from binary log: 'Client requested master to start replication from position > file size''
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 include/stop_slave.inc
 RESET SLAVE;
 RESET MASTER;
 SET @@global.innodb_flush_log_at_trx_commit= @old_innodb_flush_log_at_trx_commit;
 call mtr.add_suppression("Slave SQL.*Request to stop slave SQL Thread received while applying a group that has non-transactional changes; waiting for completion of the group");
+call mtr.add_suppression("Unsafe statement.*. Statement is unsafe because it accesses a non-transactional table after accessing a transactional table within the same transaction.*");
+call mtr.add_suppression("Unsafe statement.*. Statement is unsafe because it uses a system function that may return a different value on the slave.*");
 SET @@global.innodb_flush_log_at_trx_commit= @old_innodb_flush_log_at_trx_commit;
 include/rpl_end.inc

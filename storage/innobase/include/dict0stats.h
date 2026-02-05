@@ -1,14 +1,22 @@
 /*****************************************************************************
 
-Copyright (c) 2009, 2016, Oracle and/or its affiliates. All Rights Reserved.
+Copyright (c) 2009, 2023, Oracle and/or its affiliates.
 
-This program is free software; you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation; version 2 of the License.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License, version 2.0,
+as published by the Free Software Foundation.
 
-This program is distributed in the hope that it will be useful, but WITHOUT
-ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+This program is also distributed with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have included with MySQL.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License, version 2.0, for more details.
 
 You should have received a copy of the GNU General Public License along with
 this program; if not, write to the Free Software Foundation, Inc.,
@@ -28,9 +36,11 @@ Created Jan 06, 2010 Vasil Dimov
 
 #include "univ.i"
 
-#include "db0err.h"
 #include "dict0types.h"
 #include "trx0types.h"
+
+#define TABLE_STATS_NAME        "mysql/innodb_table_stats"
+#define INDEX_STATS_NAME        "mysql/innodb_index_stats"
 
 enum dict_stats_upd_option_t {
 	DICT_STATS_RECALC_PERSISTENT,/* (re) calculate the
@@ -60,7 +70,6 @@ is relatively quick and is used to calculate transient statistics that
 are not saved on disk.
 This was the only way to calculate statistics before the
 Persistent Statistics feature was introduced. */
-UNIV_INTERN
 void
 dict_stats_update_transient(
 /*========================*/
@@ -133,7 +142,6 @@ dict_stats_deinit(
 Calculates new estimates for table and index statistics. The statistics
 are used in query optimization.
 @return DB_* error code or DB_SUCCESS */
-UNIV_INTERN
 dberr_t
 dict_stats_update(
 /*==============*/
@@ -148,7 +156,6 @@ Removes the information for a particular index's stats from the persistent
 storage if it exists and if there is data stored for this index.
 This function creates its own trx and commits it.
 @return DB_SUCCESS or error code */
-UNIV_INTERN
 dberr_t
 dict_stats_drop_index(
 /*==================*/
@@ -163,7 +170,6 @@ Removes the statistics for a table and all of its indexes from the
 persistent storage if it exists and if there is data stored for the table.
 This function creates its own transaction and commits it.
 @return DB_SUCCESS or error code */
-UNIV_INTERN
 dberr_t
 dict_stats_drop_table(
 /*==================*/
@@ -174,7 +180,6 @@ dict_stats_drop_table(
 
 /*********************************************************************//**
 Fetches or calculates new estimates for index statistics. */
-UNIV_INTERN
 void
 dict_stats_update_for_index(
 /*========================*/
@@ -185,18 +190,38 @@ dict_stats_update_for_index(
 Renames a table in InnoDB persistent stats storage.
 This function creates its own transaction and commits it.
 @return DB_SUCCESS or error code */
-UNIV_INTERN
 dberr_t
 dict_stats_rename_table(
 /*====================*/
+	bool		dict_locked,	/*!< in: true if dict_sys mutex
+                                        and dict_operation_lock are held,
+                                        otherwise false*/
 	const char*	old_name,	/*!< in: old table name */
 	const char*	new_name,	/*!< in: new table name */
 	char*		errstr,		/*!< out: error string if != DB_SUCCESS
 					is returned */
 	size_t		errstr_sz);	/*!< in: errstr size */
 
+/*********************************************************************//**
+Renames an index in InnoDB persistent stats storage.
+This function creates its own transaction and commits it.
+@return DB_SUCCESS or error code. DB_STATS_DO_NOT_EXIST will be returned
+if the persistent stats do not exist. */
+dberr_t
+dict_stats_rename_index(
+/*====================*/
+	const dict_table_t*	table,		/*!< in: table whose index
+						is renamed */
+	const char*		old_index_name,	/*!< in: old index name */
+	const char*		new_index_name)	/*!< in: new index name */
+	MY_ATTRIBUTE((warn_unused_result));
+
 #ifndef UNIV_NONINL
 #include "dict0stats.ic"
 #endif
+
+#ifdef UNIV_ENABLE_UNIT_TEST_DICT_STATS
+void test_dict_stats_all();
+#endif /* UNIV_ENABLE_UNIT_TEST_DICT_STATS */
 
 #endif /* dict0stats_h */

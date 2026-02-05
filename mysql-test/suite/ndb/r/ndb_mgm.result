@@ -1,27 +1,23 @@
-Cluster Configuration
----------------------
-[ndbd(NDB)]	2 node(s)
-id=1	@127.0.0.1  (MYSQL_VERSION NDB_VERSION, Nodegroup: 0, Master)
+ndbd(s)
+id=1	@127.0.0.1  (MYSQL_VERSION NDB_VERSION, Nodegroup: 0, *)
 id=2	@127.0.0.1  (MYSQL_VERSION NDB_VERSION, Nodegroup: 0)
-
-[ndb_mgmd(MGM)]	1 node(s)
+ndb_mgmd(s)
 id=3	@127.0.0.1  (MYSQL_VERSION NDB_VERSION)
-
-[mysqld(API)]	14 node(s)
-id=16	@127.0.0.1  (MYSQL_VERSION NDB_VERSION)
-id=32	@127.0.0.1  (MYSQL_VERSION NDB_VERSION)
-id=48	@127.0.0.1  (MYSQL_VERSION NDB_VERSION)
-id=49	@127.0.0.1  (MYSQL_VERSION NDB_VERSION)
-id=63	@127.0.0.1  (MYSQL_VERSION NDB_VERSION)
-id=127	@127.0.0.1  (MYSQL_VERSION NDB_VERSION)
-id=192 (not connected, accepting connect from localhost)
-id=228 (not connected, accepting connect from localhost)
-id=229 (not connected, accepting connect from localhost)
-id=230 (not connected, accepting connect from localhost)
-id=231 (not connected, accepting connect from localhost)
-id=232 (not connected, accepting connect from localhost)
-id=233 (not connected, accepting connect from localhost)
-id=255 (not connected, accepting connect from localhost)
+mysqld(s)
+id=X	@127.0.0.1  (MYSQL_VERSION NDB_VERSION)
+id=X	@127.0.0.1  (MYSQL_VERSION NDB_VERSION)
+id=X	@127.0.0.1  (MYSQL_VERSION NDB_VERSION)
+id=X	@127.0.0.1  (MYSQL_VERSION NDB_VERSION)
+id=X	@127.0.0.1  (MYSQL_VERSION NDB_VERSION)
+id=X	@127.0.0.1  (MYSQL_VERSION NDB_VERSION)
+id=X (not connected, accepting connect from localhost)
+id=X (not connected, accepting connect from localhost)
+id=X (not connected, accepting connect from localhost)
+id=X (not connected, accepting connect from localhost)
+id=X (not connected, accepting connect from localhost)
+id=X (not connected, accepting connect from localhost)
+id=X (not connected, accepting connect from localhost)
+id=X (not connected, accepting connect from localhost)
 
 Missing report type specifier
 ERROR: missing report type specifier!
@@ -56,6 +52,18 @@ ERROR: node 17 is not a NDB node!
 Request memoryusage from illegal nodeid 49
 ERROR: illegal nodeid 49!
 
+For the following, we want to be running ndbmtd with multiple
+LQH threads
+NDBD (1 instance) is ok, but 2 instances indicates ndbmtd
+with proxy and only 1 real instance, not interesting.
+cnf file should make this impossible
+Following query should have no results
+select   node_id, count(1) as instances 
+from   ndbinfo.threadblocks 
+where   block_name="BACKUP" 
+group by node_id 
+having   instances=2;
+node_id	instances
 ALL REPORT BACKUPSTATUS
 Node 1: Backup not started
 Node 2: Backup not started
@@ -88,6 +96,13 @@ Illegal argument -1
 ERROR: Illegal value '-1' in argument to signal.
 (Value must be between 0 and 0xffffffff.)
 
+Robustness issue with bug#14537622
+Data node must not crash here
+Sending dump signal with data:
+0x000003e8 0x000003e8 
+Sending dump signal with data:
+0x000003e8 0x000003e8 
+
 ALL DUMP 1
 Sending dump signal with data:
 0x00000001 
@@ -113,3 +128,60 @@ ERROR: Too many arguments, max 25 allowed
 
 test all report eventlog
 note: test within quotes...
+Missing argument
+ERROR: Missing argument(s).
+# Unknown argument
+Invalid argument.
+# CLUSTERLOG INFO
+Severities enabled: INFO WARNING ERROR CRITICAL ALERT 
+# CLUSTERLOG OFF
+Cluster logging is disabled
+# Should be OFF now
+Cluster logging is disabled.
+# CLUSTERLOG ON
+Cluster logging is enabled.
+# Should be ON now
+Severities enabled: INFO WARNING ERROR CRITICAL ALERT 
+# CLUSTERLOG TOGGLE
+Cluster logging is disabled
+# Should be OFF now
+Cluster logging is disabled.
+# CLUSTERLOG TOGGLE
+Cluster logging is enabled.
+# Should be ON now
+Severities enabled: INFO WARNING ERROR CRITICAL ALERT 
+# Turn off severity INFO, ERROR and ALERT
+ALERT disabled
+INFO disabled
+ERROR disabled
+# Should not list ALERT, INFO or ERROR
+Severities enabled: WARNING CRITICAL 
+# Turn off reaining severities
+WARNING disabled
+CRITICAL disabled
+# Should not list anything
+Severities enabled: 
+# Back to default severity
+WARNING enabled
+CRITICAL enabled
+ALERT enabled
+INFO enabled
+ERROR enabled
+# Should list default
+Severities enabled: INFO WARNING ERROR CRITICAL ALERT 
+# Bogus severity
+Invalid severity level: bogus1
+# Should list default
+Severities enabled: INFO WARNING ERROR CRITICAL ALERT 
+# Bug 11752837: start backup wait started should not print completion logs
+Waiting for started, this may take several minutes
+Node 1: Backup 1 started from node 3
+# Bug 16585455: start backup with backup ID out of range
+Invalid command: BACKUP 201303271430 WAIT COMPLETED
+Backup ID out of range [1 - 4294967294]
+Type HELP for help.
+
+# Test 1/2 for Bug#16585497: abort backup with backup ID > 2^31
+Abort of backup 2147483648 ordered
+# Test 2/2 for Bug#16585497: abort backup with backup ID out of range
+Invalid arguments: <BackupId> out of range [1-4294967294]

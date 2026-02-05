@@ -1,9 +1,13 @@
+set @orig_sql_mode= @@sql_mode;
+set sql_mode= (select replace(@@sql_mode,'NO_AUTO_CREATE_USER',''));
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 drop table if exists t1,t2;
 drop view if exists v1,v2;
 drop function if exists f1;
 drop function if exists f2;
 use INFORMATION_SCHEMA;
-show tables where Tables_in_information_schema NOT LIKE 'Innodb%';
+show tables where Tables_in_information_schema NOT LIKE 'Innodb%' and Tables_in_information_schema NOT LIKE 'ndb%';
 Tables_in_information_schema
 CHARACTER_SETS
 COLLATIONS
@@ -28,7 +32,6 @@ SCHEMATA
 SCHEMA_PRIVILEGES
 SESSION_STATUS
 SESSION_VARIABLES
-SQL_FILTER_INFO
 STATISTICS
 TABLES
 TABLESPACES
@@ -37,15 +40,6 @@ TABLE_PRIVILEGES
 TRIGGERS
 USER_PRIVILEGES
 VIEWS
-TABLE_STATISTICS
-INDEX_STATISTICS
-THREAD_GROUP_STATUS
-TokuDB_file_map
-TokuDB_trx
-TokuDB_locks
-TokuDB_lock_waits
-TokuDB_fractal_tree_block_map
-TokuDB_fractal_tree_info
 show tables from INFORMATION_SCHEMA like 'T%';
 Tables_in_information_schema (T%)
 TABLES
@@ -53,20 +47,14 @@ TABLESPACES
 TABLE_CONSTRAINTS
 TABLE_PRIVILEGES
 TRIGGERS
-TABLE_STATISTICS
-THREAD_GROUP_STATUS
-TokuDB_file_map
-TokuDB_trx
-TokuDB_locks
-TokuDB_lock_waits
-TokuDB_fractal_tree_block_map
-TokuDB_fractal_tree_info
 create database `inf%`;
 create database mbase;
 use `inf%`;
 show tables;
 Tables_in_inf%
 grant all privileges on `inf%`.* to 'mysqltest_1'@'localhost';
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
 grant all privileges on `mbase`.* to 'mysqltest_1'@'localhost';
 create table t1 (f1 int);
 create function func1(curr_int int) returns int
@@ -159,7 +147,7 @@ View	Create View	character_set_client	collation_connection
 v6	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v6` AS select `t1`.`f1` AS `f1` from `t1`	latin1	latin1_swedish_ci
 show create view testdb_1.v7;
 View	Create View	character_set_client	collation_connection
-v7	CREATE ALGORITHM=UNDEFINED DEFINER=`no_such_user`@`no_such_host` SQL SECURITY DEFINER VIEW `v7` AS select `testdb_1`.`t2`.`f1` AS `f1` from `t2`	latin1	latin1_swedish_ci
+v7	CREATE ALGORITHM=UNDEFINED DEFINER=`no_such_user`@`no_such_host` SQL SECURITY DEFINER VIEW `v7` AS select `t2`.`f1` AS `f1` from `t2`	latin1	latin1_swedish_ci
 Warnings:
 Note	1449	The user specified as a definer ('no_such_user'@'no_such_host') does not exist
 show fields from testdb_1.v7;
@@ -191,7 +179,7 @@ Warnings:
 Note	1449	The user specified as a definer ('no_such_user'@'no_such_host') does not exist
 show create view testdb_1.v7;
 View	Create View	character_set_client	collation_connection
-v7	CREATE ALGORITHM=UNDEFINED DEFINER=`no_such_user`@`no_such_host` SQL SECURITY DEFINER VIEW `v7` AS select `testdb_1`.`t2`.`f1` AS `f1` from `t2`	latin1	latin1_swedish_ci
+v7	CREATE ALGORITHM=UNDEFINED DEFINER=`no_such_user`@`no_such_host` SQL SECURITY DEFINER VIEW `v7` AS select `t2`.`f1` AS `f1` from `t2`	latin1	latin1_swedish_ci
 Warnings:
 Note	1449	The user specified as a definer ('no_such_user'@'no_such_host') does not exist
 revoke insert(f1) on v3 from testdb_2@localhost;
@@ -250,6 +238,8 @@ create database testdb_1;
 create table testdb_1.t1 (a int);
 create view testdb_1.v1 as select * from testdb_1.t1;
 grant show view on testdb_1.* to mysqltest_1@localhost;
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
 grant select on testdb_1.v1 to mysqltest_1@localhost;
 select table_schema, table_name, view_definition from information_schema.views
 where table_name='v1';
@@ -267,3 +257,6 @@ show create view testdb_1.v1;
 ERROR 42000: SELECT command denied to user 'mysqltest_1'@'localhost' for table 'v1'
 drop user mysqltest_1@localhost;
 drop database testdb_1;
+set sql_mode= @orig_sql_mode;
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.

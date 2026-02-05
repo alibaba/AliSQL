@@ -1,13 +1,20 @@
-# Copyright (c) 2008, 2010, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; version 2 of the License.
+# it under the terms of the GNU General Public License, version 2.0,
+# as published by the Free Software Foundation.
+#
+# This program is also distributed with certain software (including
+# but not limited to OpenSSL) that is licensed under separate terms,
+# as designated in a particular file or component or in included license
+# documentation.  The authors of MySQL hereby grant you an additional
+# permission to link the program and your derivative works with the
+# separately licensed software that they have included with MySQL.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# GNU General Public License, version 2.0, for more details.
 #
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
@@ -17,12 +24,13 @@
 INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/storage/ndb/src/mgmapi)
 INCLUDE(${CMAKE_SOURCE_DIR}/storage/ndb/config/type_kernel.cmake)
 
-ADD_LIBRARY(ndbkernel STATIC
+ADD_CONVENIENCE_LIBRARY(ndbkernel
     VMSignal.cpp
     Emulator.cpp
     Configuration.cpp
     WatchDog.cpp
     SectionReader.cpp
+    SegmentList.cpp
     Mutex.cpp
     SafeCounter.cpp
     Rope.cpp
@@ -41,7 +49,7 @@ ADD_LIBRARY(ndbkernel STATIC
     mt_thr_config.cpp
 )
 
-ADD_LIBRARY(ndbsched STATIC
+ADD_CONVENIENCE_LIBRARY(ndbsched
     TimeQueue.cpp
     ThreadConfig.cpp
     FastScheduler.cpp
@@ -52,8 +60,8 @@ ADD_LIBRARY(ndbsched STATIC
     dummy_nonmt.cpp
 )
 
-IF(NDB_BUILD_NDBMTD)
-  ADD_LIBRARY(ndbsched_mt STATIC
+IF(WITH_NDBMTD)
+  ADD_CONVENIENCE_LIBRARY(ndbsched_mt
     SimulatedBlock_mt.cpp
     TransporterCallback_mt.cpp
     LongSignal_mt.cpp
@@ -62,8 +70,33 @@ IF(NDB_BUILD_NDBMTD)
     dummy_mt.cpp)
 ENDIF()
 
+ADD_CONVENIENCE_LIBRARY(ndbtest
+    test_context.cpp
+    ../blocks/dbtup/tuppage.cpp
+)
+
 ADD_EXECUTABLE(mt_thr_config-t mt_thr_config.cpp)
 SET_TARGET_PROPERTIES(mt_thr_config-t
                       PROPERTIES COMPILE_FLAGS "-DTEST_MT_THR_CONFIG")
 TARGET_LINK_LIBRARIES(mt_thr_config-t ndbgeneral)
 
+FOREACH(testprog CountingPool DynArr256 IntrusiveList LHLevel)
+  ADD_EXECUTABLE(${testprog}-t ${testprog}.cpp)
+  SET_TARGET_PROPERTIES(${testprog}-t PROPERTIES COMPILE_FLAGS "-DTAP_TEST")
+  TARGET_LINK_LIBRARIES(${testprog}-t ndbtest ndbkernel ndbsched ndberror
+                ndbtransport ndbmgmcommon ndbmgmapi ndbportlib ndbgeneral)
+ENDFOREACH(testprog)
+
+# Todo : Fix
+#FOREACH(testprog SegmentList)
+#  ADD_EXECUTABLE(${testprog}-t ${testprog}.cpp)
+#  SET_TARGET_PROPERTIES(${testprog}-t PROPERTIES COMPILE_FLAGS "-DTAP_TEST")
+#  TARGET_LINK_LIBRARIES(${testprog}-t ndbtest ndbkernel ndbsched ndberror
+#                ndbtransport ndbmgmcommon ndbmgmapi ndbportlib ndbgeneral)
+#ENDFOREACH(testprog)
+
+IF(WITH_NDBMTD)
+  ADD_EXECUTABLE(mt-send-t mt-send-t.cpp)
+  TARGET_LINK_LIBRARIES(mt-send-t ndbtest ndbkernel ndbsched ndberror
+                 ndbtransport ndbmgmcommon ndbmgmapi ndbportlib ndbgeneral)
+ENDIF()

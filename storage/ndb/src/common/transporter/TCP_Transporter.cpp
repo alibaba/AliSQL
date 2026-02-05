@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -95,23 +102,27 @@ TCP_Transporter::TCP_Transporter(TransporterRegistry &t_reg,
 	      0, false, 
 	      conf->checksum,
 	      conf->signalId,
-              conf->tcp.sendBufferSize)
+	      conf->tcp.sendBufferSize),
+  reportFreq(4096),
+  receiveCount(0), receiveSize(0),
+  sendCount(0), sendSize(0), 
+  receiveBuffer()
 {
   maxReceiveSize = conf->tcp.maxReceiveSize;
   
   // Initialize member variables
   my_socket_invalidate(&theSocket);
 
-  sendCount      = receiveCount = 0;
-  sendSize       = receiveSize  = 0;
-  reportFreq     = 4096; 
-  
   sockOptNodelay    = 1;
-  setIf(sockOptRcvBufSize, conf->tcp.tcpRcvBufSize, 70080);
-  setIf(sockOptSndBufSize, conf->tcp.tcpSndBufSize, 71540);
+  setIf(sockOptRcvBufSize, conf->tcp.tcpRcvBufSize, 0);
+  setIf(sockOptSndBufSize, conf->tcp.tcpSndBufSize, 0);
   setIf(sockOptTcpMaxSeg, conf->tcp.tcpMaxsegSize, 0);
 
   m_overload_limit = overload_limit(conf);
+  /**
+   * Always set slowdown limit to 60% of overload limit
+   */
+  m_slowdown_limit = m_overload_limit * 6 / 10;
 }
 
 
@@ -137,7 +148,15 @@ TCP_Transporter::~TCP_Transporter() {
     doDisconnect();
   
   // Delete receive buffer!!
+  assert(!isConnected());
   receiveBuffer.destroy();
+}
+
+void
+TCP_Transporter::resetBuffers()
+{
+  assert(!isConnected());
+  receiveBuffer.clear();
 }
 
 bool TCP_Transporter::connect_server_impl(NDB_SOCKET_TYPE sockfd)
@@ -230,8 +249,15 @@ TCP_Transporter::pre_connect_options(NDB_SOCKET_TYPE sockfd)
 void
 TCP_Transporter::setSocketOptions(NDB_SOCKET_TYPE socket)
 {
-  set_get(socket, SOL_SOCKET, SO_RCVBUF, "SO_RCVBUF", sockOptRcvBufSize);
-  set_get(socket, SOL_SOCKET, SO_SNDBUF, "SO_SNDBUF", sockOptSndBufSize);
+  if (sockOptRcvBufSize)
+  {
+    set_get(socket, SOL_SOCKET, SO_RCVBUF, "SO_RCVBUF", sockOptRcvBufSize);
+  }
+  if (sockOptSndBufSize)
+  {
+    set_get(socket, SOL_SOCKET, SO_SNDBUF, "SO_SNDBUF", sockOptSndBufSize);
+  }
+
   set_get(socket, IPPROTO_TCP, TCP_NODELAY, "TCP_NODELAY", sockOptNodelay);
   set_get(socket, SOL_SOCKET, SO_KEEPALIVE, "SO_KEEPALIVE", 1);
 
@@ -264,7 +290,6 @@ TCP_Transporter::send_is_possible(NDB_SOCKET_TYPE fd,int timeout_millisec) const
   if (!my_socket_valid(fd))
     return false;
 
-  poller.clear();
   poller.add(fd, false, true, false);
 
   if (poller.poll_unsafe(timeout_millisec) <= 0)
@@ -277,14 +302,14 @@ TCP_Transporter::send_is_possible(NDB_SOCKET_TYPE fd,int timeout_millisec) const
                                  (!((sz == -1) && ((e == SOCKET_EAGAIN) || (e == SOCKET_EWOULDBLOCK) || (e == SOCKET_EINTR)))))
 
 
-int
+bool
 TCP_Transporter::doSend() {
   struct iovec iov[64];
   Uint32 cnt = fetch_send_iovec_data(iov, NDB_ARRAY_SIZE(iov));
 
   if (cnt == 0)
   {
-    return 0;
+    return false;
   }
 
   Uint32 sum = 0;
@@ -313,12 +338,14 @@ TCP_Transporter::doSend() {
     int nBytesSent = (int)my_socket_writev(theSocket, iov+pos, iovcnt);
     assert(nBytesSent <= (int)remain);
 
-    if (Uint32(nBytesSent) == remain)
+    if (Uint32(nBytesSent) == remain)  //Completed this send
     {
       sum_sent += nBytesSent;
-      goto ok;
+      assert(sum >= sum_sent);
+      remain = sum - sum_sent;
+      break;
     }
-    else if (nBytesSent > 0)
+    else if (nBytesSent > 0)           //Sent some, more pending
     {
       sum_sent += nBytesSent;
       remain -= nBytesSent;
@@ -334,28 +361,16 @@ TCP_Transporter::doSend() {
         cnt--;
       }
 
-      if (nBytesSent)
+      if (nBytesSent > 0)
       {
         assert(iov[pos].iov_len > Uint32(nBytesSent));
         iov[pos].iov_len -= nBytesSent;
         iov[pos].iov_base = ((char*)(iov[pos].iov_base))+nBytesSent;
       }
-      continue;
     }
-    else
+    else                               //Send failed, terminate
     {
-      int err = my_socket_errno();
-      if (!(DISCONNECT_ERRNO(err, nBytesSent)))
-      {
-        if (sum_sent)
-        {
-          goto ok;
-        }
-        else
-        {
-          return remain;
-        }
-      }
+      const int err = my_socket_errno();
 
 #if defined DEBUG_TRANSPORTER
       g_eventLogger->error("Send Failure(disconnect==%d) to node = %d "
@@ -365,16 +380,23 @@ TCP_Transporter::doSend() {
                            remoteNodeId, nBytesSent, my_socket_errno(),
                            (char*)ndbstrerror(err));
 #endif
-      do_disconnect(err);
-      return 0;
+
+      if ((DISCONNECT_ERRNO(err, nBytesSent)))
+      {
+        do_disconnect(err); //Initiate pending disconnect
+        remain = 0;
+      }
+      break;
     }
   }
 
-ok:
-  assert(sum >= sum_sent);
-  iovec_data_sent(sum_sent);
+  if (sum_sent > 0)
+  {
+    iovec_data_sent(sum_sent);
+  }
   sendCount += send_cnt;
   sendSize  += sum_sent;
+  m_bytes_sent += sum_sent;
   if(sendCount >= reportFreq)
   {
     get_callback_obj()->reportSendLen(remoteNodeId, sendCount, sendSize);
@@ -382,11 +404,12 @@ ok:
     sendSize  = 0;
   }
 
-  return sum - sum_sent; // 0 if every thing flushed else >0
+  return (remain>0); // false if nothing remains or disconnected, else true
 }
 
 int
-TCP_Transporter::doReceive() {
+TCP_Transporter::doReceive(TransporterReceiveHandle& recvdata)
+{
   // Select-function must return the socket for read
   // before this method is called
   // It reads the external TCP/IP interface once
@@ -415,10 +438,11 @@ TCP_Transporter::doReceive() {
       
       receiveCount ++;
       receiveSize  += nBytesRead;
+      m_bytes_received += nBytesRead;
       
       if(receiveCount == reportFreq){
-	get_callback_obj()->reportReceiveLen(remoteNodeId,
-                                             receiveCount, receiveSize);
+        recvdata.reportReceiveLen(remoteNodeId,
+                                  receiveCount, receiveSize);
 	receiveCount = 0;
 	receiveSize  = 0;
       }
@@ -442,11 +466,11 @@ TCP_Transporter::doReceive() {
 }
 
 void
-TCP_Transporter::disconnectImpl() {
+TCP_Transporter::disconnectImpl()
+{
   get_callback_obj()->lock_transporter(remoteNodeId);
 
   NDB_SOCKET_TYPE sock = theSocket;
-  receiveBuffer.clear();
   my_socket_invalidate(&theSocket);
 
   get_callback_obj()->unlock_transporter(remoteNodeId);

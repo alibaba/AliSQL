@@ -1,13 +1,20 @@
-/* Copyright (c) 2000, 2014, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
@@ -19,20 +26,7 @@
 #ifndef _my_base_h
 #define _my_base_h
 
-#ifndef stdin				/* Included first in handler */
-#define CHSIZE_USED
-#include <my_global.h>
-#include <my_dir.h>			/* This includes types */
-#include <my_sys.h>
-#include <m_string.h>
-#include <errno.h>
-
-#ifndef EOVERFLOW
-#define EOVERFLOW 84
-#endif
-
-#endif	/* stdin */
-#include <my_list.h>
+#include "my_global.h"
 
 /* The following is bits in the flag parameter to ha_open() */
 
@@ -88,7 +82,8 @@ enum ha_rkey_function {
   HA_READ_MBR_INTERSECT,          /* Minimum Bounding Rectangle intersect */
   HA_READ_MBR_WITHIN,             /* Minimum Bounding Rectangle within */
   HA_READ_MBR_DISJOINT,           /* Minimum Bounding Rectangle disjoint */
-  HA_READ_MBR_EQUAL               /* Minimum Bounding Rectangle equal */
+  HA_READ_MBR_EQUAL,              /* Minimum Bounding Rectangle equal */
+  HA_READ_INVALID= -1             /* Invalid enumeration value, always last. */
 };
 
 	/* Key algorithm types */
@@ -260,14 +255,11 @@ enum ha_base_keytype {
 #define HA_SPATIAL		1024    /* For spatial search */
 #define HA_NULL_ARE_EQUAL	2048	/* NULL in key are cmp as equal */
 #define HA_GENERATED_KEY	8192	/* Automaticly generated key */
-#define HA_INVISIBLE_KEY        (1<<30) /* This key is visible */
-#define HA_CLUSTERING           (1<<31) /* TokuDB CLUSTERING key */
 
         /* The combination of the above can be used for key type comparison. */
 #define HA_KEYFLAG_MASK (HA_NOSAME | HA_PACK_KEY | HA_AUTO_KEY | \
                          HA_BINARY_PACK_KEY | HA_FULLTEXT | HA_UNIQUE_CHECK | \
-                         HA_SPATIAL | HA_NULL_ARE_EQUAL | HA_GENERATED_KEY  | \
-                         HA_CLUSTERING)
+                         HA_SPATIAL | HA_NULL_ARE_EQUAL | HA_GENERATED_KEY)
 
 /*
   Key contains partial segments.
@@ -280,6 +272,20 @@ enum ha_base_keytype {
   This flag can be calculated -- it's based on key lengths comparison.
 */
 #define HA_KEY_HAS_PART_KEY_SEG 65536
+/**
+  Key was renamed (or is result of renaming a key).
+
+  This is another flag internal to SQL-layer.
+  Used by in-place ALTER TABLE implementation.
+
+  @note This flag can be set for keys which have other changes than
+        simple renaming as well. So from the point of view of storage
+        engine such key might have to be dropped and re-created with
+        new definition.
+*/
+#define HA_KEY_RENAMED          (1 << 17)
+/** Set if a key is on any virtual generated columns */
+#define HA_VIRTUAL_GEN_KEY      (1 << 18)
 
 	/* Automatic bits in key-flag */
 
@@ -422,7 +428,7 @@ is the global server default. */
 #define HA_ERR_INDEX_FILE_FULL	136	/* No more room in file */
 #define HA_ERR_END_OF_FILE	137	/* end in next/prev/first/last */
 #define HA_ERR_UNSUPPORTED	138	/* unsupported extension used */
-#define HA_ERR_TO_BIG_ROW	139	/* Too big row */
+#define HA_ERR_TOO_BIG_ROW	139	/* Too big row */
 #define HA_WRONG_CREATE_OPTION	140	/* Wrong create option */
 #define HA_ERR_FOUND_DUPP_UNIQUE 141	/* Dupplicate unique on write */
 #define HA_ERR_UNKNOWN_CHARSET	 142	/* Can't open charset */
@@ -483,17 +489,44 @@ is the global server default. */
 #define HA_ERR_TABLE_IN_FK_CHECK  183    /* Table being used in foreign key check */
 #define HA_ERR_TABLESPACE_EXISTS  184    /* The tablespace existed in storage engine */
 #define HA_ERR_TOO_MANY_FIELDS    185    /* Table has too many columns */
-#define HA_ERR_ROW_IN_WRONG_PARTITION 186 /* Row in wrong partition */
-#define HA_ERR_INNODB_READ_ONLY   187    /* InnoDB is in read only mode. */
+#define HA_ERR_ROW_IN_WRONG_PARTITION  186  /* Row in wrong partition */
+#define HA_ERR_INNODB_READ_ONLY        187  /* InnoDB is in read only mode. */
 #define HA_ERR_FTS_EXCEED_RESULT_CACHE_LIMIT  188 /* FTS query exceeds result cache limit */
-#define HA_ERR_TEMP_FILE_WRITE_FAILURE	189	/* Temporary file write failure */
-#define HA_ERR_INNODB_FORCED_RECOVERY 190	/* Innodb is in force recovery mode */
-#define HA_ERR_FTS_TOO_MANY_WORDS_IN_PHRASE	191 /* Too many words in a phrase */
-#define HA_ERR_SEQUENCE_RUN_OUT         192     /* Sequence has been run out */
-#define HA_ERR_SEQUENCE_INVALID         193     /* Sequence structure or number is invalid.*/
-#define HA_ERR_SEQUENCE_NOT_DEFINED     194     /* Sequence is not yet defined in this session. */
-#define HA_ERR_SEQUENCE_ACCESS_ERROR    195     /* Sequence access error */
-#define HA_ERR_LAST               195    /* Copy of last error nr */
+#define HA_ERR_TEMP_FILE_WRITE_FAILURE 189  /* Temporary file write failure */
+#define HA_ERR_INNODB_FORCED_RECOVERY  190  /* Innodb is in force recovery mode */
+#define HA_ERR_FTS_TOO_MANY_WORDS_IN_PHRASE   191 /* Too many words in a phrase */
+#define HA_ERR_FK_DEPTH_EXCEEDED       192  /* FK cascade depth exceeded */
+#define HA_MISSING_CREATE_OPTION       193  /* Option Missing during Create */
+#define HA_ERR_SE_OUT_OF_MEMORY        194  /* Out of memory in storage engine */
+#define HA_ERR_TABLE_CORRUPT           195  /* Table/Clustered index is corrupted. */
+#define HA_ERR_QUERY_INTERRUPTED       196  /* The query was interrupted */
+#define HA_ERR_TABLESPACE_MISSING      197  /* Missing Tablespace */
+#define HA_ERR_TABLESPACE_IS_NOT_EMPTY 198  /* Tablespace is not empty */
+#define HA_ERR_WRONG_FILE_NAME         199  /* Invalid Filename */
+#define HA_ERR_NOT_ALLOWED_COMMAND     200  /* Operation is not allowed */
+#define HA_ERR_COMPUTE_FAILED          201  /* Compute generated column value failed */
+#define HA_ERR_FTS_TOO_MANY_NESTED_EXP 202  /* Too many sub-expression in search string */
+
+/* These errors are only for Sequence Engine. */
+#define HA_ERR_SEQUENCE_RUN_OUT 203        /* Sequence has run out */
+#define HA_ERR_SEQUENCE_INVALID 204        /* Structure or number is invalid */
+#define HA_ERR_SEQUENCE_NOT_DEFINED 205    /* Sequence is not yet defined */
+#define HA_ERR_SEQUENCE_ACCESS_FAILURE 206 /* Sequence access failure*/
+#define HA_ERR_LAST                    207  /* Copy of last error nr */
+
+/* Duckdb errors begin */
+#define HA_DUCKDB_CREATE_ERROR 207
+#define HA_DUCKDB_DML_ERROR 208
+#define HA_DUCKDB_OPEN_ERROR 209
+#define HA_DUCKDB_UNSUPPORTED_DATA_TYPE 210
+#define HA_DUCKDB_RENAME_ERROR 211
+#define HA_DUCKDB_DROP_TABLE_ERROR 212
+#define HA_DUCKDB_TRUNCATE_TABLE_ERROR 213
+#define HA_DUCKDB_REGISTER_TRX_ERROR 214
+#define HA_DUCKDB_APPEND_ERROR 215
+/* Duckdb errors end */
+
+#define HA_ERR_LAST                    215  /* Copy of last error nr */
 
 /* Number of different errors */
 #define HA_ERR_ERRORS            (HA_ERR_LAST - HA_ERR_FIRST + 1)
@@ -563,7 +596,7 @@ enum data_file_type {
 
 /* For key ranges */
 
-enum key_range_flag {
+enum key_range_flags {
   NO_MIN_RANGE=      1 << 0,                    ///< from -inf
   NO_MAX_RANGE=      1 << 1,                    ///< to +inf
   /*  X < key, i.e. not including the left endpoint */
@@ -587,7 +620,11 @@ enum key_range_flag {
     least one keypart the condition is "keypart IS NULL".
   */
   NULL_RANGE=        1 << 6,
-  GEOM_FLAG=         1 << 7,                     ///< GIS
+  /**
+    This flag means that the index is an rtree index, and the interval is
+    specified using HA_READ_MBR_XXX defined in enum ha_rkey_function.
+  */
+  GEOM_FLAG=         1 << 7,
   /* Deprecated, currently used only by NDB at row retrieval */
   SKIP_RANGE=        1 << 8,
   /* 
@@ -616,13 +653,8 @@ typedef struct st_key_multi_range
 
 
 /* For number of records */
-#ifdef BIG_TABLES
 #define rows2double(A)	ulonglong2double(A)
 typedef my_off_t	ha_rows;
-#else
-#define rows2double(A)	(double) (A)
-typedef ulong		ha_rows;
-#endif
 
 #define HA_POS_ERROR	(~ (ha_rows) 0)
 #define HA_OFFSET_ERROR	(~ (my_off_t) 0)
@@ -630,7 +662,7 @@ typedef ulong		ha_rows;
 #if SYSTEM_SIZEOF_OFF_T == 4
 #define MAX_FILE_SIZE	INT_MAX32
 #else
-#define MAX_FILE_SIZE	LONGLONG_MAX
+#define MAX_FILE_SIZE	LLONG_MAX
 #endif
 
 #define HA_VARCHAR_PACKLENGTH(field_length) ((field_length) < 256 ? 1 :2)

@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -90,7 +97,7 @@ extern EventLogger * g_eventLogger;
 #define MGM_END() \
  { 0, \
    0, \
-   ParserRow<MgmApiSession>::Arg, \
+   ParserRow<MgmApiSession>::End, \
    ParserRow<MgmApiSession>::Int, \
    ParserRow<MgmApiSession>::Optional, \
    ParserRow<MgmApiSession>::IgnoreMinMax, \
@@ -170,6 +177,7 @@ ParserRow<MgmApiSession> commands[] = {
   MGM_CMD("insert error", &MgmApiSession::insertError, ""),
     MGM_ARG("node", Int, Mandatory, "Node to receive error"),
     MGM_ARG("error", Int, Mandatory, "Errorcode to insert"),
+    MGM_ARG("extra", Int, Optional, "Extra info to error insert"),
 
   MGM_CMD("set trace", &MgmApiSession::setTrace, ""),
     MGM_ARG("node", Int, Mandatory, "Node"),
@@ -310,16 +318,11 @@ ParserRow<MgmApiSession> commands[] = {
     MGM_ARG("type", Int, Mandatory, "Type of event"),
     MGM_ARG("nodes", String, Optional, "Nodes to include"),
 
-  MGM_END()
-};
+  MGM_CMD("set ports", &MgmApiSession::set_ports, ""),
+    MGM_ARG("node", Int, Mandatory, "Node which port list concerns"),
+    MGM_ARG("num_ports", Int, Mandatory, "Number of ports being set"),
 
-struct PurgeStruct
-{
-  NodeBitmask free_nodes;/* free nodes as reported
-			  * by ndbd in apiRegReqConf
-			  */
-  BaseString *str;
-  NDB_TICKS tick;
+  MGM_END()
 };
 
 extern int g_errorInsert;
@@ -328,23 +331,29 @@ extern int g_errorInsert;
 #define SLEEP_ERROR_INSERTED(x) if(ERROR_INSERTED(x)){NdbSleep_SecSleep(10);}
 
 MgmApiSession::MgmApiSession(class MgmtSrvr & mgm, NDB_SOCKET_TYPE sock, Uint64 session_id)
-  : SocketServer::Session(sock), m_mgmsrv(mgm), m_name("unknown:0")
+  : SocketServer::Session(sock), m_mgmsrv(mgm),
+    m_session_id(session_id), m_name("unknown:0")
 {
   DBUG_ENTER("MgmApiSession::MgmApiSession");
   m_input = new SocketInputStream(sock, SOCKET_TIMEOUT);
   m_output = new BufferedSockOutputStream(sock, SOCKET_TIMEOUT);
-  m_parser = new Parser_t(commands, *m_input, true, true, true);
-  m_allocated_resources= new MgmtSrvr::Allocated_resources(m_mgmsrv);
+  m_parser = new Parser_t(commands, *m_input);
   m_stopSelf= 0;
   m_ctx= NULL;
-  m_session_id= session_id;
   m_mutex= NdbMutex_Create();
   m_errorInsert= 0;
 
   struct sockaddr_in addr;
   SOCKET_SIZE_TYPE addrlen= sizeof(addr);
   if (my_getpeername(sock, (struct sockaddr*)&addr, &addrlen) == 0)
-    m_name.assfmt("%s:%d", inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
+  {
+    char addr_buf[NDB_ADDR_STRLEN];
+    char *addr_str = Ndb_inet_ntop(AF_INET,
+                                   static_cast<void*>(&addr.sin_addr),
+                                   addr_buf,
+                                   (socklen_t)sizeof(addr_buf));
+    m_name.assfmt("%s:%d", addr_str, ntohs(addr.sin_port));
+  }
   DBUG_PRINT("info", ("new connection from: %s", m_name.c_str()));
 
   DBUG_VOID_RETURN;
@@ -359,8 +368,6 @@ MgmApiSession::~MgmApiSession()
     delete m_output;
   if (m_parser)
     delete m_parser;
-  if (m_allocated_resources)
-    delete m_allocated_resources;
   if(my_socket_valid(m_socket))
   {
     NDB_CLOSE_SOCKET(m_socket);
@@ -473,38 +480,38 @@ MgmApiSession::get_nodeid(Parser_t::Context &,
 			  const class Properties &args)
 {
   Uint32 version, nodeid= 0, nodetype= 0xff;
-  Uint32 timeout= 20;  // default seconds timeout
-  const char * transporter;
-  const char * user;
-  const char * password;
-  const char * public_key;
+  Uint32 timeout= 20;  // timeout in seconds
   const char * endian= NULL;
   const char * name= NULL;
   Uint32 log_event= 1;
-  bool log_event_version;
-  union { long l; char c[sizeof(long)]; } endian_check;
 
   args.get("version", &version);
   args.get("nodetype", &nodetype);
-  args.get("transporter", &transporter);
+  // transporter
   args.get("nodeid", &nodeid);
-  args.get("user", &user);
-  args.get("password", &password);
-  args.get("public key", &public_key);
+  // user
+  // password
+  // public key
   args.get("endian", &endian);
   args.get("name", &name);
   args.get("timeout", &timeout);
   /* for backwards compatability keep track if client uses new protocol */
-  log_event_version= args.get("log_event", &log_event);
+  const bool log_event_version= args.get("log_event", &log_event);
 
   m_output->println("get nodeid reply");
 
-  endian_check.l = 1;
-  if(endian 
-     && strcmp(endian,(endian_check.c[sizeof(long)-1])?"big":"little")!=0) {
-    m_output->println("result: Node does not have the same endianness as the management server.");
-    m_output->println("%s", "");
-    return;
+  // Check that client says it's using same endian
+  {
+    union { long l; char c[sizeof(long)]; } endian_check;
+    endian_check.l = 1;
+    if (endian &&
+        strcmp(endian,(endian_check.c[sizeof(long)-1])?"big":"little")!=0)
+    {
+      m_output->println("result: Node does not have the same "
+                        "endianness as the management server.");
+      m_output->println("%s", "");
+      return;
+    }
   }
 
   bool compatible;
@@ -523,14 +530,17 @@ MgmApiSession::get_nodeid(Parser_t::Context &,
   }
 
   struct sockaddr_in addr;
-  SOCKET_SIZE_TYPE addrlen= sizeof(addr);
-  int r = my_getpeername(m_socket, (struct sockaddr*)&addr, &addrlen);
-  if (r != 0 ) {
-    m_output->println("result: getpeername(" MY_SOCKET_FORMAT   \
-                      ") failed, err= %d",
-                      MY_SOCKET_FORMAT_VALUE(m_socket), r);
-    m_output->println("%s", "");
-    return;
+  {
+    SOCKET_SIZE_TYPE addrlen= sizeof(addr);
+    int r = my_getpeername(m_socket, (struct sockaddr*)&addr, &addrlen);
+    if (r != 0 )
+    {
+      m_output->println("result: getpeername(" MY_SOCKET_FORMAT \
+                        ") failed, err= %d",
+                        MY_SOCKET_FORMAT_VALUE(m_socket), r);
+      m_output->println("%s", "");
+      return;
+    }
   }
 
   /* Check nodeid parameter */
@@ -542,62 +552,27 @@ MgmApiSession::get_nodeid(Parser_t::Context &,
   }
 
   NodeId tmp= nodeid;
-  if(tmp == 0 || !m_allocated_resources->is_reserved(tmp)){
-    BaseString error_string;
-    int error_code;
-    NDB_TICKS tick= 0;
-    /* only report error on second attempt as not to clog the cluster log */
-    while (!m_mgmsrv.alloc_node_id(&tmp, (enum ndb_mgm_node_type)nodetype, 
-                                   (struct sockaddr*)&addr, &addrlen,
-                                   error_code, error_string,
-                                   tick == 0 ? 0 : log_event,
-                                   timeout))
-    {
-      /* NDB_MGM_ALLOCID_CONFIG_MISMATCH is a non retriable error */
-      if (tick == 0 && error_code != NDB_MGM_ALLOCID_CONFIG_MISMATCH)
-      {
-        // attempt to free any timed out reservations
-        tick= NdbTick_CurrentMillisecond();
-        struct PurgeStruct ps;
-        m_mgmsrv.get_connected_nodes(ps.free_nodes);
-        // invert connected_nodes to get free nodes
-        ps.free_nodes.bitXORC(NodeBitmask());
-        ps.str= 0;
-        ps.tick= tick;
-        m_mgmsrv.get_socket_server()->
-          foreachSession(stop_session_if_timed_out,&ps);
-	m_mgmsrv.get_socket_server()->checkSessions();
-        error_string = "";
-        continue;
-      }
-      const char *alias;
-      const char *str;
-      alias= ndb_mgm_get_node_type_alias_string((enum ndb_mgm_node_type)
-						nodetype, &str);
-      m_output->println("result: %s", error_string.c_str());
-      /* only use error_code protocol if client knows about it */
-      if (log_event_version)
-        m_output->println("error_code: %d", error_code);
-      m_output->println("%s", "");
-      return;
-    }
-  }    
-  
-#if 0
-  if (!compatible){
-    m_output->println(cmd);
-    m_output->println("result: incompatible version mgmt 0x%x and node 0x%x",
-		      NDB_VERSION, version);
+  BaseString error_string;
+  int error_code;
+  if (!m_mgmsrv.alloc_node_id(tmp,
+                              (ndb_mgm_node_type)nodetype,
+                              (struct sockaddr*)&addr,
+                              error_code, error_string,
+                              log_event,
+                              timeout))
+  {
+    m_output->println("result: %s", error_string.c_str());
+    /* only use error_code in reply if client knows about it */
+    if (log_event_version)
+      m_output->println("error_code: %d", error_code);
     m_output->println("%s", "");
     return;
   }
-#endif
-  
+
   m_output->println("nodeid: %u", tmp);
   m_output->println("result: Ok");
   m_output->println("%s", "");
-  m_allocated_resources->reserve_node(tmp, timeout*1000);
-  
+
   if (name)
     g_eventLogger->info("Node %d: %s", tmp, name);
 
@@ -643,26 +618,31 @@ MgmApiSession::getConfig(Parser_t::Context &,
   m_output->println("Content-Transfer-Encoding: base64");
   m_output->print("\n");
 
+  unsigned len = (unsigned)strlen(pack64.c_str());
   if(ERROR_INSERTED(3))
   {
     // Return only half the packed config
     BaseString half64 = pack64.substr(0, pack64.length());
-    m_output->println(half64.c_str());
+    m_output->write(half64.c_str(), (unsigned)strlen(half64.c_str()));
+    m_output->write("\n", 1);
     return;
   }
-  m_output->println(pack64.c_str());
-  m_output->print("\n");
+  m_output->write(pack64.c_str(), len);
+  m_output->write("\n\n", 2);
   return;
 }
 
 void
 MgmApiSession::insertError(Parser<MgmApiSession>::Context &,
 			   Properties const &args) {
+  Uint32 extra = 0;
   Uint32 node = 0, error = 0;
   int result= 0;
 
   args.get("node", &node);
   args.get("error", &error);
+  const bool hasExtra = args.get("extra", &extra);
+  Uint32 * extraptr = hasExtra ? &extra : 0;
 
   if(node==m_mgmsrv.getOwnNodeId()
      && error < MGM_ERROR_MAX_INJECT_SESSION_ONLY)
@@ -673,7 +653,7 @@ MgmApiSession::insertError(Parser<MgmApiSession>::Context &,
   }
   else
   {
-    result= m_mgmsrv.insertError(node, error);
+    result= m_mgmsrv.insertError(node, error, extraptr);
   }
 
   m_output->println("insert error reply");
@@ -796,12 +776,8 @@ MgmApiSession::bye(Parser<MgmApiSession>::Context &,
 
 void
 MgmApiSession::endSession(Parser<MgmApiSession>::Context &,
-                          Properties const &) {
-  if(m_allocated_resources)
-    delete m_allocated_resources;
-
-  m_allocated_resources= new MgmtSrvr::Allocated_resources(m_mgmsrv);
-
+                          Properties const &)
+{
   SLEEP_ERROR_INSERTED(4);
   m_output->println("end session reply");
 }
@@ -819,9 +795,11 @@ MgmApiSession::getClusterLogLevel(Parser<MgmApiSession>::Context &			, Propertie
 			  "error", 
 			  "congestion", 
 			  "debug", 
-			  "backup" };
+                          "backup",
+                          "schema" };
 
-  int loglevel_count = (CFG_MAX_LOGLEVEL - CFG_MIN_LOGLEVEL + 1) ;
+  int const loglevel_count = (CFG_MAX_LOGLEVEL - CFG_MIN_LOGLEVEL + 1);
+  NDB_STATIC_ASSERT(NDB_ARRAY_SIZE(names) == loglevel_count);
   LogLevel::EventCategory category;
 
   m_output->println("get cluster loglevel");
@@ -952,9 +930,9 @@ MgmApiSession::restart(Properties const &args, int version) {
   args.get("force", &force);
 
   char *p, *last;
-  for((p = strtok_r(nodes_str, " ", &last));
+  for((p = my_strtok_r(nodes_str, " ", &last));
       p;
-      (p = strtok_r(NULL, " ", &last))) {
+      (p = my_strtok_r(NULL, " ", &last))) {
     nodes.push_back(atoi(p));
   }
 
@@ -966,6 +944,22 @@ MgmApiSession::restart(Properties const &args, int version) {
                                     abort != 0,
                                     force != 0,
                                     &m_stopSelf);
+
+  if (result == UNSUPPORTED_NODE_SHUTDOWN && nodes.size() > 1 && force)
+  {
+    /**
+     * We don't support multi node graceful shutdown...
+     *   add "-a" and try again
+     */
+    abort = 1;
+    result= m_mgmsrv.restartNodes(nodes,
+                                  &restarted,
+                                  nostart != 0,
+                                  initialstart != 0,
+                                  abort != 0,
+                                  force != 0,
+                                  &m_stopSelf);
+  }
 
   if (force &&
       (result == NODE_SHUTDOWN_WOULD_CAUSE_SYSTEM_CRASH ||
@@ -1024,9 +1018,13 @@ printNodeStatus(OutputStream *output,
       connectCount = 0;
     bool system;
     const char *address= NULL;
+    char addr_buf[NDB_ADDR_STRLEN];
+
     mgmsrv.status(nodeId, &status, &version, &mysql_version, &startPhase,
 		  &system, &dynamicId, &nodeGroup, &connectCount,
-		  &address);
+		  &address,
+                  addr_buf,
+                  sizeof(addr_buf));
     output->println("node.%d.type: %s",
 		      nodeId,
 		      ndb_mgm_get_node_type_string(type));
@@ -1145,9 +1143,9 @@ MgmApiSession::stop(Properties const &args, int version) {
   args.get("force", &force);
 
   char *p, *last;
-  for((p = strtok_r(nodes_str, " ", &last));
+  for((p = my_strtok_r(nodes_str, " ", &last));
       p;
-      (p = strtok_r(NULL, " ", &last))) {
+      (p = my_strtok_r(NULL, " ", &last))) {
     nodes.push_back(atoi(p));
   }
 
@@ -1157,6 +1155,17 @@ MgmApiSession::stop(Properties const &args, int version) {
   {
     result= m_mgmsrv.stopNodes(nodes, &stopped, abort != 0, force != 0,
                                &m_stopSelf);
+
+    if (result == UNSUPPORTED_NODE_SHUTDOWN && nodes.size() > 1 && force)
+    {
+      /**
+       * We don't support multi node graceful shutdown...
+       *   add "-a" and try again
+       */
+      abort = 1;
+      result= m_mgmsrv.stopNodes(nodes, &stopped, abort != 0, force != 0,
+                                 &m_stopSelf);
+    }
 
     if (force &&
         (result == NODE_SHUTDOWN_WOULD_CAUSE_SYSTEM_CRASH ||
@@ -1313,7 +1322,7 @@ MgmApiSession::start(Parser<MgmApiSession>::Context &,
 
   args.get("node", &node);
   
-  int result = m_mgmsrv.start(node);
+  int result = m_mgmsrv.sendSTART_ORD(node);
 
   m_output->println("start reply");
   if(result != 0)
@@ -1330,7 +1339,7 @@ MgmApiSession::startAll(Parser<MgmApiSession>::Context &,
   int started = 0;
 
   while(m_mgmsrv.getNextNodeId(&node, NDB_MGM_NODE_TYPE_NDB))
-    if(m_mgmsrv.start(node) == 0)
+    if(m_mgmsrv.sendSTART_ORD(node) == 0)
       started++;
 
   m_output->println("start reply");
@@ -1418,12 +1427,12 @@ logevent2str(BaseString& str, int eventType,
       str.appfmt("%s=%d\n",ndb_logevent_body[i].token, val);
       if(strcmp(ndb_logevent_body[i].token,"error") == 0)
       {
-        int pretty_text_len= strlen(pretty_text);
+        int pretty_text_len= (int)strlen(pretty_text);
         if(pretty_text_size-pretty_text_len-3 > 0)
         {
           BaseString::snprintf(pretty_text+pretty_text_len, 4 , " - ");
           ndb_error_string(val, pretty_text+(pretty_text_len+3),
-                           pretty_text_size-pretty_text_len-3);
+                           (int)(pretty_text_size-pretty_text_len-3));
         }
       }
     } while (ndb_logevent_body[++i].type == eventType);
@@ -1478,9 +1487,20 @@ Ndb_mgmd_event_service::log(int eventType, const Uint32* theData,
 
       int r;
       if (m_clients[i].m_parsable)
-        r= out.println(str.c_str());
+      {
+        unsigned len = str.length();
+        r= out.write(str.c_str(), len);
+      }
       else
-        r= out.println(pretty_text);
+      {
+        unsigned len = (unsigned)strlen(pretty_text);
+        r= out.write(pretty_text, len);
+      }
+
+      if (! (r < 0))
+      {
+        r = out.write("\n", 1);
+      }
 
       if (r<0)
       {
@@ -1679,7 +1699,7 @@ MgmApiSession::listen_event(Parser<MgmApiSession>::Context & ctx,
   Vector<BaseString> list;
   param.trim();
   param.split(list, " ,");
-  for(size_t i = 0; i<list.size(); i++){
+  for(unsigned i = 0; i<list.size(); i++){
     Vector<BaseString> spec;
     list[i].trim();
     list[i].split(spec, "=:");
@@ -1725,6 +1745,17 @@ done:
     m_output->println("msg: %s", msg.c_str());
   m_output->println("%s", "");
 
+  /*
+    Flush output from command before adding the new event listener.
+    This makes sure that the client receives the reply before the
+    loglevel thread starts to check the connection by sending <PING>'s.
+    The client is expecting <PING>'s but not until after the reply has been
+    received.
+  */
+  NdbMutex_Unlock(m_mutex);   
+  m_output->flush();
+  NdbMutex_Lock(m_mutex);   
+
   if(result==0)
   {
     m_mgmsrv.m_event_listner.add_listener(le);
@@ -1733,48 +1764,14 @@ done:
   }
 }
 
-void
-MgmApiSession::stop_session_if_not_connected(SocketServer::Session *_s, void *data)
-{
-  MgmApiSession *s= (MgmApiSession *)_s;
-  struct PurgeStruct &ps= *(struct PurgeStruct *)data;
-  if (s->m_allocated_resources->is_reserved(ps.free_nodes))
-  {
-    if (ps.str)
-      ps.str->appfmt(" %d", s->m_allocated_resources->get_nodeid());
-    s->stopSession();
-  }
-}
-
-void
-MgmApiSession::stop_session_if_timed_out(SocketServer::Session *_s, void *data)
-{
-  MgmApiSession *s= (MgmApiSession *)_s;
-  struct PurgeStruct &ps= *(struct PurgeStruct *)data;
-  if (s->m_allocated_resources->is_reserved(ps.free_nodes) &&
-      s->m_allocated_resources->is_timed_out(ps.tick))
-  {
-    s->stopSession();
-  }
-}
 
 void
 MgmApiSession::purge_stale_sessions(Parser_t::Context &ctx,
 				    const class Properties &args)
 {
-  struct PurgeStruct ps;
-  BaseString str;
-  ps.str = &str;
-
-  m_mgmsrv.get_connected_nodes(ps.free_nodes);
-  ps.free_nodes.bitXORC(NodeBitmask()); // invert connected_nodes to get free nodes
-
-  m_mgmsrv.get_socket_server()->foreachSession(stop_session_if_not_connected,&ps);
   m_mgmsrv.get_socket_server()->checkSessions();
 
   m_output->println("purge stale sessions reply");
-  if (str.length() > 0)
-    m_output->println("purged:%s",str.c_str());
   m_output->println("result: Ok");
   m_output->println("%s", "");
 }
@@ -1795,15 +1792,18 @@ void
 MgmApiSession::transporter_connect(Parser_t::Context &ctx,
 				   Properties const &args)
 {
+  bool close_with_reset = true;
   BaseString errormsg;
-  if (!m_mgmsrv.transporter_connect(m_socket, errormsg))
+  if (!m_mgmsrv.transporter_connect(m_socket, errormsg, close_with_reset))
   {
     // Connection not allowed or failed
     g_eventLogger->warning("Failed to convert connection "
                            "from '%s' to transporter: %s",
                            name(),
                            errormsg.c_str());
-    // Close the socket to indicate failure to other side
+    // Close the socket to indicate failure to client
+    ndb_socket_close(m_socket, close_with_reset);
+    my_socket_invalidate(&m_socket); // Already closed
   }
   else
   {
@@ -1932,10 +1932,9 @@ MgmApiSession::list_session(SocketServer::Session *_s, void *data)
   lister->m_output->println("session: %llu",id);
   lister->m_output->println("session.%llu.m_stopSelf: %d",id,s->m_stopSelf);
   lister->m_output->println("session.%llu.m_stop: %d",id,s->m_stop);
-  lister->m_output->println("session.%llu.allocated.nodeid: %d",id,s->m_allocated_resources->get_nodeid());
   if(s->m_ctx)
   {
-    int l= strlen(s->m_ctx->m_tokenBuffer);
+    int l= (int)strlen(s->m_ctx->m_tokenBuffer);
     char *buf= (char*) malloc(2*l+1);
     char *b= buf;
     for(int i=0; i<l;i++)
@@ -2003,10 +2002,9 @@ MgmApiSession::get_session(SocketServer::Session *_s, void *data)
   p->l->m_output->println("id: %llu",s->m_session_id);
   p->l->m_output->println("m_stopSelf: %d",s->m_stopSelf);
   p->l->m_output->println("m_stop: %d",s->m_stop);
-  p->l->m_output->println("nodeid: %d",s->m_allocated_resources->get_nodeid());
   if(s->m_ctx)
   {
-    int l= strlen(s->m_ctx->m_tokenBuffer);
+    int l= (int)strlen(s->m_ctx->m_tokenBuffer);
     p->l->m_output->println("parser_buffer_len: %u",l);
     p->l->m_output->println("parser_status: %d",s->m_ctx->m_status);
   }
@@ -2103,7 +2101,7 @@ void MgmApiSession::setConfig(Parser_t::Context &ctx, Properties const &args)
       if((r= read_socket(m_socket,
                          SOCKET_TIMEOUT,
                          &buf64[start],
-                         len64-start)) < 1)
+                         (int)(len64-start))) < 1)
       {
         delete[] buf64;
         result.assfmt("read_socket failed, errno: %d", errno);
@@ -2115,6 +2113,13 @@ void MgmApiSession::setConfig(Parser_t::Context &ctx, Properties const &args)
     char* decoded = new char[base64_needed_decoded_length((size_t)len64 - 1)];
     int decoded_len= ndb_base64_decode(buf64, len64-1, decoded, NULL);
     delete[] buf64;
+
+    if (decoded_len == -1)
+    {
+      result.assfmt("Failed to unpack config");
+      delete[] decoded;
+      goto done;
+    }
 
     ConfigValuesFactory cvf;
     if(!cvf.unpack(decoded, decoded_len))
@@ -2333,6 +2338,186 @@ MgmApiSession::dump_events(Parser_t::Context &,
   }
 }
 
+
+/*
+  Read and discard the "bulk data" until
+   - nothing more to read
+   - empty line found
+
+  When error detected, the command part is already read, but the bulk data
+  is still pending on the socket, it need to be consumed(read and discarded).
+
+  Example:
+  set ports
+  nodeid: 1 // << Error detected here
+  num_ports: 2
+  <new_line> // Parser always reads to first new line
+  bulk line 1
+  bulk line 2
+  <new line> // discard_bulk_data() discards until here
+*/
+
+static
+void
+discard_bulk_data(InputStream* in)
+{
+  char buf[256];
+  while (true)
+  {
+    if (in->gets(buf, sizeof(buf)) == 0)
+    {
+      // Nothing more to read
+      break;
+    }
+
+    if (buf[0] == 0)
+    {
+      // Got eof
+      break;
+    }
+
+    if (buf[0] == '\n')
+    {
+      // Found empty line
+      break;
+    }
+  }
+  return;
+}
+
+
+static
+bool
+read_dynamic_ports(InputStream* in,
+                   Uint32 num_ports,
+                   MgmtSrvr::DynPortSpec ports[],
+                   Uint32& ports_read,
+                   BaseString& msg)
+{
+  char buf[256];
+  Uint32 counter = 0;
+  while (counter < num_ports)
+  {
+    if (in->gets(buf, sizeof(buf)) == 0)
+    {
+      msg.assign("Read of ports failed");
+      return false;
+    }
+
+    if (buf[0] == 0)
+    {
+      msg.assign("Got eof instead of port");
+      return false;
+    }
+
+    if (buf[0] == '\n')
+    {
+      // Found empty line, list of ports ended too early
+      msg.assign("Failed to parse line, expected name=value pair");
+      return false;
+    }
+
+    int node, port;
+    if (sscanf(buf, "%d=%d", &node, &port) != 2)
+    {
+      msg.assign("Failed to parse line, expected name=value pair");
+      discard_bulk_data(in);
+      return false;
+    }
+
+    ports[counter].port = port;
+    ports[counter].node = node;
+    counter++;
+  }
+
+  // Read ending empty line
+  if (in->gets(buf, sizeof(buf)) == 0)
+  {
+    msg.assign("Read of ending empty line failed");
+    return false;
+  }
+
+  if (buf[0] == 0)
+  {
+    msg.assign("Got eof instead of ending new line");
+    return false;
+  }
+
+  if (buf[0] != '\n')
+  {
+    msg.assign("Failed to parse line, expected empty line");
+    discard_bulk_data(in);
+    return false;
+  }
+
+  ports_read= counter;
+  return true;
+}
+
+
+void
+MgmApiSession::set_ports(Parser_t::Context &,
+                         Properties const &args)
+{  
+  m_output->println("set ports reply");
+
+  // Check node argument
+  Uint32 node;
+  args.get("node", &node);
+  if (node == 0 || node >= MAX_NODES)
+  {
+    m_output->println("result: Illegal value for argument node: %u", node);
+    m_output->println("%s", "");
+    discard_bulk_data(m_input);
+    return;
+  }
+
+  Uint32 num_ports;
+  args.get("num_ports", &num_ports);
+  if (num_ports == 0 || num_ports >= MAX_NODES)
+  {
+    m_output->println("result: Illegal value for argument num_ports: %u",
+                      num_ports);
+    m_output->println("%s", "");
+    discard_bulk_data(m_input);
+    return;
+  }
+
+  // Read the name value pair list of ports to set from bulk data
+  MgmtSrvr::DynPortSpec ports[MAX_NODES];
+  {
+    Uint32 ports_read;
+    BaseString msg;
+    if (!read_dynamic_ports(m_input, num_ports, ports, ports_read, msg))
+    {
+      m_output->println("result: %s", msg.c_str());
+      m_output->println("%s", "");
+      return;
+    }
+
+    if (ports_read != num_ports)
+    {
+      m_output->println("result: Only read %d ports of expected %d",
+                        ports_read, num_ports);
+      m_output->println("%s", "");
+      return;
+    }
+  }
+  // All bulk data consumed!
+
+  // Set all the received ports
+  BaseString msg;
+  if (!m_mgmsrv.setDynamicPorts(node, ports, num_ports, msg))
+  {
+    m_output->println("result: %s", msg.c_str());
+    m_output->println("%s", "");
+    return;
+  }
+
+  m_output->println("result: Ok");
+  m_output->println("%s", "");
+  return;
+}
 
 template class MutexVector<int>;
 template class Vector<ParserRow<MgmApiSession> const*>;

@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -56,16 +63,18 @@ runClusterMgr_C(void * me)
 
 ClusterMgr::ClusterMgr(TransporterFacade & _facade):
   theStop(0),
+  m_sent_API_REGREQ_to_myself(false),
   theFacade(_facade),
   theArbitMgr(NULL),
   m_connect_count(0),
   m_max_api_reg_req_interval(~0),
   noOfAliveNodes(0),
   noOfConnectedNodes(0),
+  noOfConnectedDBNodes(0),
   minDbVersion(0),
   theClusterMgrThread(NULL),
-  waitingForHB(false),
-  m_cluster_state(CS_waiting_for_clean_cache)
+  m_cluster_state(CS_waiting_for_clean_cache),
+  m_hbFrequency(0)
 {
   DBUG_ENTER("ClusterMgr::ClusterMgr");
   clusterMgrThreadMutex = NdbMutex_Create();
@@ -84,18 +93,23 @@ ClusterMgr::ClusterMgr(TransporterFacade & _facade):
 ClusterMgr::~ClusterMgr()
 {
   DBUG_ENTER("ClusterMgr::~ClusterMgr");
-  doStop();
+  assert(theStop == 1);
   if (theArbitMgr != 0)
   {
     delete theArbitMgr;
     theArbitMgr = 0;
   }
-  this->close(); // disconnect from TransporterFacade
   NdbCondition_Destroy(waitForHBCond);
   NdbMutex_Destroy(clusterMgrThreadMutex);
   DBUG_VOID_RETURN;
 }
 
+/**
+ * This method is called from start of cluster connection instance and
+ * before we have started any socket services and thus it needs no
+ * mutex protection since the ClusterMgr object isn't known by any other
+ * thread at this point in time.
+ */
 void
 ClusterMgr::configure(Uint32 nodeId,
                       const ndb_mgm_configuration* config)
@@ -126,7 +140,6 @@ ClusterMgr::configure(Uint32 nodeId,
       theNode.m_info.m_type = NodeInfo::MGM;
       break;
     default:
-      type = type;
       break;
     }
   }
@@ -168,10 +181,37 @@ ClusterMgr::configure(Uint32 nodeId,
     delete theArbitMgr;
     theArbitMgr= NULL;
   }
+
+  // Configure heartbeats.
+  unsigned hbFrequency = 0;
+  iter.get(CFG_MGMD_MGMD_HEARTBEAT_INTERVAL, &hbFrequency);
+  m_hbFrequency = static_cast<Uint32>(hbFrequency);
+
+  // Configure max backoff time for connection attempts to first
+  // data node.
+  Uint32 backoff_max_time = 0;
+  iter.get(CFG_START_CONNECT_BACKOFF_MAX_TIME,
+           &backoff_max_time);
+  start_connect_backoff_max_time = backoff_max_time;
+
+  // Configure max backoff time for connection attempts to data
+  // nodes.
+  backoff_max_time = 0;
+  iter.get(CFG_CONNECT_BACKOFF_MAX_TIME, &backoff_max_time);
+  connect_backoff_max_time = backoff_max_time;
+
+  theFacade.get_registry()->set_connect_backoff_max_time_in_ms(
+    start_connect_backoff_max_time);
 }
 
 void
-ClusterMgr::startThread() {
+ClusterMgr::startThread()
+{
+  /**
+   * We use the clusterMgrThreadMutex as a signalling object between this
+   * thread and the main thread of the ClusterMgr.
+   * The clusterMgrThreadMutex also protects the theStop-variable.
+   */
   Guard g(clusterMgrThreadMutex);
 
   theStop = -1;
@@ -193,14 +233,15 @@ void
 ClusterMgr::doStop( ){
   DBUG_ENTER("ClusterMgr::doStop");
   {
+    /* Ensure stop is only executed once */
     Guard g(clusterMgrThreadMutex);
     if(theStop == 1){
       DBUG_VOID_RETURN;
     }
+    theStop = 1;
   }
 
   void *status;
-  theStop = 1;
   if (theClusterMgrThread) {
     NdbThread_WaitFor(theClusterMgrThread, &status);  
     NdbThread_Destroy(&theClusterMgrThread);
@@ -210,81 +251,18 @@ ClusterMgr::doStop( ){
   {
     theArbitMgr->doStop(NULL);
   }
+  {
+    /**
+     * Need protection against concurrent execution of do_poll in main
+     * thread. We cannot rely only on the trp_client lock since it is
+     * not supposed to be locked when calling close (it is locked as
+     * part of the close logic.
+     */
+    Guard g(clusterMgrThreadMutex);
+    this->close(); // disconnect from TransporterFacade
+  }
 
   DBUG_VOID_RETURN;
-}
-
-void
-ClusterMgr::forceHB()
-{
-  theFacade.lock_mutex();
-
-  if(waitingForHB)
-  {
-    NdbCondition_WaitTimeout(waitForHBCond, theFacade.theMutexPtr, 1000);
-    theFacade.unlock_mutex();
-    return;
-  }
-
-  waitingForHB= true;
-
-  NodeBitmask ndb_nodes;
-  ndb_nodes.clear();
-  waitForHBFromNodes.clear();
-  for(Uint32 i = 1; i < MAX_NDB_NODES; i++)
-  {
-    const trp_node &node= getNodeInfo(i);
-    if(!node.defined)
-      continue;
-    if(node.m_info.getType() == NodeInfo::DB)
-    {
-      ndb_nodes.set(i);
-      waitForHBFromNodes.bitOR(node.m_state.m_connected_nodes);
-    }
-  }
-  waitForHBFromNodes.bitAND(ndb_nodes);
-  theFacade.unlock_mutex();
-
-#ifdef DEBUG_REG
-  char buf[128];
-  ndbout << "Waiting for HB from " << waitForHBFromNodes.getText(buf) << endl;
-#endif
-  NdbApiSignal signal(numberToRef(API_CLUSTERMGR, theFacade.ownId()));
-
-  signal.theVerId_signalNumber   = GSN_API_REGREQ;
-  signal.theReceiversBlockNumber = QMGR;
-  signal.theTrace                = 0;
-  signal.theLength               = ApiRegReq::SignalLength;
-
-  ApiRegReq * req = CAST_PTR(ApiRegReq, signal.getDataPtrSend());
-  req->ref = numberToRef(API_CLUSTERMGR, theFacade.ownId());
-  req->version = NDB_VERSION;
-  req->mysql_version = NDB_MYSQL_VERSION_D;
-
-  {
-    lock();
-    int nodeId= 0;
-    for(int i=0;
-        (int) NodeBitmask::NotFound != (nodeId= waitForHBFromNodes.find(i));
-        i= nodeId+1)
-    {
-#ifdef DEBUG_REG
-      ndbout << "FORCE HB to " << nodeId << endl;
-#endif
-      raw_sendSignal(&signal, nodeId);
-    }
-    unlock();
-  }
-  /* Wait for nodes to reply - if any heartbeats was sent */
-  theFacade.lock_mutex();
-  if (!waitForHBFromNodes.isclear())
-    NdbCondition_WaitTimeout(waitForHBCond, theFacade.theMutexPtr, 1000);
-
-  waitingForHB= false;
-#ifdef DEBUG_REG
-  ndbout << "Still waiting for HB from " << waitForHBFromNodes.getText(buf) << endl;
-#endif
-  theFacade.unlock_mutex();
 }
 
 void
@@ -298,13 +276,16 @@ ClusterMgr::startup()
 
   lock();
   theFacade.doConnect(nodeId);
+  flush_send_buffers();
   unlock();
 
   for (Uint32 i = 0; i<3000; i++)
   {
-    lock();
-    theFacade.theTransporterRegistry->update_connections();
-    unlock();
+    theFacade.request_connection_check();
+    start_poll();
+    do_poll(0);
+    complete_poll();
+
     if (theNode.is_connected())
       break;
     NdbSleep_MilliSleep(20);
@@ -312,6 +293,7 @@ ClusterMgr::startup()
 
   assert(theNode.is_connected());
   Guard g(clusterMgrThreadMutex);
+  /* Signalling to creating thread that we are done with thread startup */
   theStop = 0;
   NdbCondition_Broadcast(waitForHBCond);
 }
@@ -338,29 +320,35 @@ ClusterMgr::threadMain()
   nodeFail_signal.theTrace  = 0;
   nodeFail_signal.theLength = NodeFailRep::SignalLengthLong;
 
-  NDB_TICKS timeSlept = 100;
-  NDB_TICKS now = NdbTick_CurrentMillisecond();
+  NDB_TICKS now = NdbTick_getCurrentTicks();
 
   while(!theStop)
   {
-    /* Sleep at 100ms between each heartbeat check */
-    NDB_TICKS before = now;
-    for (Uint32 i = 0; i<10; i++)
+    /* Sleep 1/5 of minHeartBeatInterval between each check */
+    const NDB_TICKS before = now;
+    for (Uint32 i = 0; i<5; i++)
     {
-      NdbSleep_MilliSleep(10);
+      NdbSleep_MilliSleep(minHeartBeatInterval/5);
       {
-        Guard g(clusterMgrThreadMutex);
         /**
-         * Protect from ArbitMgr sending signals while we poll
+         * start_poll does lock the trp_client and complete_poll
+         * releases this lock. This means that this protects
+         * against concurrent calls to send signals in ArbitMgr.
+         * We do however need to protect also against concurrent
+         * close in doStop, so to avoid this problem we need to
+         * also lock clusterMgrThreadMutex before we start the
+         * poll.
          */
+        Guard g(clusterMgrThreadMutex);
         start_poll();
         do_poll(0);
         complete_poll();
       }
     }
-    now = NdbTick_CurrentMillisecond();
-    timeSlept = (now - before);
+    now = NdbTick_getCurrentTicks();
+    const Uint32 timeSlept = (Uint32)NdbTick_Elapsed(before, now).milliSec();
 
+    lock();
     if (m_cluster_state == CS_waiting_for_clean_cache &&
         theFacade.m_globalDictCache)
     {
@@ -370,19 +358,21 @@ ClusterMgr::threadMain()
         unsigned sz= theFacade.m_globalDictCache->get_size();
         theFacade.m_globalDictCache->unlock();
         if (sz)
+        {
+          unlock();
           continue;
+        }
       }
       m_cluster_state = CS_waiting_for_first_connect;
     }
 
-
     NodeFailRep * nodeFailRep = CAST_PTR(NodeFailRep,
                                          nodeFail_signal.getDataPtrSend());
     nodeFailRep->noOfNodes = 0;
-    NodeBitmask::clear(nodeFailRep->theNodes);
+    NodeBitmask::clear(nodeFailRep->theAllNodes);
 
-    trp_client::lock();
-    for (int i = 1; i < MAX_NODES; i++){
+    for (int i = 1; i < MAX_NODES; i++)
+    {
       /**
        * Send register request (heartbeat) to all available nodes 
        * at specified timing intervals
@@ -405,16 +395,19 @@ ClusterMgr::threadMain()
 	continue;
       }
       
-      if (nodeId == getOwnNodeId() && theNode.is_confirmed())
+      if (nodeId == getOwnNodeId())
       {
         /**
          * Don't send HB to self more than once
          * (once needed to avoid weird special cases in e.g ConfigManager)
          */
-        continue;
+        if (m_sent_API_REGREQ_to_myself)
+        {
+          continue;
+        }
       }
 
-      cm_node.hbCounter += (Uint32)timeSlept;
+      cm_node.hbCounter += timeSlept;
       if (cm_node.hbCounter >= m_max_api_reg_req_interval ||
           cm_node.hbCounter >= cm_node.hbFrequency)
       {
@@ -435,24 +428,40 @@ ClusterMgr::threadMain()
 #ifdef DEBUG_REG
 	ndbout_c("ClusterMgr: Sending API_REGREQ to node %d", (int)nodeId);
 #endif
+        if (nodeId == getOwnNodeId())
+        {
+          /* Set flag to ensure we only send once to ourself */
+          m_sent_API_REGREQ_to_myself = true;
+        }
 	raw_sendSignal(&signal, nodeId);
       }//if
       
       if (cm_node.hbMissed == 4 && cm_node.hbFrequency > 0)
       {
         nodeFailRep->noOfNodes++;
-        NodeBitmask::set(nodeFailRep->theNodes, nodeId);
+        NodeBitmask::set(nodeFailRep->theAllNodes, nodeId);
       }
     }
+    flush_send_buffers();
+    unlock();
 
     if (nodeFailRep->noOfNodes)
     {
+      lock();
       raw_sendSignal(&nodeFail_signal, getOwnNodeId());
+      flush_send_buffers();
+      unlock();
     }
-    trp_client::unlock();
   }
 }
 
+/**
+ * We're holding the trp_client lock while performing poll from
+ * ClusterMgr. So we always execute all the execSIGNAL-methods in
+ * ClusterMgr with protection other methods that use the trp_client
+ * lock (reportDisconnect, reportConnect, is_cluster_completely_unavailable,
+ * ArbitMgr (sendSignalToQmgr)).
+ */
 void
 ClusterMgr::trp_deliver_signal(const NdbApiSignal* sig,
                                const LinearSectionPtr ptr[3])
@@ -530,7 +539,7 @@ ClusterMgr::trp_deliver_signal(const NdbApiSignal* sig,
       tSignal.theReceiversBlockNumber= refToBlock(ref);
       tSignal.theVerId_signalNumber= GSN_SUB_GCP_COMPLETE_ACK;
       tSignal.theSendersBlockRef = API_CLUSTERMGR;
-      safe_sendSignal(&tSignal, aNodeId);
+      safe_noflush_sendSignal(&tSignal, aNodeId);
     }
     break;
   }
@@ -550,6 +559,16 @@ ClusterMgr::trp_deliver_signal(const NdbApiSignal* sig,
   case GSN_DISCONNECT_REP:
   {
     execDISCONNECT_REP(sig, ptr);
+    return;
+  }
+  case GSN_CLOSE_COMREQ:
+  {
+    theFacade.perform_close_clnt(this);
+    return;
+  }
+  case GSN_EXPAND_CLNT:
+  {
+    theFacade.expand_clnt();
     return;
   }
   default:
@@ -649,6 +668,14 @@ ClusterMgr::execAPI_REGREQ(const Uint32 * theData){
   assert(node.defined == true);
   assert(node.is_connected() == true);
 
+  /* 
+     API nodes send API_REGREQ once to themselves. Other than that, there are
+     no API-API heart beats.
+  */
+  assert(cm_node.m_info.m_type != NodeInfo::API ||
+         (nodeId == getOwnNodeId() &&
+          !cm_node.is_confirmed()));
+
   if(node.m_info.m_version != apiRegReq->version){
     node.m_info.m_version = apiRegReq->version;
     node.m_info.m_mysql_version = apiRegReq->mysql_version;
@@ -673,7 +700,12 @@ ClusterMgr::execAPI_REGREQ(const Uint32 * theData){
   conf->qmgrRef = numberToRef(API_CLUSTERMGR, theFacade.ownId());
   conf->version = NDB_VERSION;
   conf->mysql_version = NDB_MYSQL_VERSION_D;
-  conf->apiHeartbeatFrequency = cm_node.hbFrequency;
+
+  /*
+    This is the frequency (in centiseonds) at which we want the other node
+    to send API_REGREQ messages.
+  */
+  conf->apiHeartbeatFrequency = m_hbFrequency/10;
 
   conf->minDbVersion= 0;
   conf->nodeState= node.m_state;
@@ -754,31 +786,49 @@ ClusterMgr::execAPI_REGCONF(const NdbApiSignal * signal,
 
   cm_node.hbMissed = 0;
   cm_node.hbCounter = 0;
-  cm_node.hbFrequency = (apiRegConf->apiHeartbeatFrequency * 10) - 50;
+  /*
+    By convention, conf->apiHeartbeatFrequency is in centiseconds rather than
+    milliseconds. See also Qmgr::sendApiRegConf().
+   */
+  const Int64 freq = 
+    (static_cast<Int64>(apiRegConf->apiHeartbeatFrequency) * 10) - 50;
+
+  if (freq > UINT_MAX32)
+  {
+    // In case of overflow.
+    assert(false);  /* Note this assert fails on some upgrades... */
+    cm_node.hbFrequency = UINT_MAX32;
+  }
+  else if (freq < minHeartBeatInterval)
+  {
+    /** 
+     * We use minHeartBeatInterval as a lower limit. This also prevents 
+     * against underflow.
+     */
+    cm_node.hbFrequency = minHeartBeatInterval;
+  }
+  else
+  {
+    cm_node.hbFrequency = static_cast<Uint32>(freq);
+  }
+
+  // If responding nodes indicates that it is connected to other
+  // nodes, that makes it probable that those nodes are alive and
+  // available also for this node.
+  for (int db_node_id = 1; db_node_id <= MAX_DATA_NODE_ID; db_node_id ++)
+  {
+    if (node.m_state.m_connected_nodes.get(db_node_id))
+    {
+      // Tell this nodes start clients thread that db_node_id
+      // is up and probable connectable.
+      theFacade.theTransporterRegistry->indicate_node_up(db_node_id);
+    }
+  }
 
   // Distribute signal to all threads/blocks
   // TODO only if state changed...
   theFacade.for_each(this, signal, ptr);
-
-  check_wait_for_hb(nodeId);
 }
-
-void
-ClusterMgr::check_wait_for_hb(NodeId nodeId)
-{
-  if(waitingForHB)
-  {
-    waitForHBFromNodes.clear(nodeId);
-
-    if(waitForHBFromNodes.isclear())
-    {
-      waitingForHB= false;
-      NdbCondition_Broadcast(waitForHBCond);
-    }
-  }
-  return;
-}
-
 
 void
 ClusterMgr::execAPI_REGREF(const Uint32 * theData){
@@ -810,8 +860,6 @@ ClusterMgr::execAPI_REGREF(const Uint32 * theData){
   default:
     break;
   }
-
-  check_wait_for_hb(nodeId);
 }
 
 void
@@ -831,6 +879,10 @@ ClusterMgr::execNF_COMPLETEREP(const NdbApiSignal* signal,
   }
 }
 
+/**
+ * This is called as a callback when executing update_connections which
+ * is always called with ownership of trp_client lock.
+ */
 void
 ClusterMgr::reportConnected(NodeId nodeId)
 {
@@ -842,15 +894,23 @@ ClusterMgr::reportConnected(NodeId nodeId)
    * us with the real time-out period to use.
    */
   assert(nodeId > 0 && nodeId < MAX_NODES);
-  if (nodeId == getOwnNodeId())
+  if (nodeId != getOwnNodeId())
   {
-    noOfConnectedNodes--; // Don't count self...
+    noOfConnectedNodes++;
   }
-
-  noOfConnectedNodes++;
 
   Node & cm_node = theNodes[nodeId];
   trp_node & theNode = cm_node;
+
+  if (theNode.m_info.m_type == NodeInfo::DB)
+  {
+    noOfConnectedDBNodes++;
+    if (noOfConnectedDBNodes == 1)
+    {
+      // Data node connected, use ConnectBackoffMaxTime
+      theFacade.get_registry()->set_connect_backoff_max_time_in_ms(connect_backoff_max_time);
+    }
+  }
 
   cm_node.hbMissed = 0;
   cm_node.hbCounter = 0;
@@ -913,7 +973,7 @@ ClusterMgr::reportDisconnected(NodeId nodeId)
   assert(noOfConnectedNodes > 0);
 
   /**
-   * We know that we have clusterMgrThreadMutex and trp_client::mutex
+   * We know that we have trp_client lock
    *   but we don't know if we are polling...and for_each can
    *   only be used by a poller...
    *
@@ -965,6 +1025,17 @@ ClusterMgr::execDISCONNECT_REP(const NdbApiSignal* sig,
     }
   }
 
+  if (theNode.m_info.m_type == NodeInfo::DB)
+  {
+    assert(noOfConnectedDBNodes > 0);
+    noOfConnectedDBNodes--;
+    if (noOfConnectedDBNodes == 0)
+    {
+      // No data nodes connected, use StartConnectBackoffMaxTime
+      theFacade.get_registry()->set_connect_backoff_max_time_in_ms(start_connect_backoff_max_time);
+    }
+  }
+
   if (node_failrep == false)
   {
     /**
@@ -980,8 +1051,8 @@ ClusterMgr::execDISCONNECT_REP(const NdbApiSignal* sig,
     rep->failNo = 0;
     rep->masterNodeId = 0;
     rep->noOfNodes = 1;
-    NodeBitmask::clear(rep->theNodes);
-    NodeBitmask::set(rep->theNodes, nodeId);
+    NodeBitmask::clear(rep->theAllNodes);
+    NodeBitmask::set(rep->theAllNodes, nodeId);
     execNODE_FAILREP(&signal, 0);
   }
 }
@@ -991,22 +1062,30 @@ ClusterMgr::execNODE_FAILREP(const NdbApiSignal* sig,
                              const LinearSectionPtr ptr[])
 {
   const NodeFailRep * rep = CAST_CONSTPTR(NodeFailRep, sig->getDataPtr());
+  NodeBitmask mask;
+  if (sig->getLength() == NodeFailRep::SignalLengthLong)
+  {
+    mask.assign(NodeBitmask::Size, rep->theAllNodes);
+  }
+  else
+  {
+    mask.assign(NdbNodeBitmask::Size, rep->theNodes);
+  }
 
   NdbApiSignal signal(sig->theSendersBlockRef);
   signal.theVerId_signalNumber = GSN_NODE_FAILREP;
   signal.theReceiversBlockNumber = API_CLUSTERMGR;
   signal.theTrace  = 0;
   signal.theLength = NodeFailRep::SignalLengthLong;
-  
+
   NodeFailRep * copy = CAST_PTR(NodeFailRep, signal.getDataPtrSend());
   copy->failNo = 0;
   copy->masterNodeId = 0;
   copy->noOfNodes = 0;
-  NodeBitmask::clear(copy->theNodes);
+  NodeBitmask::clear(copy->theAllNodes);
 
-  for (Uint32 i = NdbNodeBitmask::find_first(rep->theNodes);
-       i != NdbNodeBitmask::NotFound;
-       i = NdbNodeBitmask::find_next(rep->theNodes, i + 1))
+  for (Uint32 i = mask.find_first(); i != NodeBitmask::NotFound;
+       i = mask.find_next(i + 1))
   {
     Node & cm_node = theNodes[i];
     trp_node & theNode = cm_node;
@@ -1018,7 +1097,7 @@ ClusterMgr::execNODE_FAILREP(const NdbApiSignal* sig,
     if (node_failrep == false)
     {
       theNode.m_node_fail_rep = true;
-      NodeBitmask::set(copy->theNodes, i);
+      NodeBitmask::set(copy->theAllNodes, i);
       copy->noOfNodes++;
     }
 
@@ -1058,6 +1137,69 @@ ClusterMgr::execNODE_FAILREP(const NdbApiSignal* sig,
       }
     }
   }
+}
+
+bool
+ClusterMgr::is_cluster_completely_unavailable()
+{
+  bool ret_code = true;
+
+  /**
+   * This method (and several other 'node state getters') allow
+   * reading of theNodes[] from multiple block threads while 
+   * ClusterMgr concurrently updates them. Thus, a mutex should
+   * have been expected here. See bug#20391191, and addendum patches
+   * to bug#19524096, to understand what prevents us from locking (yet)
+   */
+  for (NodeId n = 1; n < MAX_NDB_NODES ; n++)
+  {
+    const trp_node& node = theNodes[n];
+    if (!node.defined)
+    {
+      /**
+       * Node isn't even part of configuration.
+       */
+      continue;
+    }
+    if (node.m_state.startLevel > NodeState::SL_STARTED)
+    {
+      /**
+       * Node is stopping, so isn't available for any transactions,
+       * so not available for us to use.
+       */
+      continue;
+    }
+    if (!node.compatible)
+    {
+      /**
+       * The node isn't compatible with ours, so we can't use it
+       */
+      continue;
+    }
+    if (node.m_alive ||
+        node.m_state.startLevel == NodeState::SL_STARTING ||
+        node.m_state.startLevel == NodeState::SL_STARTED)
+    {
+      /**
+       * We found a node that is either alive (less likely since we call this
+       * method), or it is in state SL_STARTING which means that we were
+       * allowed to connect, this means that we will very shortly be able to
+       * use this connection. So this means that we know that the current
+       * connection problem is a temporary issue and we can report a temporary
+       * error instead of reporting 4009.
+       *
+       * We can deduce that the cluster isn't ready to be declared down
+       * yet, we have a link to a starting node. We either very soon have
+       * a working cluster, or we already have a working cluster but we
+       * haven't yet the most up-to-date information about the cluster state.
+       * So the cluster will soon be available again very likely, so
+       * we can report a temporary error rather than an unknown error.
+       */
+      ret_code = false;
+      break;
+    }
+  }
+  return ret_code;
 }
 
 void
@@ -1435,7 +1577,7 @@ ArbitMgr::sendSignalToQmgr(ArbitSignal& aSignal)
   {
     m_clusterMgr.lock();
     m_clusterMgr.raw_sendSignal(&signal, aSignal.data.sender);
+    m_clusterMgr.flush_send_buffers();
     m_clusterMgr.unlock();
   }
 }
-

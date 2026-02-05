@@ -1,13 +1,25 @@
-/* Copyright (c) 2008, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation; version 2 of the License.
+  it under the terms of the GNU General Public License, version 2.0,
+  as published by the Free Software Foundation.
+
+  This program is also distributed with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an additional
+  permission to link the program and your derivative works with the
+  separately licensed software that they have included with MySQL.
+
+  Without limiting anything contained in the foregoing, this file,
+  which is part of C Driver for MySQL (Connector/C), is also subject to the
+  Universal FOSS Exception, version 1.0, a copy of which can be found at
+  http://oss.oracle.com/licenses/universal-foss-exception.
 
   This program is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
+  GNU General Public License, version 2.0, for more details.
 
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software
@@ -54,40 +66,18 @@
 #include "my_global.h"
 #include "my_rdtsc.h"
 
+#include <stdio.h>
 #if defined(_WIN32)
-#include <stdio.h>
 #include "windows.h"
-#else
-#include <stdio.h>
 #endif
 
-#if !defined(_WIN32)
-#if TIME_WITH_SYS_TIME
+#if defined(TIME_WITH_SYS_TIME)
 #include <sys/time.h>
 #include <time.h>           /* for clock_gettime */
-#else
-#if HAVE_SYS_TIME_H
-#include <sys/time.h>
-#elif defined(HAVE_TIME_H)
-#include <time.h>
-#endif
-#endif
-#endif
-
-#if defined(HAVE_ASM_MSR_H) && defined(HAVE_RDTSCLL)
-#include <asm/msr.h>         /* for rdtscll */
-#endif
-
-#if defined(HAVE_SYS_TIMEB_H) && defined(HAVE_FTIME)
-#include <sys/timeb.h>       /* for ftime */
 #endif
 
 #if defined(HAVE_SYS_TIMES_H) && defined(HAVE_TIMES)
 #include <sys/times.h>       /* for times */
-#endif
-
-#if defined(__INTEL_COMPILER) && defined(__ia64__) && defined(HAVE_IA64INTRIN_H)
-#include <ia64intrin.h>    /* for __GetReg */
 #endif
 
 #if defined(__APPLE__) && defined(__MACH__)
@@ -112,23 +102,12 @@ ulonglong my_timer_cycles_il_i386();
 ulonglong my_timer_cycles_il_x86_64();
 #endif
 
-#if defined(__INTEL_COMPILER)
-/*
-  icc warning #1011 is:
-  missing return statement at end of non-void function
-*/
-#pragma warning (disable:1011)
-#endif
-
 /*
   For cycles, we depend on RDTSC for x86 platforms,
   or on time buffer (which is not really a cycle count
   but a separate counter with less than nanosecond
   resolution) for most PowerPC platforms, or on
-  gethrtime which is okay for hpux and solaris, or on
-  clock_gettime(CLOCK_SGI_CYCLE) for Irix platforms,
-  or on read_real_time for aix platforms. There is
-  nothing for Alpha platforms, they would be tricky.
+  gethrtime which is okay for solaris.
 */
 
 ulonglong my_timer_cycles(void)
@@ -147,32 +126,24 @@ ulonglong my_timer_cycles(void)
                         "orq %%rdx,%%rax"
                         : "=a" (result) :: "%edx");
   return result;
-#elif defined(HAVE_ASM_MSR_H) && defined(HAVE_RDTSCLL)
-  {
-    ulonglong result;
-    rdtscll(result);
-    return result;
-  }
 #elif defined(_WIN32) && defined(_M_IX86)
   __asm {rdtsc};
 #elif defined(_WIN64) && defined(_M_X64)
   /* For 64-bit Windows: unsigned __int64 __rdtsc(); */
   return __rdtsc();
-#elif defined(__INTEL_COMPILER) && defined(__ia64__) && defined(HAVE_IA64INTRIN_H)
-  return (ulonglong) __getReg(_IA64_REG_AR_ITC); /* (3116) */
 #elif defined(__GNUC__) && defined(__ia64__)
   {
     ulonglong result;
     __asm __volatile__ ("mov %0=ar.itc" : "=r" (result));
     return result;
   }
-#elif defined(__GNUC__) && (defined(__powerpc__) || defined(__POWERPC__) || (defined(_POWER) && defined(_AIX52))) && (defined(__64BIT__) || defined(_ARCH_PPC64))
+#elif defined(__GNUC__) && (defined(__powerpc__) || defined(__POWERPC__)) && (defined(__64BIT__) || defined(_ARCH_PPC64))
   {
     ulonglong result;
     __asm __volatile__ ("mftb %0" : "=r" (result));
     return result;
   }
-#elif defined(__GNUC__) && (defined(__powerpc__) || defined(__POWERPC__) || (defined(_POWER) && defined(_AIX52))) && (!defined(__64BIT__) && !defined(_ARCH_PPC64))
+#elif defined(__GNUC__) && (defined(__powerpc__) || defined(__POWERPC__)) && (!defined(__64BIT__) && !defined(_ARCH_PPC64))
   {
     /*
       mftbu means "move from time-buffer-upper to result".
@@ -200,13 +171,13 @@ ulonglong my_timer_cycles(void)
   return (my_timer_cycles_il_i386());
 #elif (defined(__SUNPRO_CC) || defined(__SUNPRO_C)) && defined(__x86_64) && defined(_LP64)
   return (my_timer_cycles_il_x86_64());
-#elif defined(__GNUC__) && defined(__sparcv9) && defined(_LP64)  && (__GNUC__>2)
+#elif defined(__GNUC__) && defined(__sparcv9) && defined(_LP64)
   {
     ulonglong result;
     __asm __volatile__ ("rd %%tick,%0" : "=r" (result));
     return result;
   }
-#elif defined(__GNUC__) && defined(__sparc__) && !defined(_LP64) && (__GNUC__>2)
+#elif defined(__GNUC__) && defined(__sparc__) && !defined(_LP64)
   {
       union {
               ulonglong wholeresult;
@@ -218,11 +189,11 @@ ulonglong my_timer_cycles(void)
     __asm __volatile__ ("rd %%tick,%1; srlx %1,32,%0" : "=r" (result.splitresult.high), "=r" (result.splitresult.low));
     return result.wholeresult;
   }
-#elif defined(__sgi) && defined(HAVE_CLOCK_GETTIME) && defined(CLOCK_SGI_CYCLE)
+#elif defined(__GNUC__) && defined(__aarch64__)
   {
-    struct timespec tp;
-    clock_gettime(CLOCK_SGI_CYCLE, &tp);
-    return (ulonglong) tp.tv_sec * 1000000000 + (ulonglong) tp.tv_nsec;
+    ulonglong result;
+    __asm __volatile__ ("mrs %[rt],cntvct_el0" : [rt] "=r" (result));
+    return result;
   }
 #elif defined(HAVE_SYS_TIMES_H) && defined(HAVE_GETHRTIME)
   /* gethrtime may appear as either cycle or nanosecond counter */
@@ -232,12 +203,6 @@ ulonglong my_timer_cycles(void)
 #endif
 }
 
-#if defined(__INTEL_COMPILER)
-/* re-enable warning#1011 which was only for my_timer_cycles() */
-/* There may be an icc bug which means we must leave disabled. */
-#pragma warning (default:1011)
-#endif
-
 /*
   For nanoseconds, most platforms have nothing available that
   (a) doesn't require bringing in a 40-kb librt.so library
@@ -246,13 +211,7 @@ ulonglong my_timer_cycles(void)
 
 ulonglong my_timer_nanoseconds(void)
 {
-#if defined(HAVE_READ_REAL_TIME)
-  {
-    timebasestruct_t tr;
-    read_real_time(&tr, TIMEBASE_SZ);
-    return (ulonglong) tr.tb_high * 1000000000 + (ulonglong) tr.tb_low;
-  }
-#elif defined(HAVE_SYS_TIMES_H) && defined(HAVE_GETHRTIME)
+#if defined(HAVE_SYS_TIMES_H) && defined(HAVE_GETHRTIME)
   /* SunOS 5.10+, Solaris, HP-UX: hrtime_t gethrtime(void) */
   return (ulonglong) gethrtime();
 #elif defined(HAVE_CLOCK_GETTIME) && defined(CLOCK_REALTIME)
@@ -318,21 +277,32 @@ ulonglong my_timer_microseconds(void)
 }
 
 /*
-  For milliseconds, we use ftime() if it's supported
-  or time()*1000 if it's not. With modern versions of
-  Windows and with HP Itanium, resolution is 10-15
-  milliseconds.
+  For milliseconds, gettimeofday() is available on
+  almost all platforms. On Windows we use
+  GetSystemTimeAsFileTime.
 */
 
 ulonglong my_timer_milliseconds(void)
 {
-#if defined(HAVE_SYS_TIMEB_H) && defined(HAVE_FTIME)
-  /* ftime() is obsolete but maybe the platform is old */
-  struct timeb ft;
-  ftime(&ft);
-  return (ulonglong)ft.time * 1000 + (ulonglong)ft.millitm;
-#elif defined(HAVE_TIME)
-  return (ulonglong) time(NULL) * 1000;
+#if defined(HAVE_GETTIMEOFDAY)
+  {
+    static ulonglong last_ms_value= 0;
+    struct timeval tv;
+    if (gettimeofday(&tv, NULL) == 0)
+      last_ms_value= (ulonglong) tv.tv_sec * 1000 +
+                     (ulonglong) tv.tv_usec / 1000;
+    else
+    {
+      /*
+        There are reports that gettimeofday(2) can have intermittent failures
+        on some platform, see for example Bug#36819.
+        We are not trying again or looping, just returning the best value possible
+        under the circumstances ...
+      */
+      last_ms_value++;
+    }
+    return last_ms_value;
+  }
 #elif defined(_WIN32)
    FILETIME ft;
    GetSystemTimeAsFileTime( &ft );
@@ -505,19 +475,15 @@ void my_timer_init(MY_TIMER_INFO *mti)
   mti->cycles.routine= MY_TIMER_ROUTINE_ASM_X86;
 #elif defined(__GNUC__) && defined(__x86_64__)
   mti->cycles.routine= MY_TIMER_ROUTINE_ASM_X86_64;
-#elif defined(HAVE_ASM_MSR_H) && defined(HAVE_RDTSCLL)
-  mti->cycles.routine= MY_TIMER_ROUTINE_RDTSCLL;
 #elif defined(_WIN32) && defined(_M_IX86)
   mti->cycles.routine= MY_TIMER_ROUTINE_ASM_X86_WIN;
 #elif defined(_WIN64) && defined(_M_X64)
   mti->cycles.routine= MY_TIMER_ROUTINE_RDTSC;
-#elif defined(__INTEL_COMPILER) && defined(__ia64__) && defined(HAVE_IA64INTRIN_H)
-  mti->cycles.routine= MY_TIMER_ROUTINE_ASM_IA64;
 #elif defined(__GNUC__) && defined(__ia64__)
   mti->cycles.routine= MY_TIMER_ROUTINE_ASM_IA64;
-#elif defined(__GNUC__) && (defined(__powerpc__) || defined(__POWERPC__) || (defined(_POWER) && defined(_AIX52))) && (defined(__64BIT__) || defined(_ARCH_PPC64))
+#elif defined(__GNUC__) && (defined(__powerpc__) || defined(__POWERPC__)) && (defined(__64BIT__) || defined(_ARCH_PPC64))
   mti->cycles.routine= MY_TIMER_ROUTINE_ASM_PPC64;
-#elif defined(__GNUC__) && (defined(__powerpc__) || defined(__POWERPC__) || (defined(_POWER) && defined(_AIX52))) && (!defined(__64BIT__) && !defined(_ARCH_PPC64))
+#elif defined(__GNUC__) && (defined(__powerpc__) || defined(__POWERPC__)) && (!defined(__64BIT__) && !defined(_ARCH_PPC64))
   mti->cycles.routine= MY_TIMER_ROUTINE_ASM_PPC;
 #elif (defined(__SUNPRO_CC) || defined(__SUNPRO_C)) && defined(__sparcv9) && defined(_LP64) && !defined(__SunOS_5_7)
   mti->cycles.routine= MY_TIMER_ROUTINE_ASM_SUNPRO_SPARC64;
@@ -527,12 +493,12 @@ void my_timer_init(MY_TIMER_INFO *mti)
   mti->cycles.routine= MY_TIMER_ROUTINE_ASM_SUNPRO_I386;
 #elif (defined(__SUNPRO_CC) || defined(__SUNPRO_C)) && defined(__x86_64) && defined(_LP64)
   mti->cycles.routine= MY_TIMER_ROUTINE_ASM_SUNPRO_X86_64;
-#elif defined(__GNUC__) && defined(__sparcv9) && defined(_LP64) && (__GNUC__>2)
+#elif defined(__GNUC__) && defined(__sparcv9) && defined(_LP64)
   mti->cycles.routine= MY_TIMER_ROUTINE_ASM_GCC_SPARC64;
-#elif defined(__GNUC__) && defined(__sparc__) && !defined(_LP64) && (__GNUC__>2)
+#elif defined(__GNUC__) && defined(__sparc__) && !defined(_LP64)
   mti->cycles.routine= MY_TIMER_ROUTINE_ASM_GCC_SPARC32;
-#elif defined(__sgi) && defined(HAVE_CLOCK_GETTIME) && defined(CLOCK_SGI_CYCLE)
-  mti->cycles.routine= MY_TIMER_ROUTINE_SGI_CYCLE;
+#elif defined(__GNUC__) && defined(__aarch64__)
+  mti->cycles.routine= MY_TIMER_ROUTINE_ASM_AARCH64;
 #elif defined(HAVE_SYS_TIMES_H) && defined(HAVE_GETHRTIME)
   mti->cycles.routine= MY_TIMER_ROUTINE_GETHRTIME;
 #else
@@ -549,9 +515,7 @@ void my_timer_init(MY_TIMER_INFO *mti)
 
   /* nanoseconds */
   mti->nanoseconds.frequency=  1000000000; /* initial assumption */
-#if defined(HAVE_READ_REAL_TIME)
-  mti->nanoseconds.routine= MY_TIMER_ROUTINE_READ_REAL_TIME;
-#elif defined(HAVE_SYS_TIMES_H) && defined(HAVE_GETHRTIME)
+#if defined(HAVE_SYS_TIMES_H) && defined(HAVE_GETHRTIME)
   mti->nanoseconds.routine= MY_TIMER_ROUTINE_GETHRTIME;
 #elif defined(HAVE_CLOCK_GETTIME)
   mti->nanoseconds.routine= MY_TIMER_ROUTINE_CLOCK_GETTIME;
@@ -597,12 +561,10 @@ void my_timer_init(MY_TIMER_INFO *mti)
 
   /* milliseconds */
   mti->milliseconds.frequency= 1000; /* initial assumption */
-#if defined(HAVE_SYS_TIMEB_H) && defined(HAVE_FTIME)
-  mti->milliseconds.routine= MY_TIMER_ROUTINE_FTIME;
+#if defined(HAVE_GETTIMEOFDAY)
+  mti->milliseconds.routine= MY_TIMER_ROUTINE_GETTIMEOFDAY;
 #elif defined(_WIN32)
   mti->milliseconds.routine= MY_TIMER_ROUTINE_GETSYSTEMTIMEASFILETIME;
-#elif defined(HAVE_TIME)
-  mti->milliseconds.routine= MY_TIMER_ROUTINE_TIME;
 #else
   mti->milliseconds.routine= 0;
 #endif
@@ -697,13 +659,8 @@ void my_timer_init(MY_TIMER_INFO *mti)
     mti->microseconds.resolution=
     my_timer_init_resolution(&my_timer_microseconds, 20);
   if (mti->milliseconds.routine)
-  {
-    if (mti->milliseconds.routine == MY_TIMER_ROUTINE_TIME)
-      mti->milliseconds.resolution= 1000;
-    else
-      mti->milliseconds.resolution=
-      my_timer_init_resolution(&my_timer_milliseconds, 0);
-  }
+    mti->milliseconds.resolution=
+    my_timer_init_resolution(&my_timer_milliseconds, 0);
   if (mti->ticks.routine)
     mti->ticks.resolution= 1;
 
@@ -870,11 +827,6 @@ void my_timer_init(MY_TIMER_INFO *mti)
 
    clock_gettime() -- In tests, clock_gettime often had
    resolution = 1000.
-
-   ftime() -- A "man ftime" says: "This function is obsolete.
-   Don't use it." On every platform that we tested, if ftime()
-   was available, then so was gettimeofday(), and gettimeofday()
-   overhead was always at least as good as ftime() overhead.
 
    gettimeofday() -- available on most platforms, though not
    on Windows. There is a hardware timer (sometimes a Programmable

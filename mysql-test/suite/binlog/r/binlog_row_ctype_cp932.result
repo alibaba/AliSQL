@@ -58,7 +58,7 @@ want1result
 location
 DROP TABLE t1;
 create table t1 (a set('a') not null);
-insert into t1 values (),();
+insert ignore into t1 values (),();
 Warnings:
 Warning	1364	Field 'a' doesn't have a default value
 select cast(a as char(1)) from t1;
@@ -83,7 +83,7 @@ Table	Create Table
 t1	CREATE TABLE `t1` (
   `name` varchar(10) DEFAULT NULL,
   `level` smallint(5) unsigned DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=cp932
+) ENGINE=InnoDB DEFAULT CHARSET=cp932
 insert into t1 values ('string',1);
 select concat(name,space(level)), concat(name, repeat(' ',level)) from t1;
 concat(name,space(level))	concat(name, repeat(' ',level))
@@ -97,6 +97,8 @@ SET character_set_client= @safe_character_set_client;
 SET character_set_results= @safe_character_set_results;
 set names cp932;
 set character_set_database = cp932;
+Warnings:
+Warning	1681	Updating 'character_set_database' is deprecated. It will be made read-only in a future release.
 CREATE TABLE t1(c1 CHAR(1)) DEFAULT CHARACTER SET = cp932;
 INSERT INTO t1 VALUES
 (0x05),(0x7E),(0x815C),(0x815F),(0x8160),(0x8161),(0x817C),(0x8191),(0x8192),(0x81CA);
@@ -11431,9 +11433,9 @@ F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F225
 3 rows expected
 SELECT a, hex(b), c FROM t1 WHERE b LIKE concat(repeat(0xF1F2,10), '%');
 a	hex(b)	c
-2	F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2	
-3	F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2	
-4	F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2	
+2	F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2	NULL
+3	F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2	NULL
+4	F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2	NULL
 DROP TABLE t1;
 SET collation_connection='cp932_bin';
 create table t1 select repeat('a',4000) a;
@@ -11458,9 +11460,9 @@ F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F225
 3 rows expected
 SELECT a, hex(b), c FROM t1 WHERE b LIKE concat(repeat(0xF1F2,10), '%');
 a	hex(b)	c
-2	F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2	
-3	F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2	
-4	F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2	
+2	F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2	NULL
+3	F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2	NULL
+4	F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2F1F2	NULL
 DROP TABLE t1;
 create table t2 (a char(1));
 insert into t2 values ('0'),('1'),('2'),('3'),('4'),('5'),('6'),('7');
@@ -11480,14 +11482,14 @@ drop table t1;
 drop table t2;
 create table t1 (col1 varchar(1)) character set cp932;
 insert into t1 values ('a');
-insert into t1 values ('ab');
+insert ignore into t1 values ('ab');
 Warnings:
 Warning	1265	Data truncated for column 'col1' at row 1
 select * from t1;
 col1
 a
 a
-insert into t1 values ('abc');
+insert ignore into t1 values ('abc');
 Warnings:
 Warning	1265	Data truncated for column 'col1' at row 1
 select * from t1;

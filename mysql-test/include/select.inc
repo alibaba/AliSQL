@@ -1416,7 +1416,9 @@ drop table tmp;
 SET BIG_TABLES=1;
 select distinct concat(fld3," ",fld3) as namn from t2,t3 where t2.fld1=t3.t2nr order by namn limit 10;
 SET BIG_TABLES=0;
+--source include/turn_off_only_full_group_by.inc
 select distinct concat(fld3," ",fld3) from t2,t3 where t2.fld1=t3.t2nr order by fld3 limit 10;
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 select distinct fld5 from t2 limit 10;
 
 #
@@ -1522,6 +1524,8 @@ INSERT INTO t4 (companynr, companyname) VALUES (00,'Unknown');
 #
 # Test of stright join to force a full join.
 #
+
+# We see the functional dependency implied by WHERE and primary key of t4!
 
 select STRAIGHT_JOIN t2.companynr,companyname from t4,t2 where t2.companynr=t4.companynr group by t2.companynr;
 
@@ -1638,15 +1642,22 @@ select name,count(*) from t3 where name='cloakroom' and price>10 group by name;
 select count(*) from t3 where name='cloakroom' and price2=823742;
 select name,count(*) from t3 where name='cloakroom' and price2=823742 group by name;
 select name,count(*) from t3 where name >= "extramarital" and price <= 39654943 group by name;
+
+# We see the functional dependency implied by WHERE!
+
 select t2.fld3,count(*) from t2,t3 where t2.fld1=158402 and t3.name=t2.fld3 group by t3.name;
 
 #
 # Group with extra not group fields.
 #
 
+--source include/turn_off_only_full_group_by.inc
 select companynr|0,companyname from t4 group by 1;
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
+
 select t2.companynr,companyname,count(*) from t2,t4 where t2.companynr=t4.companynr group by t2.companynr order by companyname;
 select t2.fld1,count(*) from t2,t3 where t2.fld1=158402 and t3.name=t2.fld3 group by t3.name;
+
 
 #
 # Calculation with group functions
@@ -1685,6 +1696,8 @@ select t2.companynr,count(*),min(fld3),max(fld3),sum(price),avg(price) from t2,t
 #	    send rows
 #
 
+# We see the functional dependency implied by WHERE, for "ORDER BY fld1"
+
 select t3.companynr+0,t3.t2nr,fld3,sum(price) from t3,t2 where t2.fld1 = t3.t2nr and t3.companynr = 37 group by 1,t3.t2nr,fld3,fld3,fld3,fld3,fld3 order by fld1;
 
 #
@@ -1713,6 +1726,7 @@ select companynr,fld1 from t2 HAVING fld1=250501 or fld1=250502;
 select companynr,fld1 from t2 WHERE fld1>=250501 HAVING fld1<=250502;
 select companynr,count(*) as count,sum(fld1) as sum from t2 group by companynr having count > 40 and sum/count >= 120000;
 select companynr from t2 group by companynr having count(*) > 40 and sum(fld1)/count(*) >= 120000 ;
+
 select t2.companynr,companyname,count(*) from t2,t4 where t2.companynr=t4.companynr group by companyname having t2.companynr >= 40;
 
 #
@@ -1748,7 +1762,11 @@ select t1.period as "Nuvarande period" from t1 as t1 limit 1;
 select period as ok_period from t1 limit 1;
 select period as ok_period from t1 group by ok_period limit 1;
 select 1+1 as summa from t1 group by summa limit 1;
+
+# Note that grouping expression is a literal (constant), not an aliased column.
+--source include/turn_off_only_full_group_by.inc
 select period as "Nuvarande period" from t1 group by "Nuvarande period" limit 1;
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 
 #
 # Some simple show commands
@@ -1995,7 +2013,9 @@ create table t1 (a int(11) unsigned, b int(11) unsigned);
 insert into t1 values (1,0), (1,1), (18446744073709551615,0);
 select a-b  from t1 order by 1;
 select a-b , (a-b < 0)  from t1 order by 1;
+--source include/turn_off_only_full_group_by.inc
 select a-b as d, (a-b >= 0), b from t1 group by b having d >= 0;
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 select cast((a - b) as unsigned) from t1 order by 1;
 drop table t1;
 
@@ -2230,8 +2250,10 @@ CREATE TABLE t2 ( a INT NOT NULL, b INT NOT NULL, e INT );
 INSERT INTO t2 VALUES ( 1,10,1), (1,10,2), (1,11,1), (1,11,2), (1,2,1), (1,2,2),(1,2,3);
 SELECT t2.a, t2.b, IF(t1.b IS NULL,'',e) AS c, COUNT(*) AS d FROM t2 LEFT JOIN
 t1 ON t2.a = t1.a AND t2.b = t1.b GROUP BY a, b, c;
+--source include/turn_off_only_full_group_by.inc
 SELECT t2.a, t2.b, IF(t1.b IS NULL,'',e) AS c, COUNT(*) AS d FROM t2 LEFT JOIN
 t1 ON t2.a = t1.a AND t2.b = t1.b GROUP BY t1.a, t1.b, c;
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 SELECT t2.a, t2.b, IF(t1.b IS NULL,'',e) AS c, COUNT(*) AS d FROM t2 LEFT JOIN
 t1 ON t2.a = t1.a AND t2.b = t1.b GROUP BY t2.a, t2.b, c;
 SELECT t2.a, t2.b, IF(t1.b IS NULL,'',e) AS c, COUNT(*) AS d FROM t2,t1
@@ -2358,7 +2380,7 @@ DROP TABLE t1;
 #
 
 create table t1(a bigint unsigned, b bigint);
-insert into t1 values (0xfffffffffffffffff, 0xfffffffffffffffff), 
+insert ignore into t1 values (0xfffffffffffffffff, 0xfffffffffffffffff), 
   (0x10000000000000000, 0x10000000000000000), 
   (0x8fffffffffffffff, 0x8fffffffffffffff);
 select hex(a), hex(b) from t1;
@@ -2944,8 +2966,8 @@ insert into t2 select A.a, B.a, C.a, C.a from t1 A, t1 B, t1 C;
 analyze table t2;
 select 'In next EXPLAIN, B.rows must be exactly 10:' Z;
 
-explain select * from t2 A, t2 B where A.a=5 and A.b=5 and A.C<5
-          and B.a=5 and B.b=A.e and (B.b =1 or B.b = 3 or B.b=5);
+explain select * from t2 a, t2 b where a.a=5 and a.b=5 and a.c<5
+          and b.a=5 and b.b=a.e and (b.b =1 or b.b = 3 or b.b=5);
 drop table t1, t2;
 
 #
@@ -3148,7 +3170,11 @@ CREATE TABLE t1 ( f1 int primary key, f2 int, f3 int, f4 int, f5 int, f6 int, ch
 CREATE TABLE t2 ( f11 int PRIMARY KEY );
 INSERT INTO t1 VALUES (1,1,1,0,0,0,0),(2,1,1,3,8,1,0),(3,1,1,4,12,1,0);
 INSERT INTO t2 VALUES (62);
+
+# We see the functional dependency implied by ON and primary key of t1!
+
 SELECT * FROM t1 LEFT JOIN t2 ON f11 = t1.checked_out GROUP BY f1 ORDER BY f2, f3, f4, f5 LIMIT 0, 1;
+
 DROP TABLE t1, t2;
 
 #
@@ -3410,7 +3436,10 @@ while ($n)
   dec $n;
 }
 --disable_warnings
+--disable_result_log
+--error 0,1436
 eval EXPLAIN SELECT c1 FROM t1 WHERE $q > 0;
+--enable_result_log
 --enable_warnings
 
 let $n= 64;
@@ -3762,8 +3791,8 @@ DROP TABLE t1;
 --echo #
 CREATE TABLE t1(a LINESTRING NOT NULL, SPATIAL KEY(a));
 INSERT INTO t1 VALUES
-  (GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)')),
-  (GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
+  (ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)')),
+  (ST_GEOMFROMTEXT('LINESTRING(-1 -1, 1 -1, -1 -1, -1 1, 1 1)'));
 EXPLAIN SELECT 1 FROM t1 NATURAL LEFT JOIN t1 AS t2;
 SELECT 1 FROM t1 NATURAL LEFT JOIN t1 AS t2;
 EXPLAIN SELECT 1 FROM t1 NATURAL LEFT JOIN t1 AS t2 FORCE INDEX(a);
@@ -3791,7 +3820,7 @@ DROP TABLE t1;
 --echo # Bug #48458: simple query tries to allocate enormous amount of
 --echo #   memory
 --echo #
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 CREATE TABLE t1(a INT NOT NULL, b YEAR);
 INSERT INTO t1 VALUES ();
 CREATE TABLE t2(c INT);
@@ -3799,7 +3828,7 @@ CREATE TABLE t2(c INT);
 SELECT 1 FROM t2 JOIN t1 ON 1=1
   WHERE a != '1' AND NOT a >= b OR NOT ROW(b,a )<> ROW(a,a);
 DROP TABLE t1,t2;
-
+SET sql_mode = default;
 
 --echo #
 --echo # Bug #49199: Optimizer handles incorrectly: 
@@ -3857,7 +3886,7 @@ DROP TABLE t1;
 --echo #
 SET @old_sort_buffer_size= @@session.sort_buffer_size;
 SET @@sort_buffer_size= 40000;
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 CREATE TABLE t1(a CHAR(0) NOT NULL);
 --disable_warnings
 INSERT INTO t1 VALUES (0), (0), (0);
@@ -3889,7 +3918,7 @@ SELECT * FROM t1 ORDER BY c, a LIMIT 5;
 
 SET @@sort_buffer_size= @old_sort_buffer_size;
 DROP TABLE t1;
-
+SET sql_mode = default;
 
 --echo End of 5.0 tests
 
@@ -3919,7 +3948,7 @@ CREATE TABLE C (
   varchar_key varchar(1)
 );
 
-INSERT INTO C VALUES 
+INSERT IGNORE INTO C VALUES 
 (1,1,1,'0000-00-00',NULL,NULL),
 (1,1,1,'0000-00-00',NULL,NULL);
 
@@ -3989,7 +4018,7 @@ CREATE TABLE `B` (
   KEY `varchar_key` (`varchar_key`)
 );
 
-INSERT INTO `B` VALUES ('2003-07-28','2003-07-28','15:13:38','0000-00-00 00:00:00','f'),('0000-00-00','0000-00-00','00:05:48','2004-07-02 14:34:13','x');
+INSERT IGNORE INTO `B` VALUES ('2003-07-28','2003-07-28','15:13:38','0000-00-00 00:00:00','f'),('0000-00-00','0000-00-00','00:05:48','2004-07-02 14:34:13','x');
 
 CREATE TABLE `BB` (
   `pk` int(11) NOT NULL AUTO_INCREMENT,
@@ -4001,7 +4030,7 @@ CREATE TABLE `BB` (
   KEY `date_key` (`date_key`)
 );
 
-INSERT INTO `BB` VALUES (10,8,'0000-00-00','i','0000-00-00'),(11,0,'2005-08-18','','2005-08-18');
+INSERT IGNORE INTO `BB` VALUES (10,8,'0000-00-00','i','0000-00-00'),(11,0,'2005-08-18','','2005-08-18');
 # Test #1
 SELECT table1 . `pk` AS field1 
   FROM 
@@ -4214,7 +4243,7 @@ DROP TABLE t1,t2,t_empty;
 --echo #
 --echo # Bug#45227: Lost HAVING clause led to a wrong result.
 --echo #
-CREATE TABLE `CC` (
+CREATE TABLE `cc` (
   `int_nokey` int(11) NOT NULL,
   `int_key` int(11) NOT NULL,
   `varchar_key` varchar(1) NOT NULL,
@@ -4222,18 +4251,18 @@ CREATE TABLE `CC` (
   KEY `int_key` (`int_key`),
   KEY `varchar_key` (`varchar_key`)
 );
-INSERT INTO `CC` VALUES
+INSERT INTO `cc` VALUES
 (0,8,'q','q'),(5,8,'m','m'),(7,3,'j','j'),(1,2,'z','z'),(8,2,'a','a'),(2,6,'',''),(1,8,'e'
 ,'e'),(8,9,'t','t'),(5,2,'q','q'),(4,6,'b','b'),(5,5,'w','w'),(3,2,'m','m'),(0,4,'x','x'),
 (8,9,'',''),(0,6,'w','w'),(4,5,'x','x'),(0,0,'e','e'),(0,0,'e','e'),(2,8,'p','p'),(0,0,'x'
 ,'x');
-EXPLAIN SELECT `varchar_nokey` G1  FROM CC  WHERE `int_nokey` AND `int_key`  <= 4
-  HAVING G1  ORDER  BY `varchar_key` LIMIT  6   ;
+EXPLAIN SELECT `varchar_nokey` g1  FROM cc  WHERE `int_nokey` AND `int_key`  <= 4
+  HAVING g1  ORDER  BY `varchar_key` LIMIT  6   ;
 
-SELECT `varchar_nokey` G1  FROM CC  WHERE `int_nokey` AND `int_key`  <= 4
-  HAVING G1  ORDER  BY `varchar_key` LIMIT  6   ;
+SELECT `varchar_nokey` g1  FROM cc  WHERE `int_nokey` AND `int_key`  <= 4
+  HAVING g1  ORDER  BY `varchar_key` LIMIT  6   ;
 
-DROP TABLE CC;
+DROP TABLE cc;
 --echo # End of test#45227
 
 --echo #
@@ -4262,17 +4291,20 @@ DROP TABLE t1;
 --echo #
 --echo # Bug #57203 Assertion `field_length <= 255' failed.
 --echo #
-
-SELECT coalesce((avg(distinct (geomfromtext("point(25379 -22010)"))))) 
+--error ER_WRONG_ARGUMENTS
+SELECT coalesce((avg(distinct (ST_geomfromtext("point(25379 -22010)"))))) 
 UNION ALL 
-SELECT coalesce((avg(distinct (geomfromtext("point(25379 -22010)")))))
+SELECT coalesce((avg(distinct (ST_geomfromtext("point(25379 -22010)")))))
 AS foo
 ;
 
 CREATE table t1(a text);
 INSERT INTO t1 VALUES (''), ('');
+
+--source include/turn_off_only_full_group_by.inc
 SELECT avg(distinct(t1.a)) FROM t1, t1 t2
 GROUP BY t2.a ORDER BY t1.a;
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 
 DROP TABLE t1;
 
@@ -4299,7 +4331,28 @@ DROP VIEW view_t1;
 --echo #
 
 CREATE TABLE t1 (a TINYBLOB NOT NULL);
+
+--source include/turn_off_only_full_group_by.inc
 SELECT a, COUNT(*) FROM t1 WHERE 0;
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
+
 DROP TABLE t1;
 
 --echo # End of test BUG#13571700
+
+--echo #
+--echo # Bug #18766378: CRASH IN ITEM_SUM_BIT::RESET_FIELD
+--echo #
+CREATE TABLE t1(b int);
+CREATE TABLE t2(a int);
+INSERT INTO t1 VALUES (),();
+INSERT INTO t2 VALUES (),();
+SELECT
+( SELECT 1 FROM t1 GROUP BY a
+  HAVING avg(distinct 1) ORDER BY max(a)
+)
+FROM  t1, t2
+GROUP BY a;
+
+DROP TABLE t1,t2;
+echo # End of test BUG#18766378

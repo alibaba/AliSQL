@@ -1,0 +1,3 @@
+--enforce-gtid-consistency=on
+--gtid-mode=on
+--duckdb_mode=0

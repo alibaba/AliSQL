@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -19,6 +26,9 @@
 
 #define QMGR_C
 #include "Qmgr.hpp"
+
+#define JAM_FILE_ID 361
+
 
 #define DEBUG(x) { ndbout << "Qmgr::" << x << endl; }
 
@@ -34,7 +44,6 @@ void Qmgr::initData()
     nodeRec[i].m_secret = 0;
   }
 
-  cnoCommitFailedNodes = 0;
   c_maxDynamicId = 0;
   c_clusterNodes.clear();
   c_stopReq.senderRef = 0;
@@ -53,6 +62,7 @@ void Qmgr::initData()
   nodePtr.i = getOwnNodeId();
   ptrAss(nodePtr, nodeRec);
   nodePtr.p->blockRef = reference();
+  ndbrequire(getNodeInfo(getOwnNodeId()).m_type == NodeInfo::DB);
 
   c_connectedNodes.set(getOwnNodeId());
   setNodeInfo(getOwnNodeId()).m_version = NDB_VERSION;
@@ -70,6 +80,10 @@ void Qmgr::initData()
   
   setHbApiDelay(hbDBAPI);
 
+  const NDB_TICKS now = NdbTick_getCurrentTicks(); //OJA bug#17757895
+  interface_check_timer.setDelay(1000);
+  interface_check_timer.reset(now);
+
 #ifdef ERROR_INSERT
   nodeFailCount = 0;
 #endif
@@ -77,8 +91,9 @@ void Qmgr::initData()
   cfailureNr = 1;
   ccommitFailureNr = 1;
   cprepareFailureNr = 1;
-  cnoFailedNodes = 0;
-  cnoPrepFailedNodes = 0;
+  cfailedNodes.clear();
+  cprepFailedNodes.clear();
+  ccommitFailedNodes.clear();
   creadyDistCom = ZFALSE;
   cpresident = ZNIL;
   c_start.m_president_candidate = ZNIL;
@@ -87,13 +102,47 @@ void Qmgr::initData()
   cneighbourh = ZNIL;
   cneighbourl = ZNIL;
   cdelayRegreq = ZDELAY_REGREQ;
-  cactivateApiCheck = 0;
   c_allow_api_connect = 0;
   ctoStatus = Q_NOT_ACTIVE;
-  clatestTransactionCheck = 0;
+
+  for (nodePtr.i = 1; nodePtr.i < MAX_NODES; nodePtr.i++)
+  {
+    ptrAss(nodePtr, nodeRec);
+    nodePtr.p->ndynamicId = 0;
+    nodePtr.p->hbOrder = 0;
+    Uint32 cnt = 0;
+    Uint32 type = getNodeInfo(nodePtr.i).m_type;
+    switch(type){
+    case NodeInfo::DB:
+      jam();
+      nodePtr.p->phase = ZINIT;
+      c_definedNodes.set(nodePtr.i);
+      break;
+    case NodeInfo::API:
+      jam();
+      nodePtr.p->phase = ZAPI_INACTIVE;
+      break;
+    case NodeInfo::MGM:
+      jam();
+      /**
+       * cmvmi allows ndb_mgmd to connect directly
+       */
+      nodePtr.p->phase = ZAPI_INACTIVE;
+      break;
+    default:
+      jam();
+      nodePtr.p->phase = ZAPI_INACTIVE;
+    }
+
+    set_hb_count(nodePtr.i) = cnt;
+    nodePtr.p->sendPrepFailReqStatus = Q_NOT_ACTIVE;
+    nodePtr.p->sendCommitFailReqStatus = Q_NOT_ACTIVE;
+    nodePtr.p->sendPresToStatus = Q_NOT_ACTIVE;
+    nodePtr.p->failState = NORMAL;
+  }//for
 }//Qmgr::initData()
 
-void Qmgr::initRecords() 
+void Qmgr::initRecords()
 {
   // Records with dynamic sizes
 }//Qmgr::initRecords()
@@ -170,6 +219,15 @@ Qmgr::Qmgr(Block_context& ctx)
   // Connectivity check signals
   addRecSignal(GSN_NODE_PING_REQ, &Qmgr::execNODE_PINGREQ);
   addRecSignal(GSN_NODE_PING_CONF, &Qmgr::execNODE_PINGCONF);
+
+  // Ndbinfo signal
+  addRecSignal(GSN_DBINFO_SCANREQ, &Qmgr::execDBINFO_SCANREQ);
+
+  // Message from NDBCNTR when our node is set to state STARTED
+  addRecSignal(GSN_NODE_STARTED_REP, &Qmgr::execNODE_STARTED_REP);
+
+  // Message from other blocks requesting node isolation
+  addRecSignal(GSN_ISOLATE_ORD, &Qmgr::execISOLATE_ORD);
 
   initData();
 }//Qmgr::Qmgr()

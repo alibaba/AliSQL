@@ -1,13 +1,20 @@
-/* Copyright (c) 2011, 2013, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -75,7 +82,7 @@ private:
   MYSQL_TIME t;
   uint p;
 public:
-  Mock_protocol(THD *thd) : Protocol(thd) {}
+  Mock_protocol(THD *thd) {}
 
   virtual bool store_time(MYSQL_TIME *time, uint precision)
   {
@@ -91,27 +98,55 @@ public:
   }
 
   // Lots of functions that require implementation
-  virtual void prepare_for_resend() {}
+  int read_packet() { return 0; }
+  ulong get_client_capabilities() { return 0; }
+  bool has_client_capability(unsigned long client_capability) {return false;}
+  void end_partial_result_set() {}
+  int shutdown(bool server_shutdown= false) { return 0; }
+  void *get_ssl() { return 0; }
+  void start_row() {}
+  bool end_row() { return false; }
+  bool connection_alive() { return false; }
+  void abort_row() {}
+  uint get_rw_status() { return 0; }
+  bool get_compression() { return false; }
+  bool start_result_metadata(uint num_cols, uint flags,
+                             const CHARSET_INFO *resultcs)
+  { return false; }
+  void send_num_fields(uint) {}
+  void send_num_rows(uint) {}
+  bool send_field_metadata(Send_field *field,
+                           const CHARSET_INFO *charset) { return false; }
+  virtual bool send_ok(uint server_status, uint statement_warn_count,
+                       ulonglong affected_rows, ulonglong last_insert_id,
+                       const char *message) { return false; }
+
+  virtual bool send_eof(uint server_status,
+                        uint statement_warn_count) { return false; }
+  virtual bool send_error(uint sql_errno, const char *err_msg,
+                          const char *sql_state) { return false; }
+  bool end_result_metadata() { return false; }
 
   virtual bool store_null() { return false; }
   virtual bool store_tiny(longlong from) { return false; }
   virtual bool store_short(longlong from) { return false; }
   virtual bool store_long(longlong from) { return false; }
-  virtual bool store_longlong(longlong from, bool unsigned_flag) { return false; }
-  virtual bool store_decimal(const my_decimal *) { return false; }
+  virtual bool store_longlong(longlong from, bool unsigned_flag)
+  { return false; }
+  virtual bool store_decimal(const my_decimal *, uint, uint) { return false; }
   virtual bool store(const char *from, size_t length,
-                     const CHARSET_INFO *cs) { return false; }
-  virtual bool store(const char *from, size_t length,
-                     const CHARSET_INFO *fromcs,
-                     const CHARSET_INFO *tocs) { return false; }
-  virtual bool store(float from, uint32 decimals, String *buffer) { return false; }
-  virtual bool store(double from, uint32 decimals, String *buffer) { return false; }
+                     const CHARSET_INFO *fromcs) { return false; }
+  virtual bool store(float from, uint32 decimals, String *buffer)
+  { return false; }
+  virtual bool store(double from, uint32 decimals, String *buffer)
+  { return false; }
   virtual bool store(MYSQL_TIME *time, uint precision) { return false; }
   virtual bool store_date(MYSQL_TIME *time) { return false; }
-  virtual bool store(Field *field) { return false; }
-
-  virtual bool send_out_parameters(List<Item_param> *sp_params) { return false; }
+  virtual bool store(Proto_field *field) { return false; }
   virtual enum enum_protocol_type type() { return PROTOCOL_LOCAL; };
+  virtual enum enum_vio_type connection_type() { return NO_VIO_TYPE; }
+  virtual int get_command(COM_DATA *com_data, enum_server_command *cmd)
+  { return -1; }
 };
 
 
@@ -186,7 +221,7 @@ TEST_F(FieldTest, FieldTimef)
   EXPECT_EQ(0, field->store_time(&bigTime, 4));
   EXPECT_FALSE(field->get_date(&dateTime, 0));
 
-  make_datetime((DATE_TIME_FORMAT *)0, &dateTime, &timeStr, 6);
+  make_datetime((Date_time_format *)0, &dateTime, &timeStr, 6);
   // Skip 'yyyy-mm-dd ' since that will depend on current time zone.
   EXPECT_STREQ("03:45:45.555500", timeStr.c_ptr() + 11);
 
@@ -195,6 +230,7 @@ TEST_F(FieldTest, FieldTimef)
   compareMysqlTime(bigTime, t);
 
   Mock_protocol protocol(thd());
+  EXPECT_EQ(protocol.connection_type(), NO_VIO_TYPE);
   EXPECT_FALSE(field->send_binary(&protocol));
   // The verification below fails because send_binary move hours to days
   // protocol.verify_time(&bigTime, 0);  // Why 0?
@@ -390,12 +426,13 @@ TEST_F(FieldTest, CopyFieldSet)
 
   Field_set *f_from= create_field_set(&tl4);
   bitmap_set_all(f_from->table->write_set);
+  bitmap_set_all(f_from->table->read_set);
   uchar from_fieldval= static_cast<uchar>(typeset);
   f_from->ptr= &from_fieldval;
 
   Copy_field *cf= new (thd()->mem_root) Copy_field;
   cf->set(f_to, f_from, false);
-  cf->do_copy(cf);
+  cf->invoke_do_copy(cf);
 
   // Copy_field DTOR is not invoked in all contexts, so we may leak memory.
   EXPECT_FALSE(cf->tmp.is_alloced());
@@ -637,7 +674,7 @@ TEST_F(FieldTest, MakeSortKey)
     SCOPED_TRACE("Field_blob");
     CHARSET_INFO cs;
     cs.state= MY_CHARSET_UNDEFINED; // Avoid valgrind warning.
-    Field_blob fb(0, false, "", &cs);
+    Field_blob fb(0, false, "", &cs, false);
   }
   {
     SCOPED_TRACE("Field_enum");

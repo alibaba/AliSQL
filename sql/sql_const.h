@@ -1,13 +1,20 @@
-/* Copyright (c) 2006, 2013, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2006, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -104,8 +111,6 @@
 #define READ_RECORD_BUFFER	(uint) (IO_SIZE*8) /* Pointer_buffer_size */
 #define DISK_BUFFER_SIZE	(uint) (IO_SIZE*16) /* Size of diskbuffer */
 
-#define FRM_VER_TRUE_VARCHAR (FRM_VER+4) /* 10 */
-
 /***************************************************************************
   Configuration parameters
 ****************************************************************************/
@@ -116,7 +121,6 @@
 #define MAX_ACCEPT_RETRY	10	// Test accept this many times
 #define MAX_FIELDS_BEFORE_HASH	32
 #define USER_VARS_HASH_SIZE     16
-#define SEQUENCES_HASH_SIZE     16
 #define TABLE_OPEN_CACHE_MIN    400
 #define TABLE_OPEN_CACHE_DEFAULT 2000
 #define TABLE_DEF_CACHE_DEFAULT 400
@@ -149,7 +153,13 @@
 #define STACK_MIN_SIZE          16000   // Abort if less stack during eval.
 
 #define STACK_MIN_SIZE_FOR_OPEN 1024*80
+
+#if defined( __SUNPRO_CC)
+#define STACK_BUFF_ALLOC        352*2   ///< For stack overrun checks
+#else
 #define STACK_BUFF_ALLOC        352     ///< For stack overrun checks
+#endif
+
 #ifndef MYSQLD_NET_RETRY_COUNT
 #define MYSQLD_NET_RETRY_COUNT  10	///< Abort read after this many int.
 #endif
@@ -163,7 +173,6 @@
 #define UDF_ALLOC_BLOCK_SIZE		1024
 #define TABLE_ALLOC_BLOCK_SIZE		1024
 #define WARN_ALLOC_BLOCK_SIZE		2048
-#define WARN_ALLOC_PREALLOC_SIZE	1024
 
 /*
   The following parameters is to decide when to use an extra cache to
@@ -173,18 +182,6 @@
 #define MIN_ROWS_TO_USE_TABLE_CACHE	 100
 #define MIN_ROWS_TO_USE_BULK_INSERT	 100
 
-/**
-  The following is used to decide if MySQL should use table scanning
-  instead of reading with keys.  The number says how costly evaluation of the
-  filter condition for a row is compared to reading one extra row from a table.
-*/
-#define ROW_EVALUATE_COST  0.20
-
-/**
-  Cost of comparing a rowid compared to reading one row from a table.
-*/
-#define ROWID_COMPARE_COST 0.10  // Half the cost of a general row comparison
-
 /*
   For sequential disk seeks the cost formula is:
     DISK_SEEK_BASE_COST + DISK_SEEK_PROP_COST * #blocks_to_skip  
@@ -192,11 +189,11 @@
   The cost of average seek 
     DISK_SEEK_BASE_COST + DISK_SEEK_PROP_COST*BLOCKS_IN_AVG_SEEK =1.0.
 */
-#define DISK_SEEK_BASE_COST ((double)0.9)
+#define DISK_SEEK_BASE_COST (0.9)
 
 #define BLOCKS_IN_AVG_SEEK  128
 
-#define DISK_SEEK_PROP_COST ((double)0.1/BLOCKS_IN_AVG_SEEK)
+#define DISK_SEEK_PROP_COST (0.1/BLOCKS_IN_AVG_SEEK)
 
 
 /**
@@ -205,33 +202,6 @@
   distribution.
 */
 #define MATCHING_ROWS_IN_OTHER_TABLE 10
-
-/*
-  Constants related to the use of temporary tables in query execution.
-  Lookup and write operations are currently assumed to be equally costly
-  (concerns HEAP_TEMPTABLE_ROW_COST and DISK_TEMPTABLE_ROW_COST).
-*/
-/*
-  Creating a Heap temporary table is by benchmark found to be as costly as
-  writing 10 rows into the table.
-*/
-#define HEAP_TEMPTABLE_CREATE_COST    2.0
-/*
-  Writing a row to or reading a row from a Heap temporary table is equivalent
-  to evaluating a row in the join engine.
-*/
-#define HEAP_TEMPTABLE_ROW_COST       0.2
-/*
-  Creating a MyISAM table is 20 times slower than creating a Heap table.
-*/
-#define DISK_TEMPTABLE_CREATE_COST   40.0
-/*
-  Generating MyIsam rows sequentially is 2 times slower than generating
-  Heap rows, when number of rows is greater than 1000. However, we do not have
-  benchmarks for very large tables, so setting this factor conservatively to
-  be 5 times slower (ie the cost is 1.0).
-*/
-#define DISK_TEMPTABLE_ROW_COST       1.0
 
 #define MY_CHARSET_BIN_MB_MAXLEN 1
 
@@ -242,9 +212,6 @@
 #define PROCESS_LIST_WIDTH 100
 /* Characters shown for the command in 'information_schema.processlist' */
 #define PROCESS_LIST_INFO_WIDTH 65535
-
-/* The max key string length for sql filter */
-#define SQL_FILTER_STR_LEN 10240
 
 #define PRECISION_FOR_DOUBLE 53
 #define PRECISION_FOR_FLOAT  24
@@ -274,7 +241,7 @@
 */
 #define MAX_TIME_ZONE_NAME_LENGTH       (NAME_LEN + 1)
 
-#if defined(__WIN__)
+#if defined(_WIN32)
 #define INTERRUPT_PRIOR -2
 #define CONNECT_PRIOR	-1
 #define WAIT_PRIOR	0
@@ -284,6 +251,109 @@
 #define CONNECT_PRIOR	9
 #define WAIT_PRIOR	8
 #define QUERY_PRIOR	6
-#endif /* __WIN92__ */
+#endif /* _WIN32 */
+
+/*
+  Flags below are set when we perform
+  context analysis of the statement and make
+  subqueries non-const. It prevents subquery
+  evaluation at context analysis stage.
+*/
+
+/*
+  Don't evaluate this subquery during statement prepare even if
+  it's a constant one. The flag is switched off in the end of
+  mysqld_stmt_prepare.
+*/ 
+#define CONTEXT_ANALYSIS_ONLY_PREPARE 1
+/*
+  Special SELECT_LEX::prepare mode: changing of query is prohibited.
+  When creating a view, we need to just check its syntax omitting
+  any optimizations: afterwards definition of the view will be
+  reconstructed by means of ::print() methods and written to
+  to an .frm file. We need this definition to stay untouched.
+*/ 
+#define CONTEXT_ANALYSIS_ONLY_VIEW    2
+/*
+  Don't evaluate this subquery during derived table prepare even if
+  it's a constant one.
+*/
+#define CONTEXT_ANALYSIS_ONLY_DERIVED 4
+
+
+/* @@optimizer_switch flags. These must be in sync with optimizer_switch_typelib */
+#define OPTIMIZER_SWITCH_INDEX_MERGE               (1ULL << 0)
+#define OPTIMIZER_SWITCH_INDEX_MERGE_UNION         (1ULL << 1)
+#define OPTIMIZER_SWITCH_INDEX_MERGE_SORT_UNION    (1ULL << 2)
+#define OPTIMIZER_SWITCH_INDEX_MERGE_INTERSECT     (1ULL << 3)
+#define OPTIMIZER_SWITCH_ENGINE_CONDITION_PUSHDOWN (1ULL << 4)
+#define OPTIMIZER_SWITCH_INDEX_CONDITION_PUSHDOWN  (1ULL << 5)
+/** If this is off, MRR is never used. */
+#define OPTIMIZER_SWITCH_MRR                       (1ULL << 6)
+/**
+   If OPTIMIZER_SWITCH_MRR is on and this is on, MRR is used depending on a
+   cost-based choice ("automatic"). If OPTIMIZER_SWITCH_MRR is on and this is
+   off, MRR is "forced" (i.e. used as long as the storage engine is capable of
+   doing it).
+*/
+#define OPTIMIZER_SWITCH_MRR_COST_BASED            (1ULL << 7)
+#define OPTIMIZER_SWITCH_BNL                       (1ULL << 8)
+#define OPTIMIZER_SWITCH_BKA                       (1ULL << 9)
+#define OPTIMIZER_SWITCH_MATERIALIZATION           (1ULL << 10)
+#define OPTIMIZER_SWITCH_SEMIJOIN                  (1ULL << 11)
+#define OPTIMIZER_SWITCH_LOOSE_SCAN                (1ULL << 12)
+#define OPTIMIZER_SWITCH_FIRSTMATCH                (1ULL << 13)
+#define OPTIMIZER_SWITCH_DUPSWEEDOUT               (1ULL << 14)
+#define OPTIMIZER_SWITCH_SUBQ_MAT_COST_BASED       (1ULL << 15)
+#define OPTIMIZER_SWITCH_USE_INDEX_EXTENSIONS      (1ULL << 16)
+#define OPTIMIZER_SWITCH_COND_FANOUT_FILTER        (1ULL << 17)
+#define OPTIMIZER_SWITCH_DERIVED_MERGE             (1ULL << 18)
+#define OPTIMIZER_SWITCH_PREFER_ORDERING_INDEX     (1ULL << 19)
+#define OPTIMIZER_SWITCH_LAST                      (1ULL << 20)
+
+#define OPTIMIZER_SWITCH_DEFAULT (OPTIMIZER_SWITCH_INDEX_MERGE | \
+                                  OPTIMIZER_SWITCH_INDEX_MERGE_UNION | \
+                                  OPTIMIZER_SWITCH_INDEX_MERGE_SORT_UNION | \
+                                  OPTIMIZER_SWITCH_INDEX_MERGE_INTERSECT | \
+                                  OPTIMIZER_SWITCH_ENGINE_CONDITION_PUSHDOWN |\
+                                  OPTIMIZER_SWITCH_INDEX_CONDITION_PUSHDOWN | \
+                                  OPTIMIZER_SWITCH_MRR | \
+                                  OPTIMIZER_SWITCH_MRR_COST_BASED | \
+                                  OPTIMIZER_SWITCH_BNL | \
+                                  OPTIMIZER_SWITCH_MATERIALIZATION | \
+                                  OPTIMIZER_SWITCH_SEMIJOIN | \
+                                  OPTIMIZER_SWITCH_LOOSE_SCAN | \
+                                  OPTIMIZER_SWITCH_FIRSTMATCH | \
+                                  OPTIMIZER_SWITCH_DUPSWEEDOUT | \
+                                  OPTIMIZER_SWITCH_SUBQ_MAT_COST_BASED | \
+                                  OPTIMIZER_SWITCH_USE_INDEX_EXTENSIONS | \
+                                  OPTIMIZER_SWITCH_COND_FANOUT_FILTER | \
+                                  OPTIMIZER_SWITCH_DERIVED_MERGE | \
+                                  OPTIMIZER_SWITCH_PREFER_ORDERING_INDEX)
+
+enum SHOW_COMP_OPTION { SHOW_OPTION_YES, SHOW_OPTION_NO, SHOW_OPTION_DISABLED};
+
+enum enum_mark_columns
+{ MARK_COLUMNS_NONE, MARK_COLUMNS_READ, MARK_COLUMNS_WRITE, MARK_COLUMNS_TEMP};
+
+/*
+  Exit code used by mysqld_exit, exit and _exit function
+  to indicate successful termination of mysqld.
+*/
+#define MYSQLD_SUCCESS_EXIT 0
+/*
+  Exit code used by mysqld_exit, exit and _exit function to
+  signify unsuccessful termination of mysqld. The exit
+  code signifies the server should NOT BE RESTARTED AUTOMATICALLY
+  by init systems like systemd. 
+*/
+#define MYSQLD_ABORT_EXIT 1
+/*
+  Exit code used by mysqld_exit, exit and _exit function to
+  signify unsuccessful termination of mysqld. The exit code
+  signifies the server should be RESTARTED AUTOMATICALLY by
+  init systems like systemd.
+*/
+#define MYSQLD_FAILURE_EXIT 2
 
 #endif /* SQL_CONST_INCLUDED */

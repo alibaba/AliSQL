@@ -1,13 +1,20 @@
-/* Copyright (c) 2000, 2014, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -28,8 +35,8 @@
 
 uchar *hp_find_block(HP_BLOCK *block, ulong pos)
 {
-  reg1 int i;
-  reg3 HP_PTRS *ptr; /* block base ptr */
+  int i;
+  HP_PTRS *ptr; /* block base ptr */
 
   for (i=block->levels-1, ptr=block->root ; i > 0 ; i--)
   {
@@ -56,7 +63,7 @@ uchar *hp_find_block(HP_BLOCK *block, ulong pos)
 
 int hp_get_new_block(HP_BLOCK *block, size_t *alloc_length)
 {
-  reg1 uint i,j;
+  uint i,j;
   HP_PTRS *root;
 
   for (i=0 ; i < block->levels ; i++)
@@ -77,7 +84,8 @@ int hp_get_new_block(HP_BLOCK *block, size_t *alloc_length)
    */
   *alloc_length= sizeof(HP_PTRS)* i + (ulonglong) block->records_in_block *
                                               block->recbuffer;
-  if (!(root=(HP_PTRS*) my_malloc(*alloc_length,MYF(MY_WME))))
+  if (!(root=(HP_PTRS*) my_malloc(hp_key_memory_HP_PTRS,
+                                  *alloc_length,MYF(MY_WME))))
     return 1;
 
   if (i == 0)

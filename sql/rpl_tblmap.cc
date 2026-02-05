@@ -1,26 +1,29 @@
-/* Copyright (c) 2005, 2013, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2005, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
    51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
 
-#include "sql_priv.h"
-#include "my_global.h"                          // HAVE_REPLICATION
-
 #ifdef HAVE_REPLICATION
-
 #include "rpl_tblmap.h"
 #ifndef MYSQL_CLIENT
-#include "table.h"
+#include "table.h"       // TABLE
 #endif
 
 #ifdef MYSQL_CLIENT
@@ -34,6 +37,14 @@
 table_mapping::table_mapping()
   : m_free(0)
 {
+  PSI_memory_key psi_key;
+
+#ifdef MYSQL_CLIENT
+  psi_key= PSI_NOT_INSTRUMENTED;
+#else
+  psi_key= key_memory_table_mapping_root;
+#endif
+
   /*
     No "free_element" function for entries passed here, as the entries are
     allocated in a MEM_ROOT (freed as a whole in the destructor), they cannot
@@ -43,9 +54,10 @@ table_mapping::table_mapping()
   */
   (void) my_hash_init(&m_table_ids,&my_charset_bin,TABLE_ID_HASH_SIZE,
 		   offsetof(entry,table_id),sizeof(ulonglong),
-		   0,0,0);
+                   0, 0, 0, psi_key);
   /* We don't preallocate any block, this is consistent with m_free=0 above */
-  init_alloc_root(&m_mem_root, TABLE_ID_HASH_SIZE*sizeof(entry), 0);
+  init_alloc_root(psi_key,
+                  &m_mem_root, TABLE_ID_HASH_SIZE*sizeof(entry), 0);
 }
 
 table_mapping::~table_mapping()

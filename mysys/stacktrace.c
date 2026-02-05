@@ -1,28 +1,40 @@
-/* Copyright (c) 2001, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2001, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include <my_global.h>
-#include <my_stacktrace.h>
+#include "my_stacktrace.h"
 
-#ifndef __WIN__
+#ifndef _WIN32
+#include "my_thread.h"
+#include "m_string.h"
 #include <signal.h>
-#include <my_pthread.h>
-#include <m_string.h>
-#ifdef HAVE_STACKTRACE
+#ifdef HAVE_UNISTD_H
 #include <unistd.h>
-#include <strings.h>
+#endif
+#ifdef HAVE_STACKTRACE
 
 #ifdef __linux__
 #include <ctype.h>          /* isprint */
@@ -33,19 +45,20 @@
 #include <execinfo.h>
 #endif
 
+#ifdef __linux__
+/* __bss_start doesn't seem to work on FreeBSD and doesn't exist on OSX/Solaris. */
 #define PTR_SANE(p) ((p) && (char*)(p) >= heap_start && (char*)(p) <= heap_end)
-
 static char *heap_start;
-
-#ifdef HAVE_BSS_START
 extern char *__bss_start;
-#endif
+#else
+#define PTR_SANE(p) (p)
+#endif /* __linux */
 
 void my_init_stacktrace()
 {
-#ifdef HAVE_BSS_START
+#ifdef __linux__
   heap_start = (char*) &__bss_start;
-#endif
+#endif /* __linux__ */
 }
 
 #ifdef __linux__
@@ -130,18 +143,19 @@ static int safe_print_str(const char *addr, int max_len)
   return 0;
 }
 
-#endif
+#endif /* __linux __ */
 
-void my_safe_print_str(const char* val, int max_len)
+void my_safe_puts_stderr(const char* val, size_t max_len)
 {
+#ifdef __linux__
+/* Only needed by the linux version of PTR_SANE */
   char *heap_end;
 
-#ifdef __linux__
   if (!safe_print_str(val, max_len))
     return;
-#endif
 
   heap_end= (char*) sbrk(0);
+#endif
 
   if (!PTR_SANE(val))
   {
@@ -166,17 +180,17 @@ void my_print_stacktrace(uchar* stack_bottom MY_ATTRIBUTE((unused)),
     my_safe_printf_stderr("%s",
       "Error when traversing the stack, stack appears corrupt.\n");
   else
-    my_safe_printf_stderr("%s",
-      "Please read "
-      "http://dev.mysql.com/doc/refman/5.1/en/resolve-stack-dump.html\n"
+    my_safe_printf_stderr("Please read "
+      "http://dev.mysql.com/doc/refman/%u.%u/en/resolve-stack-dump.html\n"
       "and follow instructions on how to resolve the stack trace.\n"
       "Resolved stack trace is much more helpful in diagnosing the\n"
-      "problem, so please do resolve it\n");
+      "problem, so please do resolve it\n",
+      MYSQL_VERSION_MAJOR, MYSQL_VERSION_MINOR);
 }
 
-#elif HAVE_BACKTRACE && (HAVE_BACKTRACE_SYMBOLS || HAVE_BACKTRACE_SYMBOLS_FD)
+#elif HAVE_BACKTRACE
 
-#if BACKTRACE_DEMANGLE
+#if HAVE_ABI_CXA_DEMANGLE
 
 char MY_ATTRIBUTE ((weak)) *
 my_demangle(const char *mangled_name MY_ATTRIBUTE((unused)),
@@ -215,7 +229,7 @@ static void my_demangle_symbols(char **addrs, int n)
   }
 }
 
-#endif /* BACKTRACE_DEMANGLE */
+#endif /* HAVE_ABI_CXA_DEMANGLE */
 
 void my_print_stacktrace(uchar* stack_bottom, ulong thread_stack)
 {
@@ -224,209 +238,34 @@ void my_print_stacktrace(uchar* stack_bottom, ulong thread_stack)
   int n = backtrace(addrs, array_elements(addrs));
   my_safe_printf_stderr("stack_bottom = %p thread_stack 0x%lx\n",
                         stack_bottom, thread_stack);
-#if BACKTRACE_DEMANGLE
+#if HAVE_ABI_CXA_DEMANGLE
   if ((strings= backtrace_symbols(addrs, n)))
   {
     my_demangle_symbols(strings, n);
     free(strings);
   }
 #endif
-#if HAVE_BACKTRACE_SYMBOLS_FD
   if (!strings)
   {
     backtrace_symbols_fd(addrs, n, fileno(stderr));
   }
-#endif
 }
 
-#elif defined(TARGET_OS_LINUX)
-
-#ifdef __i386__
-#define SIGRETURN_FRAME_OFFSET 17
-#endif
-
-#ifdef __x86_64__
-#define SIGRETURN_FRAME_OFFSET 23
-#endif
-
-#if defined(__alpha__) && defined(__GNUC__)
-/*
-  The only way to backtrace without a symbol table on alpha
-  is to find stq fp,N(sp), and the first byte
-  of the instruction opcode will give us the value of N. From this
-  we can find where the old value of fp is stored
-*/
-
-#define MAX_INSTR_IN_FUNC  10000
-
-inline uchar** find_prev_fp(uint32* pc, uchar** fp)
-{
-  int i;
-  for (i = 0; i < MAX_INSTR_IN_FUNC; ++i,--pc)
-  {
-    uchar* p = (uchar*)pc;
-    if (p[2] == 222 &&  p[3] == 35)
-    {
-      return (uchar**)((uchar*)fp - *(short int*)p);
-    }
-  }
-  return 0;
-}
-
-inline uint32* find_prev_pc(uint32* pc, uchar** fp)
-{
-  int i;
-  for (i = 0; i < MAX_INSTR_IN_FUNC; ++i,--pc)
-  {
-    char* p = (char*)pc;
-    if (p[1] == 0 && p[2] == 94 &&  p[3] == -73)
-    {
-      uint32* prev_pc = (uint32*)*((fp+p[0]/sizeof(fp)));
-      return prev_pc;
-    }
-  }
-  return 0;
-}
-#endif /* defined(__alpha__) && defined(__GNUC__) */
-
-void my_print_stacktrace(uchar* stack_bottom, ulong thread_stack)
-{
-  uchar** fp;
-  uint frame_count = 0, sigreturn_frame_count;
-#if defined(__alpha__) && defined(__GNUC__)
-  uint32* pc;
-#endif
-  LINT_INIT(fp);
-
-
-#ifdef __i386__
-  __asm __volatile__ ("movl %%ebp,%0"
-		      :"=r"(fp)
-		      :"r"(fp));
-#endif
-#ifdef __x86_64__
-  __asm __volatile__ ("movq %%rbp,%0"
-		      :"=r"(fp)
-		      :"r"(fp));
-#endif
-#if defined(__alpha__) && defined(__GNUC__) 
-  __asm __volatile__ ("mov $30,%0"
-		      :"=r"(fp)
-		      :"r"(fp));
-#endif
-  if (!fp)
-  {
-    my_safe_printf_stderr("%s",
-      "frame pointer is NULL, did you compile with\n"
-      "-fomit-frame-pointer? Aborting backtrace!\n");
-    return;
-  }
-
-  if (!stack_bottom || (uchar*) stack_bottom > (uchar*) &fp)
-  {
-    ulong tmp= MY_MIN(0x10000, thread_stack);
-    /* Assume that the stack starts at the previous even 65K */
-    stack_bottom= (uchar*) (((ulong) &fp + tmp) & ~(ulong) 0xFFFF);
-    my_safe_printf_stderr("Cannot determine thread, fp=%p, "
-                          "backtrace may not be correct.\n", fp);
-  }
-  if (fp > (uchar**) stack_bottom ||
-      fp < (uchar**) stack_bottom - thread_stack)
-  {
-    my_safe_printf_stderr("Bogus stack limit or frame pointer, "
-                          "fp=%p, stack_bottom=%p, thread_stack=%ld, "
-                          "aborting backtrace.\n",
-                          fp, stack_bottom, thread_stack);
-    return;
-  }
-
-  my_safe_printf_stderr("%s",
-    "Stack range sanity check OK, backtrace follows:\n");
-#if defined(__alpha__) && defined(__GNUC__)
-  my_safe_printf_stderr("%s",
-    "Warning: Alpha stacks are difficult -"
-    "will be taking some wild guesses, stack trace may be incorrect or "
-    "terminate abruptly\n");
-
-  /* On Alpha, we need to get pc */
-  __asm __volatile__ ("bsr %0, do_next; do_next: "
-		      :"=r"(pc)
-		      :"r"(pc));
-#endif  /* __alpha__ */
-
-  /* We are 1 frame above signal frame with NPTL and 2 frames above with LT */
-  sigreturn_frame_count = thd_lib_detected == THD_LIB_LT ? 2 : 1;
-
-  while (fp < (uchar**) stack_bottom)
-  {
-#if defined(__i386__) || defined(__x86_64__)
-    uchar** new_fp = (uchar**)*fp;
-    my_safe_printf_stderr("%p\n",
-                          frame_count == sigreturn_frame_count ?
-                          *(fp + SIGRETURN_FRAME_OFFSET) : *(fp + 1));
-#endif /* defined(__386__)  || defined(__x86_64__) */
-
-#if defined(__alpha__) && defined(__GNUC__)
-    uchar** new_fp = find_prev_fp(pc, fp);
-    if (frame_count == sigreturn_frame_count - 1)
-    {
-      new_fp += 90;
-    }
-
-    if (fp && pc)
-    {
-      pc = find_prev_pc(pc, fp);
-      if (pc)
-	my_safe_printf_stderr("%p\n", pc);
-      else
-      {
-        my_safe_printf_stderr("%s",
-          "Not smart enough to deal with the rest of this stack\n");
-	goto end;
-      }
-    }
-    else
-    {
-      my_safe_printf_stderr("%s",
-        "Not smart enough to deal with the rest of this stack\n");
-      goto end;
-    }
-#endif /* defined(__alpha__) && defined(__GNUC__) */
-    if (new_fp <= fp )
-    {
-      my_safe_printf_stderr("New value of fp=%p failed sanity check, "
-                            "terminating stack trace!\n", new_fp);
-      goto end;
-    }
-    fp = new_fp;
-    ++frame_count;
-  }
-  my_safe_printf_stderr("%s",
-                        "Stack trace seems successful - bottom reached\n");
-
-end:
-  my_safe_printf_stderr("%s",
-    "Please read "
-    "http://dev.mysql.com/doc/refman/5.1/en/resolve-stack-dump.html\n"
-    "and follow instructions on how to resolve the stack trace.\n"
-    "Resolved stack trace is much more helpful in diagnosing the\n"
-    "problem, so please do resolve it\n");
-}
-#endif /* TARGET_OS_LINUX */
+#endif /* HAVE_PRINTSTACK || HAVE_BACKTRACE */
 #endif /* HAVE_STACKTRACE */
 
 /* Produce a core for the thread */
 void my_write_core(int sig)
 {
   signal(sig, SIG_DFL);
-  pthread_kill(pthread_self(), sig);
-#if defined(P_MYID) && !defined(SCO)
+  pthread_kill(my_thread_self(), sig);
+#if defined(P_MYID)
   /* On Solaris, the above kill is not enough */
   sigsend(P_PID,P_MYID,sig);
 #endif
 }
 
-#else /* __WIN__*/
+#else /* _WIN32*/
 
 #include <dbghelp.h>
 #include <tlhelp32.h>
@@ -473,13 +312,13 @@ static void get_symbol_path(char *path, size_t size)
   HANDLE hSnap; 
   char *envvar;
   char *p;
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   static char pdb_debug_dir[MAX_PATH + 7];
 #endif
 
   path[0]= '\0';
 
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   /* 
     Add "debug" subdirectory of the application directory, sometimes PDB will 
     placed here by installation.
@@ -657,69 +496,92 @@ void my_write_core(int unused)
 {
   char path[MAX_PATH];
   char dump_fname[MAX_PATH]= "core.dmp";
-  MINIDUMP_EXCEPTION_INFORMATION info;
-  HANDLE hFile;
 
   if(!exception_ptrs)
     return;
-
-  info.ExceptionPointers= exception_ptrs;
-  info.ClientPointers= FALSE;
-  info.ThreadId= GetCurrentThreadId();
 
   if(GetModuleFileName(NULL, path, sizeof(path)))
   {
     _splitpath(path, NULL, NULL,dump_fname,NULL);
     strncat(dump_fname, ".dmp", sizeof(dump_fname));
   }
+  my_create_minidump(dump_fname, 0, 0);
+}
 
-  hFile= CreateFile(dump_fname, GENERIC_WRITE, 0, 0, CREATE_ALWAYS,
+
+/** Create a minidump.
+  @param name    path of minidump file.
+  @param process HANDLE to process. (0 for own process).
+  @param pid     Process id.
+*/
+
+void my_create_minidump(const char *name, HANDLE process, DWORD pid)
+{
+  char path[MAX_PATH];
+  MINIDUMP_EXCEPTION_INFORMATION info;
+  HANDLE hFile;
+
+  if (process == 0)
+  {
+    /* Does not need to CloseHandle() for the below. */
+    process= GetCurrentProcess();
+    pid= GetCurrentProcessId();
+    info.ExceptionPointers= exception_ptrs;
+    info.ClientPointers= FALSE;
+    info.ThreadId= GetCurrentThreadId();
+  }
+
+  hFile= CreateFile(name, GENERIC_WRITE, 0, 0, CREATE_ALWAYS,
     FILE_ATTRIBUTE_NORMAL, 0);
   if(hFile)
   {
-    /* Create minidump */
-    if(MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(),
-      hFile, MiniDumpNormal, &info, 0, 0))
+    MINIDUMP_TYPE mdt= (MINIDUMP_TYPE) (MiniDumpNormal |
+                                        MiniDumpWithThreadInfo |
+                                        MiniDumpWithProcessThreadData);
+    /* Create minidump, use info only if same process. */
+    if(MiniDumpWriteDump(process, pid, hFile, mdt,
+                         process ? NULL : &info, 0, 0))
     {
       my_safe_printf_stderr("Minidump written to %s\n",
-                            _fullpath(path, dump_fname, sizeof(path)) ?
-                            path : dump_fname);
+                            _fullpath(path, name, sizeof(path)) ?
+                            path : name);
     }
     else
     {
-      my_safe_printf_stderr("MiniDumpWriteDump() failed, last error %u\n",
-                            (uint) GetLastError());
+      my_safe_printf_stderr("MiniDumpWriteDump() failed, last error %d\n",
+                            GetLastError());
     }
     CloseHandle(hFile);
   }
   else
   {
-    my_safe_printf_stderr("CreateFile(%s) failed, last error %u\n",
-                          dump_fname, (uint) GetLastError());
+    my_safe_printf_stderr("CreateFile(%s) failed, last error %d\n",
+                          name, GetLastError());
   }
 }
 
 
-void my_safe_print_str(const char *val, int len)
+void my_safe_puts_stderr(const char *val, size_t len)
 {
   __try
   {
     my_write_stderr(val, len);
+    my_safe_printf_stderr("%s", "\n");
   }
   __except(EXCEPTION_EXECUTE_HANDLER)
   {
     my_safe_printf_stderr("%s", "is an invalid string pointer\n");
   }
 }
-#endif /*__WIN__*/
+#endif /* _WIN32 */
 
 
-#ifdef __WIN__
+#ifdef _WIN32
 size_t my_write_stderr(const void *buf, size_t count)
 {
   DWORD bytes_written;
   SetFilePointer(GetStdHandle(STD_ERROR_HANDLE), 0, NULL, FILE_END);
-  WriteFile(GetStdHandle(STD_ERROR_HANDLE), buf, count, &bytes_written, NULL);
+  WriteFile(GetStdHandle(STD_ERROR_HANDLE), buf, (DWORD)count, &bytes_written, NULL);
   return bytes_written;
 }
 #else
@@ -866,8 +728,11 @@ static size_t my_safe_vsnprintf(char *to, size_t size,
             my_safe_utoa(base, uval, &buff[sizeof(buff)-1]) :
             my_safe_itoa(base, ival, &buff[sizeof(buff)-1]);
 
-          /* Strip off "ffffffff" if we have 'x' format without 'll' */
-          if (*format == 'x' && !have_longlong && ival < 0)
+          /*
+            Strip off "ffffffff" if we have 'x' format without 'll'
+            Similarly for 'p' format on 32bit systems.
+          */
+          if (base == 16 && !have_longlong && ival < 0)
             val_as_str+= 8;
 
           while (*val_as_str && to < end)
@@ -913,3 +778,37 @@ size_t my_safe_printf_stderr(const char* fmt, ...)
   my_write_stderr(to, result);
   return result;
 }
+
+
+void my_safe_print_system_time()
+{
+  char hrs_buf[3]= "00";
+  char mins_buf[3]= "00";
+  char secs_buf[3]= "00";
+  int base= 10;
+#ifdef _WIN32
+  SYSTEMTIME utc_time;
+  long hrs, mins, secs;
+  GetSystemTime(&utc_time);
+  hrs=  utc_time.wHour;
+  mins= utc_time.wMinute;
+  secs= utc_time.wSecond;
+#else
+  /* Using time() instead of my_time() to avoid looping */
+  const time_t curr_time= time(NULL);
+  /* Calculate time of day */
+  const long tmins = curr_time / 60;
+  const long thrs  = tmins / 60;
+  const long hrs   = thrs  % 24;
+  const long mins  = tmins % 60;
+  const long secs  = curr_time % 60;
+#endif
+
+  my_safe_itoa(base, hrs, &hrs_buf[2]);
+  my_safe_itoa(base, mins, &mins_buf[2]);
+  my_safe_itoa(base, secs, &secs_buf[2]);
+
+  my_safe_printf_stderr("---------- %s:%s:%s UTC - ",
+                        hrs_buf, mins_buf, secs_buf);
+}
+

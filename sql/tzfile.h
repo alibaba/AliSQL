@@ -1,17 +1,23 @@
 #ifndef TZFILE_INCLUDED
 #define TZFILE_INCLUDED
 
-/* Copyright (c) 2004, 2006, 2007 MySQL AB, 2009 Sun Microsystems, Inc.
-   Use is subject to license terms.
+/* Copyright (c) 2004, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
@@ -89,15 +95,11 @@ struct tzhead {
 #endif /* !defined TZ_MAX_TIMES */
 
 #ifndef TZ_MAX_TYPES
-#ifdef SOLAR
-#define TZ_MAX_TYPES	256 /* Limited by what (unsigned char)'s can hold */
-#else
 /*
   Must be at least 14 for Europe/Riga as of Jan 12 1995,
   as noted by Earl Chew <earl@hpato.aus.hp.com>.
 */
 #define TZ_MAX_TYPES	20	/* Maximum number of local time types */
-#endif /* defined SOLAR */
 #endif /* !defined TZ_MAX_TYPES */
 
 #ifndef TZ_MAX_CHARS
@@ -110,12 +112,7 @@ struct tzhead {
 #endif /* !defined TZ_MAX_LEAPS */
 
 #ifndef TZ_MAX_REV_RANGES
-#ifdef SOLAR
-/* Solar (Asia/RiyadhXX) zones need significantly bigger TZ_MAX_REV_RANGES */
-#define TZ_MAX_REV_RANGES (TZ_MAX_TIMES*2+TZ_MAX_LEAPS*2+2)
-#else
 #define TZ_MAX_REV_RANGES (TZ_MAX_TIMES+TZ_MAX_LEAPS+2)
-#endif
 #endif
 
 #define SECS_PER_MIN	60

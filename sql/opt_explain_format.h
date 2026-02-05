@@ -1,13 +1,20 @@
-/* Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
@@ -24,41 +31,6 @@
 #include "sql_class.h"
 
 struct st_join_table;
-
-
-/**
-  Names for different query parse tree parts
-*/
-
-enum Explain_context_enum
-{
-  CTX_NONE= 0, ///< Empty value
-  CTX_MESSAGE, ///< "No tables used" messages etc.
-  CTX_TABLE, ///< for single-table UPDATE/DELETE
-  CTX_SELECT_LIST, ///< SELECT (subquery), (subquery)...
-  CTX_UPDATE_VALUE_LIST, ///< UPDATE ... SET field=(subquery)...
-  CTX_JOIN,
-  CTX_JOIN_TAB,
-  CTX_MATERIALIZATION,
-  CTX_DUPLICATES_WEEDOUT,
-  CTX_DERIVED, ///< "Derived" subquery
-  CTX_WHERE, ///< Subquery in WHERE clause item tree
-  CTX_HAVING, ///< Subquery in HAVING clause item tree
-  CTX_ORDER_BY, ///< ORDER BY clause execution context
-  CTX_GROUP_BY, ///< GROUP BY clause execution context
-  CTX_SIMPLE_ORDER_BY, ///< ORDER BY clause execution context
-  CTX_SIMPLE_GROUP_BY, ///< GROUP BY clause execution context
-  CTX_DISTINCT, ///< DISTINCT clause execution context
-  CTX_SIMPLE_DISTINCT, ///< DISTINCT clause execution context
-  CTX_BUFFER_RESULT, ///< see SQL_BUFFER_RESULT in the manual
-  CTX_ORDER_BY_SQ, ///< Subquery in ORDER BY clause item tree
-  CTX_GROUP_BY_SQ, ///< Subquery in GROUP BY clause item tree
-  CTX_OPTIMIZED_AWAY_SUBQUERY, ///< Subquery executed once during optimization
-  CTX_UNION,
-  CTX_UNION_RESULT, ///< Pseudo-table context for UNION result
-  CTX_QUERY_SPEC ///< Inner SELECTs of UNION expression
-};
-
 
 /**
   Types of traditional "extra" column parts and property names for hierarchical
@@ -99,6 +71,7 @@ enum Extra_tag
   ET_UNIQUE_ROW_NOT_FOUND,
   ET_IMPOSSIBLE_ON_CONDITION,
   ET_PUSHED_JOIN,
+  ET_FT_HINTS,
   //------------------------------------
   ET_total
 };
@@ -131,9 +104,9 @@ public:
 */
 struct Explain_context : Sql_alloc
 {
-  Explain_context_enum type; ///< type tag
+  enum_parsing_context type; ///< type tag
 
-  explicit Explain_context(Explain_context_enum type_arg) : type(type_arg) {}
+  explicit Explain_context(enum_parsing_context type_arg) : type(type_arg) {}
 };
 
 
@@ -142,6 +115,10 @@ namespace opt_explain_json_namespace // for forward declaration of "context"
   class context;
 }
 
+
+// Table modification type
+enum enum_mod_type { MT_NONE, MT_INSERT, MT_UPDATE, MT_DELETE, MT_REPLACE };
+
 /**
   Helper class for table property buffering
 
@@ -149,7 +126,7 @@ namespace opt_explain_json_namespace // for forward declaration of "context"
   output row.
 
   For hierarchical EXPLAIN this structure contains property values for a single
-  CTX_TABLE/CTX_JOIN_TAB context node of the intermediate tree.
+  CTX_TABLE/CTX_QEP_TAB context node of the intermediate tree.
 */
 
 class qep_row : public Sql_alloc
@@ -168,7 +145,7 @@ public:
     "Extra" column - see the col_extra list).
 
     For hierarchical EXPLAIN this structure contains a numeric property value
-    for a single CTX_TABLE/CTX_JOIN_TAB context node of the intermediate tree.
+    for a single CTX_TABLE/CTX_QEP_TAB context node of the intermediate tree.
   */
   template<typename T>
   struct column
@@ -183,7 +160,7 @@ public:
     bool is_empty() const { return nil; }
     void cleanup() { nil= true; }
     void set(T value_arg) { value= value_arg; nil= false; }
-    T get() const { DBUG_ASSERT(!nil); return value; }
+    T get() const { assert(!nil); return value; }
   };
 
   /**
@@ -218,7 +195,7 @@ public:
         StringBuffer<128> buff(system_charset_info);
         if (deferred->eval(&buff) || set(buff))
         {
-          DBUG_ASSERT(!"OOM!");
+          assert(!"OOM!");
           return true; // ignore OOM
         }
         deferred= NULL; // prevent double evaluation, if any
@@ -331,7 +308,6 @@ public:
   mem_root_str col_key; ///< "key" column: index that is actually decided to use
   mem_root_str col_key_len; ///< "key_length" column: length of the "key" above
   List<const char> col_ref; ///< "ref":columns/constants which are compared to "key"
-  column<longlong> col_rows; ///< "rows": estimated number of examined table rows
   column<float>    col_filtered; ///< "filtered": % of rows filtered by condition
   List<extra> col_extra; ///< "extra" column (traditional) or property list
 
@@ -339,7 +315,24 @@ public:
   mem_root_str col_message; ///< replaces "Extra" column if not empty
   mem_root_str col_attached_condition; ///< former "Using where"
 
-  /* For structured EXPLAIN in CTX_JOIN_TAB context: */
+  /// "rows": estimated number of examined table rows per single scan
+  column<ulonglong> col_rows;
+  /// "rows": estimated number of examined table rows per query
+  column<ulonglong> col_prefix_rows;
+
+  column<double> col_read_cost; ///< Time to read the table
+  /// Cost of the partial join including this table
+  column<double> col_prefix_cost;
+  /// Cost of evaluating conditions on this table per query
+  column<double> col_cond_cost;
+
+  /// Size of data expected to be read  per query
+  mem_root_str col_data_size_query;
+
+  /// List of used columns
+  List<const char> col_used_columns;
+
+  /* For structured EXPLAIN in CTX_QEP_TAB context: */
   uint query_block_id; ///< query block id for materialized subqueries
 
   /**
@@ -352,18 +345,16 @@ public:
   bool is_dependent;
   bool is_cacheable;
   bool using_temporary;
+  enum_mod_type mod_type;
   bool is_materialized_from_subquery;
-  bool is_update; //< UPDATE modified this table
-  bool is_delete; //< DELETE modified this table
 
   qep_row() :
     query_block_id(0),
     is_dependent(false),
     is_cacheable(true),
     using_temporary(false),
-    is_materialized_from_subquery(false),
-    is_update(false),
-    is_delete(false)
+    mod_type(MT_NONE),
+    is_materialized_from_subquery(false)
   {}
 
   virtual ~qep_row() {}
@@ -378,12 +369,20 @@ public:
     col_key.cleanup();
     col_key_len.cleanup();
     col_ref.empty();
-    col_rows.cleanup();
     col_filtered.cleanup();
     col_extra.empty();
     col_message.cleanup();
     col_attached_condition.cleanup();
     col_key_parts.empty();
+
+    col_rows.cleanup();
+    col_prefix_rows.cleanup();
+
+    col_read_cost.cleanup();
+    col_prefix_cost.cleanup();
+    col_cond_cost.cleanup();
+
+    col_data_size_query.cleanup();
 
     /*
       Not needed (we call cleanup() for structured EXPLAIN only,
@@ -394,9 +393,8 @@ public:
     is_dependent= false;
     is_cacheable= true;
     using_temporary= false;
+    mod_type= MT_NONE;
     is_materialized_from_subquery= false;
-    is_update= false;
-    is_delete= false;
   }
 
   /**
@@ -428,10 +426,10 @@ public:
 struct Explain_subquery_marker
 {
   class qep_row *destination; ///< hosting TABLE/JOIN_TAB
-  Explain_context_enum type; ///< CTX_WHERE/CTX_HAVING/CTX_ORDER_BY/CTX_GROUP_BY
+  enum_parsing_context type; ///< CTX_WHERE/CTX_HAVING/CTX_ORDER_BY/CTX_GROUP_BY
 
   Explain_subquery_marker(qep_row *destination_arg,
-                          Explain_context_enum type_arg)
+                          enum_parsing_context type_arg)
   : destination(destination_arg), type(type_arg)
   {}
 };
@@ -532,8 +530,8 @@ private:
   Explain_format(Explain_format &); // undefined
   Explain_format &operator=(Explain_format &); // undefined
 
-public:
-  select_result *output; ///< output resulting data there
+protected:
+  Query_result *output; ///< output resulting data there
 
 public:
   Explain_format() : output(NULL) {}
@@ -558,7 +556,7 @@ public:
     @retval false       OK
     @retval true        Error
   */
-  virtual bool send_headers(select_result *result)
+  virtual bool send_headers(Query_result *result)
   {
     output= result;
     return false;
@@ -570,7 +568,7 @@ public:
     @param context      context type
     @param subquery     for CTX_WHERE: unit of the subquery
   */
-  virtual bool begin_context(Explain_context_enum context,
+  virtual bool begin_context(enum_parsing_context context,
                              SELECT_LEX_UNIT *subquery = 0,
                              const Explain_format_flags *flags= NULL)= 0;
 
@@ -579,7 +577,7 @@ public:
 
     @param context      current context type (for validation/debugging)
   */
-  virtual bool end_context(Explain_context_enum context)= 0;
+  virtual bool end_context(enum_parsing_context context)= 0;
  
   /**
     Flush TABLE/JOIN_TAB property set

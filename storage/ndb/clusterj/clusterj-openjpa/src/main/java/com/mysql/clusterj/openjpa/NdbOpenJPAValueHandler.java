@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2010, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -18,10 +25,13 @@
 package com.mysql.clusterj.openjpa;
 
 import com.mysql.clusterj.ColumnMetadata;
+import com.mysql.clusterj.core.CacheManager;
 import com.mysql.clusterj.core.spi.DomainTypeHandler;
 import com.mysql.clusterj.core.spi.ValueHandler;
 import com.mysql.clusterj.core.util.Logger;
 import com.mysql.clusterj.core.util.LoggerFactoryService;
+
+import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.sql.Date;
@@ -41,6 +51,15 @@ public class NdbOpenJPAValueHandler implements ValueHandler {
 
     /** My logger */
     static final Logger logger = LoggerFactoryService.getFactory().getInstance(NdbOpenJPAValueHandler.class);
+
+    public void release() {
+        this.sm = null;
+        this.store = null;
+    }
+
+    public boolean wasReleased() {
+        return this.sm == null;
+    }
 
     protected OpenJPAStateManager getStateManager() {
         return sm;
@@ -309,6 +328,39 @@ public class NdbOpenJPAValueHandler implements ValueHandler {
     }
 
     public void set(int columnNumber, Object value) {
+        throw new UnsupportedOperationException("Not supported yet.");
+    }
+
+    public byte[] getLobBytes(int fieldNumber) {
+        return (byte[])sm.fetchObject(fieldNumber);
+    }
+
+    public String getLobString(int fieldNumber) {
+        return sm.fetchString(fieldNumber);
+    }
+
+    public void setCacheManager(CacheManager cm) {
+        // we do not need a cache manager...
+    }
+
+    public void setLobBytes(int fieldNumber, byte[] value) {
+        sm.storeObject(fieldNumber, value);
+    }
+
+    public void setLobString(int fieldNumber, String value) {
+        sm.storeString(fieldNumber, value);
+    }
+
+    public void setProxy(Object proxy) {
+        // we do not support Proxy domain model
+    }
+
+    public Object invoke(Object proxy, Method method, Object[] args)
+            throws Throwable {
+        throw new UnsupportedOperationException("Not supported yet.");
+    }
+
+    public Object getProxy() {
         throw new UnsupportedOperationException("Not supported yet.");
     }
 

@@ -2,6 +2,7 @@
 # Bug #33931  	assertion at write_ignored_events_info_to_relay_log if init_slave_thread() fails
 # Bug #33932  	assertion at handle_slave_sql if init_slave_thread() fails
 
+--source include/not_group_replication_plugin.inc
 source include/have_debug.inc;
 source include/master-slave.inc;
 
@@ -37,15 +38,16 @@ start slave;
 --let $show_slave_sql_error= 1
 --source include/wait_for_slave_sql_error.inc
 
-# In 5.6 servers, there would be no I/O thread failure reported
-# on SHOW SLAVE STATUS. We should just wait for the IO thread to stop.
---source include/wait_for_slave_io_to_stop.inc
+# Wait for the I/O thread error
+--let $slave_io_errno= convert_error(ER_SLAVE_FATAL_ERROR)
+--let $show_slave_io_error= 1
+--source include/wait_for_slave_io_error.inc
 #
 # Cleanup
 #
 SET GLOBAL debug="";
 
-# Clear Last_SQL_Error
+# Clear Last_SQL_Error and Last_IO_Error
 RESET SLAVE;
 
 --let $rpl_only_running_threads= 1

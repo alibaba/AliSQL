@@ -1,14 +1,20 @@
-/* Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
 
-   This program is free software; you can redistribute it and/or
-   modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; version 2 of the
-   License.
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
 
-   This program is distributed in the hope that it will be useful, but
-   WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-   General Public License for more details.
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -17,15 +23,14 @@
 
 #include "rpl_gtid.h"
 
-#include "my_sys.h"
-#include "sql_class.h"
+#include "mysqld_error.h"     // ER_*
+#include "sql_class.h"        // THD
 
 
 Mutex_cond_array::Mutex_cond_array(Checkable_rwlock *_global_lock)
-  : global_lock(_global_lock)
+  : global_lock(_global_lock), m_array(key_memory_Mutex_cond_array_Mutex_cond)
 {
   DBUG_ENTER("Mutex_cond_array::Mutex_cond_array");
-  my_init_dynamic_array(&array, sizeof(Mutex_cond *), 0, 8);
   DBUG_VOID_RETURN;
 }
 
@@ -45,10 +50,9 @@ Mutex_cond_array::~Mutex_cond_array()
     {
       mysql_mutex_destroy(&mutex_cond->mutex);
       mysql_cond_destroy(&mutex_cond->cond);
-      free(mutex_cond);
+      my_free(mutex_cond);
     }
   }
-  delete_dynamic(&array);
   global_lock->unlock();
   DBUG_VOID_RETURN;
 }
@@ -71,24 +75,27 @@ enum_return_status Mutex_cond_array::ensure_index(int n)
   int max_index= get_max_index();
   if (n > max_index)
   {
-    if (n > max_index)
+    for (int i= max_index + 1; i <= n; i++)
     {
-      if (allocate_dynamic(&array, n + 1))
+      Mutex_cond *mutex_cond=
+        static_cast<Mutex_cond*>
+        (my_malloc(key_memory_Mutex_cond_array_Mutex_cond,
+                   sizeof(Mutex_cond), MYF(MY_WME)));
+      if (mutex_cond == NULL)
         goto error;
-      for (int i= max_index + 1; i <= n; i++)
-      {
-        Mutex_cond *mutex_cond= (Mutex_cond *)my_malloc(sizeof(Mutex_cond), MYF(MY_WME));
-        if (mutex_cond == NULL)
-          goto error;
-        mysql_mutex_init(key_gtid_ensure_index_mutex, &mutex_cond->mutex, NULL);
-        mysql_cond_init(key_gtid_ensure_index_cond, &mutex_cond->cond, NULL);
-        insert_dynamic(&array, &mutex_cond);
-        DBUG_ASSERT(&get_mutex_cond(i)->mutex == &mutex_cond->mutex);
-      }
+      mysql_mutex_init(key_gtid_ensure_index_mutex, &mutex_cond->mutex, NULL);
+      mysql_cond_init(key_gtid_ensure_index_cond, &mutex_cond->cond);
+      m_array.push_back(mutex_cond);
+      assert(&get_mutex_cond(i)->mutex == &mutex_cond->mutex);
     }
   }
   RETURN_OK;
 error:
   BINLOG_ERROR(("Out of memory."), (ER_OUT_OF_RESOURCES, MYF(0)));
   RETURN_REPORTED_ERROR;
+}
+
+bool Mutex_cond_array::is_thd_killed(const THD* thd) const
+{
+  return thd->killed;
 }

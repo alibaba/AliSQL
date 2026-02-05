@@ -1,0 +1,17 @@
+# (c) 2014-2015 Glen Joseph Fernandes
+# glenjofe at gmail dot com
+#
+# Distributed under the Boost Software
+# License, Version 1.0.
+# http://boost.org/LICENSE_1_0.txt
+
+import testing ;
+
+run align_test.cpp ;
+run aligned_alloc_test.cpp ;
+run aligned_allocator_test.cpp ;
+run aligned_allocator_adaptor_test.cpp ;
+run aligned_delete_test.cpp ;
+run alignment_of_test.cpp ;
+compile assume_aligned_test.cpp ;
+run is_aligned_test.cpp ;

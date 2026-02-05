@@ -1,5 +1,27 @@
 #!/bin/sh
 
+# Copyright (c) 2011, 2021, Oracle and/or its affiliates.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License, version 2.0,
+# as published by the Free Software Foundation.
+#
+# This program is also distributed with certain software (including
+# but not limited to OpenSSL) that is licensed under separate terms,
+# as designated in a particular file or component or in included license
+# documentation.  The authors of MySQL hereby grant you an additional
+# permission to link the program and your derivative works with the
+# separately licensed software that they have included with MySQL.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License, version 2.0, for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+
 set -e
 
 : ${load:=1}
@@ -71,9 +93,9 @@ opre="$pre.$$"
 
 gensql=${RQG_HOME}/gensql.pl
 gendata=${RQG_HOME}/gendata.pl
-ecp="set engine_condition_pushdown=on;"
+ecp="set optimizer_switch = 'engine_condition_pushdown=on';"
 
-dsn=dbi:mysql:host=${host}:port=${port}:user=root:database=${pre}_myisam
+dsn=dbi:mysql:host=${host}:port=${port}:user=root:database=${pre}_innodb
 mysqltest="$MYSQLINSTALL/bin/mysqltest -uroot --host=${host} --port=${port}"
 mysql="$MYSQLINSTALL/bin/mysql --host=${host} --port=${port}"
 
@@ -85,8 +107,8 @@ charset_spec="character set latin1 collate latin1_bin"
 export RQG_HOME
 if [ "$load" ]
 then
-	$mysql -uroot -e "drop database if exists ${pre}_myisam; drop database if exists ${pre}_ndb"
-	$mysql -uroot -e "create database ${pre}_myisam ${charset_spec}; create database ${pre}_ndb ${charset_spec}"
+	$mysql -uroot -e "drop database if exists ${pre}_innodb; drop database if exists ${pre}_ndb"
+	$mysql -uroot -e "create database ${pre}_innodb ${charset_spec}; create database ${pre}_ndb ${charset_spec}"
 	${gendata} --dsn=$dsn ${data}
 cat > /tmp/sproc.$$ <<EOF
 DROP PROCEDURE IF EXISTS copydb;
@@ -280,11 +302,44 @@ BEGIN
 END
 \G
 
+CREATE PROCEDURE analyzedb(db varchar(64))
+BEGIN
 
-CALL copydb('${pre}_ndb', '${pre}_myisam', 'ndb')\G
+  declare tabname varchar(255);
+  declare done integer default 0;
+  declare cnt integer default 0;
+  declare c cursor for 
+    SELECT table_name
+    FROM INFORMATION_SCHEMA.TABLES where table_schema = db;
+  declare continue handler for not found set done = 1;
+
+  set @ddl = 'ANALYZE TABLE ';
+  open c;
+  
+  repeat
+    fetch c into tabname;
+    if not done then
+       set cnt = cnt+1;
+       if cnt > 1 then
+         set @ddl = CONCAT(@ddl, ', ');
+       end if;
+       set @ddl = CONCAT(@ddl,  db, '.', tabname);
+    end if;
+  until done end repeat;
+  close c;
+
+  PREPARE stmt from @ddl;
+  EXECUTE stmt;
+END
+\G
+
+CALL copydb('${pre}_ndb', '${pre}_innodb', 'ndb')\G
+CALL analyzedb('${pre}_ndb')\G
+
 ##CALL alterengine('${pre}_ndb', 'ndb')\G
 DROP PROCEDURE copydb\G
 DROP PROCEDURE alterengine\G
+DROP PROCEDURE analyzedb\G
 EOF
 	$mysql -uroot test < /tmp/sproc.$$
 	rm -f /tmp/sproc.$$
@@ -314,7 +369,7 @@ EOF
     export NDB_JOIN_PUSHDOWN
     for t in 1
     do
-	$mysqltest ${pre}_myisam < $tmp >> ${opre}.$no.myisam.$i.txt
+	$mysqltest ${pre}_innodb < $tmp >> ${opre}.$no.innodb.$i.txt
     done
 
     for t in 1
@@ -359,9 +414,9 @@ run_all() {
 
     NDB_JOIN_PUSHDOWN=off
     export NDB_JOIN_PUSHDOWN
-    echo "- run myisam"
-    $mysqltest ${pre}_myisam < $file > ${opre}_myisam.out
-    md5_myisam=`md5sum ${opre}_myisam.out | awk '{ print $1;}'`
+    echo "- run innodb"
+    $mysqltest ${pre}_innodb < $file > ${opre}_innodb.out
+    md5_innodb=`md5sum ${opre}_innodb.out | awk '{ print $1;}'`
 
     echo "- run ndb without push"
     NDB_JOIN_PUSHDOWN=off
@@ -375,14 +430,14 @@ run_all() {
     $mysqltest ${pre}_ndb < $file > ${opre}_ndbpush.out
     md5_ndbpush=`md5sum ${opre}_ndbpush.out | awk '{ print $1;}'`
 
-    if [ "$md5_myisam" != "$md5_ndb" ] || [ "$md5_myisam" != "$md5_ndbpush" ]
+    if [ "$md5_innodb" != "$md5_ndb" ] || [ "$md5_innodb" != "$md5_ndbpush" ]
     then
-	echo "md5 missmatch: $md5_myisam $md5_ndb $md5_ndbpush"
+	echo "md5 missmatch: $md5_innodb $md5_ndb $md5_ndbpush"
 	echo "locating failing query(s)"
 	locate_query $file
     fi
 
-    rm ${opre}_myisam.out ${opre}_ndb.out ${opre}_ndbpush.out
+    rm ${opre}_innodb.out ${opre}_ndb.out ${opre}_ndbpush.out
 }
 
 i=0

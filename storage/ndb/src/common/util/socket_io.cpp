@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -27,7 +34,7 @@ int
 poll_socket(ndb_socket_t socket, bool read, bool write,
             int timeout_millis, int* total_elapsed_millis)
 {
-  const NDB_TICKS start = NdbTick_CurrentMillisecond();
+  const NDB_TICKS start = NdbTick_getCurrentTicks();
 
   timeout_millis -= *total_elapsed_millis;
 
@@ -38,8 +45,8 @@ poll_socket(ndb_socket_t socket, bool read, bool write,
     ndb_poll(socket, read, write, false, timeout_millis);
 
   // Calculate elapsed time in this function
-  const int elapsed_millis = (int)(NdbTick_CurrentMillisecond() - start);
-  assert(elapsed_millis >= 0);
+  const NDB_TICKS now = NdbTick_getCurrentTicks();
+  const int elapsed_millis = (int)(NdbTick_Elapsed(start,now).milliSec());
 
   // Update the total elapsed time
   *total_elapsed_millis += elapsed_millis;
@@ -123,7 +130,7 @@ readln_socket(NDB_SOCKET_TYPE socket, int timeout_millis, int *time,
         *time = 0;
 
 	ptr[0]= 0;
-	return ptr - buf;
+	return (int)(ptr - buf);
       }
     }
     
@@ -226,7 +233,7 @@ vprint_socket(NDB_SOCKET_TYPE socket, int timeout_millis, int *time,
   } else
     return 0;
 
-  int ret = write_socket(socket, timeout_millis, time, buf2, size);
+  int ret = write_socket(socket, timeout_millis, time, buf2, (int)size);
   if(buf2 != buf)
     free(buf2);
   return ret;
@@ -254,7 +261,7 @@ vprintln_socket(NDB_SOCKET_TYPE socket, int timeout_millis, int *time,
   }
   buf2[size-1]='\n';
 
-  int ret = write_socket(socket, timeout_millis, time, buf2, size);
+  int ret = write_socket(socket, timeout_millis, time, buf2, (int)size);
   if(buf2 != buf)
     free(buf2);
   return ret;

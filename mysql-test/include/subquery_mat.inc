@@ -6,7 +6,7 @@
 # Force the feature, to test it as much as possible:
 set @old_opt_switch=@@optimizer_switch;
 set optimizer_switch='subquery_materialization_cost_based=off';
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 --disable_warnings
 drop table if exists t1, t2, t3, t1i, t2i, t3i;
 drop view if exists v1, v2, v1m, v2m;
@@ -120,10 +120,12 @@ explain extended
 select * from t1i where (a1, a2) in (select b1, b2 from t2i order by b1, b2);
 select * from t1i where (a1, a2) in (select b1, b2 from t2i order by b1, b2);
 
-/******************************************************************************
-* Views, UNIONs, several levels of nesting.
-******************************************************************************/
-# materialize the result of subquery over temp-table view
+--echo /******************************************************************************
+--echo * Views, UNIONs, several levels of nesting.
+--echo ******************************************************************************/
+--echo # materialize the result of subquery over temp-table view
+
+--source include/turn_off_only_full_group_by.inc
 
 create algorithm=merge view v1 as
 select b1, c2 from t2, t3 where b2 > c2;
@@ -143,6 +145,7 @@ select * from v1 where (c2, b1) in (select distinct c2, b1 from v2 where b1 is n
 select * from v1m where (c2, b1) in (select c2, b1 from v2m where b1 is not null);
 select * from v1m where (c2, b1) in (select distinct c2, b1 from v2m where b1 is not null);
 
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 drop view v1, v2, v1m, v2m;
 
 # nested subqueries, views
@@ -287,6 +290,7 @@ select ((a1,a2) IN (select * from t2 where b2 > '0')) IS NULL from t1;
 /* GROUP BY clause */
 create table columns (col int key);
 insert into columns values (1), (2);
+--source include/turn_off_only_full_group_by.inc
 
 explain extended
 select * from t1 group by (select col from columns limit 1);
@@ -295,6 +299,8 @@ select * from t1 group by (select col from columns limit 1);
 explain extended
 select * from t1 group by (a1 in (select col from columns));
 select * from t1 group by (a1 in (select col from columns));
+
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 
 /* ORDER BY clause */
 explain extended
@@ -790,12 +796,14 @@ CREATE TABLE t3 (c char(1));
 INSERT INTO t1 VALUES (1), (2);
 INSERT INTO t2 VALUES ('a'), ('b');
 INSERT INTO t3 VALUES ('x'), ('y');
+--source include/turn_off_only_full_group_by.inc
 
 SELECT COUNT( i ),i
 FROM t1
 HAVING ('c')  
   IN (SELECT t2.c FROM (t2 JOIN t3));
 
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 DROP TABLE t1,t2,t3;
 
 --echo # End BUG#54511
@@ -1330,18 +1338,18 @@ CREATE TABLE t4 (
 INSERT INTO t4 VALUES (1,'x');
 
 let $query=
-SELECT OUTR.pk, OUTR.col_varchar_nokey, OUTR2.col_varchar_nokey
-FROM t2 AS OUTR2
-  JOIN t4 AS OUTR
-  ON (OUTR2.col_varchar_nokey > OUTR.col_varchar_nokey)
+SELECT outr.pk, outr.col_varchar_nokey, outr2.col_varchar_nokey
+FROM t2 AS outr2
+  JOIN t4 AS outr
+  ON (outr2.col_varchar_nokey > outr.col_varchar_nokey)
 WHERE
-  OUTR.col_varchar_nokey IN (
-    SELECT INNR.col_varchar_nokey
-    FROM t3 AS INNR2
-      LEFT JOIN t1 AS INNR
-      ON (INNR2.col_int_key >= INNR.pk)
+  outr.col_varchar_nokey IN (
+    SELECT innr.col_varchar_nokey
+    FROM t3 AS innr2
+      LEFT JOIN t1 AS innr
+      ON (innr2.col_int_key >= innr.pk)
   )
-  XOR OUTR.pk < 6
+  XOR outr.pk < 6
 ;
 
 eval EXPLAIN $query;
@@ -1417,6 +1425,95 @@ eval $query;
 
 DROP TABLE t1,t2,t3;
 
+--echo # End of 5.6 tests
+
+--echo #
+--echo # Bug #18770217 	DIFFERENT RESULT WITH SP ON 2ND EXECUTION OF QUERY WITH STRAIGHT_JOIN IN NOT IN
+--echo #
+
+# If IN->EXISTS is used, the WHERE clause of the EXISTS subquery looks
+# like:
+# alias1.col_varchar_key=sq1_alias1.col_varchar_nokey AND (scalar subquery)
+# and because the equality is false for all rows, the scalar subquery
+# is not evaluted - produces no ER_SUBQUERY_NO_1_ROW.
+
+if (`select locate('materialization=on', @@optimizer_switch) > 0`) 
+{
+
+CREATE TABLE t1 (
+  col_int_key INT,
+  col_varchar_key VARCHAR(1),
+  col_varchar_nokey VARCHAR(1),
+  KEY col_int_key (col_int_key),
+  KEY col_varchar_key (col_varchar_key,col_int_key)
+);
+
+INSERT INTO t1 VALUES (8,'x','x');
+INSERT INTO t1 VALUES (NULL,'x','x');
+
+CREATE TABLE t2 (
+  col_int_key INT,
+  col_varchar_key VARCHAR(1),
+  col_varchar_nokey VARCHAR(1),
+  KEY col_int_key (col_int_key),
+  KEY col_varchar_key (col_varchar_key,col_int_key)
+);
+
+INSERT INTO t2 VALUES (0,'x','x');
+
+CREATE TABLE t3 (
+  col_int_key INT,
+  col_varchar_key VARCHAR(1),
+  col_varchar_nokey VARCHAR(1),
+  KEY col_int_key (col_int_key),
+  KEY col_varchar_key (col_varchar_key,col_int_key)
+);
+
+INSERT INTO t3 VALUES (8,'g','g');
+
+CREATE VIEW view_d AS SELECT * FROM t2;
+
+let $query=
+SELECT alias2.col_int_key
+FROM t1 AS alias1 , t2 AS alias2
+WHERE alias1.col_varchar_key NOT IN (
+  SELECT sq1_alias1.col_varchar_nokey
+  FROM t3 AS sq1_alias1
+    JOIN ( t1 AS sq1_alias2
+      STRAIGHT_JOIN view_d AS sq1_alias3 )
+  WHERE (
+    SELECT col_int_key
+    FROM t1 AS c_sq1_alias1
+    WHERE c_sq1_alias1.col_varchar_key = sq1_alias3.col_varchar_nokey
+  )
+)
+;
+
+# Show materialization is used
+eval EXPLAIN $query;
+
+--error ER_SUBQUERY_NO_1_ROW
+eval $query;
+
+eval CREATE PROCEDURE stored_proc_2581 () LANGUAGE SQL $query;
+
+--error ER_SUBQUERY_NO_1_ROW
+CALL stored_proc_2581;
+--error ER_SUBQUERY_NO_1_ROW
+CALL stored_proc_2581;
+DROP PROCEDURE stored_proc_2581;
+
+eval PREPARE s FROM '$query';
+--error ER_SUBQUERY_NO_1_ROW
+EXECUTE s;
+--error ER_SUBQUERY_NO_1_ROW
+EXECUTE s;
+
+DROP VIEW view_d;
+DROP TABLE t1,t2,t3;
+
+}
+
 --echo #
 --echo # Bug#19297190 NOT IN DOESN'T RETURN EXPECTED RESULT
 --echo #
@@ -1443,29 +1540,143 @@ WHERE t1.a NOT IN (
   SELECT t2.a FROM t1 as t2
 );
 
-# If subq-mat is used, this will force MEMORY->MYISAM tmp table conversion:
+#  If subq-mat is used, this will force MEMORY->disk-based tmp table conversion:
 set @save_heap_size= @@max_heap_table_size;
 set @@max_heap_table_size= 16384;
 
-# Uses IN->EXISTS because field too long for subq-materialization:
+# Test both disk-based engines:
+set @saved_engine=@@internal_tmp_disk_storage_engine;
+set global internal_tmp_disk_storage_engine = 'myisam';
+
+# Subq-materialization can be used and gives correct result:
 eval EXPLAIN $query;
 eval $query;
 
-# Make field just below the length limit:
-# Silence truncation warnings:
---disable_warnings
-ALTER TABLE t1 MODIFY a VARCHAR(332) CHARACTER SET UTF8;
---enable_warnings
-
-ANALYZE TABLE t1;
-
-# Now subquery materialization can be used, and result is still correct:
+set global internal_tmp_disk_storage_engine = 'innodb';
 eval EXPLAIN $query;
 eval $query;
 
 DROP TABLE t1;
+set global internal_tmp_disk_storage_engine = @saved_engine;
 set @@max_heap_table_size= @save_heap_size;
 
---echo # End of 5.6 tests
+--echo #
+--echo # Bug#19805761 ASSERTION FAILURE IN SUBSELECT_HASH_SJ_ENGINE::EXEC WITH SUBQUERY IN LEFT ARGUME
+--echo #
+
+CREATE TABLE t1(a INT) ENGINE=INNODB;
+INSERT INTO t1 VALUES(1);
+CREATE TABLE t2 LIKE t1;
+ANALYZE TABLE t1,t2;
+
+let $query=
+SELECT (SELECT 1,2 FROM t2) NOT IN (SELECT 1,2 FROM t1) FROM t1;
+
+eval EXPLAIN $query;
+eval $query;
+
+DROP TABLE t1,t2;
+
+--echo #
+--echo # Bug#20729351 ASSERTION FAILED: ITEM_IN->LEFT_EXPR->ELEMENT_INDEX(0)->MAYBE_NULL
+--echo #
+
+CREATE TABLE t1 (a LONGBLOB) ENGINE=INNODB;
+INSERT INTO t1 VALUES ('a'), ('a'), ('a');
+CREATE TABLE t2 (a INT) ENGINE=INNODB;
+INSERT INTO t2 VALUES(1), (1), (1), (1);
+ANALYZE TABLE t1, t2;
+SELECT
+ (SELECT NULL IN (NULL) FROM t1 WHERE a) =
+  ANY(SELECT 1 FROM t2)
+FROM t1;
+DROP TABLE t1, t2;
+
+--echo #
+--echo # Bug#22089623 ASSERTION IN ITEM_FUNC_TRIG_COND::VAL_INT()
+--echo #              WITH SUBQUERY ON LEFT SIDE OF IN
+--echo #
+
+--let $query= SELECT (SELECT NULL, NULL) IN (SELECT 1, 2)
+--eval EXPLAIN $query
+--eval $query
+--let $query= SELECT (SELECT 1, 1) IN (SELECT 1, 2)
+--eval EXPLAIN $query
+--eval $query
+--let $query= SELECT (SELECT 1, 2) IN (SELECT 1, 2)
+--eval EXPLAIN $query
+--eval $query
+--let $query= SELECT (SELECT NULL, 2) IN (SELECT 1, 2)
+--eval EXPLAIN $query
+--eval $query
+--let $query= SELECT (SELECT 1, NULL) IN (SELECT 1, 2)
+--eval EXPLAIN $query
+--eval $query
+--let $query= SELECT (SELECT NULL, 1) IN (SELECT 1, 2)
+--eval EXPLAIN $query
+--eval $query
+--let $query= SELECT (SELECT 2, NULL) IN (SELECT 1, 2)
+--eval EXPLAIN $query
+--eval $query
+--let $query= SELECT (SELECT 1, 2 UNION SELECT 1, 2) IN (SELECT 1, 2)
+--eval EXPLAIN $query
+--eval $query
+--let $query= SELECT (SELECT 1, 1 UNION SELECT 1, 1) IN (SELECT 1, 2)
+--eval EXPLAIN $query
+--eval $query
+--let $query= SELECT (SELECT NULL, NULL UNION SELECT NULL, NULL) IN (SELECT 1, 2)
+--eval EXPLAIN $query
+--eval $query
+--let $query= SELECT (SELECT 1, 1 UNION SELECT 2, 2) IN (SELECT 1, 2)
+--eval EXPLAIN $query
+--error ER_SUBQUERY_NO_1_ROW
+--eval $query
+--let $query= SELECT (SELECT 1, 2 WHERE FALSE UNION SELECT 1, 2 WHERE FALSE) IN (SELECT 1, 2)
+--eval EXPLAIN $query
+--eval $query
+--let $query= SELECT (SELECT 1, 2 UNION ALL SELECT 1, 2) IN (SELECT 1, 2)
+--eval EXPLAIN $query
+--error ER_SUBQUERY_NO_1_ROW
+--eval $query
+--let $query= SELECT (SELECT 1, 1 UNION ALL SELECT 1, 1) IN (SELECT 1, 2)
+--eval EXPLAIN $query
+--error ER_SUBQUERY_NO_1_ROW
+--eval $query
+--let $query= SELECT (SELECT NULL, NULL UNION ALL SELECT NULL, NULL) IN (SELECT 1, 2)
+--eval EXPLAIN $query
+--error ER_SUBQUERY_NO_1_ROW
+--eval $query
+--let $query= SELECT (SELECT 1, 1 UNION ALL SELECT 2, 2) IN (SELECT 1, 2)
+--eval EXPLAIN $query
+--error ER_SUBQUERY_NO_1_ROW
+--eval $query
+--let $query= SELECT (SELECT 1, 2 WHERE FALSE UNION ALL SELECT 1, 2 WHERE FALSE) IN (SELECT 1, 2)
+--eval EXPLAIN $query
+--eval $query
+
+--echo #
+--echo # Bug#20536077: WRONG RESULT FOR SELECT NULL,NULL IN (SUBQUERY)
+--echo #
+
+--echo # The following queries correctly returned NULL.
+CREATE TABLE s (s INT) ENGINE=InnoDB;
+INSERT INTO s VALUES(1);
+SELECT NULL IN (SELECT 1);
+SELECT NULL = (SELECT 1);
+SELECT NULL = (SELECT 1 FROM s);
+SELECT (NULL, NULL) IN (SELECT 1, 2);
+
+--echo # The following queries returned 0 instead of NULL.
+SELECT NULL IN (SELECT 1 FROM s);
+SELECT (SELECT NULL, NULL FROM DUAL) IN (SELECT 1, 2 FROM s) FROM s;
+SELECT (SELECT NULL,NULL) IN (SELECT 1, 2);
+CREATE TABLE u(a INT, b INT) ENGINE=MyISAM;
+INSERT INTO u VALUES (NULL, NULL);
+SELECT (SELECT * FROM u) IN (SELECT 1, 2 FROM s) FROM s;
+SELECT (SELECT * FROM u) IN (SELECT 1, 2);
+
+DROP TABLE s, u;
+
 
 set @@optimizer_switch=@old_opt_switch;
+SET sql_mode = default;

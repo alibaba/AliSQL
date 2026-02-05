@@ -3,11 +3,10 @@
 #       own purposes. But the replication feature itself is stopped.
 #
 
-
+--source include/no_valgrind_without_big.inc
+--source include/have_innodb_16k.inc
 --source suite/federated/include/federated.inc
-
 connection default;
-
 # Disable concurrent inserts to avoid test failures when reading
 # data from concurrent connections (insert might return before
 # the data is actually in the table).
@@ -222,7 +221,9 @@ SELECT * FROM federated.t1 ORDER BY id DESC;
 SELECT * FROM federated.t1 ORDER BY name;
 SELECT * FROM federated.t1 ORDER BY name DESC;
 SELECT * FROM federated.t1 ORDER BY name ASC;
+--source include/turn_off_only_full_group_by.inc
 SELECT * FROM federated.t1 GROUP BY other;
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 
 # ::delete_row
 DELETE FROM federated.t1 WHERE id = 5; 
@@ -305,7 +306,9 @@ SELECT * FROM federated.t1 ORDER BY id DESC;
 SELECT * FROM federated.t1 ORDER BY name;
 SELECT * FROM federated.t1 ORDER BY name DESC;
 SELECT * FROM federated.t1 ORDER BY name ASC;
+--source include/turn_off_only_full_group_by.inc
 SELECT * FROM federated.t1 GROUP BY other;
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 
 # ::delete_row
 DELETE FROM federated.t1 WHERE id = 5; 
@@ -703,14 +706,16 @@ AND other IS NULL;
 
 connection slave;
 DROP TABLE IF EXISTS federated.t1;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 CREATE TABLE federated.t1 (
     `blurb_id` int NOT NULL DEFAULT 0,
     `blurb` text default '',
     PRIMARY KEY (blurb_id))
   DEFAULT CHARSET=latin1; 
-
+SET sql_mode = default;
 connection master;
 DROP TABLE IF EXISTS federated.t1;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 --replace_result $SLAVE_MYPORT SLAVE_PORT
 eval CREATE TABLE federated.t1 (
     `blurb_id` int NOT NULL DEFAULT 0,
@@ -719,7 +724,7 @@ eval CREATE TABLE federated.t1 (
   ENGINE="FEDERATED"
   DEFAULT CHARSET=latin1
   CONNECTION='mysql://root@127.0.0.1:$SLAVE_MYPORT/federated/t1'; 
-
+SET sql_mode = default;
 INSERT INTO federated.t1 VALUES (1, " MySQL supports a number of column types in several categories: numeric types, date and time types, and string (character) types.  This chapter first gives an overview of these column types, and then provides a more detailed description of the properties of the types in each category, and a summary of the column type storage requirements.  The overview is intentionally brief.  The more detailed descriptions should be consulted for additional information about particular column types, such as the allowable formats in which you can specify values.");
 INSERT INTO federated.t1 VALUES (2, "All arithmetic is done using signed BIGINT or DOUBLE values, so you should not use unsigned big integers larger than 9223372036854775807 (63 bits) except with bit functions! If you do that, some of the last digits in the result may be wrong because of rounding errors when converting a BIGINT value to a DOUBLE.");
 INSERT INTO federated.t1 VALUES (3, " A floating-point number.  p represents the precision. It can be from 0 to 24 for a single-precision floating-point number and from 25 to 53 for a double-precision floating-point number. These types are like the FLOAT and DOUBLE types described immediately following.  FLOAT(p) has the same range as the corresponding FLOAT and DOUBLE types, but the display size and number of decimals are undefined.  ");
@@ -752,6 +757,7 @@ INSERT INTO federated.t1 VALUES (3,3,3),(1,1,1),(2,2,2),(4,4,4);
 
 connection slave;
 DROP TABLE IF EXISTS federated.t1;
+
 CREATE TABLE federated.t1 (i1 int, i2 int, i3 int, i4 int, i5 int, i6 int, i7 int, i8
 int, i9 int, i10 int, i11 int, i12 int, i13 int, i14 int, i15 int, i16 int, i17
 int, i18 int, i19 int, i20 int, i21 int, i22 int, i23 int, i24 int, i25 int,
@@ -876,10 +882,12 @@ int, i967 int, i968 int, i969 int, i970 int, i971 int, i972 int, i973 int, i974
 int, i975 int, i976 int, i977 int, i978 int, i979 int, i980 int, i981 int, i982
 int, i983 int, i984 int, i985 int, i986 int, i987 int, i988 int, i989 int, i990
 int, i991 int, i992 int, i993 int, i994 int, i995 int, i996 int, i997 int, i998
-int, i999 int, i1000 int, b varchar(256)) row_format=dynamic;
-
+int, i999 int, i1000 int, b varchar(256)) 
+row_format=dynamic;
 connection master;
+
 DROP TABLE IF EXISTS federated.t1;
+
 --replace_result $SLAVE_MYPORT SLAVE_PORT
 eval CREATE TABLE federated.t1 
 (i1 int, i2 int, i3 int, i4 int, i5 int, i6 int, i7 int, i8
@@ -1988,10 +1996,107 @@ DROP TABLE federated.t1;
 connection slave;
 DROP TABLE federated.t1;
 
-connection default;
-
 
 --echo End of 5.1 tests
+
+--echo #
+--echo # BUG#11751864 - FEDERATED DOESN'T DISTINGUISH BETWEEN DELETE FROM
+--echo #                 T1 AND TRUNCATE T1 NOT NULL NOT SPECIFIED
+--echo # BUG#17564775 - FEDERATED DOES NOT SUPPORT DELETE IGNORE
+
+--enable_connect_log
+connection master;
+CREATE TABLE federated.t1 (a INT PRIMARY KEY, b varchar(64)) ENGINE=InnoDB;
+connection slave;
+--replace_result $MASTER_MYPORT MASTER_PORT
+eval CREATE TABLE federated.t2 (a INT PRIMARY KEY, b varchar(64))
+  ENGINE=FEDERATED
+  connection='mysql://root@127.0.0.1:$MASTER_MYPORT/federated/t1'
+  DEFAULT CHARSET=utf8;
+connection master;
+INSERT INTO federated.t1 VALUES (1,"Larry"), (2,"Curly"), (3,"Moe");
+CREATE TABLE federated.t1_child(a int);
+ALTER TABLE federated.t1_child ADD CONSTRAINT dc FOREIGN KEY (a) REFERENCES federated.t1(a);
+INSERT INTO federated.t1_child VALUES (1), (3);
+connection slave;
+SELECT * FROM federated.t2;
+--echo #We will use the error message returned from server to differentiate between DELETE and TRUNCATE
+--error ER_GET_ERRMSG
+DELETE FROM federated.t2;
+--error ER_GET_ERRMSG
+TRUNCATE TABLE federated.t2;
+SELECT * FROM federated.t2;
+DELETE IGNORE FROM federated.t2;
+SELECT * FROM federated.t2;
+DELETE IGNORE FROM federated.t2 where a>1;
+SELECT * FROM federated.t2;
+INSERT INTO federated.t2 VALUES (2,"Curly"),(6,"James");
+SELECT * FROM federated.t2;
+DELETE IGNORE federated.t2.* FROM federated.t2 where federated.t2.a<5;
+SELECT * FROM federated.t2;
+DROP TABLE federated.t2;
+connection master;
+DROP TABLE federated.t1_child;
+DROP TABLE federated.t1;
+--disable_connect_log
+
+--echo ###
+--echo ### Bug#27509959: EXCEPTION NOT CAUGHT W/IN SPROC ADDING A ROW
+--echo ###               THAT FAILS FK CHECK IN FED TABLE
+--echo ###
+
+connection master;
+
+CREATE TABLE federated.parent(a INT, PRIMARY KEY(a)) ENGINE=InnoDB;
+CREATE TABLE federated.child(a INT, b INT, PRIMARY KEY(b),FOREIGN KEY(a) REFERENCES federated.parent(a))ENGINE=InnoDB;
+INSERT federated.parent VALUES (1);
+INSERT federated.child VALUES (1,1);
+
+connection slave;
+
+--replace_result $MASTER_MYPORT MASTER_PORT
+eval CREATE TABLE federated.child(a INT, b INT, PRIMARY KEY(b),
+     FOREIGN KEY(a) REFERENCES federated.parent(a))
+     ENGINE=FEDERATED
+     CONNECTION='mysql://root@127.0.0.1:$MASTER_MYPORT/federated/child';
+
+SELECT * FROM federated.child;
+
+DROP PROCEDURE IF EXISTS add_child;
+DELIMITER |;
+CREATE PROCEDURE add_child(IN new_a INT, IN new_b INT)
+DETERMINISTIC MODIFIES SQL DATA
+BEGIN
+  DECLARE CONTINUE HANDLER FOR SQLEXCEPTION
+  BEGIN
+    GET DIAGNOSTICS @p1 = NUMBER, @p2 = ROW_COUNT;
+    GET DIAGNOSTICS CONDITION 1 @p3=CLASS_ORIGIN, @p4=SUBCLASS_ORIGIN, @p5=RETURNED_SQLSTATE, @p6=MESSAGE_TEXT, @p7=MYSQL_ERRNO;
+  SELECT
+      @p1 as 'NUMBER'
+    , @p2 as 'ROW_COUNT'
+    , @p3 as 'CLASS_ORIGIN'
+    , @p4 as 'SUBCLASS_ORIGIN'
+    , @p5 as 'RETURNED_SQLSTATE'
+    , @p6 as 'MESSAGE_TEXT'
+    , @p7 as 'MYSQL_ERRNO';
+  END;
+  INSERT federated.child(a, b) VALUES(new_a, new_b);
+END|
+DELIMITER ;|
+
+CALL add_child(2,2);
+CALL add_child(1,1);
+
+#Cleanup
+DROP TABLE federated.child;
+DROP PROCEDURE add_child;
+
+connection master;
+DROP TABLE federated.child;
+DROP TABLE federated.parent;
+
+
+connection default;
 SET @@GLOBAL.CONCURRENT_INSERT= @OLD_MASTER_CONCURRENT_INSERT;
 connection slave;
 SET @@GLOBAL.CONCURRENT_INSERT= @OLD_SLAVE_CONCURRENT_INSERT;

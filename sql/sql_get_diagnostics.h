@@ -1,13 +1,20 @@
-/* Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -24,7 +31,7 @@ class Diagnostics_information;
   Sql_cmd_get_diagnostics represents a GET DIAGNOSTICS statement.
 
   The GET DIAGNOSTICS statement retrieves exception or completion
-  condition information from a diagnostics area, usually pertaining
+  condition information from a Diagnostics Area, usually pertaining
   to the last non-diagnostic SQL statement that was executed.
 */
 class Sql_cmd_get_diagnostics : public Sql_cmd
@@ -62,20 +69,21 @@ class Diagnostics_information : public Sql_alloc
 {
 public:
   /**
-    Which diagnostics area to access.
-    Only CURRENT is supported for now.
+    Which Diagnostics Area to access.
   */
   enum Which_area
   {
-    /** Access the first diagnostics area. */
-    CURRENT_AREA
+    /** Access the first Diagnostics Area. */
+    CURRENT_AREA,
+    /** Access the second Diagnostics Area. */
+    STACKED_AREA
   };
 
-  /** Set which diagnostics area to access. */
+  /** Set which Diagnostics Area to access. */
   void set_which_da(Which_area area)
   { m_area= area; }
 
-  /** Get which diagnostics area to access. */
+  /** Get which Diagnostics Area to access. */
   Which_area get_which_da(void) const
   { return m_area; }
 
@@ -83,7 +91,7 @@ public:
     Aggregate diagnostics information.
 
     @param thd  The current thread.
-    @param da   The diagnostics area.
+    @param da   The Diagnostics Area.
 
     @retval false on success.
     @retval true on error
@@ -97,7 +105,7 @@ protected:
   */
   virtual ~Diagnostics_information()
   {
-    DBUG_ASSERT(false);
+    assert(false);
   }
 
   /**
@@ -124,7 +132,7 @@ protected:
   }
 
 private:
-  /** Which diagnostics area to access. */
+  /** Which Diagnostics Area to access. */
   Which_area m_area;
 };
 
@@ -163,7 +171,7 @@ protected:
   */
   virtual ~Diagnostics_information_item()
   {
-    DBUG_ASSERT(false);
+    assert(false);
   }
 
 private:
@@ -222,7 +230,7 @@ public:
     : m_items(items)
   {}
 
-  /** Obtain statement information in the context of a diagnostics area. */
+  /** Obtain statement information in the context of a Diagnostics Area. */
   bool aggregate(THD *thd, const Diagnostics_area *da);
 
 private:
@@ -300,7 +308,7 @@ public:
     : m_cond_number_expr(cond_number_expr), m_items(items)
   {}
 
-  /** Obtain condition information in the context of a diagnostics area. */
+  /** Obtain condition information in the context of a Diagnostics Area. */
   bool aggregate(THD *thd, const Diagnostics_area *da);
 
 private:

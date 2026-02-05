@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -18,6 +25,7 @@
 
 #include <ndb_global.h>
 
+#include "mt-asm.h"
 #include "WatchDog.hpp"
 #include "GlobalData.hpp"
 #include <NdbOut.hpp>
@@ -43,6 +51,7 @@ WatchDog::WatchDog(Uint32 interval) :
   setCheckInterval(interval);
   m_mutex = NdbMutex_Create();
   theStop = false;
+  killer = false;
   theThreadPtr = 0;
 }
 
@@ -72,7 +81,7 @@ WatchDog::registerWatchedThread(Uint32 *counter, Uint32 threadId)
   {
     m_watchedList[m_watchedCount].m_watchCounter = counter;
     m_watchedList[m_watchedCount].m_threadId = threadId;
-    NdbTick_getMicroTimer(&(m_watchedList[m_watchedCount].m_startTime));
+    m_watchedList[m_watchedCount].m_startTicks = NdbTick_getCurrentTicks();
     m_watchedList[m_watchedCount].m_slowWarnDelay = theInterval;
     m_watchedList[m_watchedCount].m_lastCounterValue = 0;
     ++m_watchedCount;
@@ -124,6 +133,15 @@ WatchDog::doStop(){
   }
 }
 
+void
+WatchDog::setKillSwitch(bool kill)
+{
+  g_eventLogger->info("Watchdog KillSwitch %s.",
+                      (kill?"on":"off"));
+  killer = kill;
+}
+
+static
 const char *get_action(Uint32 IPValue)
 {
   const char *action;
@@ -155,8 +173,11 @@ const char *get_action(Uint32 IPValue)
   case 9:
     action = "Allocating memory";
     break;
+  case 11:
+    action = "Packing Send Buffers";
+    break;
   default:
-    action = "Unknown place";
+    action = NULL;
     break;
   }//switch
   return action;
@@ -214,22 +235,31 @@ times(struct tms *buf)
 #include <sys/times.h>
 #endif
 
+#define JAM_FILE_ID 235
+
+
 void 
 WatchDog::run()
 {
   unsigned int sleep_time;
-  struct MicroSecondTimer last_time, now;
+  NDB_TICKS last_ticks, now;
   Uint32 numThreads;
   Uint32 counterValue[MAX_WATCHED_THREADS];
   Uint32 oldCounterValue[MAX_WATCHED_THREADS];
   Uint32 threadId[MAX_WATCHED_THREADS];
-  struct MicroSecondTimer start_time[MAX_WATCHED_THREADS];
+  NDB_TICKS start_ticks[MAX_WATCHED_THREADS];
   Uint32 theIntervalCheck[MAX_WATCHED_THREADS];
   Uint32 elapsed[MAX_WATCHED_THREADS];
 
-  NdbTick_getMicroTimer(&last_time);
+  if (!NdbTick_IsMonotonic())
+  {
+    g_eventLogger->warning("A monotonic timer was not available on this platform.");
+    g_eventLogger->warning("Adjusting system time manually, or otherwise (e.g. NTP), "
+              "may cause false watchdog alarms, temporary freeze, or node shutdown.");
+  }
 
-  // WatchDog for the single threaded NDB
+  last_ticks = NdbTick_getCurrentTicks();
+
   while (!theStop)
   {
     sleep_time= 100;
@@ -238,19 +268,40 @@ WatchDog::run()
     if(theStop)
       break;
 
-    NdbTick_getMicroTimer(&now);
-    if (NdbTick_getMicrosPassed(last_time, now)/1000 > sleep_time*2)
+    now = NdbTick_getCurrentTicks();
+
+    if (NdbTick_Compare(now, last_ticks) < 0)
+    {
+      g_eventLogger->warning("Watchdog: Time ticked backwards %llu ms.",
+                             NdbTick_Elapsed(now, last_ticks).milliSec());
+      /**
+       * A backtick after sleeping 100ms, is considdered a
+       * fatal error if monotonic timers are used.
+       */
+      assert(!NdbTick_IsMonotonic());
+    }
+    // Print warnings if sleeping much longer than expected
+    else if (NdbTick_Elapsed(last_ticks, now).milliSec() > sleep_time*2)
     {
       struct tms my_tms;
-      times(&my_tms);
-      g_eventLogger->info("Watchdog: User time: %llu  System time: %llu",
+      if (times(&my_tms) != (clock_t)-1)
+      {
+        g_eventLogger->info("Watchdog: User time: %llu  System time: %llu",
                           (Uint64)my_tms.tms_utime,
                           (Uint64)my_tms.tms_stime);
+      }
+      else
+      {
+        g_eventLogger->info("Watchdog: User time: %llu System time: %llu (errno=%d)",
+                          (Uint64)my_tms.tms_utime,
+                          (Uint64)my_tms.tms_stime,
+                          errno);
+      }
       g_eventLogger->warning("Watchdog: Warning overslept %llu ms, expected %u ms.",
-                             NdbTick_getMicrosPassed(last_time, now)/1000,
+                             NdbTick_Elapsed(last_ticks, now).milliSec(),
                              sleep_time);
     }
-    last_time = now;
+    last_ticks = now;
 
     /*
       Copy out all active counters under locked mutex, then check them
@@ -260,13 +311,20 @@ WatchDog::run()
     numThreads = m_watchedCount;
     for (Uint32 i = 0; i < numThreads; i++)
     {
+#ifdef NDB_HAVE_XCNG
+      /* atomically read and clear watchdog counter */
+      counterValue[i] = xcng(m_watchedList[i].m_watchCounter, 0);
+#else
       counterValue[i] = *(m_watchedList[i].m_watchCounter);
-      if (counterValue[i] != 0)
+#endif
+      if (likely(counterValue[i] != 0))
       {
         /*
           The thread responded since last check, so just update state until
           next check.
-
+         */
+#ifndef NDB_HAVE_XCNG
+        /*
           There is a small race here. If the thread changes the counter
           in-between the read and setting to zero here in the watchdog
           thread, then gets stuck immediately after, we may report the
@@ -275,17 +333,18 @@ WatchDog::run()
           this race, nor will there be missed reporting.
         */
         *(m_watchedList[i].m_watchCounter) = 0;
-        m_watchedList[i].m_startTime = now;
+#endif
+        m_watchedList[i].m_startTicks = now;
         m_watchedList[i].m_slowWarnDelay = theInterval;
         m_watchedList[i].m_lastCounterValue = counterValue[i];
       }
       else
       {
-        start_time[i] = m_watchedList[i].m_startTime;
+        start_ticks[i] = m_watchedList[i].m_startTicks;
         threadId[i] = m_watchedList[i].m_threadId;
         oldCounterValue[i] = m_watchedList[i].m_lastCounterValue;
         theIntervalCheck[i] = m_watchedList[i].m_slowWarnDelay;
-        elapsed[i] = (Uint32)NdbTick_getMicrosPassed(start_time[i], now)/1000;
+        elapsed[i] = (Uint32)NdbTick_Elapsed(start_ticks[i], now).milliSec();
         if (oldCounterValue[i] == 9 && elapsed[i] >= theIntervalCheck[i])
           m_watchedList[i].m_slowWarnDelay += theInterval;
       }
@@ -309,17 +368,35 @@ WatchDog::run()
       if (oldCounterValue[i] != 9 || elapsed[i] >= theIntervalCheck[i])
       {
         const char *last_stuck_action = get_action(oldCounterValue[i]);
-        g_eventLogger->warning("Ndb kernel thread %u is stuck in: %s "
-                              "elapsed=%u",
-                              threadId[i], last_stuck_action, elapsed[i]);
+        if (last_stuck_action != NULL)
+        {
+          g_eventLogger->warning("Ndb kernel thread %u is stuck in: %s "
+                                 "elapsed=%u",
+                                 threadId[i], last_stuck_action, elapsed[i]);
+        }
+        else
+        {
+          g_eventLogger->warning("Ndb kernel thread %u is stuck in: Unknown place %u "
+                                 "elapsed=%u",
+                                 threadId[i],  oldCounterValue[i], elapsed[i]);
+        }
         {
           struct tms my_tms;
-          times(&my_tms);
-          g_eventLogger->info("Watchdog: User time: %llu  System time: %llu",
+          if (times(&my_tms) != (clock_t)-1)
+          {
+            g_eventLogger->info("Watchdog: User time: %llu  System time: %llu",
                               (Uint64)my_tms.tms_utime,
                               (Uint64)my_tms.tms_stime);
+          }
+          else
+          {
+            g_eventLogger->info("Watchdog: User time: %llu System time: %llu (errno=%d)",
+                              (Uint64)my_tms.tms_utime,
+                              (Uint64)my_tms.tms_stime,
+                              errno);
+          }
         }
-        if (elapsed[i] > 3 * theInterval)
+        if ((elapsed[i] > 3 * theInterval) || killer)
         {
           shutdownSystem(last_stuck_action);
         }

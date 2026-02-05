@@ -4,14 +4,16 @@ baseport = 14000
 clusters = .4node
 mysqld = CHOOSE_host1
 fix-nodeid=1
+mt=2
 
 [ndb_mgmd]
 
 [mysqld]
-skip-innodb
+innodb
 loose-skip-bdb
 socket=mysql.sock
 skip-grant-tables
+default-storage-engine=myisam
 
 [client]
 protocol=tcp
@@ -30,4 +32,5 @@ MaxNoOfSavedMessages= 5
 SendBufferMemory = 2M
 NoOfFragmentLogFiles = 4
 FragmentLogFileSize = 64M
+Checksum=1
 

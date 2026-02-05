@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -24,6 +31,7 @@
 #include "ScanFunctions.hpp"
 #include <random.h>
 #include <signaldata/DumpStateOrd.hpp>
+#include <NdbConfig.hpp>
 
 const NdbDictionary::Table *
 getTable(Ndb* pNdb, int i){
@@ -110,7 +118,7 @@ int createOrderedPkIndex(NDBT_Context* ctx, NDBT_Step* step){
   if (pNdb->getDictionary()->createIndex(pIdx) != 0){
     ndbout << "FAILED! to create index" << endl;
     const NdbError err = pNdb->getDictionary()->getNdbError();
-    ERR(err);
+    NDB_ERR(err);
     return NDBT_FAILED;
   }
   
@@ -125,7 +133,7 @@ int createOrderedPkIndex_Drop(NDBT_Context* ctx, NDBT_Step* step){
   if (pNdb->getDictionary()->dropIndex(orderedPkIdxName, 
 				       pTab->getName()) != 0){
     ndbout << "FAILED! to drop index" << endl;
-    ERR(pNdb->getDictionary()->getNdbError());
+    NDB_ERR(pNdb->getDictionary()->getNdbError());
     return NDBT_FAILED;
   }
   
@@ -454,6 +462,56 @@ int runScanReadError(NDBT_Context* ctx, NDBT_Step* step){
   return result;
 }
 
+#include "../../src/ndbapi/ndb_internal.hpp"
+
+int runScanReadExhaust(NDBT_Context* ctx, NDBT_Step* step)
+{
+  int result = NDBT_OK;
+  int loops = ctx->getNumLoops();
+  int records = ctx->getNumRecords();
+  int parallelism = 240; // Max parallelism
+  int error = 8093;
+  NdbRestarter restarter;
+  Ndb *pNdb = GETNDB(step);
+  NdbDictionary::Dictionary *pDict = pNdb->getDictionary();
+  
+  /* First take a TC resource snapshot */
+  int savesnapshot= DumpStateOrd::TcResourceSnapshot;
+  Uint32 checksnapshot= DumpStateOrd::TcResourceCheckLeak;
+  
+  restarter.dumpStateAllNodes(&savesnapshot, 1);
+  Ndb_internal::set_TC_COMMIT_ACK_immediate(pNdb, true);
+
+  int i = 0;
+  HugoTransactions hugoTrans(*ctx->getTab());
+  hugoTrans.setRetryMax(1);
+  while (i<loops && !ctx->isTestStopped()) {
+    g_info << i << ": ";
+    
+    ndbout << "insertErrorInAllNodes("<<error<<")"<<endl;
+    if (restarter.insertErrorInAllNodes(error) != 0){
+      ndbout << "Could not insert error in all nodes "<<endl;
+      return NDBT_FAILED;
+    }
+    
+    if (hugoTrans.scanReadRecords(GETNDB(step), records, 0, parallelism) == 0)
+    {
+      /* Expect error 291 */
+      result = NDBT_FAILED;
+      break;
+    }
+    i++;
+  }
+  
+  restarter.insertErrorInAllNodes(0);
+  pDict->forceGCPWait(1);
+  if (Ndb_internal::send_dump_state_all(pNdb, &checksnapshot, 1) != 0)
+  {
+    return NDBT_FAILED;
+  }
+  return result;
+}
+
 int
 runInsertError(NDBT_Context* ctx, NDBT_Step* step){
   int error = ctx->getProperty("ErrorCode");
@@ -497,7 +555,11 @@ int runScanReadErrorOneNode(NDBT_Context* ctx, NDBT_Step* step){
     for (int j=0; j<10; j++){
       if (hugoTrans.scanReadRecords(GETNDB(step), 
 				    records, 0, parallelism) != 0)
+      {
+        // Remember that one scan read failed, but continue to
+        // read to put load on the system
 	result = NDBT_FAILED;
+      }
     }
 	
 
@@ -822,8 +884,8 @@ int runCheckGetValue(NDBT_Context* ctx, NDBT_Step* step){
   AttribList alist; 
   alist.buildAttribList(pTab);
   UtilTransactions utilTrans(*pTab);  
-  for(size_t i = 0; i < alist.attriblist.size(); i++){
-    g_info << (unsigned)i << endl;
+  for(unsigned i = 0; i < alist.attriblist.size(); i++){
+    g_info << i << endl;
     if(utilTrans.scanReadRecords(GETNDB(step), 
 				 parallelism,
 				 NdbOperation::LM_Read,
@@ -1135,9 +1197,15 @@ runScanVariants(NDBT_Context* ctx, NDBT_Step* step)
 		 << endl;
 	  
 	  NdbConnection* pCon = pNdb->startTransaction();
+          if (pCon == NULL)
+          {
+            NDB_ERR(pNdb->getNdbError());
+            return NDBT_FAILED;
+          }
+
 	  NdbScanOperation* pOp = pCon->getNdbScanOperation(pTab->getName());
 	  if (pOp == NULL) {
-	    ERR(pCon->getNdbError());
+	    NDB_ERR(pCon->getNdbError());
 	    return NDBT_FAILED;
 	  }
 	  
@@ -1146,7 +1214,7 @@ runScanVariants(NDBT_Context* ctx, NDBT_Step* step)
 			      par,
 			      batch) != 0) 
 	  {
-	    ERR(pCon->getNdbError());
+	    NDB_ERR(pCon->getNdbError());
 	    return NDBT_FAILED;
 	  }
 	  
@@ -1162,7 +1230,7 @@ runScanVariants(NDBT_Context* ctx, NDBT_Step* step)
 	    }
 	    
 	    if((pOp->getValue(pTab->getColumn(a)->getName())) == 0) {
-	      ERR(pCon->getNdbError());
+	      NDB_ERR(pCon->getNdbError());
 	      return NDBT_FAILED;
 	    }
 	  } 
@@ -1171,7 +1239,7 @@ runScanVariants(NDBT_Context* ctx, NDBT_Step* step)
 	  {
 	    int check = pCon->execute(NoCommit);
 	    if( check == -1 ) {
-	      ERR(pCon->getNdbError());
+	      NDB_ERR(pCon->getNdbError());
 	      return NDBT_FAILED;
 	    }
 	    
@@ -1193,21 +1261,27 @@ runBug36124(NDBT_Context* ctx, NDBT_Step* step){
   const NdbDictionary::Table*  pTab = ctx->getTab();
 
   NdbTransaction* pCon = pNdb->startTransaction();
+  if (pCon == NULL)
+  {
+    NDB_ERR(pNdb->getNdbError());
+    return NDBT_FAILED;
+  }
+
   NdbScanOperation* pOp = pCon->getNdbScanOperation(pTab->getName());
   if (pOp == NULL) {
-    ERR(pCon->getNdbError());
+    NDB_ERR(pCon->getNdbError());
     return NDBT_FAILED;
   }
   
   if( pOp->readTuples(NdbOperation::LM_Read) != 0) 
   {
-    ERR(pCon->getNdbError());
+    NDB_ERR(pCon->getNdbError());
     return NDBT_FAILED;
   }
 
   if( pOp->getValue(NdbDictionary::Column::ROW_COUNT) == 0)
   {
-    ERR(pCon->getNdbError());
+    NDB_ERR(pCon->getNdbError());
     return NDBT_FAILED;
   }
 
@@ -1282,6 +1356,12 @@ int runBug42545(NDBT_Context* ctx, NDBT_Step* step){
   {
     g_info << i << ": ";
     NdbTransaction* pTrans = pNdb->startTransaction();
+    if (pTrans == NULL)
+    {
+      NDB_ERR(pNdb->getNdbError());
+      return NDBT_FAILED;
+    }
+
     int nodeId = pTrans->getConnectedNodeId();
     
     {
@@ -1295,7 +1375,7 @@ int runBug42545(NDBT_Context* ctx, NDBT_Step* step){
           cnt++;
       }
       
-      for (size_t t = 0; t < translist.size(); t++)
+      for (unsigned t = 0; t < translist.size(); t++)
         translist[t]->close();
       translist.clear();
     }
@@ -1348,6 +1428,226 @@ finalizeBug42559(NDBT_Context* ctx, NDBT_Step* step){
   return NDBT_OK;
 }
 
+int takeResourceSnapshot(NDBT_Context* ctx, NDBT_Step* step)
+{
+  Ndb *pNdb = GETNDB(step);
+  NdbRestarter restarter;
+  
+  int checksnapshot = DumpStateOrd::TcResourceSnapshot;
+  restarter.dumpStateAllNodes(&checksnapshot, 1);
+  Ndb_internal::set_TC_COMMIT_ACK_immediate(pNdb, true);
+
+  /* TODO : Check other block's resources? */
+  return NDBT_OK;
+}
+
+int runScanReadIndexWithBounds(NDBT_Context* ctx, NDBT_Step* step){
+  int loops = ctx->getNumLoops();
+  int records = ctx->getNumRecords();
+  int numRanges = ctx->getProperty("NumRanges", 1);
+  int maxRunSecs = ctx->getProperty("MaxRunSecs", 60);
+  int maxRetries = ctx->getProperty("MaxRetries", 1000000);
+  
+  const NdbDictionary::Index * pIdx = 
+    GETNDB(step)->getDictionary()->getIndex(orderedPkIdxName, 
+					    ctx->getTab()->getName());
+
+  int i = 0;
+  HugoCalculator calc(*ctx->getTab());
+  NDBT_ResultRow row (*ctx->getTab());
+  Ndb* ndb = GETNDB(step);
+
+  Uint64 start = NdbTick_CurrentMillisecond();
+  Uint64 end = start + (1000*maxRunSecs);
+  int retries = 0;
+
+  /* Here we run an ordered index scan, with a bound.
+   * There are numRanges sub-scans with the same bound
+   * This is done to use up some KeyInfo, and expose bugs in that area
+   * If we run many of these in parallel we may exhaust the available KeyInfo storage,
+   * which may expose some bugs.
+   */
+  while (pIdx &&
+         i<loops && 
+         !ctx->isTestStopped() &&
+         NdbTick_CurrentMillisecond() < end) {
+    g_info << "Step " << step->getStepNo() 
+           << "Loop : " << i << ": ";
+    
+    /* Use specific-partition variant of startTransaction to ensure a single
+     * TC node is used
+     */
+    NdbTransaction* trans = ndb->startTransaction(ctx->getTab(), Uint32(0));
+    if (trans == NULL)
+    {
+      g_err << "Transaction start failed " << ndb->getNdbError() << endl;
+      return NDBT_FAILED;
+    }
+
+    NdbIndexScanOperation* iso = trans->getNdbIndexScanOperation(pIdx->getName(), 
+                                                                 ctx->getTab()->getName());
+    if (iso == NULL)
+    {
+      g_err << "Error obtaining IndexScanOperation : " << trans->getNdbError() << endl;
+      trans->close();
+      return NDBT_FAILED;
+    }
+
+    if (iso->readTuples(NdbOperation::LM_CommittedRead, 
+                        (NdbScanOperation::SF_OrderBy |
+                         NdbScanOperation::SF_ReadRangeNo |
+                         NdbScanOperation::SF_MultiRange), 
+                        0) != 0)
+    {
+      g_err << "Error calling readTuples : " << iso->getNdbError() << endl;
+      trans->close();
+      return NDBT_FAILED;
+    }
+
+    for (int range = 0; range < numRanges; range++)
+    {
+      /* Now define a bound... */
+      for (Uint32 k=0; k<pIdx->getNoOfColumns(); k++)
+      {
+        const NdbDictionary::Column* idxCol = pIdx->getColumn(k);
+        const char* colName = idxCol->getName();
+        /* Lower bound of <= NULL should return all rows */
+        if (iso->setBound(colName, NdbIndexScanOperation::BoundLE, NULL) != 0)
+        {
+          g_err << "Error setting bound for column %s. " 
+                << iso->getNdbError() << endl;
+          trans->close();
+          return NDBT_FAILED;
+        }
+      }
+      
+      if (iso->end_of_bound(range) != 0)
+      {
+        g_err << "Error closing range " << range << endl;
+        g_err << iso->getNdbError() << endl;
+        return NDBT_FAILED;
+      }
+    }
+    
+    const NdbDictionary::Table& tab= *ctx->getTab();
+
+    /* Now request all columns in result projection */
+    for (int a=0; a<tab.getNoOfColumns(); a++){
+      if((row.attributeStore(a) = 
+	  iso->getValue(tab.getColumn(a)->getName())) == 0) {
+	g_err << "Error defining read value " << trans->getNdbError() << endl;
+        trans->close();
+	return NDBT_FAILED;
+      }
+    }
+          
+    /* Ready to go... */
+    trans->execute(NoCommit, AbortOnError);
+
+    if (trans->getNdbError().code != 0)
+    {
+      if (trans->getNdbError().code == 218)
+      {
+        /* Out of KeyInfo buffers in TC - that's ok, let's try again */
+        trans->close();
+        if (retries++ < maxRetries)
+        {
+          g_err << "Step " << step->getStepNo()
+                << " TC out of Keyinfo buffers (218) - retrying" << endl;
+          continue;
+        }
+      }
+
+      g_err << "Error on execution : " << trans->getNdbError() << endl;
+      trans->close();
+      return NDBT_FAILED;
+    }
+    
+    int eof;
+    int rows = 0;
+    while ((eof = iso->nextResult(true)) == 0)
+    {
+      rows++;
+      if (calc.verifyRowValues(&row) != 0)
+      {
+        g_err << "Verification failed." << endl;
+        trans->close();
+        return NDBT_FAILED;
+      }
+
+#ifdef BUG_14388257_FIXED
+      int rangeNum = (rows -1) / records;
+      if (iso->get_range_no() != rangeNum)
+      {
+        g_err << "Expected row " << rows 
+              << " to be in range " << rangeNum
+              << " but it reports range num " << iso->get_range_no()
+              << " : " << row
+              << endl;
+        return NDBT_FAILED;
+      }
+#endif
+
+      //g_err << row << endl;
+    }
+
+    if (eof != 1)
+    {
+      g_err << "nextResult() returned " << eof << endl;
+      g_err << "Scan error : " << iso->getNdbError() << endl;
+
+      if (iso->getNdbError().status == NdbError::TemporaryError)
+      {
+        if (retries++ < maxRetries)
+        {
+          g_err << "Step "
+                << step->getStepNo()
+                << "  Temporary, retrying on iteration " 
+                << i << " rows so far : " << rows << endl;
+          trans->close();
+          NdbSleep_MilliSleep(2500);
+          continue;
+        }
+      }
+
+      trans->close();
+      return NDBT_FAILED;
+    }
+    
+    g_err << "Read " << rows << " rows." << endl;
+    
+    if (records != 0 && rows != (numRanges * records))
+    {
+      g_err << "Expected " << records << " rows"
+            << ", read " << rows << endl;
+#ifdef BUG_14388257_FIXED
+      trans->close();
+      require(false);
+      return NDBT_FAILED;
+#endif
+    }
+
+    trans->close();
+    i++;
+  }
+  return NDBT_OK;
+}
+
+int checkResourceSnapshot(NDBT_Context* ctx, NDBT_Step* step)
+{
+  Ndb *pNdb = GETNDB(step);
+  NdbDictionary::Dictionary *pDict = pNdb->getDictionary();
+  
+  Uint32 checksnapshot = DumpStateOrd::TcResourceCheckLeak;
+  pDict->forceGCPWait(1);
+  if (Ndb_internal::send_dump_state_all(pNdb, &checksnapshot, 1) != 0)
+  {
+    return NDBT_FAILED;
+  }
+  /* TODO : Check other block's resources? */
+  return NDBT_OK;
+}
+
 
 int
 runBug54945(NDBT_Context* ctx, NDBT_Step* step)
@@ -1392,21 +1692,28 @@ runBug54945(NDBT_Context* ctx, NDBT_Step* step)
     for (int i = 0; i< 25; i++)
     {
       NdbTransaction* pCon = pNdb->startTransaction();
+      if (pCon == NULL)
+      {
+        NDB_ERR(pNdb->getNdbError());
+        return NDBT_FAILED;
+      }
+
       NdbScanOperation* pOp = pCon->getNdbScanOperation(pTab->getName());
-      if (pOp == NULL) {
-        ERR(pCon->getNdbError());
+      if (pOp == NULL)
+      {
+        NDB_ERR(pCon->getNdbError());
         return NDBT_FAILED;
       }
       
-      if( pOp->readTuples(NdbOperation::LM_Read) != 0) 
+      if (pOp->readTuples(NdbOperation::LM_Read) != 0) 
       {
-        ERR(pCon->getNdbError());
+        NDB_ERR(pCon->getNdbError());
         return NDBT_FAILED;
       }
       
-      if( pOp->getValue(NdbDictionary::Column::ROW_COUNT) == 0)
+      if (pOp->getValue(NdbDictionary::Column::ROW_COUNT) == 0)
       {
-        ERR(pCon->getNdbError());
+        NDB_ERR(pCon->getNdbError());
         return NDBT_FAILED;
       }
       
@@ -1437,35 +1744,41 @@ runCloseRefresh(NDBT_Context* ctx, NDBT_Step* step)
   if ((code.interpret_exit_last_row() != 0) ||
       (code.finalise() != 0))
   {
-    ERR(code.getNdbError());
+    NDB_ERR(code.getNdbError());
     return NDBT_FAILED;
   }
 
   const NdbDictionary::Table*  pTab = ctx->getTab();
   NdbTransaction* pTrans = pNdb->startTransaction();
+  if (pTrans == NULL)
+  {
+    NDB_ERR(pNdb->getNdbError());
+    return NDBT_FAILED;
+  }
+
   NdbScanOperation* pOp = pTrans->getNdbScanOperation(pTab->getName());
   if (pOp == NULL)
   {
-    ERR(pTrans->getNdbError());
+    NDB_ERR(pTrans->getNdbError());
     return NDBT_FAILED;
   }
 
   if (pOp->readTuples(NdbOperation::LM_CommittedRead) != 0)
   {
-    ERR(pTrans->getNdbError());
+    NDB_ERR(pTrans->getNdbError());
     return NDBT_FAILED;
   }
 
   if (pOp->setInterpretedCode(&code) == -1 )
   {
-    ERR(pTrans->getNdbError());
+    NDB_ERR(pTrans->getNdbError());
     pNdb->closeTransaction(pTrans);
     return NDBT_FAILED;
   }
 
   if (pOp->getValue(NdbDictionary::Column::ROW_COUNT) == 0)
   {
-    ERR(pTrans->getNdbError());
+    NDB_ERR(pTrans->getNdbError());
     return NDBT_FAILED;
   }
 
@@ -1475,26 +1788,26 @@ runCloseRefresh(NDBT_Context* ctx, NDBT_Step* step)
   pOp = pTrans->getNdbScanOperation(pTab->getName());
   if (pOp == NULL)
   {
-    ERR(pTrans->getNdbError());
+    NDB_ERR(pTrans->getNdbError());
     return NDBT_FAILED;
   }
 
   if (pOp->readTuples(NdbOperation::LM_CommittedRead) != 0)
   {
-    ERR(pTrans->getNdbError());
+    NDB_ERR(pTrans->getNdbError());
     return NDBT_FAILED;
   }
 
   if (pOp->setInterpretedCode(&code) == -1 )
   {
-    ERR(pTrans->getNdbError());
+    NDB_ERR(pTrans->getNdbError());
     pNdb->closeTransaction(pTrans);
     return NDBT_FAILED;
   }
 
   if (pOp->getValue(NdbDictionary::Column::ROW_COUNT) == 0)
   {
-    ERR(pTrans->getNdbError());
+    NDB_ERR(pTrans->getNdbError());
     return NDBT_FAILED;
   }
 
@@ -1611,6 +1924,378 @@ runMixedDML(NDBT_Context* ctx, NDBT_Step* step)
   delete [] pRow;
 
   return NDBT_OK;
+}
+
+int
+runBug13394788(NDBT_Context* ctx, NDBT_Step* step)
+{
+  const int loops = ctx->getNumLoops();
+  const int records = ctx->getNumRecords();
+  const NdbDictionary::Index * pIdx =
+    GETNDB(step)->getDictionary()->getIndex(orderedPkIdxName,
+					    ctx->getTab()->getName());
+  HugoTransactions hugoTrans(*ctx->getTab(), pIdx);
+
+  NdbRestarter res;
+  for (int i = 0; i < loops; i++)
+  {
+    res.insertErrorInAllNodes(5074);
+    // this will actually be a mrr scan...
+    int batch = 1 + (rand() % records);
+    // this should be error...
+    hugoTrans.pkReadRecords(GETNDB(step), records, batch);
+
+    // make it should work again...
+    res.insertErrorInAllNodes(0);
+    if (hugoTrans.pkReadRecords(GETNDB(step), records, batch) != 0)
+      return NDBT_FAILED;
+  }
+
+  return NDBT_OK;
+}
+
+/** 
+ * Tests reated to TupKeyRef (cf. Bug#16176006: TUPLE WITH CHECKSUM ERROR
+ * SILENTLY DISCARDED).
+ */
+namespace TupErr
+{
+  static const char* const tabName = "tupErrTab";
+  static const int totalRowCount = 2000;
+  
+  struct Row
+  {
+    int pk1;
+    int pk2;
+    int a1;
+  };
+
+  static int
+  createDataBase(NDBT_Context* ctx, NDBT_Step* step)
+  {
+    // Create table.
+    NDBT_Attribute pk1("pk1", NdbDictionary::Column::Int, 1, true);
+    NDBT_Attribute pk2("pk2", NdbDictionary::Column::Int, 1, true);
+    NDBT_Attribute a1("a1", NdbDictionary::Column::Int, 1);
+  
+    NdbDictionary::Column* columns[] = {&pk1, &pk2, &a1};
+  
+    const NDBT_Table tabDef(tabName, sizeof columns/sizeof columns[0], 
+                            columns);
+    Ndb* const ndb = step->getNdb();
+  
+    NdbDictionary::Dictionary* const dictionary = ndb->getDictionary();
+  
+    dictionary->dropTable(tabName);
+    require(dictionary->createTable(tabDef) == 0);
+
+    // Populate table.
+    const NdbDictionary::Table* const tab = dictionary->getTable(tabName);
+    const NdbRecord* const record = tab->getDefaultRecord();
+
+    NdbTransaction* const trans = ndb->startTransaction();
+    if (trans == NULL)
+    {
+      NDB_ERR(ndb->getNdbError());
+      return NDBT_FAILED;
+    }
+
+    for (int i = 0; i<totalRowCount; i++)
+    {
+      const Row row = {i, 0, i};
+
+      const NdbOperation* const operation=
+        trans->insertTuple(record, reinterpret_cast<const char*>(&row));
+      require(operation != NULL);
+    }
+    require(trans->execute( NdbTransaction::Commit) != -1);
+    ndb->closeTransaction(trans);
+
+    return NDBT_OK;
+  }
+
+  static int
+  doCheckSumQuery(NDBT_Context* ctx, NDBT_Step* step)
+  {
+    // Insert error.
+    const int errInsertNo = 4036;
+    NdbRestarter restarter;
+    const int nodeId = restarter.getDbNodeId(0);
+
+    /**
+     * Let the first tuple from one fragment cause error 896 
+     * (tuple checksum error).
+     */
+    g_info << "Inserting error " << errInsertNo << " in node " << nodeId 
+           << endl;
+    require(restarter.insertErrorInNode(nodeId, errInsertNo) == 0);
+  
+    // Build query.
+    Ndb* const ndb = step->getNdb();
+  
+    NdbDictionary::Dictionary* const dictionary = ndb->getDictionary();
+    const NdbDictionary::Table* const tab = dictionary->getTable(tabName);
+    const NdbRecord* const record = tab->getDefaultRecord();
+
+  
+    NdbTransaction* const trans = ndb->startTransaction();
+    if (trans == NULL)
+    {
+      NDB_ERR(ndb->getNdbError());
+      return NDBT_FAILED;
+    }
+
+    NdbScanOperation* const scanOp = trans->scanTable(record);
+    require(scanOp != NULL);
+    require(trans->execute(Commit) == 0);
+  
+    int queryRes = 0;
+  
+    // Loop through the result set.
+    int rowCount = -1;
+    while(queryRes == 0)
+    {
+      const Row* resRow;
+      queryRes = scanOp->nextResult(reinterpret_cast<const char**>(&resRow), 
+                                    true, false);
+      rowCount++;
+    }
+
+    int res = NDBT_OK;
+    switch (queryRes)
+    {
+    case 1: // Scan complete
+      g_err << "Did not get expected error 896. Query returned " << rowCount 
+            << " rows out of " << totalRowCount << endl;
+      res = NDBT_FAILED;
+      break;
+    
+    case -1: // Error
+      {
+        const int errCode = trans->getNdbError().code;
+        if (errCode == 896)
+        {
+          g_info << "Got expected error 896. Query returned " << rowCount
+                 << " rows." << endl;
+        }
+        else
+        {
+          g_err << "Got unexpected error " << errCode << ". Query returned " 
+                << rowCount << " rows." << endl;
+          res = NDBT_FAILED;
+        }
+      }
+      break;
+    
+    default:
+      require(false);
+    }
+    ndb->closeTransaction(trans);
+    dictionary->dropTable(tabName);
+
+    return res;
+  }
+
+  static int
+  doInterpretNok6000Query(NDBT_Context* ctx, NDBT_Step* step)
+  {
+    // Build query.
+    Ndb* const ndb = step->getNdb();
+  
+    NdbDictionary::Dictionary* const dictionary = ndb->getDictionary();
+    const NdbDictionary::Table* const tab = dictionary->getTable(tabName);
+    const NdbRecord* const record = tab->getDefaultRecord();
+
+    NdbTransaction* const trans = ndb->startTransaction();
+    if (trans == NULL)
+    {
+      NDB_ERR(ndb->getNdbError());
+      return NDBT_FAILED;
+    }
+
+    NdbInterpretedCode code(tab);
+
+    /**
+     * Build an interpreter code sequence that causes rows with pk1==50 to 
+     * abort the scan, and that skips all other rows.
+     */ 
+    const NdbDictionary::Column* const col = tab->getColumn("pk1");
+    require(col != NULL);
+    require(code.read_attr(1, col) == 0);
+    require(code.load_const_u32(2, 50) == 0);
+    require(code.branch_eq(1, 2, 0) == 0);
+
+    // Exit here if pk1!=50. Skip this row.
+    require(code.interpret_exit_nok(626) == 0);
+
+    // Go here if pk1==50. Abort scan.
+    require(code.def_label(0) == 0);
+    require(code.interpret_exit_nok(6000) == 0);
+    require(code.finalise() == 0);
+
+    NdbScanOperation::ScanOptions opts;
+    opts.optionsPresent = NdbScanOperation::ScanOptions::SO_INTERPRETED;
+    opts.interpretedCode = &code;
+
+    //NdbScanOperation* const scanOp = trans->scanTable(record);
+    NdbScanOperation* const scanOp = trans->scanTable(record, 
+                                                      NdbOperation::LM_Read,
+                                                      NULL,
+                                                      &opts,
+                                                      sizeof(opts));
+    require(scanOp != NULL);
+    require(trans->execute(Commit) == 0);
+  
+    int queryRes = 0;
+  
+    // Loop through the result set.
+    int rowCount = -1;
+    while(queryRes == 0)
+    {
+      const Row* resRow;
+      queryRes = 
+        scanOp->nextResult(reinterpret_cast<const char**>(&resRow), true, false);
+      rowCount++;
+    }
+
+    int res = NDBT_OK;
+    switch (queryRes)
+    {
+    case 1: // Scan complete
+      g_err << "Query did not fail as it should have. Query returned " 
+            << rowCount << " rows out of " << totalRowCount << endl;
+      res = NDBT_FAILED;
+      break;
+    
+    case -1: // Error
+      {
+        const int errCode = trans->getNdbError().code;
+        if (errCode == 6000)
+        {
+          if (rowCount==0)
+          {
+            g_info << "Got expected error 6000. Query returned 0 rows out of " 
+                   << totalRowCount  << endl;
+          }
+          else
+          {
+            g_err << "Got expected error 6000. Query returned " 
+                  << rowCount << " rows out of " << totalRowCount 
+                  << ". Exepected 0 rows."<< endl;
+            res = NDBT_FAILED;
+          }
+        }
+        else
+        {
+          g_err << "Got unexpected error " << errCode << ". Query returned " 
+                << rowCount << " rows out of " << totalRowCount  << endl;
+          res = NDBT_FAILED;
+        }
+      }
+      break;
+    
+    default:
+      require(false);
+    }
+
+    ndb->closeTransaction(trans);
+    dictionary->dropTable(tabName);
+
+    return res;
+  }
+} // namespace TupErr
+
+/**
+ * This is a regression test for bug #11748194 "TRANSACTION OBJECT CREATED 
+ * AND UNRELEASED BY EXTRA CALL TO NEXTRESULT()".
+ * If a transaction made an extra call to nextResult() after getting
+ * end-of-scan from nextResult(), the API would leak transaction objects. 
+ */
+static int
+runExtraNextResult(NDBT_Context* ctx, NDBT_Step* step)
+{
+  const NdbDictionary::Table * pTab = ctx->getTab();
+  // Fill table with 10 rows.
+  HugoTransactions hugoTrans(*pTab);
+  Ndb* const ndb = GETNDB(step);
+  hugoTrans.loadTable(ndb, 10);
+  // Read MaxNoOfConcurrentTransactions configuration value.
+  Uint32 maxTrans = 0;
+  NdbConfig conf;
+  require(conf.getProperty(conf.getMasterNodeId(),
+                           NODE_TYPE_DB,
+                           CFG_DB_NO_TRANSACTIONS,
+                           &maxTrans));
+  require(maxTrans > 0);
+  
+  /**
+   * The bug causes each scan to leak one object.
+   */
+  int result = NDBT_OK;
+  Uint32 i = 0;
+  while (i < maxTrans+1)
+  {
+    NdbTransaction* const trans = ndb->startTransaction();
+    if (trans == NULL)
+    {
+      g_err << "ndb->startTransaction() gave unexpected error : " 
+            << ndb->getNdbError() << " in the " << i << "th iteration." <<endl;
+    }
+    
+    // Do a random numer of scans in this transaction.
+    const int scanCount = rand()%4;
+    for (int j=0; j < scanCount; j++)
+    {
+      NdbScanOperation* const scan = trans->getNdbScanOperation(pTab);
+      if (scan == NULL)
+      {
+        g_err << "trans->getNdbScanOperation() gave unexpected error : " 
+              << trans->getNdbError() << " in the " << i
+              << "th iteration." <<endl;
+        return NDBT_FAILED;
+      }
+      
+      require(scan->readTuples(NdbOperation::LM_CommittedRead) == 0);
+      require(scan->getValue(0u) != 0);
+      require(trans->execute(NoCommit) == 0);
+      
+      // Scan table until end.
+      int scanResult;
+      do
+      {
+        // Fetch new batch.
+        scanResult = scan->nextResult(true);
+        while (scanResult == 0)
+        {
+          // Iterate over batch.
+          scanResult = scan->nextResult(false);
+        }
+      } while (scanResult == 0 || scanResult == 2);
+
+      /** 
+       * Do extra nextResult. This is the application error that triggers the 
+       * bug.
+       */
+      scanResult = scan->nextResult(true);
+      require(scanResult < 0);
+      // Here we got the undefined error code -1. So check for that too.
+      // if (trans->getNdbError().code != 4120
+      if (scan->getNdbError().code != 4120
+          && result == NDBT_OK)
+      {
+        g_err << "scan->nextResult() gave unexpected error : " 
+              << scan->getNdbError() << " in the " << i << "th iteration." 
+              << endl;
+        result = NDBT_FAILED;
+      }
+      i++;
+    }
+    ndb->closeTransaction(trans);
+  } // while (i < maxTrans+1)
+
+  // Delete table rows.
+  require(UtilTransactions(*ctx->getTab()).clearTable(ndb) == 0);
+  return result;
 }
 
 NDBT_TESTSUITE(testScan);
@@ -2025,6 +2710,24 @@ TESTCASE("ScanReadError5030",
   STEP(runScanReadErrorOneNode);
   FINALIZER(runClearTable);
 }
+TESTCASE("ScanReadError8095", 
+	 "Scan and insert error 8095. "\
+         "TC fails to send a DIH_SCAN_GET_NODES_REQ due to "\
+         "'out of LongMessageBuffers' -> terminate scan."){
+  INITIALIZER(runLoadTable);
+  TC_PROPERTY("ErrorCode", 8095);
+  STEP(runScanReadError);
+  FINALIZER(runClearTable);
+}
+TESTCASE("ScanReadError7234", 
+	 "Scan and insert error 7234. "\
+         "DIH fails to send a DIH_SCAN_GET_NODES_CONF due to "\
+         "'out of LongMessageBuffers' -> send DIH_SCAN_GET_NODES_REF."){
+  INITIALIZER(runLoadTable);
+  TC_PROPERTY("ErrorCode", 7234);
+  STEP(runScanReadError);
+  FINALIZER(runClearTable);
+}
 TESTCASE("ScanReadRestart", 
 	 "Scan requirement:A scan should be able to start and "\
 	 "complete during node recovery and when one or more nodes "\
@@ -2154,6 +2857,13 @@ TESTCASE("Bug54945", "")
 {
   INITIALIZER(runBug54945);
 }
+TESTCASE("ScanFragRecExhaust", 
+         "Test behaviour when TC scan frag recs exhausted")
+{
+  INITIALIZER(runLoadTable);
+  INITIALIZER(runScanReadExhaust);
+  FINALIZER(runClearTable);
+}
 TESTCASE("Bug12324191", "")
 {
   TC_PROPERTY("LockMode", Uint32(NdbOperation::LM_Read));
@@ -2163,6 +2873,78 @@ TESTCASE("Bug12324191", "")
   STEP(runScanRead);
   STEPS(runMixedDML,10);
 }
+TESTCASE("Bug13394788", "")
+{
+  INITIALIZER(createOrderedPkIndex);
+  INITIALIZER(runLoadTable);
+  STEP(runBug13394788);
+  FINALIZER(createOrderedPkIndex_Drop);
+  FINALIZER(runClearTable);
+}
+TESTCASE("TupCheckSumError", ""){
+  INITIALIZER(TupErr::createDataBase);
+  INITIALIZER(TupErr::doCheckSumQuery);
+}
+TESTCASE("InterpretNok6000", ""){
+  INITIALIZER(TupErr::createDataBase);
+  INITIALIZER(TupErr::doInterpretNok6000Query);
+}
+TESTCASE("extraNextResultBug11748194",
+         "Regression test for bug #11748194")
+{
+  INITIALIZER(runExtraNextResult);
+}
+TESTCASE("ScanRealKeyInfoExhaust",
+         "Test behaviour when TC keyinfo buffers exhausted 4real")
+{
+  /* 55 threads, each setting 200 ranges in their keyinfo
+   * For the lightest single column PK case, each range should
+   * use 2 words, 200 ranges = 400 words per scan thread = 
+   * 400/4 = 100 Databuffers used.
+   * 55 threads = 55*100 = 5500 Databuffers which is >
+   * the 4000 statically allocated in 6.3
+   */
+  TC_PROPERTY("NumRanges", 200);
+  TC_PROPERTY("MaxRunSecs", 120);
+  INITIALIZER(createOrderedPkIndex);
+  INITIALIZER(runLoadTable);
+  INITIALIZER(takeResourceSnapshot);
+  STEPS(runScanReadIndexWithBounds,55);
+  FINALIZER(checkResourceSnapshot);
+  FINALIZER(createOrderedPkIndex_Drop);
+  FINALIZER(runClearTable);
+}
+TESTCASE("ScanKeyInfoExhaust",
+         "Test behaviour when TC keyinfo buffers exhausted with error insert")
+{
+  /* Use error insert 8094 to cause keyinfo exhaustion, then run a single scan
+   * with keyinfo to hit the error path
+   */
+  TC_PROPERTY("MaxRunSecs", 10);
+  INITIALIZER(createOrderedPkIndex);
+  INITIALIZER(runLoadTable);
+  INITIALIZER(takeResourceSnapshot);
+  TC_PROPERTY("ErrorCode", 8094);
+  INITIALIZER(runInsertError);
+  STEP(runScanReadIndexWithBounds);
+  FINALIZER(checkResourceSnapshot);
+  FINALIZER(runInsertError);
+  FINALIZER(createOrderedPkIndex_Drop);
+  FINALIZER(runClearTable);
+}
+TESTCASE("Bug16402744", 
+	 "Test scan behaviour with multiple DIH_SCAN_GET_NODES_REQ "\
+         "and _CONF handling possible delayed/incomplete due to "\
+         "CONTINUEB(ZSTART_FRAG_SCAN)"){
+  INITIALIZER(runLoadTable);
+  TC_PROPERTY("Parallelism", 240);
+  TC_PROPERTY("ErrorCode", 8097);
+  STEP(runScanReadError);
+  FINALIZER(runClearTable);
+}
+  
+
+
 NDBT_TESTSUITE_END(testScan);
 
 int main(int argc, const char** argv){

@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -18,22 +25,18 @@
 
 #ifndef _myisam_h
 #define _myisam_h
+
+#include "my_base.h"
+#include "m_ctype.h"
+#include "keycache.h"
+#include "my_compare.h"
+#include "my_check_opt.h"
+#include "m_string.h"
+
 #ifdef	__cplusplus
 extern "C" {
 #endif
 
-#ifndef _my_base_h
-#include <my_base.h>
-#endif
-#ifndef _m_ctype_h
-#include <m_ctype.h>
-#endif
-#ifndef _keycache_h
-#include "keycache.h"
-#endif
-#include "my_compare.h"
-#include <mysql/plugin.h>
-#include <my_check_opt.h>
 /*
   Limit max keys according to HA_MAX_POSSIBLE_KEY
 */
@@ -70,35 +73,35 @@ extern "C" {
   sets all high keys.
 */
 #define MI_KEYMAP_BITS      (8 * SIZEOF_LONG_LONG)
-#define MI_KEYMAP_HIGH_MASK (ULL(1) << (MI_KEYMAP_BITS - 1))
+#define MI_KEYMAP_HIGH_MASK (1ULL << (MI_KEYMAP_BITS - 1))
 #define mi_get_mask_all_keys_active(_keys_) \
                             (((_keys_) < MI_KEYMAP_BITS) ? \
-                             ((ULL(1) << (_keys_)) - ULL(1)) : \
-                             (~ ULL(0)))
+                             ((1ULL << (_keys_)) - 1ULL) : \
+                             (~ 0ULL))
 
 #if MI_MAX_KEY > MI_KEYMAP_BITS
 
 #define mi_is_key_active(_keymap_,_keyno_) \
                             (((_keyno_) < MI_KEYMAP_BITS) ? \
-                             MY_TEST((_keymap_) & (ULL(1) << (_keyno_))) : \
+                             MY_TEST((_keymap_) & (1ULL << (_keyno_))) : \
                              MY_TEST((_keymap_) & MI_KEYMAP_HIGH_MASK))
 #define mi_set_key_active(_keymap_,_keyno_) \
                             (_keymap_)|= (((_keyno_) < MI_KEYMAP_BITS) ? \
-                                          (ULL(1) << (_keyno_)) : \
+                                          (1ULL << (_keyno_)) : \
                                           MI_KEYMAP_HIGH_MASK)
 #define mi_clear_key_active(_keymap_,_keyno_) \
                             (_keymap_)&= (((_keyno_) < MI_KEYMAP_BITS) ? \
-                                          (~ (ULL(1) << (_keyno_))) : \
-                                          (~ (ULL(0))) /*ignore*/ )
+                                          (~ (1ULL << (_keyno_))) : \
+                                          (~ (0ULL)) /*ignore*/ )
 
 #else
 
 #define mi_is_key_active(_keymap_,_keyno_) \
-                            MY_TEST((_keymap_) & (ULL(1) << (_keyno_)))
+                            MY_TEST((_keymap_) & (1ULL << (_keyno_)))
 #define mi_set_key_active(_keymap_,_keyno_) \
-                            (_keymap_)|= (ULL(1) << (_keyno_))
+                            (_keymap_)|= (1ULL << (_keyno_))
 #define mi_clear_key_active(_keymap_,_keyno_) \
-                            (_keymap_)&= (~ (ULL(1) << (_keyno_)))
+                            (_keymap_)&= (~ (1ULL << (_keyno_)))
 
 #endif
 
@@ -238,13 +241,11 @@ typedef struct st_columndef		/* column information */
   uint8  null_bit;			/* If column may be 0 */
   uint16 null_pos;			/* position for null marker */
 
-#ifndef NOT_PACKED_DATABASES
   void (*unpack)(struct st_columndef *rec,struct st_mi_bit_buff *buff,
 		 uchar *start,uchar *end);
   enum en_fieldtype base_type;
   uint space_length_bits,pack_type;
   MI_DECODE_TREE *huff_tree;
-#endif
 } MI_COLUMNDEF;
 
 
@@ -263,10 +264,15 @@ extern mysql_mutex_t THR_LOCK_myisam_mmap;
 
 	/* Prototypes for myisam-functions */
 
-extern int mi_close(struct st_myisam_info *file);
+extern int mi_close_share(struct st_myisam_info *file, my_bool *closed_share);
+#define mi_close(file) mi_close_share(file, NULL)
 extern int mi_delete(struct st_myisam_info *file,const uchar *buff);
-extern struct st_myisam_info *mi_open(const char *name,int mode,
-				      uint wait_if_locked);
+extern struct st_myisam_info *mi_open_share(const char *name,
+                                            struct st_mi_isam_share *old_share,
+                                            int mode,
+                                            uint wait_if_locked);
+#define mi_open(name, mode, wait_if_locked) \
+  mi_open_share(name, NULL, mode, wait_if_locked)
 extern int mi_panic(enum ha_panic_function function);
 extern int mi_rfirst(struct st_myisam_info *file,uchar *buf,int inx);
 extern int mi_rkey(MI_INFO *info, uchar *buf, int inx, const uchar *key,
@@ -389,8 +395,6 @@ typedef struct st_mi_check_param
   const char *db_name, *table_name;
   const char *op_name;
   enum_mi_stats_method stats_method;
-  mysql_mutex_t print_msg_mutex;
-  my_bool need_print_msg_lock;
 } MI_CHECK;
 
 typedef struct st_sort_ft_buf
@@ -412,26 +416,21 @@ typedef struct st_sort_info
   uchar *buff;
   SORT_KEY_BLOCKS *key_block,*key_block_end;
   SORT_FT_BUF *ft_buf;
-  /* sync things */
-  uint got_error, threads_running;
-  mysql_mutex_t mutex;
-  mysql_cond_t  cond;
 } SORT_INFO;
 
 /* functions in mi_check */
 void myisamchk_init(MI_CHECK *param);
 int chk_status(MI_CHECK *param, MI_INFO *info);
-int chk_del(MI_CHECK *param, register MI_INFO *info, uint test_flag);
+int chk_del(MI_CHECK *param, MI_INFO *info, uint test_flag);
 int chk_size(MI_CHECK *param, MI_INFO *info);
 int chk_key(MI_CHECK *param, MI_INFO *info);
 int chk_data_link(MI_CHECK *param, MI_INFO *info,int extend);
-int mi_repair(MI_CHECK *param, register MI_INFO *info,
-	      char * name, int rep_quick);
-int mi_sort_index(MI_CHECK *param, register MI_INFO *info, char * name);
-int mi_repair_by_sort(MI_CHECK *param, register MI_INFO *info,
-		      const char * name, int rep_quick);
-int mi_repair_parallel(MI_CHECK *param, register MI_INFO *info,
-		      const char * name, int rep_quick);
+int mi_repair(MI_CHECK *param, MI_INFO *info,
+	      char * name, int rep_quick, my_bool no_copy_stat);
+int mi_sort_index(MI_CHECK *param, MI_INFO *info, char * name,
+                  my_bool no_copy_stat);
+int mi_repair_by_sort(MI_CHECK *param, MI_INFO *info,
+		      const char * name, int rep_quick, my_bool no_copy_stat);
 int change_to_newfile(const char * filename, const char * old_ext,
 		      const char * new_ext, myf myflags);
 int lock_file(MI_CHECK *param, File file, my_off_t start, int lock_type,
@@ -463,6 +462,8 @@ void mi_change_key_cache(KEY_CACHE *old_key_cache,
 			 KEY_CACHE *new_key_cache);
 int mi_preload(MI_INFO *info, ulonglong key_map, my_bool ignore_leaves);
 
+extern st_keycache_thread_var main_thread_keycache_var;
+st_keycache_thread_var *keycache_thread_var();
 #ifdef	__cplusplus
 }
 #endif

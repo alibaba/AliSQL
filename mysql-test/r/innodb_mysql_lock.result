@@ -59,35 +59,6 @@ commit;
 # Switching to connection 'default'.
 drop table t1;
 #
-# Bug #42147 Concurrent DML and LOCK TABLE ... READ for InnoDB 
-#            table cause warnings in errlog
-#
-#
-# Note that this test for now relies on a global suppression of 
-# the warning "Found lock of type 6 that is write and read locked"
-# This suppression rule can be removed once Bug#42147 is properly
-# fixed. See bug page for more info.
-#
-DROP TABLE IF EXISTS t1;
-CREATE TABLE t1 (i INT) engine= innodb;
-# Connection 2
-# Get user-level lock
-SELECT get_lock('bug42147_lock', 60);
-get_lock('bug42147_lock', 60)
-1
-# Connection 1
-INSERT INTO t1 SELECT get_lock('bug42147_lock', 60);
-# Connection 2
-LOCK TABLES t1 READ;
-SELECT release_lock('bug42147_lock');
-release_lock('bug42147_lock')
-1
-# Connection 1
-# Connection 2
-UNLOCK TABLES;
-# Connection 1
-DROP TABLE t1;
-#
 # Bug#53798 OPTIMIZE TABLE breaks repeatable read
 #
 DROP TABLE IF EXISTS t1;
@@ -184,25 +155,4 @@ INSERT INTO t1 VALUES (1, 'a'), (2, 'b');
 CREATE INDEX t1ba ON t1(b,a);
 affected rows: 0
 info: Records: 0  Duplicates: 0  Warnings: 0
-DROP TABLE t1;
-#
-# Bug#11750045 - 40344: ALTER IGNORE TABLE T ADD INDEX DOES NOT IGNORE
-#                IN FAST INDEX CREATION
-#
-DROP TABLE IF EXISTS t1;
-CREATE TABLE t1(a INT NOT NULL, b INT) engine = innodb;
-INSERT INTO t1 VALUES (1,1), (2,1), (3,1);
-# Should give error
-ALTER TABLE t1 ADD UNIQUE INDEX (b);
-ERROR 23000: Duplicate entry '1' for key 'b'
-# Should not give error
-# Also check that copy algorithm is used
-ALTER IGNORE TABLE t1 ADD UNIQUE INDEX (b);
-affected rows: 3
-info: Records: 3  Duplicates: 2  Warnings: 1
-Warnings:
-Warning	1681	'IGNORE' is deprecated and will be removed in a future release.
-SHOW WARNINGS;
-Level	Code	Message
-Warning	1681	'IGNORE' is deprecated and will be removed in a future release.
 DROP TABLE t1;

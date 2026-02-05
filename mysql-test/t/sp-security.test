@@ -8,6 +8,11 @@
 # Save the initial number of concurrent sessions
 --source include/count_sessions.inc
 
+set @orig_sql_mode_session= @@SESSION.sql_mode;
+set @orig_sql_mode_global= @@GLOBAL.sql_mode;
+set GLOBAL sql_mode= (select replace(@@GLOBAL.sql_mode,'NO_AUTO_CREATE_USER',''));
+set SESSION sql_mode= (select replace(@@SESSION.sql_mode,'NO_AUTO_CREATE_USER',''));
+
 connect (con1root,localhost,root,,);
 
 connection con1root;
@@ -754,7 +759,7 @@ DROP DATABASE mysqltest;
 GRANT USAGE ON *.* TO user19857@localhost IDENTIFIED BY 'meow';
 GRANT SELECT, INSERT, UPDATE, DELETE, CREATE ROUTINE, ALTER ROUTINE ON test.* TO
 user19857@localhost;
-SELECT Host,User,Password FROM mysql.user WHERE User='user19857';
+SELECT Host,User,authentication_string FROM mysql.user WHERE User='user19857';
 
 --connect (mysqltest_2_con,localhost,user19857,meow,test)
 --echo
@@ -786,7 +791,7 @@ DROP PROCEDURE IF EXISTS test.sp19857;
 
 --disconnect mysqltest_2_con
 
-SELECT Host,User,Password FROM mysql.user WHERE User='user19857';
+SELECT Host,User,authentication_string FROM mysql.user WHERE User='user19857';
 
 DROP USER user19857@localhost;
 
@@ -1036,6 +1041,9 @@ connection default;
 disconnect conn1;
 drop user bug12602983_user@localhost;
 drop database mysqltest_db;
+
+set GLOBAL sql_mode= @orig_sql_mode_global;
+set SESSION sql_mode= @orig_sql_mode_session;
 
 # Wait till all disconnects are completed
 --source include/wait_until_count_sessions.inc

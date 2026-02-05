@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2006, 2012, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2006, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -19,7 +26,7 @@
 #include <gtest/gtest.h>
 
 #include <my_global.h>
-#include <my_pthread.h>
+#include <my_thread.h>
 #include <my_bitmap.h>
 
 namespace my_bitmap_unittest {
@@ -605,5 +612,32 @@ TEST_P(BitMapTest, TestIntersect)
 }
 
 #endif
+
+// Bug#11761614
+
+bool bitmap_set_prefix_t() {
+  MY_BITMAP map;
+  my_bitmap_map buf[2];                         /* 64-bit buffer */
+  uint32 _max= ~((uint32)0);
+  bitmap_init(&map, buf, 32, false);
+
+  // set all bits in the 2nd half of the buf
+  buf[1]= _max;
+  bitmap_clear_all(&map);
+
+  /*
+    Choose prefix_size as number that is not a multiple
+    of 8, so that leftover bits in the last prefix byte
+    will be set separately.
+  */
+  bitmap_set_prefix(&map, 31);
+  // 2nd half should remain unaltered
+  return (buf[1] == _max);
+}
+
+TEST(BitMapTestEx, TestSetPrefixEx)
+{
+  EXPECT_TRUE(bitmap_set_prefix_t());
+}
 
 }

@@ -3,11 +3,18 @@
 -- source include/have_binlog_format_statement.inc
 -- source include/not_gtid_enabled.inc
 -- source include/master-slave.inc
+-- source include/have_myisam.inc
 
 CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
 call mtr.add_suppression("The slave coordinator and worker threads are stopped, possibly leaving data in inconsistent state");
 
 --let $engine_type= myisam
+
+# Store the time of password_last_changed column from mysql.user table
+# to restore it back later for the different users.
+let $date_to_restore_root=`SELECT password_last_changed from mysql.user where user='root'`;
+let $date_to_restore_sys=`SELECT password_last_changed from mysql.user where user='mysql.sys'`;
+let $date_to_restore_session_user=`SELECT password_last_changed from mysql.user where user='mysql.session'`;
 
 # Load some data into t1
 create table t1 (word char(20) not null);
@@ -22,7 +29,7 @@ select * from t1 limit 10;
 --source include/sync_slave_sql_with_master.inc
 stop slave;
 connection master;
-set password for root@"localhost" = password('foo');
+set password for root@"localhost" = 'foo';
 connection slave;
 start slave;
 connection master;
@@ -30,7 +37,7 @@ connection master;
 # Give slave time to do at last one failed connect retry
 # This one must be short so that the slave will not stop retrying
 real_sleep 2;
-set password for root@"localhost" = password('');
+set password for root@"localhost" = '';
 # Give slave time to connect (will retry every second)
 sleep 2;
 
@@ -94,9 +101,12 @@ insert into t3 select get_lock('crash_lock%20C', 1) from t2;
 --enable_warnings
 
 connection master;
-send update t1 set n = n + get_lock('crash_lock%20C', 2);
+send update t1 set n = n + if(n > 50, 1, get_lock('crash_lock%20C', 100));
 connection master1;
-sleep 3;
+let $wait_condition=
+  select count(*) > 0 from information_schema.processlist
+  where state = "User lock" and info like "update t1%";
+--source include/wait_condition.inc
 select (@id := id) - id from t2;
 kill @id;
 drop table t2;
@@ -110,8 +120,9 @@ reap;
 connection slave;
 # The SQL slave thread should now have stopped because the query was killed on
 # the master (so it has a non-zero error code in the binlog).
-# 1053 = ER_SERVER_SHUTDOWN
---let $slave_sql_errno= 1053
+# The slave should report ER_ERROR_ON_MASTER and the error message should 
+# contain the actual error code received from master 1053 = ER_SERVER_SHUTDOWN
+--let $slave_sql_errno= convert_error(ER_ERROR_ON_MASTER)
 ###--source include/wait_for_slave_sql_error_and_skip.inc
 --source include/wait_for_slave_sql_error.inc
 SET GLOBAL SQL_SLAVE_SKIP_COUNTER=1;
@@ -122,8 +133,7 @@ connection master1;
 drop table t1;
 create table t1 (n int);
 insert into t1 values(3456);
-insert into mysql.user (Host, User, Password)
- VALUES ("10.10.10.%", "blafasel2", password("blafasel2"));
+create user 'blafasel2'@'10.10.10.%' identified by 'blafasel2';
 select select_priv,user from mysql.user where user = _binary'blafasel2';
 update mysql.user set Select_priv = "Y" where User= _binary"blafasel2";
 select select_priv,user from mysql.user where user = _binary'blafasel2';
@@ -133,6 +143,14 @@ select select_priv,user from mysql.user where user = _binary'blafasel2';
 connection master1;
 drop table t1;
 delete from mysql.user where user="blafasel2";
+
+--disable_query_log
+--eval UPDATE mysql.user SET password_last_changed= '$date_to_restore_root'
+--eval UPDATE mysql.user SET password_last_changed= '$date_to_restore_sys' WHERE USER= 'mysql.sys'
+--eval UPDATE mysql.user SET password_last_changed= '$date_to_restore_session_user' WHERE USER= 'mysql.session'
+--enable_query_log
+--echo # mysql.user table restored to original values.
+
 --source include/sync_slave_sql_with_master.inc
 
 # End of 4.1 tests

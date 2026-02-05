@@ -1,3 +1,4 @@
+
 # Test case for bug#32205 Replaying statements from mysqlbinlog fails
 # with a syntax error, replicates fine
 

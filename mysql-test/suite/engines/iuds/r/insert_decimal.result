@@ -1,4 +1,7 @@
 DROP TABLE IF EXISTS t1,t2;
+SET sql_mode='NO_ENGINE_SUBSTITUTION';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 DECIMAL(10,5) UNSIGNED NOT NULL, c2 DECIMAL(10,5) SIGNED NULL, c3 DECIMAL, c4 INT, UNIQUE INDEX idx(c1,c2));
 CREATE TABLE t2(c1 DECIMAL(10,0) SIGNED NOT NULL, c2 DECIMAL(10) UNSIGNED NULL, c3 DECIMAL, c4 INT);
 INSERT INTO t1 VALUES('00100.05000','-00100.05000','00100.05000',1);
@@ -48,7 +51,6 @@ Warning	1264	Out of range value for column 'c2' at row 1
 Note	1265	Data truncated for column 'c3' at row 1
 insert into t2 values ("0.0","0.0","0.0",7),("-0.0","-0.0","-0.0",8),("+0.0","+0.0","+0.0",9),("01.0","01.0","01.0",10),("+01.0","+01.0","+01.0",11),("-01.0","-01.0","-01.0",12);
 Warnings:
-Warning	1264	Out of range value for column 'c2' at row 2
 Warning	1264	Out of range value for column 'c2' at row 6
 insert into t2 values ("-.1","-.1","-.1",13),("+.1","+.1","+.1",14),(".1",".1",".1",15);
 Warnings:
@@ -1013,7 +1015,7 @@ ROUND(c1,c2)	TRUNCATE(c1,c2)
 1.133000	1.132000
 DROP TABLE t5;
 CREATE TABLE t7(c1 DECIMAL(66,0));
-ERROR 42000: Too big precision 66 specified for column 'c1'. Maximum is 65.
+ERROR 42000: Too-big precision 66 specified for 'c1'. Maximum is 65.
 CREATE TABLE t7(c1 DECIMAL(5,10));
 ERROR 42000: For float(M,D), double(M,D) or decimal(M,D), M must be >= D (column 'c1').
 DROP TABLE t1,t2;
@@ -2846,3 +2848,4 @@ DROP TABLE t5;
 CREATE TABLE t7(c1 DOUBLE(5,10));
 ERROR 42000: For float(M,D), double(M,D) or decimal(M,D), M must be >= D (column 'c1').
 DROP TABLE t1,t2;
+SET sql_mode=default;

@@ -1,13 +1,25 @@
-/* Copyright (c) 2006, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2006, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -38,13 +50,13 @@
 #include <my_global.h>
 #include <m_string.h>
 #include <my_sys.h>
+#include <mysys_priv.h>
 #include <lf.h>
 
 void lf_dynarray_init(LF_DYNARRAY *array, uint element_size)
 {
   memset(array, 0, sizeof(*array));
   array->size_of_element= element_size;
-  my_atomic_rwlock_init(&array->lock);
 }
 
 static void recursive_free(void **alloc, int level)
@@ -68,7 +80,6 @@ void lf_dynarray_destroy(LF_DYNARRAY *array)
   int i;
   for (i= 0; i < LF_DYNARRAY_LEVELS; i++)
     recursive_free(array->level[i], i);
-  my_atomic_rwlock_destroy(&array->lock);
 }
 
 static const ulong dynarray_idxes_in_prev_levels[LF_DYNARRAY_LEVELS]=
@@ -95,7 +106,7 @@ static const ulong dynarray_idxes_in_prev_level[LF_DYNARRAY_LEVELS]=
   Returns a valid lvalue pointer to the element number 'idx'.
   Allocates memory if necessary.
 */
-void *_lf_dynarray_lvalue(LF_DYNARRAY *array, uint idx)
+void *lf_dynarray_lvalue(LF_DYNARRAY *array, uint idx)
 {
   void * ptr, * volatile * ptr_ptr= 0;
   int i;
@@ -108,7 +119,8 @@ void *_lf_dynarray_lvalue(LF_DYNARRAY *array, uint idx)
   {
     if (!(ptr= *ptr_ptr))
     {
-      void *alloc= my_malloc(LF_DYNARRAY_LEVEL_LENGTH * sizeof(void *),
+      void *alloc= my_malloc(key_memory_lf_dynarray,
+                             LF_DYNARRAY_LEVEL_LENGTH * sizeof(void *),
                              MYF(MY_WME|MY_ZEROFILL));
       if (unlikely(!alloc))
         return(NULL);
@@ -123,7 +135,8 @@ void *_lf_dynarray_lvalue(LF_DYNARRAY *array, uint idx)
   if (!(ptr= *ptr_ptr))
   {
     uchar *alloc, *data;
-    alloc= my_malloc(LF_DYNARRAY_LEVEL_LENGTH * array->size_of_element +
+    alloc= my_malloc(key_memory_lf_dynarray,
+                     LF_DYNARRAY_LEVEL_LENGTH * array->size_of_element +
                      MY_MAX(array->size_of_element, sizeof(void *)),
                      MYF(MY_WME|MY_ZEROFILL));
     if (unlikely(!alloc))
@@ -148,7 +161,7 @@ void *_lf_dynarray_lvalue(LF_DYNARRAY *array, uint idx)
   Returns a pointer to the element number 'idx'
   or NULL if an element does not exists
 */
-void *_lf_dynarray_value(LF_DYNARRAY *array, uint idx)
+void *lf_dynarray_value(LF_DYNARRAY *array, uint idx)
 {
   void * ptr, * volatile * ptr_ptr= 0;
   int i;
@@ -189,14 +202,14 @@ static int recursive_iterate(LF_DYNARRAY *array, void *ptr, int level,
 
   DESCRIPTION
     lf_dynarray consists of a set of arrays, LF_DYNARRAY_LEVEL_LENGTH elements
-    each. _lf_dynarray_iterate() calls user-supplied function on every array
+    each. lf_dynarray_iterate() calls user-supplied function on every array
     from the set. It is the fastest way to scan the array, faster than
-      for (i=0; i < N; i++) { func(_lf_dynarray_value(dynarray, i)); }
+      for (i=0; i < N; i++) { func(lf_dynarray_value(dynarray, i)); }
 
   NOTE
     if func() returns non-zero, the scan is aborted
 */
-int _lf_dynarray_iterate(LF_DYNARRAY *array, lf_dynarray_func func, void *arg)
+int lf_dynarray_iterate(LF_DYNARRAY *array, lf_dynarray_func func, void *arg)
 {
   int i, res;
   for (i= 0; i < LF_DYNARRAY_LEVELS; i++)

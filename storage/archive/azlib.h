@@ -1,6 +1,9 @@
 /*
   This libary has been modified for use by the MySQL Archive Engine.
      -Brian Aker
+
+  This file was modified by Oracle on 02-08-2016.
+  Modifications Copyright (c) 2016, 2023, Oracle and/or its affiliates.
 */
 
 /* zlib.h -- interface of the 'zlib' general purpose compression library
@@ -33,7 +36,6 @@
   (zlib format), rfc1951.txt (deflate format) and rfc1952.txt (gzip format).
 */
 
-#include "../../mysys/mysys_priv.h"
 #include <my_dir.h>
 #include <zlib.h>
 
@@ -264,7 +266,7 @@ int azdopen(azio_stream *s,File fd, int Flags);
 */
 
 
-extern unsigned int azread ( azio_stream *s, voidp buf, size_t len, int *error);
+extern size_t azread ( azio_stream *s, voidp buf, size_t len, int *error);
 /*
      Reads the given number of uncompressed bytes from the compressed file.
    If the input file was not in gzip format, gzread copies the given number
@@ -331,9 +333,9 @@ extern int azclose(azio_stream *file);
    error number (see function gzerror below).
 */
 
-extern int azwrite_frm (azio_stream *s, char *blob, unsigned int length);
+extern int azwrite_frm (azio_stream *s, char *blob, size_t length);
 extern int azread_frm (azio_stream *s, char *blob);
-extern int azwrite_comment (azio_stream *s, char *blob, unsigned int length);
+extern int azwrite_comment (azio_stream *s, char *blob, size_t length);
 extern int azread_comment (azio_stream *s, char *blob);
 
 #ifdef	__cplusplus

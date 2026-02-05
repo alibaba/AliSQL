@@ -1,3 +1,8 @@
+# The include statement below is a temp one for tests that are yet to
+#be ported to run with InnoDB,
+#but needs to be kept for tests that would need MyISAM in future.
+--source include/force_myisam_default.inc
+
 # Initialise
 --disable_warnings
 drop table if exists t1, t2;
@@ -7,7 +12,11 @@ drop table if exists t1, t2;
 # Testing of NULL in a lot of different places
 #
 
+# The --ps-protocol switch hides parse-time warnings, so disable it to show
+# the deprecation warning:
+--disable_ps_protocol
 select null,\N,isnull(null),isnull(1/0),isnull(1/0 = null),ifnull(null,1),ifnull(null,"TRUE"),ifnull("TRUE","ERROR"),1/0 is null,1 is not null;
+--enable_ps_protocol
 explain extended select null,\N,isnull(null),isnull(1/0),isnull(1/0 = null),ifnull(null,1),ifnull(null,"TRUE"),ifnull("TRUE","ERROR"),1/0 is null,1 is not null;
 select 1 | NULL,1 & NULL,1+NULL,1-NULL;
 select NULL=NULL,NULL<>NULL,IFNULL(NULL,1.1)+0,IFNULL(NULL,1) | 0;
@@ -20,8 +29,10 @@ explain extended select 2 between null and 1,2 between 3 AND NULL,NULL between 1
 SELECT NULL AND NULL, 1 AND NULL, NULL AND 1, NULL OR NULL, 0 OR NULL, NULL OR 0;
 SELECT (NULL OR NULL) IS NULL;
 select NULL AND 0, 0 and NULL;
-select inet_ntoa(null),inet_aton(null),inet_aton("122.256"),inet_aton("122.226."),inet_aton("");
-explain extended select inet_ntoa(null),inet_aton(null),inet_aton("122.256"),inet_aton("122.226."),inet_aton("");
+select inet_ntoa(null),inet_aton(null);
+explain extended select inet_ntoa(null),inet_aton(null);
+select inet6_ntoa(null),inet6_aton(null);
+explain extended select inet6_ntoa(null), inet6_aton(null);
 
 create table t1 (x int);
 insert into t1 values (null);
@@ -59,6 +70,7 @@ drop table t1;
 #
 # Test inserting and updating with NULL
 #
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 CREATE TABLE t1 (a varchar(16) NOT NULL default '', b smallint(6) NOT NULL default 0, c datetime NOT NULL default '0000-00-00 00:00:00', d smallint(6) NOT NULL default 0);
 INSERT INTO t1 SET a = "", d= "2003-01-14 03:54:55";
 UPDATE t1 SET d=1/NULL;
@@ -85,7 +97,7 @@ INSERT INTO t1 (d) values (1/null);
 INSERT INTO t1 (d) values (null),(null);
 select * from t1;
 drop table t1;
-
+SET sql_mode = default;
 #
 # Test to check elimination of IS NULL predicate for a non-nullable attribute
 # (bug #1990)  
@@ -117,7 +129,9 @@ insert into t1 select i*2 from t1;
 insert into t1 values(null);
 explain select * from t1 where i=2 or i is null;
 select count(*) from t1 where i=2 or i is null;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 alter table t1 change i i int not null;
+SET sql_mode = default;
 explain select * from t1 where i=2 or i is null;
 select count(*) from t1 where i=2 or i is null;
 drop table t1;

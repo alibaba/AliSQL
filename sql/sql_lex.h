@@ -1,13 +1,20 @@
-/* Copyright (c) 2000, 2015, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -20,21 +27,43 @@
 #ifndef SQL_LEX_INCLUDED
 #define SQL_LEX_INCLUDED
 
-#include "violite.h"                            /* SSL_type */
-#include "sql_trigger.h"
-#include "item.h"               /* From item_subselect.h: subselect_union_engine */
-#include "thr_lock.h"                  /* thr_lock_type, TL_UNLOCK */
-#include "sql_array.h"
-#include "mem_root_array.h"
+#include "my_global.h"
+#include "mem_root_array.h"           // Mem_root_array
+#include "prealloced_array.h"         // Prealloced_array
+#include "thr_lock.h"                 // thr_lock_type
+#include "violite.h"                  // SSL_type
+#include "item.h"                     // Name_resolution_context
+#include "item_subselect.h"           // chooser_compare_func_creator
+#include "lex_symbol.h"               // LEX_SYMBOL
+#include "parse_tree_node_base.h"     // enum_parsing_context
+#include "query_options.h"            // OPTION_NO_CONST_TABLES
+#include "sql_alloc.h"                // Sql_alloc
+#include "sql_chars.h"
 #include "sql_alter.h"                // Alter_info
-#include "sql_sequence.h"
+#include "sql_connect.h"              // USER_RESOURCES
+#include "sql_data_change.h"          // enum_duplicates
+#include "sql_get_diagnostics.h"      // Diagnostics_information
+#include "sql_servers.h"              // Server_options
+#include "sql_signal.h"               // enum_condition_item_name
+#include "table.h"                    // TABLE_LIST
+#include "trigger_def.h"              // enum_trigger_action_time_type
+#include "xa.h"                       // xa_option_words
+#include "select_lex_visitor.h"
+#include "parse_tree_hints.h"
+#include "sql_admin.h"
+#include <map>
+
+#ifdef MYSQL_SERVER
+#include "item_func.h"                // Cast_target
+#endif
+
+#include "duckdb/duckdb_table.h"
 
 /* YACC and LEX Definitions */
 
 /* These may not be declared yet */
 class Table_ident;
 class sql_exchange;
-class LEX_COLUMN;
 class sp_head;
 class sp_name;
 class sp_instr;
@@ -47,7 +76,15 @@ class sys_var;
 class Item_func_match;
 class File_parser;
 class Key_part_spec;
+class Query_result_interceptor;
+class Item_func;
+class Sql_cmd;
 struct sql_digest_state;
+typedef class st_select_lex SELECT_LEX;
+
+const size_t INITIAL_LEX_PLUGIN_LIST_SIZE = 16;
+class Opt_hints_global;
+class Opt_hints_qb;
 
 #ifdef MYSQL_SERVER
 /*
@@ -96,6 +133,31 @@ extern uint binlog_unsafe_map[256];
 void binlog_unsafe_map_init();
 #endif
 
+enum enum_yes_no_unknown
+{
+  TVL_YES, TVL_NO, TVL_UNKNOWN
+};
+
+enum keytype {
+  KEYTYPE_PRIMARY,
+  KEYTYPE_UNIQUE,
+  KEYTYPE_MULTIPLE,
+  KEYTYPE_FULLTEXT,
+  KEYTYPE_SPATIAL,
+  KEYTYPE_FOREIGN
+};
+
+enum enum_ha_read_modes { RFIRST, RNEXT, RPREV, RLAST, RKEY, RNEXT_SAME };
+
+enum enum_filetype { FILETYPE_CSV, FILETYPE_XML };
+
+enum fk_match_opt { FK_MATCH_UNDEF, FK_MATCH_FULL,
+                    FK_MATCH_PARTIAL, FK_MATCH_SIMPLE};
+
+enum fk_option { FK_OPTION_UNDEF, FK_OPTION_RESTRICT, FK_OPTION_CASCADE,
+                 FK_OPTION_SET_NULL, FK_OPTION_NO_ACTION, FK_OPTION_DEFAULT};
+
+
 /**
   used by the parser to store internal variable name
 */
@@ -105,39 +167,32 @@ struct sys_var_with_base
   LEX_STRING base_name;
 };
 
-#ifdef MYSQL_SERVER
-/*
-  The following hack is needed because mysql_yacc.cc does not define
-  YYSTYPE before including this file
-*/
-#ifdef MYSQL_YACC
-#define LEX_YYSTYPE void *
-#else
-#include "lex_symbol.h"
-#if MYSQL_LEX
-#include "item_func.h"            /* Cast_target used in sql_yacc.h */
-#include "sql_get_diagnostics.h"  /* Types used in sql_yacc.h */
-#include "sql_yacc.h"
-#define LEX_YYSTYPE YYSTYPE *
-#else
-#define LEX_YYSTYPE void *
-#endif
-#endif
-#endif
 
-#include "sql_cmd.h"
+#define YYSTYPE_IS_DECLARED 1
+union YYSTYPE;
+typedef YYSTYPE *LEX_YYSTYPE;
 
 // describe/explain types
 #define DESCRIBE_NONE		0 // Not explain query
 #define DESCRIBE_NORMAL		1
-#define DESCRIBE_EXTENDED	2
-/*
-  This is not within #ifdef because we want "EXPLAIN PARTITIONS ..." to produce
-  additional "partitions" column even if partitioning is not compiled in.
-*/
-#define DESCRIBE_PARTITIONS	4
 
 #ifdef MYSQL_SERVER
+
+/*
+  If we encounter a diagnostics statement (GET DIAGNOSTICS, or e.g.
+  the old SHOW WARNINGS|ERRORS, or "diagnostics variables" such as
+  @@warning_count | @@error_count, we'll set some hints so this
+  information is not lost. DA_KEEP_UNSPECIFIED is used in LEX constructor to
+  avoid leaving variables uninitialized.
+ */
+enum enum_keep_diagnostics
+{
+  DA_KEEP_NOTHING= 0,   /**< keep nothing */
+  DA_KEEP_DIAGNOSTICS,  /**< keep the diagnostics area */
+  DA_KEEP_COUNTS,       /**< keep @@warning_count / @error_count */
+  DA_KEEP_PARSE_ERROR,  /**< keep diagnostics area after parse error */
+  DA_KEEP_UNSPECIFIED   /**< keep semantics is unspecified */
+};
 
 enum enum_sp_suid_behaviour
 {
@@ -170,7 +225,8 @@ enum enum_sp_type
 {
   SP_TYPE_FUNCTION= 1,
   SP_TYPE_PROCEDURE,
-  SP_TYPE_TRIGGER
+  SP_TYPE_TRIGGER,
+  SP_TYPE_EVENT
 };
 
 /*
@@ -217,18 +273,9 @@ enum enum_drop_mode
 #define TL_OPTION_FORCE_INDEX	2
 #define TL_OPTION_IGNORE_LEAVES 4
 #define TL_OPTION_ALIAS         8
-#define TL_OPTION_SEQUENCE      16
 
 typedef List<Item> List_item;
 typedef Mem_root_array<ORDER*, true> Group_list_ptrs;
-
-/* SERVERS CACHE CHANGES */
-typedef struct st_lex_server_options
-{
-  long port;
-  uint server_name_length;
-  char *server_name, *host, *db, *username, *password, *scheme, *socket, *owner;
-} LEX_SERVER_OPTIONS;
 
 
 /**
@@ -240,6 +287,15 @@ typedef struct st_lex_server_options
 */
 typedef struct st_lex_master_info
 {
+  /*
+    The array of IGNORE_SERVER_IDS has a preallocation, and is not expected
+    to grow to any significant size, so no instrumentation.
+  */
+  st_lex_master_info()
+    : repl_ignore_server_ids(PSI_NOT_INSTRUMENTED)
+  {
+    initialize();
+  }
   char *host, *user, *password, *log_file_name, *bind_addr;
   uint port, connect_retry;
   float heartbeat_period;
@@ -247,23 +303,34 @@ typedef struct st_lex_master_info
   ulonglong pos;
   ulong server_id, retry_count;
   char *gtid;
+  char* view_id;
+  const char* channel;  // identifier similar to database name
   enum {UNTIL_SQL_BEFORE_GTIDS= 0, UNTIL_SQL_AFTER_GTIDS} gtid_until_condition;
   bool until_after_gaps;
+  bool slave_until;
+  bool for_channel;
 
   /*
     Enum is used for making it possible to detect if the user
     changed variable or if it should be left at old value
    */
   enum {LEX_MI_UNCHANGED= 0, LEX_MI_DISABLE, LEX_MI_ENABLE}
-    ssl, ssl_verify_server_cert, heartbeat_opt, repl_ignore_server_ids_opt, 
-    retry_count_opt, auto_position;
+    ssl, ssl_verify_server_cert, heartbeat_opt, repl_ignore_server_ids_opt,
+    retry_count_opt, auto_position, port_opt;
   char *ssl_key, *ssl_cert, *ssl_ca, *ssl_capath, *ssl_cipher;
-  char *ssl_crl, *ssl_crlpath;
+  char *ssl_crl, *ssl_crlpath, *tls_version;
   char *relay_log_name;
   ulong relay_log_pos;
-  DYNAMIC_ARRAY repl_ignore_server_ids;
-  ulong server_ids_buffer[2];
+  Prealloced_array<ulong, 2, true> repl_ignore_server_ids;
+
+  /// Initializes everything to zero/NULL/empty.
+  void initialize();
+  /// Sets all fields to their "unspecified" value.
   void set_unspecified();
+private:
+  // Not copyable or assignable.
+  st_lex_master_info(const st_lex_master_info&);
+  st_lex_master_info &operator=(const st_lex_master_info&);
 } LEX_MASTER_INFO;
 
 typedef struct st_lex_reset_slave
@@ -314,11 +381,9 @@ public:
   */ 
   LEX_STRING key_name;
 
-  Index_hint (enum index_hint_type type_arg, index_clause_map clause_arg,
-              char *str, uint length) :
-    type(type_arg), clause(clause_arg)
+  Index_hint (const char *str, uint length)
   {
-    key_name.str= str;
+    key_name.str= const_cast<char *>(str);
     key_name.length= length;
   }
 
@@ -326,46 +391,50 @@ public:
 }; 
 
 /* 
-  The state of the lex parsing for selects 
-   
-   master and slaves are pointers to select_lex.
-   master is pointer to upper level node.
-   slave is pointer to lower level node
-   select_lex is a SELECT without union
-   unit is container of either
-     - One SELECT
-     - UNION of selects
-   select_lex and unit are both inherited form select_lex_node
-   neighbors are two select_lex or units on the same level
+  Class st_select_lex_unit represents a query expression.
+  Class st_select_lex represents a query block.
+  A query expression contains one or more query blocks (more than one means
+  that we have a UNION query).
+  These classes are connected as follows:
+   Both classes have a master, a slave, a next and a prev field.
+   For class st_select_lex, master and slave connect to objects of type
+   st_select_lex_unit, whereas for class st_select_lex_unit, they connect
+   to st_select_lex.
+   master is pointer to outer node.
+   slave is pointer to the first inner node
 
-   All select describing structures linked with following pointers:
+   neighbors are two st_select_lex or st_select_lex_unit objects on
+   the same level.
+
+   The structures are linked with the following pointers:
    - list of neighbors (next/prev) (prev of first element point to slave
-     pointer of upper structure)
-     - For select this is a list of UNION's (or one element list)
-     - For units this is a list of sub queries for the upper level select
+     pointer of outer structure)
+     - For st_select_lex, this is a list of query blocks.
+     - For st_select_lex_unit, this is a list of subqueries.
 
-   - pointer to master (master), which is
-     If this is a unit
-       - pointer to outer select_lex
-     If this is a select_lex
-       - pointer to outer unit structure for select
+   - pointer to outer node (master), which is
+     If this is st_select_lex_unit
+       - pointer to outer select_lex.
+     If this is st_select_lex
+       - pointer to outer st_select_lex_unit.
 
-   - pointer to slave (slave), which is either:
-     If this is a unit:
-       - first SELECT that belong to this unit
-     If this is a select_lex
-       - first unit that belong to this SELECT (subquries or derived tables)
+   - pointer to inner objects (slave), which is either:
+     If this is an st_select_lex_unit:
+       - first query block that belong to this query expression.
+     If this is an st_select_lex
+       - first query expression that belong to this query block (subqueries).
 
-   - list of all select_lex (link_next/link_prev)
+   - list of all st_select_lex objects (link_next/link_prev)
      This is to be used for things like derived tables creation, where we
      go through this list and create the derived tables.
 
-   If unit contain several selects (UNION now, INTERSECT etc later)
-   then it have special select_lex called fake_select_lex. It used for
-   storing global parameters (like ORDER BY, LIMIT) and executing union.
+   If query expression contain several query blocks (UNION now,
+   INTERSECT etc later) then it has a special select_lex called
+   fake_select_lex. It used for storing global parameters (like ORDER BY,
+   LIMIT) and executing union.
    Subqueries used in global ORDER BY clause will be attached to this
-   fake_select_lex, which will allow them correctly resolve fields of
-   'upper' UNION and outer selects.
+   fake_select_lex, which will allow them to correctly resolve fields of
+   the containing UNION and outer selects.
 
    For example for following query:
 
@@ -439,135 +508,77 @@ public:
 
 */
 
-/* 
-    Base class for st_select_lex (SELECT_LEX) & 
-    st_select_lex_unit (SELECT_LEX_UNIT)
-*/
+
 struct LEX;
-class st_select_lex;
-class st_select_lex_unit;
+class THD;
+class Query_result;
+class JOIN;
+class Query_result_union;
 
-
-class st_select_lex_node {
-protected:
-  st_select_lex_node *next, **prev,   /* neighbor list */
-    *master, *slave,                  /* vertical links */
-    *link_next, **link_prev;          /* list of whole SELECT_LEX */
-public:
-
-  ulonglong options;
-
-  /*
-    In sql_cache we store SQL_CACHE flag as specified by user to be
-    able to restore SELECT statement from internal structures.
+/**
+  This class represents a query expression (one query block or
+  several query blocks combined with UNION).
+*/
+class st_select_lex_unit: public Sql_alloc
+{
+  /**
+    Intrusive double-linked list of all query expressions
+    immediately contained within the same query block.
   */
-  enum e_sql_cache { SQL_CACHE_UNSPECIFIED, SQL_NO_CACHE, SQL_CACHE };
-  e_sql_cache sql_cache;
+  st_select_lex_unit *next;
+  st_select_lex_unit **prev;
 
-  /*
+  /**
+    The query block wherein this query expression is contained,
+    NULL if the query block is the outer-most one.
+  */
+  SELECT_LEX *master;
+  /// The first query block in this query expression.
+  SELECT_LEX *slave;
+private:
+  /**
+    Marker for subqueries in WHERE, HAVING, ORDER BY, GROUP BY and
+    SELECT item lists.
+    Must be read/written when holding LOCK_query_plan.
+
+   See Item_subselect::explain_subquery_checker
+  */
+  enum_parsing_context explain_marker;
+
+  bool prepared; ///< All query blocks in query expression are prepared
+  bool optimized; ///< All query blocks in query expression are optimized
+  bool executed; ///< Query expression has been executed
+
+  TABLE_LIST result_table_list;
+  Query_result_union *union_result;
+  TABLE *table; /* temporary table using for appending UNION results */
+  /// Object to which the result for this query expression is sent
+  Query_result *m_query_result;
+
+public:
+  /**
     result of this query can't be cached, bit field, can be :
       UNCACHEABLE_DEPENDENT
       UNCACHEABLE_RAND
       UNCACHEABLE_SIDEEFFECT
-      UNCACHEABLE_EXPLAIN
-      UNCACHEABLE_PREPARE
   */
   uint8 uncacheable;
-  enum sub_select_type linkage;
-  bool no_table_names_allowed; /* used for global order by */
-  bool no_error; /* suppress error message (convert it to warnings) */
 
-  static void *operator new(size_t size) throw ()
+  explicit st_select_lex_unit(enum_parsing_context parsing_context);
+
+  /// @return true for a query expression without UNION or multi-level ORDER
+  bool is_simple() const { return !(is_union() || fake_select_lex); }
+
+  /// Values for st_select_lex_unit::cleaned
+  enum enum_clean_state
   {
-    return sql_alloc(size);
-  }
-  static void *operator new(size_t size, MEM_ROOT *mem_root) throw ()
-  { return (void*) alloc_root(mem_root, (uint) size); }
-  static void operator delete(void *ptr,size_t size) { TRASH(ptr, size); }
-  static void operator delete(void *ptr, MEM_ROOT *mem_root) {}
-
-  // Ensures that at least all members used during cleanup() are initialized.
-  st_select_lex_node()
-    : next(NULL), prev(NULL),
-      master(NULL), slave(NULL),
-      link_next(NULL), link_prev(NULL),
-      linkage(UNSPECIFIED_TYPE)
-  {
-  }
-  virtual ~st_select_lex_node() {}
-
-  inline st_select_lex_node* get_master() { return master; }
-  virtual void init_query();
-  virtual void init_select();
-  void include_down(st_select_lex_node *upper);
-  void include_neighbour(st_select_lex_node *before);
-  void include_standalone(st_select_lex_node *sel, st_select_lex_node **ref);
-  void include_global(st_select_lex_node **plink);
-  void exclude();
-
-  virtual st_select_lex_unit* master_unit()= 0;
-  virtual st_select_lex* outer_select()= 0;
-
-  virtual bool set_braces(bool value);
-  virtual bool inc_in_sum_expr();
-  virtual uint get_in_sum_expr();
-  virtual TABLE_LIST* get_table_list();
-  virtual List<Item>* get_item_list();
-  virtual ulong get_table_join_options();
-  virtual TABLE_LIST *add_table_to_list(THD *thd, Table_ident *table,
-					LEX_STRING *alias,
-					ulong table_options,
-					thr_lock_type flags= TL_UNLOCK,
-                                        enum_mdl_type mdl_type= MDL_SHARED_READ,
-					List<Index_hint> *hints= 0,
-                                        List<String> *partition_names= 0,
-                                        LEX_STRING *option= 0,
-                                        bool sequence_read= false);
-  virtual void set_lock_for_tables(thr_lock_type lock_type) {}
-
-  friend class st_select_lex_unit;
-  friend bool mysql_new_select(LEX *lex, bool move_down);
-  friend bool mysql_make_view(THD *thd, TABLE_SHARE *share, TABLE_LIST *table,
-                              bool open_view_no_parse);
-private:
-  void fast_exclude();
-};
-typedef class st_select_lex_node SELECT_LEX_NODE;
-
-/* 
-   SELECT_LEX_UNIT - unit of selects (UNION, INTERSECT, ...) group 
-   SELECT_LEXs
-*/
-class THD;
-class select_result;
-class JOIN;
-class select_union;
-
-
-class st_select_lex_unit: public st_select_lex_node {
-protected:
-  TABLE_LIST result_table_list;
-  select_union *union_result;
-  TABLE *table; /* temporary table using for appending UNION results */
-
-  select_result *result;
-  ulonglong found_rows_for_union;
-  bool saved_error;
-
-public:
-  // Ensures that at least all members used during cleanup() are initialized.
-  st_select_lex_unit()
-    : union_result(NULL), table(NULL), result(NULL),
-      cleaned(false),
-      fake_select_lex(NULL),
-      explain_marker(0)
-  {
-  }
-
-  bool  prepared, // prepare phase already performed for UNION (unit)
-    optimized, // optimize phase already performed for UNION (unit)
-    executed, // already executed
-    cleaned;
+    UC_DIRTY,     ///< Unit isn't cleaned
+    UC_PART_CLEAN,///< Unit were cleaned, except JOIN and JOIN_TABs were
+                  ///< kept for possible EXPLAIN
+    UC_CLEAN      ///< Unit completely cleaned, all underlying JOINs were
+                  ///< freed
+  };
+  enum_clean_state cleaned; ///< cleanliness state
 
   // list of fields which points to temporary table for union
   List<Item> item_list;
@@ -583,104 +594,299 @@ public:
     by get_unit_column_types(). Check the places where it is used.
   */
   List<Item> types;
-  /*
-    Pointer to 'last' select or pointer to unit where stored
-    global parameters for union
+  /**
+    Pointer to query block containing global parameters for query.
+    Global parameters may include ORDER BY, LIMIT and OFFSET.
+
+    If this is a union of multiple query blocks, the global parameters are
+    stored in fake_select_lex. If the union doesn't use a temporary table,
+    st_select_lex_unit::prepare() nulls out fake_select_lex, but saves a copy
+    in saved_fake_select_lex in order to preserve the global parameters.
+
+    If this is not a union, and the query expression has no multi-level
+    ORDER BY/LIMIT, global parameters are in the single query block.
+
+    @return query block containing the global parameters
   */
-  st_select_lex *global_parameters;
+  inline st_select_lex *global_parameters() const
+  {
+    if (fake_select_lex != NULL)
+      return fake_select_lex;
+    else if (saved_fake_select_lex != NULL)
+      return saved_fake_select_lex;
+    return first_select();
+  };
   /* LIMIT clause runtime counters */
   ha_rows select_limit_cnt, offset_limit_cnt;
-  /* not NULL if unit used in subselect, point to subselect item */
+  /// Points to subquery if this query expression is used in one, otherwise NULL
   Item_subselect *item;
-  /* thread handler */
-  THD *thd;
-  /*
-    SELECT_LEX for hidden SELECT in onion which process global
-    ORDER BY and LIMIT
+  THD *thd;                   ///< Thread handler
+  /**
+    Helper query block for query expression with UNION or multi-level
+    ORDER BY/LIMIT
   */
   st_select_lex *fake_select_lex;
-
-  st_select_lex *union_distinct; /* pointer to the last UNION DISTINCT */
-  bool describe; /* union exec() called for EXPLAIN */
-
   /**
-    Marker for subqueries in WHERE, HAVING, ORDER BY, GROUP BY and
-    SELECT item lists
-
-   See Item_subselect::explain_subquery_checker
-
-   @note Actually, the type of this variable is Explain_context_enum, but .h
-         files are too interlinked to include "opt_format.h" there
+    SELECT_LEX that stores LIMIT and OFFSET for UNION ALL when no
+    fake_select_lex is used.
   */
-  int explain_marker;
+  st_select_lex *saved_fake_select_lex;
+  /// Points to last query block used by UNION DISTINCT query
+  st_select_lex *union_distinct;
 
-  void init_query();
-  st_select_lex_unit* master_unit();
-  st_select_lex* outer_select();
-  st_select_lex* first_select()
-  {
-    return reinterpret_cast<st_select_lex*>(slave);
-  }
-  st_select_lex_unit* next_unit()
-  {
-    return reinterpret_cast<st_select_lex_unit*>(next);
-  }
-  void exclude_level();
-  void exclude_tree();
-  inline select_result *get_result() { return result; }
+  /// @return true if query expression can be merged into an outer query
+  bool is_mergeable() const;
 
-  /* UNION methods */
-  bool prepare(THD *thd, select_result *result, ulong additional_options);
-  bool optimize();
-  bool exec();
-  bool explain();
-  bool cleanup();
-  bool cleanup_level();
-  inline void unclean() { cleaned= 0; }
+  /// @return the query block this query expression belongs to as subquery
+  st_select_lex* outer_select() const { return master; }
+
+  /// @return the first query block inside this query expression
+  st_select_lex* first_select() const { return slave; }
+
+  /// @return the next query expression within same query block (next subquery)
+  st_select_lex_unit* next_unit() const { return next; }
+
+  /// @return the query result object in use for this query expression
+  Query_result *query_result() const { return m_query_result; }
+
+  /// Set new query result object for this query expression
+  void set_query_result(Query_result *res) { m_query_result= res; }
+
+  bool prepare(THD *thd, Query_result *result, ulonglong added_options,
+               ulonglong removed_options);
+  bool optimize(THD *thd);
+  bool execute(THD *thd);
+  bool explain(THD *ethd);
+  bool cleanup(bool full);
+  inline void unclean() { cleaned= UC_DIRTY; }
   void reinit_exec_mechanism();
 
   void print(String *str, enum_query_type query_type);
+  bool accept(Select_lex_visitor *visitor);
 
   bool add_fake_select_lex(THD *thd);
-  bool init_prepare_fake_select_lex(THD *thd, bool no_const_tables);
-  inline bool is_prepared() { return prepared; }
-  bool change_result(select_result_interceptor *result,
-                     select_result_interceptor *old_result);
+  bool prepare_fake_select_lex(THD *thd);
+  void set_prepared() { prepared= true; }
+  void set_optimized() { optimized= true; }
+  void set_executed() { executed= true; }
+  void reset_executed() { executed= false; }
+  bool is_prepared() const { return prepared; }
+  bool is_optimized() const { return optimized; }
+  bool is_executed() const { return executed; }
+  bool change_query_result(Query_result_interceptor *result,
+                           Query_result_interceptor *old_result);
   void set_limit(st_select_lex *values);
   void set_thd(THD *thd_arg) { thd= thd_arg; }
-  inline bool is_union (); 
 
-  friend void lex_start(THD *thd);
-  friend bool subselect_union_engine::exec();
+  inline bool is_union () const;
+  bool union_needs_tmp_table();
+
+  /// Include a query expression below a query block.
+  void include_down(LEX *lex, st_select_lex *outer);
+
+  /// Include a chain of query expressions below a query block.
+  void include_chain(LEX *lex, st_select_lex *outer);
+
+  /// Exclude this unit and immediately contained select_lex objects
+  void exclude_level();
+
+  /// Exclude subtree of current unit from tree of SELECTs
+  void exclude_tree();
+
+  /// Renumber query blocks of a query expression according to supplied LEX
+  void renumber_selects(LEX *lex);
+
+  friend class st_select_lex;
 
   List<Item> *get_unit_column_types();
   List<Item> *get_field_list();
-private:
+
+  enum_parsing_context get_explain_marker() const;
+  void set_explain_marker(enum_parsing_context m);
+  void set_explain_marker_from(const st_select_lex_unit *u);
+
+#ifndef NDEBUG
+  /**
+     Asserts that none of {this unit and its children units} is fully cleaned
+     up.
+  */
+  void assert_not_fully_clean();
+#else
+  void assert_not_fully_clean() {}
+#endif
   void invalidate();
+  /*
+    An exception: this is the only function that needs to adjust
+    explain_marker.
+  */
+  friend bool parse_view_definition(THD *thd, TABLE_LIST *view_ref);
 };
 
 typedef class st_select_lex_unit SELECT_LEX_UNIT;
 typedef Bounds_checked_array<Item*> Ref_ptr_array;
 
-/*
-  SELECT_LEX - store information of parsed SELECT statment
+/**
+  This class represents a query block, aka a query specification, which is
+  a query consisting of a SELECT keyword, followed by a table list,
+  optionally followed by a WHERE clause, a GROUP BY, etc.
 */
-class st_select_lex: public st_select_lex_node
+class st_select_lex: public Sql_alloc
 {
 public:
+  /// @returns a slice of ref_pointer_array
+  Ref_ptr_array ref_ptr_array_slice(size_t slice_num)
+  {
+    size_t slice_sz= ref_pointer_array.size() / 5U;
+    assert(ref_pointer_array.size() % 5 == 0);
+    assert(slice_num < 5U);
+    return Ref_ptr_array(&ref_pointer_array[slice_num * slice_sz], slice_sz);
+  }
+
+  Item  *where_cond() const { return m_where_cond; }
+  void   set_where_cond(Item *cond) { m_where_cond= cond; }
+  Item **where_cond_ref() { return &m_where_cond; }
+  Item  *having_cond() const { return m_having_cond; }
+  void   set_having_cond(Item *cond) { m_having_cond= cond; }
+
+  void set_query_result(Query_result *result) { m_query_result= result; }
+  Query_result *query_result() const { return m_query_result; }
+  bool change_query_result(Query_result_interceptor *new_result,
+                           Query_result_interceptor *old_result);
+
+  /// Set base options for a query block (and active options too)
+  void set_base_options(ulonglong options_arg)
+  {
+    DBUG_EXECUTE_IF("no_const_tables", options_arg|= OPTION_NO_CONST_TABLES;);
+
+    // Make sure we do not overwrite options by accident
+    assert(m_base_options == 0 && m_active_options == 0);
+    m_base_options= options_arg;
+    m_active_options= options_arg;
+  }
+
+  /// Add base options to a query block, also update active options
+  void add_base_options(ulonglong options)
+  {
+    assert(first_execution);
+    m_base_options|= options;
+    m_active_options|= options;
+  }
+
+  /**
+    Remove base options from a query block.
+    Active options are also updated, and we assume here that "extra" options
+    cannot override removed base options.
+  */
+  void remove_base_options(ulonglong options)
+  {
+    assert(first_execution);
+    m_base_options&= ~options;
+    m_active_options&= ~options;
+  }
+
+  /// Make active options from base options, supplied options and environment:
+  void make_active_options(ulonglong added_options, ulonglong removed_options);
+
+  /// Adjust the active option set
+  void add_active_options(ulonglong options)
+  { m_active_options|= options; }
+
+  /// @return the active query options
+  ulonglong active_options() const { return m_active_options; }
+
+private:
+  /**
+    Intrusive double-linked list of all query blocks within the same
+    query expression.
+  */
+  st_select_lex *next;
+  st_select_lex **prev;
+
+  /// The query expression containing this query block.
+  st_select_lex_unit *master;
+  /// The first query expression contained within this query block.
+  st_select_lex_unit *slave;
+
+  /// Intrusive double-linked global list of query blocks.
+  st_select_lex *link_next;
+  st_select_lex **link_prev;
+
+  /// Result of this query block
+  Query_result *m_query_result;
+
+  /**
+    Options assigned from parsing and throughout resolving,
+    should not be modified after resolving is done.
+  */
+  ulonglong m_base_options;
+  /**
+    Active options. Derived from base options, modifiers added during
+    resolving and values from session variable option_bits. Since the latter
+    may change, active options are refreshed per execution of a statement.
+  */
+  ulonglong m_active_options;
+
+public:
+  /**
+    In sql_cache we store SQL_CACHE flag as specified by user to be
+    able to restore SELECT statement from internal structures.
+  */
+  enum e_sql_cache { SQL_CACHE_UNSPECIFIED, SQL_NO_CACHE, SQL_CACHE };
+  /// Query cache hint (should rather belong in LEX object?)
+  e_sql_cache sql_cache;
+  /**
+    result of this query can't be cached, bit field, can be :
+      UNCACHEABLE_DEPENDENT
+      UNCACHEABLE_RAND
+      UNCACHEABLE_SIDEEFFECT
+  */
+  uint8 uncacheable;
+
+  /// Describes context of this query block (e.g if it is a derived table).
+  enum sub_select_type linkage;
+  bool no_table_names_allowed; ///< used for global order by
+  /**
+    Context for name resolution for all column references except columns
+    from joined tables.
+  */
   Name_resolution_context context;
-  /*
-    Two fields used by semi-join transformations to know when semi-join is
+  /**
+    Pointer to first object in list of Name res context objects that have
+    this query block as the base query block.
+    Includes field "context" which is embedded in this query block.
+  */
+  Name_resolution_context *first_context;
+  /**
+    Three fields used by semi-join transformations to know when semi-join is
     possible, and in which condition tree the subquery predicate is located.
   */
   enum Resolve_place { RESOLVE_NONE, RESOLVE_JOIN_NEST, RESOLVE_CONDITION,
-                       RESOLVE_HAVING };
-  Resolve_place resolve_place; // Indicates part of query being resolved
-  TABLE_LIST *resolve_nest;    // Used when resolving outer join condition
+                       RESOLVE_HAVING, RESOLVE_SELECT_LIST };
+  Resolve_place resolve_place; ///< Indicates part of query being resolved
+  TABLE_LIST *resolve_nest;    ///< Used when resolving outer join condition
+  /**
+    Disables semi-join flattening when resolving a subtree in which flattening
+    is not allowed. The flag should be true while resolving items that are not
+    on the AND-top-level of a condition tree.
+  */
+  bool semijoin_disallowed;
   char *db;
-  Item *where, *having;                         /* WHERE & HAVING clauses */
-  Item *prep_where; /* saved WHERE clause for prepared statement processing */
-  Item *prep_having;/* saved HAVING clause for prepared statement processing */
+private:
+  /**
+    Condition to be evaluated after all tables in a query block are joined.
+    After all permanent transformations have been conducted by
+    SELECT_LEX::prepare(), this condition is "frozen", any subsequent changes
+    to it must be done with change_item_tree(), unless they only modify AND/OR
+    items and use a copy created by SELECT_LEX::get_optimizable_conditions().
+    Same is true for 'having_cond'.
+  */
+  Item *m_where_cond;
+
+  /// Condition to be evaluated on grouped rows after grouping.
+  Item *m_having_cond;
+
+public:
+
   /**
     Saved values of the WHERE and HAVING clauses. Allowed values are: 
      - COND_UNDEF if the condition was not specified in the query or if it 
@@ -689,14 +895,17 @@ public:
      - COND_FALSE if the condition is impossible
      - COND_OK otherwise
   */
-  Item::cond_result cond_value, having_value;
-  /* point on lex in which it was created, used in view subquery detection */
+  Item::cond_result cond_value;
+  Item::cond_result having_value;
+
+  /// Reference to LEX that this query block belongs to
   LEX *parent_lex;
+  /// Indicates whether this query block contains the WITH ROLLUP clause
   enum olap_type olap;
-  /* FROM clause - points to the beginning of the TABLE_LIST::next_local list. */
+  /// List of tables in FROM clause - use TABLE_LIST::next_local to traverse
   SQL_I_List<TABLE_LIST>  table_list;
 
-  /*
+  /**
     GROUP BY clause.
     This list may be mutated during optimization (by remove_const()),
     so for prepared statements, we keep a copy of the ORDER.next pointers in
@@ -706,33 +915,58 @@ public:
   Group_list_ptrs        *group_list_ptrs;
 
   /**
-    List of fields & expressions.
-
-    SELECT: Fields and expressions in the SELECT list.
-    UPDATE: Fields in the SET clause.
+    List of columns and expressions:
+    SELECT: Columns and expressions in the SELECT list.
+    UPDATE: Columns in the SET clause.
   */
   List<Item>          item_list;
-  List<String>        interval_list;
   bool	              is_item_list_lookup;
-  /* 
-    Usualy it is pointer to ftfunc_list_alloc, but in union used to create fake
-    select_lex for calling mysql_select under results of union
+
+  /// Number of GROUP BY expressions added to all_fields
+  int hidden_group_field_count;
+
+  List<Item> &fields_list; ///< hold field list
+  List<Item> all_fields; ///< to store all expressions used in query
+  /**
+    Usually a pointer to ftfunc_list_alloc, but in UNION this is used to create
+    fake select_lex that consolidates result fields of UNION
   */
   List<Item_func_match> *ftfunc_list;
   List<Item_func_match> ftfunc_list_alloc;
-  JOIN *join; /* after JOIN::prepare it is pointer to corresponding JOIN */
-  List<TABLE_LIST> top_join_list; /* join list of the top level          */
-  List<TABLE_LIST> *join_list;    /* list for the currently parsed join  */
-  TABLE_LIST *embedding;          /* table embedding to the above list   */
+  /**
+    After optimization it is pointer to corresponding JOIN. This member
+    should be changed only when THD::LOCK_query_plan mutex is taken.
+  */
+  JOIN *join;
+  /// join list of the top level
+  List<TABLE_LIST> top_join_list;
+  /// list for the currently parsed join
+  List<TABLE_LIST> *join_list;
+  /// table embedding the above list
+  TABLE_LIST *embedding;
   /// List of semi-join nests generated for this query block
   List<TABLE_LIST> sj_nests;
-  //Dynamic_array<TABLE_LIST*> sj_nests; psergey-5:
-  /*
-    Beginning of the list of leaves in a FROM clause, where the leaves
-    inlcude all base tables including view tables. The tables are connected
-    by TABLE_LIST::next_leaf, so leaf_tables points to the left-most leaf.
+  /**
+    Points to first leaf table of query block. After setup_tables() is done,
+    this is a list of base tables and derived tables. After derived tables
+    processing is done, this is a list of base tables only.
+    Use TABLE_LIST::next_leaf to traverse the list.
   */
   TABLE_LIST *leaf_tables;
+  /// Number of leaf tables in this query block.
+  uint leaf_table_count;
+  /// Number of derived tables and views in this query block.
+  uint derived_table_count;
+  /// Number of materialized derived tables and views in this query block.
+  uint materialized_derived_table_count;
+  /**
+    True if query block has semi-join nests merged into it. Notice that this
+    is updated earlier than sj_nests, so check this if info is needed
+    before the full resolver process is complete.
+  */
+  bool has_sj_nests;
+  /// Number of partitioned tables
+  uint partitioned_table_count;
   /**
     SELECT_LEX type enum
   */
@@ -750,7 +984,7 @@ public:
   // Don't insert new types below this line!
   };
 
-  /*
+  /**
     ORDER BY clause.
     This list may be mutated during optimization (by remove_const()),
     so for prepared statements, we keep a copy of the ORDER.next pointers in
@@ -759,66 +993,77 @@ public:
   SQL_I_List<ORDER> order_list;
   Group_list_ptrs *order_list_ptrs;
 
-  SQL_I_List<ORDER> gorder_list;
-  Item *select_limit, *offset_limit;  /* LIMIT clause parameters */
+  /// LIMIT clause, NULL if no limit is given
+  Item *select_limit;
+  /// LIMIT ... OFFSET clause, NULL if no offset is given
+  Item *offset_limit;
 
-  /// Array of pointers to top elements of all_fields list
+  /// The complete ref pointer array, with 5 slices (see class JOIN too)
   Ref_ptr_array ref_pointer_array;
+  /// Slice 0 of array, with pointers to all expressions in all_fields
+  Ref_ptr_array ref_ptrs;
 
-  /// Number of derived tables and views
-  uint derived_table_count;
-  /// Number of materialized derived tables and views
-  uint materialized_table_count;
-  /// Number of partitioned tables
-  uint partitioned_table_count;
-  /*
+  /**
     number of items in select_list and HAVING clause used to get number
     bigger then can be number of entries that will be added to all item
     list during split_sum_func
   */
   uint select_n_having_items;
-  uint cond_count;    /* number of arguments of and/or/xor in where/having/on */
-  uint between_count; /* number of between predicates in where/having/on      */
-  uint max_equal_elems; /* maximal number of elements in multiple equalities  */
-  /*
+  uint cond_count;    ///< number of arguments of and/or/xor in where/having/on
+  uint between_count; ///< number of between predicates in where/having/on 
+  uint max_equal_elems; ///< maximal number of elements in multiple equalities
+  /**
     Number of fields used in select list or where clause of current select
     and all inner subselects.
   */
   uint select_n_where_fields;
-  enum_parsing_place parsing_place; /* where we are parsing expression */
-  bool with_sum_func;   /* sum function indicator */
 
-  ulong table_join_options;
+  /// Parse context: indicates where the current expression is being parsed
+  enum_parsing_context parsing_place;
+  /// Parse context: is inside a set function if this is positive
   uint in_sum_expr;
-  uint select_number; /* number of select (used for EXPLAIN) */
+
+  /**
+    True if contains or aggregates set functions.
+    @note this is wrong when a locally found set function is aggregated
+    in an outer query block.
+  */
+  bool with_sum_func;
+  /// Number of Item_sum-derived objects in this SELECT
+  uint n_sum_items;
+  /// Number of Item_sum-derived objects in children and descendant SELECTs
+  uint n_child_sum_items;
+
+  uint select_number; ///< Query block number (used for EXPLAIN)
   /**
     Nesting level of query block, outer-most query block has level 0,
     its subqueries have level 1, etc. @see also sql/item_sum.h.
   */
   int nest_level;
-  /* Circularly linked list of sum func in nested selects */
+  /// Circular linked list of sum func in nested selects
   Item_sum *inner_sum_func_list;
-  uint with_wild; /* item list contain '*' */
-  bool  braces;   	/* SELECT ... UNION (SELECT ... ) <- this braces */
-  /* TRUE when having fix field called in processing of this SELECT */
+  /**
+    Number of wildcards used in the SELECT list. For example,
+    SELECT *, t1.*, catalog.t2.* FROM t0, t1, t2;
+    has 3 wildcards.
+  */
+  uint with_wild;
+  bool  braces;   	///< SELECT ... UNION (SELECT ... ) <- this braces
+  /// TRUE when having fix field called in processing of this query block
   bool having_fix_field;
-  /* TRUE when GROUP BY fix field called in processing of this SELECT */
+  /// TRUE when GROUP BY fix field called in processing of this query block
   bool group_fix_field;
-  /* List of references to fields referenced from inner selects */
+  /// List of references to fields referenced from inner query blocks
   List<Item_outer_ref> inner_refs_list;
-  /* Number of Item_sum-derived objects in this SELECT */
-  uint n_sum_items;
-  /* Number of Item_sum-derived objects in children and descendant SELECTs */
-  uint n_child_sum_items;
 
-  /* explicit LIMIT clause was used */
+  /// explicit LIMIT clause is used
   bool explicit_limit;
-  /*
-    there are subquery in HAVING clause => we can't close tables before
+  /**
+    HAVING clause contains subquery => we can't close tables before
     query processing end even if we use temporary table
   */
   bool subquery_in_having;
-  /*
+  /**
     This variable is required to ensure proper work of subqueries and
     stored procedures. Generally, one should use the states of
     Query_arena to determine if it's a statement prepare or first
@@ -831,33 +1076,13 @@ public:
     case of an error during prepare the PS is not created.
   */
   bool first_execution;
-  bool first_natural_join_processing;
-  bool first_cond_optimization;
-  /* do not wrap view fields with Item_ref */
-  bool no_wrap_view_item;
-  /* exclude this select from check of unique_table() */
+  /// True when semi-join pull-out processing is complete 
+  bool sj_pullout_done;
+  /// exclude this query block from unique_table() check
   bool exclude_from_table_unique_test;
-  /* List of table columns which are not under an aggregate function */
-  List<Item_field> non_agg_fields;
-
-  /// @See cur_pos_in_all_fields below
-  static const int ALL_FIELDS_UNDEF_POS= INT_MIN;
-
+  /// Allow merge of immediate unnamed derived tables
+  bool allow_merge_derived;
   /**
-     Used only for ONLY_FULL_GROUP_BY.
-     When we call fix_fields(), this member should be set as follows:
-     - if the item should honour ONLY_FULL_GROUP_BY (i.e. is in the SELECT
-     list or is a hidden ORDER BY item), cur_pos_in_all_fields is the position
-     of the item in join->all_fields with this convention: position of the
-     first item of the SELECT list is 0; item before this (in direction of the
-     front) has position -1, whereas item after has position 1.
-     - otherwise, cur_pos_in_all_fields is ALL_FIELDS_UNDEF_POS.
-  */
-  int cur_pos_in_all_fields;
-
-  List<udf_func>     udf_list;                  /* udf function calls stack */
-
-  /* 
     This is a copy of the original JOIN USING list that comes from
     the parser. The parser :
       1. Sets the natural_join of the second TABLE_LIST in the join
@@ -876,20 +1101,27 @@ public:
     this select level.
   */
   table_map select_list_tables;
-  /// First select_lex removed as part of some transformation, or NULL
-  st_select_lex *removed_select;
+  table_map outer_join;       ///< Bitmap of all inner tables from outer joins
 
-  void init_query();
-  void init_select();
-  st_select_lex_unit* master_unit();
-  st_select_lex_unit* first_inner_unit()
-  { 
-    return (st_select_lex_unit*) slave; 
-  }
-  st_select_lex* outer_select();
-  st_select_lex* next_select() { return (st_select_lex*) next; }
+  /// Query-block-level hints, for this query block
+  Opt_hints_qb *opt_hints_qb;
 
-  st_select_lex* last_select() 
+
+  /**
+    @note the group_by and order_by lists below will probably be added to the
+          constructor when the parser is converted into a true bottom-up design.
+  */
+  st_select_lex(TABLE_LIST *table_list, List<Item> *item_list,
+                Item *where, Item *having, Item *limit, Item *offset
+                //SQL_I_LIST<ORDER> *group_by, SQL_I_LIST<ORDER> order_by
+                );
+
+  st_select_lex_unit *master_unit() const { return master; }
+  st_select_lex_unit *first_inner_unit() const { return slave; }
+  SELECT_LEX *outer_select() const { return master->outer_select(); }
+  SELECT_LEX *next_select() const { return next; }
+
+  st_select_lex* last_select()
   { 
     st_select_lex* mylast= this;
     for (; mylast->next_select(); mylast= mylast->next_select())
@@ -897,26 +1129,71 @@ public:
     return mylast; 
   }
 
-  st_select_lex* next_select_in_list() 
-  {
-    return (st_select_lex*) link_next;
-  }
-  st_select_lex_node** next_select_in_list_addr()
-  {
-    return &link_next;
-  }
-  void invalidate();
+  SELECT_LEX *next_select_in_list() const { return link_next; }
+
   void mark_as_dependent(st_select_lex *last);
 
+  /// @return true if query block is explicitly grouped (non-empty GROUP BY)
+  bool is_explicitly_grouped() const { return group_list.elements > 0; }
+
+  /**
+    @return true if this query block is implicitly grouped, ie it is not
+    explicitly grouped but contains references to set functions.
+    The query will return max. 1 row (@see also is_single_grouped()).
+  */
+  bool is_implicitly_grouped() const
+  { return m_agg_func_used && group_list.elements == 0; }
+
+  /**
+    @return true if this query block is implicitly grouped and returns exactly
+    one row, which happens when it does not have a HAVING clause.
+  */
+  bool is_single_grouped() const
+  {
+    return m_agg_func_used &&
+           group_list.elements == 0 &&
+           m_having_cond == NULL;
+  }
+
+  /**
+    @return true if this query block is explicitly or implicitly grouped.
+    @note a query with DISTINCT is not considered to be aggregated.
+    @note in standard SQL, a query with HAVING is defined as grouped, however
+          MySQL allows HAVING without any aggregation to be the same as WHERE.
+  */
+  bool is_grouped() const
+  { return group_list.elements > 0 || m_agg_func_used; }
+
+  /// @return true if this query block contains DISTINCT at start of select list
+  bool is_distinct() const
+  { return active_options() & SELECT_DISTINCT; }
+
+  /**
+    @return true if this query block contains an ORDER BY clause.
+
+    @note returns false if ORDER BY has been eliminated, e.g if the query
+          can return max. 1 row.
+  */
+  bool is_ordered() const
+  { return order_list.elements > 0; }
+
+  /// @return true if this query block has a LIMIT clause
+  bool has_limit() const
+  { return select_limit != NULL; }
+
+  /// @return true if query block references full-text functions
+  bool has_ft_funcs() const
+  { return ftfunc_list->elements > 0; }
+
+  void invalidate();
+
   bool set_braces(bool value);
-  bool inc_in_sum_expr();
-  uint get_in_sum_expr();
+  uint get_in_sum_expr() const { return in_sum_expr; }
 
   bool add_item_to_list(THD *thd, Item *item);
-  bool add_group_to_list(THD *thd, Item *item, bool asc);
+  void add_group_to_list(ORDER *order);
   bool add_ftfunc_to_list(Item_func_match *func);
-  bool add_order_to_list(THD *thd, Item *item, bool asc);
-  bool add_gorder_to_list(THD *thd, Item *item, bool asc);
+  void add_order_to_list(ORDER *order);
   TABLE_LIST* add_table_to_list(THD *thd, Table_ident *table,
 				LEX_STRING *alias,
 				ulong table_options,
@@ -924,19 +1201,36 @@ public:
                                 enum_mdl_type mdl_type= MDL_SHARED_READ,
 				List<Index_hint> *hints= 0,
                                 List<String> *partition_names= 0,
-                                LEX_STRING *option= 0,
-                                bool sequence_read= false);
-  TABLE_LIST* get_table_list();
+                                LEX_STRING *option= 0);
+  TABLE_LIST* get_table_list() const { return table_list.first; }
   bool init_nested_join(THD *thd);
   TABLE_LIST *end_nested_join(THD *thd);
   TABLE_LIST *nest_last_join(THD *thd);
   void add_joined_table(TABLE_LIST *table);
   TABLE_LIST *convert_right_join();
-  List<Item>* get_item_list();
-  ulong get_table_join_options();
+  List<Item>* get_item_list() { return &item_list; }
+
+  // Check privileges for views that are merged into query block
+  bool check_view_privileges(THD *thd,
+                             ulong want_privilege_first,
+                             ulong want_privilege_next);
+
+  // Resolve and prepare information about tables for one query block
+  bool setup_tables(THD *thd, TABLE_LIST *tables, bool select_insert);
+
+  // Resolve derived table and view information for a query block
+  bool resolve_derived(THD *thd, bool apply_semijoin);
+
+  // Propagate exclusion from table uniqueness test into subqueries
+  void propagate_unique_test_exclusion();
+
+  // Add full-text function elements from a list into this query block
+  bool add_ftfunc_list(List<Item_func_match> *ftfuncs);
+
   void set_lock_for_tables(thr_lock_type lock_type);
   inline void init_order()
   {
+    assert(order_list.elements == 0);
     order_list.elements= 0;
     order_list.first= 0;
     order_list.next= &order_list.first;
@@ -944,42 +1238,54 @@ public:
   /*
     This method created for reiniting LEX in mysql_admin_table() and can be
     used only if you are going remove all SELECT_LEX & units except belonger
-    to LEX (LEX::unit & LEX::select, for other purposes there are
-    SELECT_LEX_UNIT::exclude_level & SELECT_LEX_UNIT::exclude_tree
+    to LEX (LEX::unit & LEX::select, for other purposes use
+    SELECT_LEX_UNIT::exclude_level()
   */
   void cut_subtree() { slave= 0; }
   bool test_limit();
+  /**
+    Get offset for LIMIT.
 
-  friend void lex_start(THD *thd);
-  st_select_lex() : group_list_ptrs(NULL), order_list_ptrs(NULL),
-    n_sum_items(0), n_child_sum_items(0),
-    cur_pos_in_all_fields(ALL_FIELDS_UNDEF_POS)
-  {}
-  void make_empty_select()
-  {
-    init_query();
-    init_select();
-  }
-  bool setup_ref_array(THD *thd, uint order_group_num);
+    Evaluate offset item if necessary.
+
+    @return Number of rows to skip.
+  */
+  ha_rows get_offset();
+  /**
+   Get limit.
+
+   Evaluate limit item if necessary.
+
+   @return Limit of rows in result.
+  */
+  ha_rows get_limit();
+
+  /// Assign a default name resolution object for this query block.
+  bool set_context(Name_resolution_context *outer_context);
+
+  bool setup_ref_array(THD *thd);
   void print(THD *thd, String *str, enum_query_type query_type);
   static void print_order(String *str,
                           ORDER *order,
                           enum_query_type query_type);
   void print_limit(THD *thd, String *str, enum_query_type query_type);
-  void fix_prepare_information(THD *thd, Item **conds, Item **having_conds);
-  /*
-    Destroy the used execution plan (JOIN) of this subtree (this
-    SELECT_LEX and all nested SELECT_LEXes and SELECT_LEX_UNITs).
+  void fix_prepare_information(THD *thd);
+
+  virtual bool accept(Select_lex_visitor *visitor);
+
+  /**
+    Cleanup this subtree (this SELECT_LEX and all nested SELECT_LEXes and
+    SELECT_LEX_UNITs).
+    @param full  if false only partial cleanup is done, JOINs and JOIN_TABs are
+    kept to provide info for EXPLAIN CONNECTION; if true, complete cleanup is
+    done, all JOINs are freed.
   */
-  bool cleanup();
-  bool cleanup_level();
+  bool cleanup(bool full);
   /*
     Recursively cleanup the join of this select lex and of all nested
-    select lexes.
+    select lexes. This is not a full cleanup.
   */
-  void cleanup_all_joins(bool full);
-
-  void set_index_hint_type(enum index_hint_type type, index_clause_map clause);
+  void cleanup_all_joins();
 
   /* 
    Add a index hint to the tagged list of hints. The type and clause of the
@@ -989,88 +1295,490 @@ public:
 
   /* make a list to hold index hints */
   void alloc_index_hints (THD *thd);
-  /* read and clear the index hints */
-  List<Index_hint>* pop_index_hints(void) 
-  {
-    List<Index_hint> *hints= index_hints;
-    index_hints= NULL;
-    return hints;
-  }
 
-  void clear_index_hints(void) { index_hints= NULL; }
-  bool handle_derived(LEX *lex, bool (*processor)(THD*, LEX*, TABLE_LIST*));
-  bool is_part_of_union() { return master_unit()->is_union(); }
+  /// Return true if this query block is part of a UNION
+  bool is_part_of_union() const { return master_unit()->is_union(); }
 
   /*
-    For MODE_ONLY_FULL_GROUP_BY we need to maintain two flags:
-     - Non-aggregated fields are used in this select.
-     - Aggregate functions are used in this select.
-    In MODE_ONLY_FULL_GROUP_BY only one of these may be true.
+    For MODE_ONLY_FULL_GROUP_BY we need to know if
+    this query block is the aggregation query of at least one aggregate
+    function.
   */
-  bool non_agg_field_used() const { return m_non_agg_field_used; }
   bool agg_func_used()      const { return m_agg_func_used; }
+  bool json_agg_func_used() const { return m_json_agg_func_used; }
 
-  void set_non_agg_field_used(bool val) { m_non_agg_field_used= val; }
   void set_agg_func_used(bool val)      { m_agg_func_used= val; }
 
+  void set_json_agg_func_used(bool val) { m_json_agg_func_used= val; }
   /// Lookup for SELECT_LEX type
-  type_enum type(const THD *thd);
+  type_enum type();
 
   /// Lookup for a type string
-  const char *get_type_str(const THD *thd) { return type_str[type(thd)]; }
+  const char *get_type_str(const THD *thd) { return type_str[type()]; }
   static const char *get_type_str(type_enum type) { return type_str[type]; }
 
   bool is_dependent() const { return uncacheable & UNCACHEABLE_DEPENDENT; }
   bool is_cacheable() const
   {
-    // drop UNCACHEABLE_EXPLAIN, because it is for internal usage only
-    return !(uncacheable & ~UNCACHEABLE_EXPLAIN);
+    return !uncacheable;
   }
-  
+
+  /// Include query block inside a query expression.
+  void include_down(LEX *lex, st_select_lex_unit *outer);
+
+  /// Include a query block next to another query block.
+  void include_neighbour(LEX *lex, st_select_lex *before);
+
+  /// Include query block inside a query expression, but do not link.
+  void include_standalone(st_select_lex_unit *sel, st_select_lex **ref);
+
+  /// Include query block into global list.
+  void include_in_global(st_select_lex **plink);
+
+  /// Include chain of query blocks into global list.
+  void include_chain_in_global(st_select_lex **start);
+
+  /// Renumber query blocks of contained query expressions
+  void renumber(LEX *lex);
+
+  /**
+     Set pointer to corresponding JOIN object.
+     The function sets the pointer only after acquiring THD::LOCK_query_plan
+     mutex. This is needed to avoid races when EXPLAIN FOR CONNECTION is used.
+  */
+  void set_join(JOIN *join_arg);
+  /**
+    Does permanent transformations which are local to a query block (which do
+    not merge it to another block).
+  */
+  bool apply_local_transforms(THD *thd, bool prune);
+
+  bool get_optimizable_conditions(THD *thd,
+                                  Item **new_where, Item **new_having);
+
+  bool validate_outermost_option(LEX *lex, const char *wrong_option) const;
+  bool validate_base_options(LEX *lex, ulonglong options) const;
+
 private:
-  bool m_non_agg_field_used;
+  // Delete unused columns from merged derived tables
+  void delete_unused_merged_columns(List<TABLE_LIST> *tables);
+
   bool m_agg_func_used;
+  bool m_json_agg_func_used;
 
-  /* current index hint kind. used in filling up index_hints */
-  enum index_hint_type current_index_hint_type;
-  index_clause_map current_index_hint_clause;
-  /* a list of USE/FORCE/IGNORE INDEX */
-  List<Index_hint> *index_hints;
-
+  /// Helper for fix_prepare_information()
+  void fix_prepare_information_for_order(THD *thd,
+                                         SQL_I_List<ORDER> *list,
+                                         Group_list_ptrs **list_ptrs);
   static const char *type_str[SLT_total];
+
+  friend class st_select_lex_unit;
+
+  bool record_join_nest_info(List<TABLE_LIST> *tables);
+  bool simplify_joins(THD *thd,
+                      List<TABLE_LIST> *join_list,
+                      bool top, bool in_sj,
+                      Item **new_conds,
+                      uint *changelog= NULL);
+  /// Merge derived table into query block
+public:
+  bool merge_derived(THD *thd, TABLE_LIST *derived_table);
+  bool is_in_select_list(Item *cand);
+private:
+  bool convert_subquery_to_semijoin(Item_exists_subselect *subq_pred);
+  void remap_tables(THD *thd);
+  bool resolve_subquery(THD *thd);
+  bool resolve_rollup(THD *thd);
+  bool change_group_ref(THD *thd, Item_func *expr, bool *changed);
+  bool flatten_subqueries();
+  bool setup_wild(THD *thd);
+  bool setup_order_final(THD *thd);
+  bool setup_group(THD *thd);
+  void remove_redundant_subquery_clauses(THD *thd,
+                                         int hidden_group_field_count);
+  void repoint_contexts_of_join_nests(List<TABLE_LIST> join_list);
+  void empty_order_list(SELECT_LEX *sl);
+  /**
+    Pointer to collection of subqueries candidate for semijoin
+    conversion.
+    Template parameter is "true": no need to run DTORs on pointers.
+  */
+  Mem_root_array<Item_exists_subselect*, true> *sj_candidates;
+public:
+  /// How many expressions are part of the order by but not select list.
+  int hidden_order_field_count;
+
+  bool fix_inner_refs(THD *thd);
+  bool setup_conds(THD *thd);
+  bool prepare(THD *thd);
+  bool optimize(THD *thd);
+  void reset_nj_counters(List<TABLE_LIST> *join_list= NULL);
+  bool check_only_full_group_by(THD *thd);
+
+  /// Merge name resolution context objects of a subquery into its parent
+  void merge_contexts(SELECT_LEX *inner);
+
+  /**
+    Returns which subquery execution strategies can be used for this query block.
+
+    @param thd  Pointer to THD object for session.
+                Used to access optimizer_switch
+
+    @retval EXEC_MATERIALIZATION  Subquery Materialization should be used
+    @retval EXEC_EXISTS           In-to-exists execution should be used
+    @retval EXEC_EXISTS_OR_MAT    A cost-based decision should be made
+  */
+  Item_exists_subselect::enum_exec_method subquery_strategy(THD *thd) const;
+
+  /**
+    Returns whether semi-join is enabled for this query block
+
+    @see @c Opt_hints_qb::semijoin_enabled for details on how hints
+    affect this decision.  If there are no hints for this query block,
+    optimizer_switch setting determines whether semi-join is used.
+
+    @param thd  Pointer to THD object for session.
+                Used to access optimizer_switch
+
+    @return true if semijoin is enabled,
+            false otherwise
+  */
+  bool semijoin_enabled(THD *thd) const;
+  /**
+    Update available semijoin strategies for semijoin nests.
+
+    Available semijoin strategies needs to be updated on every execution since
+    optimizer_switch setting may have changed.
+
+    @param thd  Pointer to THD object for session.
+                Used to access optimizer_switch
+  */
+  void update_semijoin_strategies(THD *thd);
+
+  /**
+    Add item to the hidden part of select list
+
+    @param item  item to add
+
+    @return Pointer to ref_ptr for the added item
+  */
+  Item **add_hidden_item(Item *item);
 };
 typedef class st_select_lex SELECT_LEX;
 
-inline bool st_select_lex_unit::is_union ()
+inline bool st_select_lex_unit::is_union() const
 { 
   return first_select()->next_select() && 
-    first_select()->next_select()->linkage == UNION_TYPE;
+         first_select()->next_select()->linkage == UNION_TYPE;
 }
 
-/// Utility RAII class to save/modify/restore a Resolve_place
-class Switch_resolve_place
+#ifdef MYSQL_SERVER
+
+struct Cast_type
+{
+  Cast_target target;
+  const CHARSET_INFO *charset;
+  ulong type_flags;
+  const char *length;
+  const char *dec;
+};
+
+
+struct Limit_options
+{
+  Item *limit;
+  Item *opt_offset;
+  /*
+    true for "LIMIT offset,limit" and false for "LIMIT limit OFFSET offset"
+  */
+  bool is_offset_first;
+};
+
+
+struct Query_options {
+  ulonglong query_spec_options;
+  enum SELECT_LEX::e_sql_cache sql_cache;
+
+  bool merge(const Query_options &a, const Query_options &b);
+  bool save_to(Parse_context *);
+};
+
+
+/**
+  Argument values for PROCEDURE ANALYSE(...)
+*/
+
+struct Proc_analyse_params
+{
+  uint max_tree_elements; //< maximum number of distinct values per column
+  uint max_treemem; //< maximum amount of memory to allocate per column
+
+  static const uint default_max_tree_elements= 256;
+  static const uint default_max_treemem= 8192;
+};
+
+
+struct Select_lock_type
+{
+  bool is_set;
+  thr_lock_type lock_type;
+  bool is_safe_to_cache_query;
+};
+
+
+/**
+  Helper for the sql_exchange class
+*/
+
+struct Line_separators
+{
+  const String *line_term;
+  const String *line_start;
+
+  void cleanup() { line_term= line_start= NULL; }
+  void merge_line_separators(const Line_separators &s)
+  {
+    if (s.line_term != NULL)
+      line_term= s.line_term;
+    if (s.line_start != NULL)
+      line_start= s.line_start;
+  }
+};
+
+
+/**
+  Helper for the sql_exchange class
+*/
+
+struct Field_separators
+{
+  const String *field_term;
+  const String *escaped;
+  const String *enclosed;
+  bool opt_enclosed;
+  
+  void cleanup()
+  {
+    field_term= escaped= enclosed= NULL;
+    opt_enclosed= false;
+  }
+  void merge_field_separators(const Field_separators &s)
+  {
+    if (s.field_term != NULL)
+      field_term= s.field_term;
+    if (s.escaped != NULL)
+      escaped= s.escaped;
+    if (s.enclosed != NULL)
+      enclosed= s.enclosed;
+    // TODO: a bug?
+    // OPTIONALLY ENCLOSED BY x ENCLOSED BY y == OPTIONALLY ENCLOSED BY y
+    if (s.opt_enclosed)
+      opt_enclosed= s.opt_enclosed;
+  }
+};
+
+
+enum delete_option_enum {
+  DELETE_QUICK        = 1 << 0,
+  DELETE_LOW_PRIORITY = 1 << 1,
+  DELETE_IGNORE       = 1 << 2
+};
+
+
+union YYSTYPE {
+  /*
+    Hint parser section (sql_hints.yy)
+  */
+  opt_hints_enum hint_type;
+  LEX_CSTRING hint_string;
+  class PT_hint *hint;
+  class PT_hint_list *hint_list;
+  Hint_param_index_list hint_param_index_list;
+  Hint_param_table hint_param_table;
+  Hint_param_table_list hint_param_table_list;
+
+  /*
+    Main parser section (sql_yacc.yy)
+  */
+  int  num;
+  ulong ulong_num;
+  ulonglong ulonglong_number;
+  longlong longlong_number;
+  LEX_STRING lex_str;
+  LEX_STRING *lex_str_ptr;
+  LEX_SYMBOL symbol;
+  Table_ident *table;
+  char *simple_string;
+  Item *item;
+  Item_num *item_num;
+  List<Item> *item_list;
+  List<String> *string_list;
+  String *string;
+  Key_part_spec *key_part;
+  TABLE_LIST *table_list;
+  udf_func *udf;
+  LEX_USER *lex_user;
+  struct sys_var_with_base variable;
+  enum enum_var_type var_type;
+  keytype key_type;
+  enum ha_key_alg key_alg;
+  handlerton *db_type;
+  enum row_type row_type;
+  enum ha_rkey_function ha_rkey_mode;
+  enum enum_ha_read_modes ha_read_mode;
+  enum enum_tx_isolation tx_isolation;
+  const char *c_str;
+  struct
+  {
+    const CHARSET_INFO *charset;
+    ulong type_flags;
+  } charset_with_flags;
+  struct
+  {
+    const char *length;
+    const char *dec;
+  } precision;
+  struct Cast_type cast_type;
+  enum Item_udftype udf_type;
+  const CHARSET_INFO *charset;
+  thr_lock_type lock_type;
+  interval_type interval, interval_time_st;
+  timestamp_type date_time_type;
+  st_select_lex *select_lex;
+  chooser_compare_func_creator boolfunc2creator;
+  class sp_condition_value *spcondvalue;
+  struct { int vars, conds, hndlrs, curs; } spblock;
+  sp_name *spname;
+  LEX *lex;
+  sp_head *sphead;
+  struct p_elem_val *p_elem_value;
+  enum index_hint_type index_hint;
+  enum enum_filetype filetype;
+  enum fk_option m_fk_option;
+  enum enum_yes_no_unknown m_yes_no_unk;
+  enum_condition_item_name da_condition_item_name;
+  Diagnostics_information::Which_area diag_area;
+  Diagnostics_information *diag_info;
+  Statement_information_item *stmt_info_item;
+  Statement_information_item::Name stmt_info_item_name;
+  List<Statement_information_item> *stmt_info_list;
+  Condition_information_item *cond_info_item;
+  Condition_information_item::Name cond_info_item_name;
+  List<Condition_information_item> *cond_info_list;
+  bool is_not_empty;
+  Set_signal_information *signal_item_list;
+  enum enum_trigger_order_type trigger_action_order_type;
+  struct
+  {
+    enum enum_trigger_order_type ordering_clause;
+    LEX_STRING anchor_trigger_name;
+  } trg_characteristics;
+  class Index_hint *key_usage_element;
+  List<Index_hint> *key_usage_list;
+  class PT_subselect *subselect;
+  class PT_item_list *item_list2;
+  class PT_order_expr *order_expr;
+  class PT_order_list *order_list;
+  struct Limit_options limit_options;
+  Query_options select_options;
+  class PT_limit_clause *limit_clause;
+  Parse_tree_node *node;
+  class PT_select_part2_derived *select_part2_derived;
+  enum olap_type olap_type;
+  class PT_group *group;
+  class PT_order *order;
+  struct Proc_analyse_params procedure_analyse_params;
+  class PT_procedure_analyse *procedure_analyse;
+  Select_lock_type select_lock_type;
+  class PT_union_order_or_limit *union_order_or_limit;
+  class PT_table_expression *table_expression;
+  class PT_table_list *table_list2;
+  class PT_join_table_list *join_table_list;
+  class PT_select_paren_derived *select_paren_derived;
+  class PT_select_lex *select_lex2;
+  class PT_internal_variable_name *internal_variable_name;
+  class PT_option_value_following_option_type *option_value_following_option_type;
+  class PT_option_value_no_option_type *option_value_no_option_type;
+  class PT_option_value_list_head *option_value_list;
+  class PT_start_option_value_list *start_option_value_list;
+  class PT_transaction_access_mode *transaction_access_mode;
+  class PT_isolation_level *isolation_level;
+  class PT_transaction_characteristics *transaction_characteristics;
+  class PT_start_option_value_list_following_option_type
+    *start_option_value_list_following_option_type;
+  class PT_set *set;
+  class PT_union_list *union_list;
+  Line_separators line_separators;
+  Field_separators field_separators;
+  class PT_into_destination *into_destination;
+  class PT_select_var *select_var_ident;
+  class PT_select_var_list *select_var_list;
+  class PT_select_options_and_item_list *select_options_and_item_list;
+  class PT_select_part2 *select_part2;
+  class PT_table_reference_list *table_reference_list;
+  class PT_select_paren *select_paren;
+  class PT_select_init *select_init;
+  class PT_select_init2 *select_init2;
+  class PT_select *select;
+  class Item_param *param_marker;
+  class PTI_text_literal *text_literal;
+  XID *xid;
+  enum xa_option_words xa_option_type;
+  struct {
+    Item *column;
+    Item *value;
+  } column_value_pair;
+  struct {
+    class PT_item_list *column_list;
+    class PT_item_list *value_list;
+  } column_value_list_pair;
+  struct {
+    class PT_item_list *column_list;
+    class PT_insert_values_list *row_value_list;
+  } column_row_value_list_pair;
+  struct {
+    class PT_item_list *column_list;
+    class PT_insert_query_expression *insert_query_expression;
+  } insert_from_subquery;
+  class PT_create_select *create_select;
+  class PT_insert_values_list *values_list;
+  class PT_insert_query_expression *insert_query_expression;
+  class PT_statement *statement;
+  class Table_ident *table_ident;
+  Mem_root_array_YY<Table_ident *> table_ident_list;
+  delete_option_enum opt_delete_option;
+  class PT_hint_list *optimizer_hints;
+  enum alter_instance_action_enum alter_instance_action;
+};
+
+#endif
+
+
+/**
+  Utility RAII class to save/modify/restore the
+  semijoin_disallowed flag.
+*/
+class Disable_semijoin_flattening
 {
 public:
-  Switch_resolve_place(SELECT_LEX::Resolve_place *rp_ptr,
-                       SELECT_LEX::Resolve_place new_rp,
-                       bool apply)
-    : rp(NULL), saved_rp()
+  Disable_semijoin_flattening(SELECT_LEX *select_ptr, bool apply)
+    : select(NULL), saved_value()
   {
-    if (apply)
+    if (select_ptr && apply)
     {
-      rp= rp_ptr;
-      saved_rp= *rp;
-      *rp= new_rp;
+      select= select_ptr;
+      saved_value= select->semijoin_disallowed;
+      select->semijoin_disallowed= true;
     }
   }
-  ~Switch_resolve_place()
+  ~Disable_semijoin_flattening()
   {
-    if (rp)
-      *rp= saved_rp;
+    if (select)
+      select->semijoin_disallowed= saved_value;
   }
 private:
-  SELECT_LEX::Resolve_place *rp;
-  SELECT_LEX::Resolve_place saved_rp;
+  SELECT_LEX *select;
+  bool saved_value;
 };
 
 
@@ -1097,14 +1805,22 @@ extern const LEX_STRING empty_lex_str;
 
 struct st_trg_chistics
 {
-  enum trg_action_time_type action_time;
-  enum trg_event_type event;
+  enum enum_trigger_action_time_type action_time;
+  enum enum_trigger_event_type event;
+
+  /**
+    FOLLOWS or PRECEDES as specified in the CREATE TRIGGER statement.
+  */
+  enum enum_trigger_order_type ordering_clause;
+
+  /**
+    Trigger name referenced in the FOLLOWS/PRECEDES clause of the CREATE TRIGGER
+    statement.
+  */
+  LEX_STRING anchor_trigger_name;
 };
 
 extern sys_var *trg_new_row_fake_var;
-
-enum xa_option_words {XA_NONE, XA_JOIN, XA_RESUME, XA_ONE_PHASE,
-                      XA_SUSPEND, XA_FOR_MIGRATE};
 
 extern const LEX_STRING null_lex_str;
 
@@ -1255,11 +1971,19 @@ public:
   }
 
   /**
-    Enumeration listing of all types of unsafe statement.
+    All types of unsafe statements.
 
-    @note The order of elements of this enumeration type must
-    correspond to the order of the elements of the @c explanations
-    array defined in the body of @c THD::issue_unsafe_warnings.
+    @note The int values of the enum elements are used to point to
+    bits in two bitmaps in two different places:
+
+    - Query_tables_list::binlog_stmt_flags
+    - THD::binlog_unsafe_warning_flags
+    
+    Hence in practice this is not an enum at all, but a map from
+    symbols to bit indexes.
+
+    The ordering of elements in this enum must correspond to the order of
+    elements in the array binlog_stmt_unsafe_errcode.
   */
   enum enum_binlog_stmt_unsafe {
     /**
@@ -1267,11 +1991,6 @@ public:
       be predicted.
     */
     BINLOG_STMT_UNSAFE_LIMIT= 0,
-    /**
-      INSERT DELAYED is unsafe because the time when rows are inserted
-      cannot be predicted.
-    */
-    BINLOG_STMT_UNSAFE_INSERT_DELAYED,
     /**
       Access to log tables is unsafe because slave and master probably
       log different things.
@@ -1389,6 +2108,16 @@ public:
     */
     BINLOG_STMT_UNSAFE_AUTOINC_NOT_FIRST,
 
+    /**
+       Using a plugin is unsafe.
+    */
+    BINLOG_STMT_UNSAFE_FULLTEXT_PLUGIN,
+
+    /**
+      XA transactions and statements.
+    */
+    BINLOG_STMT_UNSAFE_XA,
+
     /* The last element of this enumeration type. */
     BINLOG_STMT_UNSAFE_COUNT
   };
@@ -1428,7 +2157,7 @@ public:
   */
   inline void set_stmt_unsafe(enum_binlog_stmt_unsafe unsafe_type) {
     DBUG_ENTER("set_stmt_unsafe");
-    DBUG_ASSERT(unsafe_type >= 0 && unsafe_type < BINLOG_STMT_UNSAFE_COUNT);
+    assert(unsafe_type >= 0 && unsafe_type < BINLOG_STMT_UNSAFE_COUNT);
     binlog_stmt_flags|= (1U << unsafe_type);
     DBUG_VOID_RETURN;
   }
@@ -1443,7 +2172,7 @@ public:
   */
   inline void set_stmt_unsafe_flags(uint32 flags) {
     DBUG_ENTER("set_stmt_unsafe_flags");
-    DBUG_ASSERT((flags & ~BINLOG_STMT_UNSAFE_ALL_FLAGS) == 0);
+    assert((flags & ~BINLOG_STMT_UNSAFE_ALL_FLAGS) == 0);
     binlog_stmt_flags|= flags;
     DBUG_VOID_RETURN;
   }
@@ -1538,7 +2267,7 @@ public:
     STMT_ACCESS_TABLE_COUNT
   };
 
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   static inline const char *stmt_accessed_table_string(enum_stmt_accessed_table accessed_table)
   {
     switch (accessed_table)
@@ -1569,7 +2298,7 @@ public:
       break;
       case STMT_ACCESS_TABLE_COUNT:
       default:
-        DBUG_ASSERT(0);
+        assert(0);
       break;
     }
     MY_ASSERT_UNREACHABLE();
@@ -1604,7 +2333,7 @@ public:
   {
     DBUG_ENTER("LEX::set_stmt_accessed_table");
 
-    DBUG_ASSERT(accessed_table >= 0 && accessed_table < STMT_ACCESS_TABLE_COUNT);
+    assert(accessed_table >= 0 && accessed_table < STMT_ACCESS_TABLE_COUNT);
     stmt_accessed_table_flag |= (1U << accessed_table);
 
     DBUG_VOID_RETURN;
@@ -1625,7 +2354,7 @@ public:
   {
     DBUG_ENTER("LEX::stmt_accessed_table");
 
-    DBUG_ASSERT(accessed_table >= 0 && accessed_table < STMT_ACCESS_TABLE_COUNT);
+    assert(accessed_table >= 0 && accessed_table < STMT_ACCESS_TABLE_COUNT);
 
     DBUG_RETURN((stmt_accessed_table_flag & (1U << accessed_table)) != 0);
   }
@@ -1661,7 +2390,7 @@ public:
 
       unsafe= (binlog_unsafe_map[stmt_accessed_table_flag] & condition);
 
-#if !defined(DBUG_OFF)
+#if !defined(NDEBUG)
       DBUG_PRINT("LEX::is_mixed_stmt_unsafe", ("RESULT %02X %02X %02X\n", condition,
               binlog_unsafe_map[stmt_accessed_table_flag],
               (binlog_unsafe_map[stmt_accessed_table_flag] & condition)));
@@ -1695,6 +2424,8 @@ public:
   bool uses_stored_routines() const
   { return sroutines_list.elements != 0; }
 
+  void set_using_match() { using_match= TRUE; }
+  bool get_using_match() { return using_match; }
 private:
 
   /**
@@ -1735,6 +2466,11 @@ private:
     be accessed while executing a statement.
   */
   uint32 stmt_accessed_table_flag;
+
+  /**
+     It will be set TRUE if 'MATCH () AGAINST' is used in the statement.
+  */
+  bool using_match;
 };
 
 
@@ -1748,7 +2484,6 @@ struct st_parsing_options
   bool allows_variable;
   bool allows_select_into;
   bool allows_select_procedure;
-  bool allows_derived;
 
   st_parsing_options() { reset(); }
   void reset();
@@ -1764,13 +2499,17 @@ enum enum_comment_state
     Not parsing comments.
   */
   NO_COMMENT,
+
   /**
     Parsing comments that need to be preserved.
+    (Copy '/' '*' and '*' '/' sequences to the preprocessed buffer.)
     Typically, these are user comments '/' '*' ... '*' '/'.
   */
   PRESERVE_COMMENT,
+
   /**
     Parsing comments that need to be discarded.
+    (Don't copy '/' '*' '!' and '*' '/' sequences to the preprocessed buffer.)
     Typically, these are special comments '/' '*' '!' ... '*' '/',
     or '/' '*' '!' 'M' 'M' 'm' 'm' 'm' ... '*' '/', where the comment
     markers should not be expanded.
@@ -1780,29 +2519,23 @@ enum enum_comment_state
 
 
 /**
-  @brief This class represents the character input stream consumed during
-  lexical analysis.
+  This class represents the character input stream consumed during lexical
+  analysis.
 
-  In addition to consuming the input stream, this class performs some
-  comment pre processing, by filtering out out of bound special text
-  from the query input stream.
-  Two buffers, with pointers inside each buffers, are maintained in
-  parallel. The 'raw' buffer is the original query text, which may
-  contain out-of-bound comments. The 'cpp' (for comments pre processor)
-  is the pre-processed buffer that contains only the query text that
-  should be seen once out-of-bound data is removed.
+  In addition to consuming the input stream, this class performs some comment
+  pre processing, by filtering out out-of-bound special text from the query
+  input stream.
+
+  Two buffers, with pointers inside each, are maintained in parallel. The
+  'raw' buffer is the original query text, which may contain out-of-bound
+  comments. The 'cpp' (for comments pre processor) is the pre-processed buffer
+  that contains only the query text that should be seen once out-of-bound data
+  is removed.
 */
 
 class Lex_input_stream
 {
 public:
-  Lex_input_stream()
-  {
-  }
-
-  ~Lex_input_stream()
-  {
-  }
 
   /**
      Object initializer. Must be called before usage.
@@ -1810,9 +2543,9 @@ public:
      @retval FALSE OK
      @retval TRUE  Error
   */
-  bool init(THD *thd, char *buff, unsigned int length);
+  bool init(THD *thd, const char *buff, size_t length);
 
-  void reset(char *buff, unsigned int length);
+  void reset(const char *buff, size_t length);
 
   /**
     Set the echo mode.
@@ -1844,6 +2577,7 @@ public:
   */
   void skip_binary(int n)
   {
+    assert(m_ptr + n <= m_end_of_query);
     if (m_echo)
     {
       memcpy(m_cpp_ptr, m_ptr, n);
@@ -1858,6 +2592,7 @@ public:
   */
   unsigned char yyGet()
   {
+    assert(m_ptr <= m_end_of_query);
     char c= *m_ptr++;
     if (m_echo)
       *m_cpp_ptr++ = c;
@@ -1878,6 +2613,7 @@ public:
   */
   unsigned char yyPeek()
   {
+    assert(m_ptr <= m_end_of_query);
     return m_ptr[0];
   }
 
@@ -1887,6 +2623,7 @@ public:
   */
   unsigned char yyPeekn(int n)
   {
+    assert(m_ptr + n <= m_end_of_query);
     return m_ptr[n];
   }
 
@@ -1907,6 +2644,7 @@ public:
   */
   void yySkip()
   {
+    assert(m_ptr <= m_end_of_query);
     if (m_echo)
       *m_cpp_ptr++ = *m_ptr++;
     else
@@ -1919,6 +2657,7 @@ public:
   */
   void yySkipn(int n)
   {
+    assert(m_ptr + n <= m_end_of_query);
     if (m_echo)
     {
       memcpy(m_cpp_ptr, m_ptr, n);
@@ -1994,11 +2733,9 @@ public:
   /** Mark the stream position as the start of a new token. */
   void start_token()
   {
-    m_tok_start_prev= m_tok_start;
     m_tok_start= m_ptr;
     m_tok_end= m_ptr;
 
-    m_cpp_tok_start_prev= m_cpp_tok_start;
     m_cpp_tok_start= m_cpp_ptr;
     m_cpp_tok_end= m_cpp_ptr;
   }
@@ -2037,12 +2774,6 @@ public:
     return m_cpp_tok_end;
   }
 
-  /** Get the previous token start position, in the raw buffer. */
-  const char *get_tok_start_prev()
-  {
-    return m_tok_start_prev;
-  }
-
   /** Get the current stream pointer, in the raw buffer. */
   const char *get_ptr()
   {
@@ -2062,7 +2793,7 @@ public:
       The assumption is that the lexical analyser is always 1 character ahead,
       which the -1 account for.
     */
-    DBUG_ASSERT(m_ptr > m_tok_start);
+    assert(m_ptr > m_tok_start);
     return (uint) ((m_ptr - m_tok_start) - 1);
   }
    
@@ -2085,6 +2816,8 @@ public:
                                 const LEX_STRING *txt,
                                 const CHARSET_INFO *txt_cs,
                                 const char *end_ptr);
+
+  uint get_lineno(const char *raw_ptr);
 
   /** Current thread. */
   THD *m_thd;
@@ -2109,9 +2842,30 @@ public:
   /** LALR(2) resolution, value of the look ahead token.*/
   LEX_YYSTYPE lookahead_yylval;
 
+  /// Skip adding of the current token's digest since it is already added
+  ///
+  /// Usually we calculate a digest token by token at the top-level function
+  /// of the lexer: MYSQLlex(). However, some complex ("hintable") tokens break
+  /// that data flow: for example, the `SELECT /*+ HINT(t) */` is the single
+  /// token from the main parser's point of view, and we add the "SELECT"
+  /// keyword to the digest buffer right after the lex_one_token() call,
+  /// but the "/*+ HINT(t) */" is a sequence of separate tokens from the hint
+  /// parser's point of view, and we add those tokens to the digest buffer
+  /// *inside* the lex_one_token() call. Thus, the usual data flow adds
+  /// tokens from the "/*+ HINT(t) */" string first, and only than it appends
+  /// the "SELECT" keyword token to that stream: "/*+ HINT(t) */ SELECT".
+  /// This is not acceptable, since we use the digest buffer to restore
+  /// query strings in their normalized forms, so the order of added tokens is
+  /// important. Thus, we add tokens of "hintable" keywords to a digest buffer
+  /// right in the hint parser and skip adding of them at the caller with the
+  /// help of skip_digest flag.
+  bool skip_digest;
+
   void add_digest_token(uint token, LEX_YYSTYPE yylval);
 
   void reduce_digest_token(uint token_left, uint token_right);
+
+  const CHARSET_INFO *query_charset;
 
 private:
   /** Pointer to the current position in the raw input stream. */
@@ -2126,14 +2880,11 @@ private:
   /** End of the query text in the input stream, in the raw buffer. */
   const char *m_end_of_query;
 
-  /** Starting position of the previous token parsed, in the raw buffer. */
-  const char *m_tok_start_prev;
-
   /** Begining of the query text in the input stream, in the raw buffer. */
   const char *m_buf;
 
   /** Length of the raw buffer. */
-  uint m_buf_length;
+  size_t m_buf_length;
 
   /** Echo the parsed stream to the pre-processed buffer. */
   bool m_echo;
@@ -2150,12 +2901,6 @@ private:
     in the pre-processed buffer.
   */
   const char *m_cpp_tok_start;
-
-  /**
-    Starting position of the previous token parsed,
-    in the pre-procedded buffer.
-  */
-  const char *m_cpp_tok_start_prev;
 
   /**
     Ending position of the previous token parsed,
@@ -2233,22 +2978,17 @@ public:
     Current statement digest instrumentation. 
   */
   sql_digest_state* m_digest;
+
+  bool text_string_is_7bit() const { return !(tok_bitmap & 0x80); }
 };
 
 
-/**
-  Argument values for PROCEDURE ANALYSE(...)
-*/
-
-struct Proc_analyse_params: public Sql_alloc
+class LEX_COLUMN : public Sql_alloc
 {
-  uint max_tree_elements; //< maximum number of distinct values per column
-  uint max_treemem; //< maximum amount of memory to allocate per column
-
-  Proc_analyse_params()
-    : max_tree_elements(256),
-      max_treemem(8192)
-  {}
+public:
+  String column;
+  uint rights;
+  LEX_COLUMN (const String& x,const  uint& y ): column (x),rights (y) {}
 };
 
 
@@ -2256,13 +2996,28 @@ struct Proc_analyse_params: public Sql_alloc
 
 struct LEX: public Query_tables_list
 {
-  SELECT_LEX_UNIT unit;                         /* most upper unit */
-  SELECT_LEX select_lex;                        /* first SELECT_LEX */
-  /* current SELECT_LEX in parsing */
-  SELECT_LEX *current_select;
-  /* list of all SELECT_LEX */
-  SELECT_LEX *all_selects_list;
+  friend bool lex_start(THD *thd);
 
+  SELECT_LEX_UNIT *unit;                 ///< Outer-most query expression
+  /// @todo: select_lex can be replaced with unit->first-select()
+  SELECT_LEX *select_lex;                ///< First query block
+  SELECT_LEX *all_selects_list;          ///< List of all query blocks
+private:
+  /* current SELECT_LEX in parsing */
+  SELECT_LEX *m_current_select;
+
+public:
+  inline SELECT_LEX *current_select() { return m_current_select; }
+  inline void set_current_select(SELECT_LEX *select)
+  {
+    // (2) Only owning thread could change m_current_select
+    // (1) bypass for bootstrap and "new THD"
+    assert(!current_thd || !thd || //(1)
+           thd == current_thd);    //(2)
+    m_current_select= select;
+  }
+  /// @return true if this is an EXPLAIN statement
+  bool is_explain() const { return (describe & DESCRIBE_NORMAL); }
   char *length,*dec,*change;
   LEX_STRING name;
   char *help_arg;
@@ -2270,21 +3025,28 @@ struct LEX: public Query_tables_list
   char* x509_subject,*x509_issuer,*ssl_cipher;
   String *wild;
   sql_exchange *exchange;
-  select_result *result;
+  Query_result *result;
   Item *default_value, *on_update_value;
   LEX_STRING comment, ident;
   LEX_USER *grant_user;
-  XID *xid;
+  LEX_ALTER alter_password;
   THD *thd;
+  Generated_column *gcol_info;
+
+  /* Optimizer hints */
+  Opt_hints_global *opt_hints_global;
 
   /* maintain a list of used plugins for this LEX */
-  DYNAMIC_ARRAY plugins;
-  plugin_ref plugins_static_buffer[INITIAL_LEX_PLUGIN_LIST_SIZE];
+  typedef Prealloced_array<plugin_ref,
+    INITIAL_LEX_PLUGIN_LIST_SIZE, true> Plugins_array;
+  Plugins_array plugins;
 
   const CHARSET_INFO *charset;
-  bool text_string_is_7bit;
-  /* store original leaf_tables for INSERT SELECT and PS/SP */
-  TABLE_LIST *leaf_tables_insert;
+
+  /// Table being inserted into (may be a view)
+  TABLE_LIST *insert_table;
+  /// Leaf table being inserted into (always a base table)
+  TABLE_LIST *insert_table_leaf;
 
   /** SELECT of CREATE VIEW statement */
   LEX_STRING create_view_select;
@@ -2293,6 +3055,11 @@ struct LEX: public Query_tables_list
   const char* raw_trg_on_table_name_begin;
   /** End of 'ON table', in trigger statements. */
   const char* raw_trg_on_table_name_end;
+
+  /** Start of clause FOLLOWS/PRECEDES. */
+  const char* trg_ordering_clause_begin;
+  /** End (a char after the end) of clause FOLLOWS/PRECEDES. */
+  const char* trg_ordering_clause_end;
 
   /* Partition info structure filled in by PARTITION BY parse part */
   partition_info *part_info;
@@ -2305,22 +3072,81 @@ struct LEX: public Query_tables_list
 
   List<Key_part_spec> col_list;
   List<Key_part_spec> ref_list;
+  List<String>	      interval_list;
+  List<LEX_USER>      users_list;
+  List<LEX_COLUMN>    columns;
+
+  ulonglong           bulk_insert_row_cnt;
+
+  // LOAD statement-specific fields:
+
+  List<Item>          load_field_list;
+  List<Item>          load_update_list;
+  List<Item>          load_value_list;
   /*
     A list of strings is maintained to store the SET clause command user strings
     which are specified in load data operation.  This list will be used
     during the reconstruction of "load data" statement at the time of writing
     to binary log.
-   */
+  */
   List<String>        load_set_str_list;
-  List<String>	      interval_list;
-  List<LEX_USER>      users_list;
-  List<LEX_COLUMN>    columns;
-  List<Item>	      *insert_list,field_list,value_list,update_list;
-  List<List_item>     many_values;
+
+  // PURGE statement-specific fields:
+  List<Item>          purge_value_list;
+
+  // KILL statement-specific fields:
+  List<Item>          kill_value_list;
+
+  // CALL statement-specific fields:
+  List<Item>          call_value_list;
+
+  // HANDLER statement-specific fields:
+  List<Item>          *handler_insert_list;
+
+  // other stuff:
   List<set_var_base>  var_list;
   List<Item_func_set_user_var> set_var_list; // in-query assignment list
   List<Item_param>    param_list;
   List<LEX_STRING>    view_list; // view list (list of field names in view)
+
+  void insert_values_map(Field *f1, Field *f2)
+  {
+    if (!insert_update_values_map)
+      insert_update_values_map= new std::map<Field*, Field*>;
+    insert_update_values_map->insert(std::make_pair(f1, f2));
+  }
+  void clear_values_map()
+  {
+    if (insert_update_values_map)
+    {
+      insert_update_values_map->clear();
+      delete insert_update_values_map;
+      insert_update_values_map= NULL;
+    }
+  }
+  bool has_values_map() const
+  {
+    return insert_update_values_map != NULL;
+  }
+  std::map<Field *, Field *>::iterator begin_values_map()
+  {
+    return insert_update_values_map->begin();
+  }
+  std::map<Field *, Field *>::iterator end_values_map()
+  {
+    return insert_update_values_map->end();
+  }
+
+private:
+  /*
+    With Visual Studio, an std::map will always allocate two small objects
+    on the heap. Sometimes we put LEX objects in a MEM_ROOT, and never run
+    the LEX DTOR. To avoid memory leaks, put this std::map on the heap,
+    and call clear_values_map() at the end of each statement
+   */
+  std::map<Field *,Field *> *insert_update_values_map;
+public:
+
   /*
     A stack of name resolution contexts for the query. This stack is used
     at parse time to set local name resolution contexts for various parts
@@ -2349,17 +3175,10 @@ struct LEX: public Query_tables_list
   KEY_CREATE_INFO key_create_info;
   LEX_MASTER_INFO mi;				// used by CHANGE MASTER
   LEX_SLAVE_CONNECTION slave_connection;
-  LEX_SERVER_OPTIONS server_options;
+  Server_options server_options;
   USER_RESOURCES mqh;
   LEX_RESET_SLAVE reset_slave_info;
   ulong type;
-  /**
-    for LOCK TABLE ... WAIT[n]/NO_WAIT and select ... for update
-    WAIT[n]/NO_WAIT. It's default values is ULONG_MAX; if set
-    NO_WAIT wait_time is 0, if set WAIT n, 0<=n<=LONG_TIMEOUT;
-  */
-  ulong wait_time;
-
   /*
     This variable is used in post-parse stage to declare that sum-functions,
     or functions which have sense only if GROUP BY is present, are allowed.
@@ -2380,24 +3199,32 @@ struct LEX: public Query_tables_list
     syntax error back.
   */
   bool expr_allows_subselect;
+  /*
+    A special command "PARSE_VCOL_EXPR" is defined for the parser
+    to translate an expression statement of a generated column
+    (stored in the *.frm file as a string) into an Item object.
+    The following flag is used to prevent other applications to use
+    this command.
+  */
+  bool parse_gcol_expr;
 
   enum SSL_type ssl_type;			/* defined in violite.h */
   enum enum_duplicates duplicates;
   enum enum_tx_isolation tx_isolation;
-  enum xa_option_words xa_opt;
   enum enum_var_type option_type;
   enum enum_view_create_mode create_view_mode;
   enum enum_drop_mode drop_mode;
 
-  uint profile_query_id;
+  /// QUERY ID for SHOW PROFILE and EXPLAIN CONNECTION
+  my_thread_id query_id;
   uint profile_options;
   uint uint_geom_type;
   uint grant, grant_tot_col, which_columns;
-  enum Foreign_key::fk_match_opt fk_match_option;
-  enum Foreign_key::fk_option fk_update_opt;
-  enum Foreign_key::fk_option fk_delete_opt;
+  enum fk_match_opt fk_match_option;
+  enum fk_option fk_update_opt;
+  enum fk_option fk_delete_opt;
   uint slave_thd_opt, start_transaction_opt;
-  int nest_level;
+  int select_number;                     ///< Number of query block (by EXPLAIN)
   uint8 describe;
   /*
     A flag that indicates what kinds of derived tables are present in the
@@ -2408,13 +3235,18 @@ struct LEX: public Query_tables_list
   uint8 create_view_algorithm;
   uint8 create_view_check;
   uint8 context_analysis_only;
-  bool drop_if_exists, drop_temporary, local_file, one_shot_set;
+  bool drop_if_exists, drop_temporary, local_file;
   bool autocommit;
   bool verbose, no_write_to_binlog;
 
   enum enum_yes_no_unknown tx_chain, tx_release;
   bool safe_to_cache_query;
-  bool subqueries, ignore;
+  bool subqueries;
+private:
+  bool ignore;
+public:
+  bool is_ignore() const { return ignore; }
+  void set_ignore(bool ignore_param) { ignore= ignore_param; }
   st_parsing_options parsing_options;
   Alter_info alter_info;
   /*
@@ -2424,7 +3256,7 @@ struct LEX: public Query_tables_list
   */
   TABLE_LIST *create_last_non_select_table;
   /* Prepared statements SQL syntax:*/
-  LEX_STRING prepared_stmt_name; /* Statement name (in all queries) */
+  LEX_CSTRING prepared_stmt_name; /* Statement name (in all queries) */
   /*
     Prepared statement query text or name of variable that holds the
     prepared statement (in PREPARE ... queries)
@@ -2439,7 +3271,6 @@ struct LEX: public Query_tables_list
   bool sp_lex_in_use;	/* Keep track on lex usage in SPs for error handling */
   bool all_privileges;
   bool proxy_priv;
-  bool is_change_password;
   /*
     Temporary variable to distinguish SET PASSWORD command from others
     SQLCOM_SET_OPTION commands. Should be removed when WL#6409 is
@@ -2447,19 +3278,8 @@ struct LEX: public Query_tables_list
   */
   bool is_set_password_sql;
   bool contains_plaintext_password;
+  enum_keep_diagnostics keep_diagnostics;
 
-  /* Force to drop table from engine even frm file doesn't exist. */
-  bool force_drop_table;
-  /* Offset of the keyword 'FORCE' in query string.*/
-  int  skip_force_pos;
-
-  bool ci_on_success; /* has hint commit_on_success */
-  bool rb_on_fail; /* has hint rollback_on_fail */
-  ulonglong ic_reduce_id; /* queue_on_pk's id */
-  ulonglong target_affect_row; /* arg of target_affect_row */
-  char *add_executed_gtid_set_string; /* arg of add_executed_gtid_set()  */
-  Sequence_create_info *seq_create_info;
-  bool native_create_sequence;
 private:
   bool m_broken; ///< see mark_broken()
   /// Current SP parsing context.
@@ -2512,21 +3332,15 @@ public:
   Event_parse_data *event_parse_data;
 
   bool only_view;       /* used for SHOW CREATE TABLE/VIEW */
-
-  bool only_sequence;   /* used for SHOW CREATE SEQUENCE */
-  /*
-    field_list was created for view and should be removed before PS/SP
-    rexecuton
-  */
-  bool empty_field_list_on_rset;
   /*
     view created to be run from definer (standard behaviour)
   */
   uint8 create_view_suid;
 
-  /*
-    stmt_definition_begin is intended to point to the next word after
-    DEFINER-clause in the following statements:
+  /**
+    Intended to point to the next word after DEFINER-clause in the
+    following statements:
+
       - CREATE TRIGGER (points to "TRIGGER");
       - CREATE PROCEDURE (points to "PROCEDURE");
       - CREATE FUNCTION (points to "FUNCTION" or "AGGREGATE");
@@ -2534,20 +3348,9 @@ public:
 
     This pointer is required to add possibly omitted DEFINER-clause to the
     DDL-statement before dumping it to the binlog.
-
-    keyword_delayed_begin_offset is the offset to the beginning of the DELAYED
-    keyword in INSERT DELAYED statement. keyword_delayed_end_offset is the
-    offset to the character right after the DELAYED keyword.
   */
-  union {
-    const char *stmt_definition_begin;
-    uint keyword_delayed_begin_offset;
-  };
-
-  union {
-    const char *stmt_definition_end;
-    uint keyword_delayed_end_offset;
-  };
+  const char *stmt_definition_begin;
+  const char *stmt_definition_end;
 
   /**
     During name resolution search only in the table list given by 
@@ -2563,8 +3366,9 @@ public:
   */
   st_alter_tablespace *alter_tablespace_info;
   
-  bool escape_used;
   bool is_lex_started; /* If lex_start() did run. For debugging. */
+  /// Set to true while resolving values in ON DUPLICATE KEY UPDATE clause
+  bool in_update_value_clause;
 
   /*
     The set of those tables whose fields are referenced in all subqueries
@@ -2578,18 +3382,34 @@ public:
 
   class Explain_format *explain_format;
 
-  bool return_update;
-  List<Item> return_update_list;
-  uint32 real_query_start;
-
+  // Maximum execution time for a statement.
+  ulong max_execution_time;
+  /*
+    To flag the current statement as dependent for binary logging
+    on explicit_defaults_for_timestamp
+  */
+  bool binlog_need_explicit_defaults_ts;
   LEX();
 
-  virtual ~LEX()
-  {
-    destroy_query_tables_list();
-    plugin_unlock_list(NULL, (plugin_ref *)plugins.buffer, plugins.elements);
-    delete_dynamic(&plugins);
-  }
+  virtual ~LEX();
+
+  /// Reset query context to initial state
+  void reset();
+
+  /// Create an empty query block within this LEX object.
+  st_select_lex *new_empty_query_block();
+
+  /// Create query expression object that contains one query block.
+  st_select_lex *new_query(st_select_lex *curr_select);
+
+  /// Create query block and attach it to the current query expression.
+  st_select_lex *new_union_query(st_select_lex *curr_select, bool distinct);
+
+  /// Create top-level query expression and query block.
+  bool new_top_level_query();
+
+  /// Create query expression and query block in existing memory objects.
+  void new_static_query(SELECT_LEX_UNIT *sel_unit, SELECT_LEX *select);
 
   inline bool is_ps_or_view_context_analysis()
   {
@@ -2598,19 +3418,26 @@ public:
              CONTEXT_ANALYSIS_ONLY_VIEW));
   }
 
-  inline void uncacheable(uint8 cause)
-  {
-    safe_to_cache_query= 0;
+  /**
+    Set the current query as uncacheable.
 
-    /*
-      There are no sense to mark select_lex and union fields of LEX,
-      but we should merk all subselects as uncacheable from current till
-      most upper
-    */
+    @param cause why this query is uncacheable.
+
+    @details
+    All query blocks representing subqueries, from the current one up to
+    the outer-most one, but excluding the main query block, are also set
+    as uncacheable.
+  */
+  void set_uncacheable(SELECT_LEX *curr_select, uint8 cause)
+  {
+    safe_to_cache_query= false;
+
+    if (m_current_select == NULL)
+      return;
     SELECT_LEX *sl;
     SELECT_LEX_UNIT *un;
-    for (sl= current_select, un= sl->master_unit();
-	 un != &unit;
+    for (sl= curr_select, un= sl->master_unit();
+	 un != unit;
 	 sl= sl->outer_select(), un= sl->master_unit())
     {
       sl->uncacheable|= cause;
@@ -2623,12 +3450,10 @@ public:
   void link_first_table_back(TABLE_LIST *first, bool link_to_local);
   void first_lists_tables_same();
 
-  bool can_be_merged();
   bool can_use_merged();
   bool can_not_use_merged();
   bool only_view_structure();
   bool need_correct_ident();
-  uint8 get_effective_with_check(TABLE_LIST *view);
   /*
     Is this update command where 'WHITH CHECK OPTION' clause is important
 
@@ -2698,43 +3523,46 @@ public:
       on its top. So select_lex (as the first added) will be at the tail 
       of the list.
     */ 
-    if (&select_lex == all_selects_list && !sroutines.records)
+    if (select_lex == all_selects_list && !sroutines.records)
     {
-      DBUG_ASSERT(!all_selects_list->next_select_in_list());
+      assert(!all_selects_list->next_select_in_list());
       return TRUE;
     }
     return FALSE;
   }
-};
 
+  void check_table_engine_type(bool &exist_duckdb_table,
+                               bool &exist_other_table)
+  {
+    for (TABLE_LIST *tl = query_tables; tl != NULL;
+         tl = tl->next_global) {
+      // TODO : view process
+      if (myduck::is_duckdb_table(tl->table)) {
+        exist_duckdb_table = true;
+      } else if (!tl->is_derived()) {
+        exist_other_table = true;
+      }
+    }
+  }
 
-/**
-  Set_signal_information is a container used in the parsed tree to represent
-  the collection of assignments to condition items in the SIGNAL and RESIGNAL
-  statements.
-*/
-class Set_signal_information
-{
-public:
-  /** Empty default constructor, use clear() */
- Set_signal_information() {} 
+  /** Check table engine type in SELECT clause only. */
+  inline void check_table_engine_type_in_select(bool &exist_duckdb_table,
+                                                bool &exist_other_table) {
+    /* Reference JOIN::prepare_result. */
+    for (TABLE_LIST *tl= select_lex->leaf_tables; tl; tl= tl->next_leaf)
+    {
+      if (myduck::is_duckdb_table(tl->table)) {
+          exist_duckdb_table = true;
+        } else if (!tl->is_derived()) {
+          exist_other_table = true;
+        }
+    }
+  }
 
-  /** Copy constructor. */
-  Set_signal_information(const Set_signal_information& set);
+  void release_plugins();
 
-  /** Destructor. */
-  ~Set_signal_information()
-  {}
+  bool accept(Select_lex_visitor *visitor);
 
-  /** Clear all items. */
-  void clear();
-
-  /**
-    For each condition item assignment, m_item[] contains the parsed tree
-    that represents the expression assigned, if any.
-    m_item[] is an array indexed by Diag_condition_item_name.
-  */
-  Item *m_item[LAST_DIAG_SET_PROPERTY+1];
 };
 
 
@@ -2746,16 +3574,22 @@ public:
 class Yacc_state
 {
 public:
-  Yacc_state()
-  {
-    reset();
-  }
+  Yacc_state() : yacc_yyss(NULL), yacc_yyvs(NULL), yacc_yyls(NULL) { reset(); }
 
   void reset()
   {
-    yacc_yyss= NULL;
-    yacc_yyvs= NULL;
-    m_set_signal_info.clear();
+    if (yacc_yyss != NULL) {
+      my_free(yacc_yyss);
+      yacc_yyss = NULL;
+    }
+    if (yacc_yyvs != NULL) {
+      my_free(yacc_yyvs);
+      yacc_yyvs = NULL;
+    }
+    if (yacc_yyls != NULL) {
+      my_free(yacc_yyls);
+      yacc_yyls = NULL;
+    }
     m_lock_type= TL_READ_DEFAULT;
     m_mdl_type= MDL_SHARED_READ;
     m_ha_rkey_mode= HA_READ_KEY_EXACT;
@@ -2787,10 +3621,10 @@ public:
   uchar *yacc_yyvs;
 
   /**
-    Fragments of parsed tree,
-    used during the parsing of SIGNAL and RESIGNAL.
+    Bison internal location value stack, yyls, when dynamically allocated using
+    my_yyoverflow().
   */
-  Set_signal_information m_set_signal_info;
+  uchar *yacc_yyls;
 
   /**
     Type of lock to be used for tables being added to the statement's
@@ -2830,24 +3664,40 @@ public:
 */
 struct Parser_input
 {
+  /**
+    True if the text parsed corresponds to an actual query,
+    and not another text artifact.
+    This flag is used to disable digest parsing of nested:
+    - view definitions
+    - table trigger definitions
+    - table partition definitions
+    - event scheduler event definitions
+  */
+  bool m_has_digest;
+  /**
+    True if the caller needs to compute a digest.
+    This flag is used to request explicitly a digest computation,
+    independently of the performance schema configuration.
+  */
   bool m_compute_digest;
 
   Parser_input()
-    : m_compute_digest(false)
+    : m_has_digest(false), m_compute_digest(false)
   {}
 };
 
 /**
   Internal state of the parser.
   The complete state consist of:
+  - input parameters that control the parser behavior
   - state data used during lexical parsing,
   - state data used during syntactic parsing.
 */
 class Parser_state
 {
 public:
-  Parser_state()
-    : m_yacc()
+  Parser_state() :
+    m_input(), m_lip(), m_yacc(), m_comment(false)
   {}
 
   /**
@@ -2856,28 +3706,39 @@ public:
      @retval FALSE OK
      @retval TRUE  Error
   */
-  bool init(THD *thd, char *buff, unsigned int length)
+  bool init(THD *thd, const char *buff, size_t length)
   {
     return m_lip.init(thd, buff, length);
   }
 
-  ~Parser_state()
-  {}
+  void reset(const char *found_semicolon, size_t length)
+  {
+    m_lip.reset(found_semicolon, length);
+    m_yacc.reset();
+  }
 
+  /// Signal that the current query has a comment
+  void add_comment()
+  {
+     m_comment= true;
+  }
+  /// Check whether the current query has a comment
+  bool has_comment() const
+  {
+    return m_comment;
+  }
+
+public:
   Parser_input m_input;
   Lex_input_stream m_lip;
   Yacc_state m_yacc;
-
   /**
     Current performance digest instrumentation. 
   */
   PSI_digest_locker* m_digest_psi;
 
-  void reset(char *found_semicolon, unsigned int length)
-  {
-    m_lip.reset(found_semicolon, length);
-    m_yacc.reset();
-  }
+private:
+  bool m_comment;                ///< True if current query contains comments
 };
 
 extern sql_digest_state *
@@ -2894,7 +3755,7 @@ struct st_lex_local: public LEX
   }
   static void *operator new(size_t size, MEM_ROOT *mem_root) throw()
   {
-    return (void*) alloc_root(mem_root, (uint) size);
+    return alloc_root(mem_root, size);
   }
   static void operator delete(void *ptr,size_t size)
   { TRASH(ptr, size); }
@@ -2902,11 +3763,13 @@ struct st_lex_local: public LEX
   { /* Never called */ }
 };
 
-extern void lex_init(void);
+
+extern bool lex_init(void);
 extern void lex_free(void);
-extern void lex_start(THD *thd);
+extern bool lex_start(THD *thd);
 extern void lex_end(LEX *lex);
-extern int MYSQLlex(union YYSTYPE *yylval, class THD *thd);
+extern int MYSQLlex(union YYSTYPE *yylval, struct YYLTYPE *yylloc,
+                    class THD *thd);
 
 extern void trim_whitespace(const CHARSET_INFO *cs, LEX_STRING *str);
 
@@ -2917,7 +3780,7 @@ extern bool is_lex_native_function(const LEX_STRING *name);
 */
 
 void my_missing_function_error(const LEX_STRING &token, const char *name);
-bool is_keyword(const char *name, uint len);
+bool is_keyword(const char *name, size_t len);
 bool db_is_default_db(const char *db, size_t db_len, const THD *thd);
 
 #endif /* MYSQL_SERVER */

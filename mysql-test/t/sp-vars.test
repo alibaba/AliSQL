@@ -111,9 +111,6 @@ SELECT sp_vars_check_ret2();
 --error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
 SELECT sp_vars_check_ret3();
 
-# TODO: Is it an error, that only a warning is emitted here? Check the same
-# behaviour with tables.
-
 SELECT sp_vars_check_ret4();
 
 --error ER_DIVISION_BY_ZERO
@@ -174,6 +171,7 @@ BEGIN
   SET v1 = v4;
   SET v2 = 0;
   SET v5 = v4; # check overflow
+  SHOW WARNINGS;
   SET v6 = v3; # check padding
 
   SELECT HEX(v1);
@@ -788,9 +786,6 @@ DROP PROCEDURE p1;
 # Test case for BUG#8768: Functions: For any unsigned data type, -ve values can
 # be passed and returned.
 #
-# TODO: there is a bug here -- the function created in ANSI mode should not
-# throw errors instead of warnings if called in TRADITIONAL mode.
-#
 ###########################################################################
 
 --echo
@@ -826,7 +821,6 @@ SELECT f1(-2500);
 
 SET @@sql_mode = 'traditional';
 
-# TODO: a warning should be emitted here.
 --error ER_WARN_DATA_OUT_OF_RANGE
 SELECT f1(-2500);
 
@@ -856,9 +850,6 @@ DROP FUNCTION f1;
 #
 # Test case for BUG#8769: Functions: For Int datatypes, out of range values can
 # be passed and returned.
-#
-# TODO: there is a bug here -- the function created in ANSI mode should not
-# throw errors instead of warnings if called in TRADITIONAL mode.
 #
 ###########################################################################
 
@@ -895,7 +886,6 @@ SELECT f1(8388699);
 
 SET @@sql_mode = 'traditional';
 
-# TODO: a warning should be emitted here.
 --error ER_WARN_DATA_OUT_OF_RANGE
 SELECT f1(8388699);
 
@@ -957,6 +947,7 @@ BEGIN
   DECLARE sp_var INTEGER;
 
   SELECT col INTO sp_var FROM t1 LIMIT 1;
+  SHOW WARNINGS;
   SET @user_var = sp_var;
 
   SELECT sp_var;
@@ -1063,7 +1054,7 @@ END|
 CREATE PROCEDURE p2(arg ENUM('a', 'b'))
 BEGIN
   DECLARE var ENUM('c', 'd') DEFAULT arg;
-
+  SHOW WARNINGS;
   SELECT arg, var;
 END|
 
@@ -1487,3 +1478,28 @@ DELIMITER ;|
 
 CALL vctest();
 DROP PROCEDURE vctest;
+
+
+###########################################################################
+#
+# Test case for BUG#19770958 WRONG RESULTS WITH STORED PROGRAMS AND 
+# NULLABLE SYSTEM VARIABLES: Create a function which returns a system
+# variable which initially is NULL. Then update the variable and call function
+# again to see that it returns the updated value.
+#
+###########################################################################
+
+--echo
+--echo ---------------------------------------------------------------
+--echo BUG#19770958
+--echo ---------------------------------------------------------------
+--echo
+
+CREATE TABLE t (a INT PRIMARY KEY, b TEXT, FULLTEXT(b)) ENGINE=InnoDB; 
+CREATE FUNCTION f() RETURNS TEXT RETURN @@GLOBAL.innodb_ft_aux_table;
+SELECT @@GLOBAL.innodb_ft_aux_table, f();
+SET GLOBAL innodb_ft_aux_table="test/t";
+SELECT @@GLOBAL.innodb_ft_aux_table, f();
+SET GLOBAL innodb_ft_aux_table= default;
+DROP FUNCTION f;
+DROP TABLE t;

@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -974,6 +981,7 @@
 #include "NdbError.hpp"
 #include "NdbDictionary.hpp"
 
+
 class NdbObjectIdMap;
 class NdbOperation;
 class NdbEventOperationImpl;
@@ -1074,6 +1082,8 @@ class Ndb
   friend class PollGuard;
   friend class NdbQueryImpl;
   friend class NdbQueryOperationImpl;
+  friend class MultiNdbWakeupHandler;
+  friend class NdbWaitGroup;
 #endif
 
 public:
@@ -1141,6 +1151,29 @@ public:
 #endif
 
   /**
+   * Get the name of the Ndb object.
+   * If no name is given, it will return 0.
+   **/
+  const char* getNdbObjectName () const;
+
+  /**
+   * Set a human readable name optionally to identify an
+   * Ndb object for debugging purpose. Setting should be done
+   * after creating the Ndb object, but before the object is
+   * initialised with init().
+   * 1) Setting the name more than once will fail and return 4014.
+   * 2) Setting the name after init will return give error 4015.
+   *
+   * It is recommended to use the reference (ndbObject->getReference())
+   * followed by the name (if given) in printouts
+   * of the user applications subscribing events.
+   * This will make tracing event handling between a subscribing user app
+   * and the ndb engine easier, since the reference correlates the app's
+   * ndb object, event buffer and the ndb engine (Suma block).
+   */
+  int setNdbObjectName(const char *name);
+
+  /**
    * The current database name can be fetched by getDatabaseName.
    *
    * @return the current database name
@@ -1191,6 +1224,46 @@ public:
    * @return 0 if successful, -1 otherwise.
    */
   int init(int maxNoOfTransactions = 4);
+
+  /**
+   * Set/get maximum memory size for event buffer
+   */
+  void set_eventbuf_max_alloc(unsigned sz);
+  unsigned get_eventbuf_max_alloc();
+
+  /**
+   * Set/get free_percent- the % of event buffer memory
+   * that should be available before resuming buffering,
+   * after the max_alloc limit is hit.
+   */
+  int set_eventbuffer_free_percent(unsigned sz);
+  unsigned get_eventbuffer_free_percent();
+
+  struct EventBufferMemoryUsage
+  {
+    EventBufferMemoryUsage() :
+      allocated_bytes(0),
+      used_bytes(0),
+      usage_percent(0)
+    {}
+
+    Uint32 allocated_bytes;
+    Uint32 used_bytes;
+    Uint32 usage_percent; // (used_bytes)*100/eventbuf_max_alloc
+  };
+  /**
+   * Get event buffer usauge as a percentage of eventbuf_max_alloc limit.
+   * In/out parameter : struct EventBufferMemoryUsage&, which contains
+   *  allocated_bytes : total event buffer memory allocated in bytes
+   *  used_bytes : total memory used in bytes
+   *  usage_percent : event buffer memory usage percent = (100*used/max_alloc).
+   * Usage_percent is allowed to go over 100% temporarily
+   * for some period of time or permanently if eventbuf_max_alloc
+   * and eventbuffer_free_percent are not configured
+   * according to the event data load. The latter causes frequent gaps
+   * and thus should be avoided.
+   */
+  void get_event_buffer_memory_usage(EventBufferMemoryUsage&);
 
 #ifndef DOXYGEN_SHOULD_SKIP_DEPRECATED
   /**
@@ -1252,21 +1325,120 @@ public:
    */
   int dropEventOperation(NdbEventOperation* eventOp);
 
+private:
+  // Help functions for pollEvents() and nextEvent()
+
+  // Inform event buffer overflow and exit
+  void printOverflowErrorAndExit();
+public:
+
   /**
-   * Wait for an event to occur. Will return as soon as an event
-   * is detected on any of the created events.
+   * Wait for an event to occur. Will return as soon as an event data
+   * is available on any of the created events. PollEvents() also moves
+   * the complete event data of an epoch to the event queue.
    *
    * @param aMillisecondNumber
    *        maximum time to wait
+   * aMillisecondNumber < 0 : returns -1
+   *
+   * @param OUT highestQueuedEpoch: if highestQueuedEpoch is non-null and
+   * there is some new event data available in the event queue,
+   * it will be set to the highest epoch among the available event data.
+   *
+   * @return > 0 if events available, 0 if no events available, < 0 on failure.
+   *
+   * @pollEvents2 will also return >0 when there is an event data
+   * representing empty or error epoch available on the head of the event queue.
+   */
+  int pollEvents2(int aMillisecondNumber, Uint64 *highestQueuedEpoch= 0);
+
+  /**
+   * Check if higher queued epochs have been seen by the last
+   * pollEvents2 call or if a TE_CLUSTER_FAILURE event has been
+   * detected. If a cluster failure has been detected then the
+   * highestQueuedEpoch returned from pollEvents2() might not
+   * increase anymore. The correct action is then not to poll
+   * for more events, but instead consume events with nextEvent()
+   * until a TE_CLUSTER_FAILURE is detected and then reconnect to
+   * the cluster when it is available again.
+   */
+  bool isExpectingHigherQueuedEpochs();
+
+#define NDB_FAILURE_GCI ~(Uint64)0
+
+  /**
+   * Wait for an event to occur. Will return as soon as an event
+   * is available on any of the created events.
+   *
+   * @param aMillisecondNumber
+   *        maximum time to wait
+   * aMillisecondNumber < 0 will cause a long wait
+   * @param latestGCI
+   *        if a valid pointer is passed to a 64-bit integer it will be set
+   *        to the latest polled GCI. If a cluster failure is detected it
+   *        will be set to NDB_FAILURE_GCI.
    *
    * @return > 0 if events available, 0 if no events available, < 0 on failure
+   *
+   * This is a backward compatibility wrapper to pollEvents2().
+   * Returns 1 if a regular data is found,
+   * returns 0 otherwise.
+   * However it does not maintain the old behaviour when it encounters
+   * exceptional event data on the head of the event queue:
+   * - returns 1 for event data representing inconsistent epoch.
+   *   In this case, the following nextEvent() call will return NULL.
+   *   The inconsistency (isConsistent(Uint64& gci)) should be checked
+   *   after the following (first) nextEvent() call returning NULL.
+   *   Even though the inconsistent event data is removed from the
+   *   event queue by this nextEvent() call, the information about
+   *   inconsistency will be removed only by the following (second)
+   *   nextEvent() call.
+   * - returns 1 for event data representing event buffer overflow epoch,
+   *   which is added to the event queue when event buffer usage
+   *   exceeds eventbuf_max_alloc.
+   *   In this case, following call to nextEvent() will exit the process.
+   * - removes empty epochs from the event queue head until a regular
+   *   event data is found or the whole queue is processed.
    */
   int pollEvents(int aMillisecondNumber, Uint64 *latestGCI= 0);
 
   /**
-   * Returns an event operation that has data after a pollEvents
+   * Returns the event operation associated with the dequeued
+   * event data from the event queue. This should be called after
+   * pollEvents() populates the queue, and then can be called repeatedly
+   * until the event queue becomes empty.
    *
-   * @return an event operations that has data, NULL if no events left with data.
+   * @return an event operation that has data or exceptional epoch data,
+   * or NULL if the queue is empty.
+   *
+   * nextEvent2() will return non-null event operation for event data
+   * representing exceptional (empty or error) epochs as well.
+   * NdbEventOperation::getEpoch2() should be called  after
+   * nextEvent2() to find the epoch, then
+   * NdbEventOperation::getEventType2() should be called to check the
+   * type of the returned event data
+   * and proper handling should be performed for the newly introduced
+   * exceptional event types:
+   * NdbDictionary::Event::TE_EMPTY, TE_INCONSISTENT and TE_OUT_OF_MEMORY.
+   * No other methods defined on NdbEventOperation than the above two
+   * should be called for exceptional epochs.
+   * Returning empty epoch (TE_EMPTY) is new and may overflood the
+   * application when ndb data nodes are idling. If this is not desirable,
+   * applications should do extra handling to filter out empty epochs.
+   */
+  NdbEventOperation *nextEvent2();
+
+  /**
+   * This is a backward compatibility wrapper to nextEvent2().
+   * Returns an event operation that has data after a pollEvents,
+   *  NULL if the queue is empty.
+   * It maintains the old behaviour :
+   * - returns NULL for inconsistent epochs. Therefore, it is important
+   *   to call isConsistent(Uint64& gci) to check for inconsistency,
+   *   after nextEvent() returns NULL.
+   * - will not have empty epochs in the event queue (i.e. remove them),
+   * - exits the process when it encounters an event data
+   *   representing an event buffer overflow.
    */
   NdbEventOperation *nextEvent();
 
@@ -1303,9 +1475,29 @@ public:
    * Set *iter=0 to start.  Returns NULL when no more.  If event_types
    * is not NULL, it returns bitmask of received event types.
    */
+
+  const NdbEventOperation*
+    getNextEventOpInEpoch2(Uint32* iter, Uint32* event_types);
+
+  /**
+   * Iterate over distinct event operations which are part of current
+   * GCI.  Valid after nextEvent.  Used to get summary information for
+   * the epoch (e.g. list of all tables) before processing event data.
+   *
+   * Set *iter=0 to start.  Returns NULL when no more.  If event_types
+   * is not NULL, it returns bitmask of received event types.
+   *
+   * This is a wrapper for getNextEventOpInEpoch2, but retains the
+   * old name in order to preserve backward compatibility.
+   */
   const NdbEventOperation*
     getGCIEventOperations(Uint32* iter, Uint32* event_types);
   
+  /** Get the highest epoch that have entered into the event queue.
+   * This value can be higher than the epoch returned by the last
+   * pollEvents() call, if new epochs have been received and queued later.
+   */
+  Uint64 getHighestQueuedEpoch();
 
 #ifndef DOXYGEN_SHOULD_SKIP_INTERNAL
   int flushIncompleteEvents(Uint64 gci);
@@ -1378,6 +1570,14 @@ public:
 
   struct PartitionSpec
   {
+    /*
+      Size of the PartitionSpec structure.
+    */
+    static inline Uint32 size()
+    {
+        return sizeof(PartitionSpec);
+    }
+
     enum SpecType
     {
       PS_NONE                = 0,
@@ -1476,6 +1676,16 @@ public:
    */
   NdbTransaction* startTransaction(const NdbDictionary::Table* table,
                                    Uint32 partitionId);
+  /**
+   * Start a transaction on a specified node id and instance id.
+   * Mostly intended for test cases, but can also be useful on
+   * heterogenous cluster installations.
+   * 
+   * As in all startTransaction variants the nodeId and instanceId is
+   * merely a hint and if the node is down another TC will be used
+   * instead.
+   */
+  NdbTransaction* startTransaction(Uint32 nodeId, Uint32 instanceId);
 
   /**
    * Compute distribution hash value given table/keys
@@ -1760,7 +1970,19 @@ public:
   /* Get/Set per-Ndb custom data pointer */
   void setCustomData(void*);
   void* getCustomData() const;
-  
+
+  /* Get/Set per-Ndb custom data pointer */
+  /* NOTE: shares storage with void*
+   * i.e can not be used together with setCustomData
+   */
+  void setCustomData64(Uint64);
+  Uint64 getCustomData64() const;
+
+  /**
+   * transid next startTransaction() on this ndb-object will get
+   */
+  Uint64 getNextTransactionId() const;
+
   /* Some client behaviour counters to assist
    * optimisation
    */
@@ -1801,7 +2023,12 @@ public:
     NonDataEventsRecvdCount  = 19, /* Number of non-data events received */
     EventBytesRecvdCount     = 20, /* Number of bytes of event data received */
     
-    NumClientStatistics      = 21   /* End marker */
+    /* Adaptive Send */
+    ForcedSendsCount         = 21, /* Number of sends with force-send set */
+    UnforcedSendsCount       = 22, /* Number of sends without force-send */
+    DeferredSendsCount       = 23, /* Number of adaptive send calls not actually sent */
+    
+    NumClientStatistics      = 24   /* End marker */
   };
   
   Uint64 getClientStat(Uint32 id) const;
@@ -1867,11 +2094,6 @@ private:
   Uint32                insert_completed_list(NdbTransaction*);
   Uint32                insert_sent_list(NdbTransaction*);
 
-  // Handle a received signal. Used by both
-  // synchronous and asynchronous interface
-  void handleReceivedSignal(const NdbApiSignal* anApiSignal,
-			    const struct LinearSectionPtr ptr[3]);
-  
   int			sendRecSignal(Uint16 aNodeId,
 				      Uint32 aWaitState,
 				      NdbApiSignal* aSignal,
@@ -1908,6 +2130,12 @@ private:
    *   Returns NULL if none found
    */
   NdbTransaction* getConnectedNdbTransaction(Uint32 nodeId, Uint32 instance);
+  /**
+   * Handle Connection Array lists
+   */
+  void appendConnectionArray(NdbTransaction *aCon, Uint32 nodeId);
+  void prependConnectionArray(NdbTransaction *aCon, Uint32 nodeId);
+  void removeConnectionArray(NdbTransaction *first, Uint32 nodeId);
 
   // Release and disconnect from DBTC a connection
   // and seize it to theConIdleList
@@ -1958,13 +2186,6 @@ private:
   static 
   const BaseString getSchemaFromInternalName(const char * internalName);
 
-  void*              int2void     (Uint32 val);
-  NdbReceiver*       void2rec     (void* val);
-  NdbTransaction*     void2con     (void* val);
-  NdbOperation*      void2rec_op  (void* val);
-  NdbIndexOperation* void2rec_iop (void* val);
-  NdbTransaction* lookupTransactionFromOperation(const class TcKeyConf *);
-
   Uint64 allocate_transaction_id();
 
 /******************************************************************************
@@ -1993,6 +2214,7 @@ private:
 
   NdbTransaction*	theTransactionList;
   NdbTransaction**      theConnectionArray;
+  NdbTransaction**      theConnectionArrayLast;
 
   Uint32   theMyRef;        // My block reference  
   Uint32   theNode;         // The node number of our node
@@ -2030,9 +2252,11 @@ private:
 #endif
 
 #ifdef VM_TRACE
-#include <my_attribute.h>
   void printState(const char* fmt, ...)
-    ATTRIBUTE_FORMAT(printf, 2, 3);
+#ifdef __GNUC__
+    __attribute__((format(printf, 2, 3)))
+#endif
+    ;
 #endif
 };
 

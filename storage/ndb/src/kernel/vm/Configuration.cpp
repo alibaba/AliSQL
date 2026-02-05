@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -17,6 +24,7 @@
 
 #include <ndb_global.h>
 
+#include <TransporterRegistry.hpp>
 #include "Configuration.hpp"
 #include <ErrorHandlingMacros.hpp>
 #include "GlobalData.hpp"
@@ -38,7 +46,12 @@
 #include <ndbapi_limits.h>
 #include "mt.hpp"
 
+#include "../../common/util/parse_mask.hpp"
+
 #include <EventLogger.hpp>
+
+#define JAM_FILE_ID 301
+
 extern EventLogger * g_eventLogger;
 
 extern Uint32 g_start_type;
@@ -116,7 +129,8 @@ void
 Configuration::fetch_configuration(const char* _connect_string,
                                    int force_nodeid,
                                    const char* _bind_address,
-                                   NodeId allocated_nodeid)
+                                   NodeId allocated_nodeid,
+                                   int connect_retries, int connect_delay)
 {
   /**
    * Fetch configuration from management server
@@ -143,7 +157,7 @@ Configuration::fetch_configuration(const char* _connect_string,
 	      m_config_retriever->getErrorString());
   }
 
-  if(m_config_retriever->do_connect(12,5,1) == -1){
+  if(m_config_retriever->do_connect(connect_retries, connect_delay, 1) == -1){
     const char * s = m_config_retriever->getErrorString();
     if(s == 0)
       s = "No error given!";
@@ -164,7 +178,7 @@ Configuration::fetch_configuration(const char* _connect_string,
   else
   {
 
-    const int alloc_retries = 2;
+    const int alloc_retries = 10;
     const int alloc_delay = 3;
     globalData.ownId = cr.allocNodeId(alloc_retries, alloc_delay);
     if(globalData.ownId == 0)
@@ -271,8 +285,6 @@ static char * get_and_validate_path(ndb_mgm_configuration_iterator &iter,
   return strdup(buf2);
 }
 
-#include "../../common/util/parse_mask.hpp"
-
 void
 Configuration::setupConfiguration(){
 
@@ -315,7 +327,10 @@ Configuration::setupConfiguration(){
 
   Uint32 total_send_buffer = 0;
   iter.get(CFG_TOTAL_SEND_BUFFER_MEMORY, &total_send_buffer);
-  globalTransporterRegistry.allocate_send_buffers(total_send_buffer);
+  Uint64 extra_send_buffer = 0;
+  iter.get(CFG_EXTRA_SEND_BUFFER_MEMORY, &extra_send_buffer);
+  globalTransporterRegistry.allocate_send_buffers(total_send_buffer,
+                                                  extra_send_buffer);
   
   if(iter.get(CFG_DB_NO_SAVE_MSGS, &_maxErrorLogs)){
     ERROR_SET(fatal, NDBD_EXIT_INVALID_CONFIG, "Invalid configuration fetched", 
@@ -338,6 +353,9 @@ Configuration::setupConfiguration(){
   _schedulerSpinTimer = 0;
   iter.get(CFG_DB_SCHED_SPIN_TIME, &_schedulerSpinTimer);
 
+  _maxSendDelay = 0;
+  iter.get(CFG_DB_MAX_SEND_DELAY, &_maxSendDelay);
+
   _realtimeScheduler = 0;
   iter.get(CFG_DB_REALTIME_SCHEDULER, &_realtimeScheduler);
 
@@ -346,6 +364,16 @@ Configuration::setupConfiguration(){
     ERROR_SET(fatal, NDBD_EXIT_INVALID_CONFIG, "Invalid configuration fetched", 
 	      "TimeBetweenWatchDogCheckInitial missing");
   }
+
+#ifdef ERROR_INSERT
+  _mixologyLevel = 0;
+  iter.get(CFG_MIXOLOGY_LEVEL, &_mixologyLevel);
+  if (_mixologyLevel)
+  {
+    ndbout_c("Mixology level set to 0x%x", _mixologyLevel);
+    globalTransporterRegistry.setMixologyLevel(_mixologyLevel);
+  }
+#endif
   
   /**
    * Get paths
@@ -398,12 +426,18 @@ Configuration::setupConfiguration(){
       m_thr_config.setLockIoThreadsToCPU(maintCPU);
   }
 
+#ifdef NDB_USE_GET_ENV
   const char * thrconfigstring = NdbEnv_GetEnv("NDB_MT_THREAD_CONFIG",
                                                (char*)0, 0);
+#else
+  const char * thrconfigstring = NULL;
+#endif
   if (thrconfigstring ||
       iter.get(CFG_DB_MT_THREAD_CONFIG, &thrconfigstring) == 0)
   {
-    int res = m_thr_config.do_parse(thrconfigstring);
+    int res = m_thr_config.do_parse(thrconfigstring,
+                                    _realtimeScheduler,
+                                    _schedulerSpinTimer);
     if (res != 0)
     {
       ERROR_SET(fatal, NDBD_EXIT_INVALID_CONFIG,
@@ -418,17 +452,22 @@ Configuration::setupConfiguration(){
 
     Uint32 classic = 0;
     iter.get(CFG_NDBMT_CLASSIC, &classic);
+#ifdef NDB_USE_GET_ENV
     const char* p = NdbEnv_GetEnv("NDB_MT_LQH", (char*)0, 0);
     if (p != 0)
     {
       if (strstr(p, "NOPLEASE") != 0)
         classic = 1;
     }
-
+#endif
     Uint32 lqhthreads = 0;
     iter.get(CFG_NDBMT_LQH_THREADS, &lqhthreads);
 
-    int res = m_thr_config.do_parse(mtthreads, lqhthreads, classic);
+    int res = m_thr_config.do_parse(mtthreads,
+                                    lqhthreads,
+                                    classic,
+                                    _realtimeScheduler,
+                                    _schedulerSpinTimer);
     if (res != 0)
     {
       ERROR_SET(fatal, NDBD_EXIT_INVALID_CONFIG,
@@ -436,18 +475,21 @@ Configuration::setupConfiguration(){
                 m_thr_config.getErrorMessage());
     }
   }
-  if (thrconfigstring)
+  if (NdbIsMultiThreaded())
   {
-    ndbout_c("ThreadConfig: input: %s LockExecuteThreadToCPU: %s => parsed: %s",
-             thrconfigstring,
-             lockmask ? lockmask : "",
-             m_thr_config.getConfigString());
-  }
-  else
-  {
-    ndbout_c("ThreadConfig (old ndb_mgmd) LockExecuteThreadToCPU: %s => parsed: %s",
-             lockmask ? lockmask : "",
-             m_thr_config.getConfigString());
+    if (thrconfigstring)
+    {
+      ndbout_c("ThreadConfig: input: %s LockExecuteThreadToCPU: %s => parsed: %s",
+               thrconfigstring,
+               lockmask ? lockmask : "",
+               m_thr_config.getConfigString());
+    }
+    else
+    {
+      ndbout_c("ThreadConfig (old ndb_mgmd) LockExecuteThreadToCPU: %s => parsed: %s",
+               lockmask ? lockmask : "",
+               m_thr_config.getConfigString());
+    }
   }
 
   ConfigValues* cf = ConfigValuesFactory::extractCurrentSection(iter.m_config);
@@ -456,6 +498,57 @@ Configuration::setupConfiguration(){
     ndb_mgm_destroy_iterator(m_clusterConfigIter);
   m_clusterConfigIter = ndb_mgm_create_configuration_iterator
     (p, CFG_SECTION_NODE);
+
+  /**
+   * This is parts of get_multithreaded_config
+   */
+  do
+  {
+    globalData.isNdbMt = NdbIsMultiThreaded();
+    if (!globalData.isNdbMt)
+      break;
+
+    globalData.ndbMtTcThreads = m_thr_config.getThreadCount(THRConfig::T_TC);
+    globalData.ndbMtSendThreads =
+      m_thr_config.getThreadCount(THRConfig::T_SEND);
+    globalData.ndbMtReceiveThreads =
+      m_thr_config.getThreadCount(THRConfig::T_RECV);
+
+    globalData.isNdbMtLqh = true;
+    {
+      if (m_thr_config.getMtClassic())
+      {
+        globalData.isNdbMtLqh = false;
+      }
+    }
+
+    if (!globalData.isNdbMtLqh)
+      break;
+
+    Uint32 threads = m_thr_config.getThreadCount(THRConfig::T_LDM);
+    Uint32 workers = threads;
+    iter.get(CFG_NDBMT_LQH_WORKERS, &workers);
+
+#ifdef VM_TRACE
+#ifdef NDB_USE_GET_ENV
+    // testing
+    {
+      const char* p;
+      p = NdbEnv_GetEnv("NDBMT_LQH_WORKERS", (char*)0, 0);
+      if (p != 0)
+        workers = atoi(p);
+    }
+#endif
+#endif
+
+
+    assert(workers != 0 && workers <= MAX_NDBMT_LQH_WORKERS);
+    assert(threads != 0 && threads <= MAX_NDBMT_LQH_THREADS);
+    assert(workers % threads == 0);
+
+    globalData.ndbMtLqhWorkers = workers;
+    globalData.ndbMtLqhThreads = threads;
+  } while (0);
 
   calcSizeAlt(cf);
 
@@ -494,6 +587,12 @@ bool
 Configuration::realtimeScheduler() const
 {
   return (bool)_realtimeScheduler;
+}
+
+Uint32
+Configuration::maxSendDelay() const
+{
+  return _maxSendDelay;
 }
 
 void 
@@ -544,6 +643,18 @@ void
 Configuration::setRestartOnErrorInsert(int i){
   m_restartOnErrorInsert = i;
 }
+
+#ifdef ERROR_INSERT
+Uint32
+Configuration::getMixologyLevel() const {
+  return _mixologyLevel;
+}
+
+void
+Configuration::setMixologyLevel(Uint32 l){
+  _mixologyLevel = l;
+}
+#endif
 
 const ndb_mgm_configuration_iterator * 
 Configuration::getOwnConfigIterator() const {
@@ -628,6 +739,12 @@ Configuration::calcSizeAlt(ConfigValues * ownConfig){
   if (globalData.isNdbMtLqh)
   {
     lqhInstances = globalData.ndbMtLqhWorkers;
+  }
+
+  Uint32 tcInstances = 1;
+  if (globalData.ndbMtTcThreads > 1)
+  {
+    tcInstances = globalData.ndbMtTcThreads;
   }
 
   Uint64 indexMem = 0, dataMem = 0;
@@ -756,7 +873,8 @@ Configuration::calcSizeAlt(ConfigValues * ownConfig){
 #if NDB_VERSION_D < NDB_MAKE_VERSION(7,2,0)
     noOfLocalScanRecords = (noOfDBNodes * noOfScanRecords) + 
 #else
-    noOfLocalScanRecords = 4 * (noOfDBNodes * noOfScanRecords) +
+    noOfLocalScanRecords = tcInstances * lqhInstances *
+      (noOfDBNodes * noOfScanRecords) +
 #endif
       1 /* NR */ + 
       1 /* LCP */; 
@@ -777,13 +895,6 @@ Configuration::calcSizeAlt(ConfigValues * ownConfig){
      * Acc Size Alt values
      */
     // Can keep 65536 pages (= 0.5 GByte)
-    cfg.put(CFG_ACC_DIR_RANGE, 
-	    2 * NO_OF_FRAG_PER_NODE * noOfAccTables* noOfReplicas); 
-    
-    cfg.put(CFG_ACC_DIR_ARRAY,
-	    (noOfIndexPages >> 8) + 
-	    2 * NO_OF_FRAG_PER_NODE * noOfAccTables* noOfReplicas);
-    
     cfg.put(CFG_ACC_FRAGMENT,
 	    NO_OF_FRAG_PER_NODE * noOfAccTables* noOfReplicas);
     
@@ -799,6 +910,7 @@ Configuration::calcSizeAlt(ConfigValues * ownConfig){
 	    (noOfLocalScanRecords * noBatchSize) +
 	    NODE_RECOVERY_SCAN_OP_RECORDS);
     
+    /* TODO: remove. CFG_ACC_OVERFLOW_RECS obsoleted ... */
     cfg.put(CFG_ACC_OVERFLOW_RECS,
 	    noOfIndexPages + 
 	    NO_OF_FRAG_PER_NODE * noOfAccTables* noOfReplicas);
@@ -849,6 +961,14 @@ Configuration::calcSizeAlt(ConfigValues * ownConfig){
     
     cfg.put(CFG_LQH_SCAN, 
 	    noOfLocalScanRecords);
+  }
+  
+  {
+    /**
+     * Spj Size Alt values
+     */
+    cfg.put(CFG_SPJ_TABLE, 
+	    noOfMetaTables);
   }
   
   {
@@ -939,8 +1059,8 @@ Configuration::setAllLockCPU(bool exec_thread)
       continue;
 
     bool run = 
-      (exec_thread && threadInfo[i].type == MainThread) ||
-      (!exec_thread && threadInfo[i].type != MainThread);
+      (exec_thread && threadInfo[i].type == BlockThread) ||
+      (!exec_thread && threadInfo[i].type != BlockThread);
 
     if (run)
     {
@@ -962,11 +1082,23 @@ Configuration::setRealtimeScheduler(NdbThread* pThread,
   if (!init || real_time)
   {
     int error_no;
-    if ((error_no = NdbThread_SetScheduler(pThread, real_time,
-                                           (type != MainThread))))
+    bool high_prio = !((type == BlockThread) ||
+                       (type == ReceiveThread) ||
+                       (type == SendThread));
+    if ((error_no = NdbThread_SetScheduler(pThread, real_time, high_prio)))
     {
       //Warning, no permission to set scheduler
+      if (init)
+      {
+        ndbout_c("Failed to set real-time prio on tid = %d, error_no = %d",
+                 NdbThread_GetTid(pThread), error_no);
+      }
       return 1;
+    }
+    else if (init)
+    {
+      ndbout_c("Successfully set real-time prio on tid = %d",
+               NdbThread_GetTid(pThread));
     }
   }
   return 0;
@@ -977,13 +1109,28 @@ Configuration::setLockCPU(NdbThread * pThread,
                           enum ThreadTypes type)
 {
   int res = 0;
-  if (type != MainThread)
+  if (type != BlockThread &&
+      type != SendThread &&
+      type != ReceiveThread)
   {
-    res = m_thr_config.do_bind_io(pThread);
+    if (type == NdbfsThread)
+    {
+      /*
+       * NdbfsThread (IO threads).
+       */
+      res = m_thr_config.do_bind_io(pThread);
+    }
+    else
+    {
+      /*
+       * WatchDogThread, SocketClientThread, SocketServerThread
+       */
+      res = m_thr_config.do_bind_watchdog(pThread);
+    }
   }
   else if (!NdbIsMultiThreaded())
   {
-    BlockNumber list[] = { CMVMI };
+    BlockNumber list[] = { DBDIH };
     res = m_thr_config.do_bind(pThread, list, 1);
   }
 
@@ -991,12 +1138,13 @@ Configuration::setLockCPU(NdbThread * pThread,
   {
     if (res > 0)
     {
-      ndbout << "Locked to CPU ok" << endl;
+      ndbout_c("Locked tid = %d to CPU ok", NdbThread_GetTid(pThread));
       return 0;
     }
     else
     {
-      ndbout << "Failed to lock CPU, error_no = " << (-res) << endl;
+      ndbout_c("Failed to lock tid = %d to CPU, error_no = %d",
+               NdbThread_GetTid(pThread), (-res));
       return 1;
     }
   }
@@ -1004,9 +1152,18 @@ Configuration::setLockCPU(NdbThread * pThread,
   return 0;
 }
 
-Uint32
-Configuration::addThread(struct NdbThread* pThread, enum ThreadTypes type)
+bool
+Configuration::get_io_real_time() const
 {
+  return m_thr_config.do_get_realtime_io();
+}
+
+Uint32
+Configuration::addThread(struct NdbThread* pThread,
+                         enum ThreadTypes type,
+                         bool single_threaded)
+{
+  const char *type_str;
   Uint32 i;
   NdbMutex_Lock(threadIdMutex);
   for (i = 0; i < threadInfo.size(); i++)
@@ -1022,24 +1179,86 @@ Configuration::addThread(struct NdbThread* pThread, enum ThreadTypes type)
   threadInfo[i].pThread = pThread;
   threadInfo[i].type = type;
   NdbMutex_Unlock(threadIdMutex);
-  setRealtimeScheduler(pThread, type, _realtimeScheduler, TRUE);
-  if (type != MainThread)
+  switch (type)
   {
+    case WatchDogThread:
+      type_str = "WatchDogThread";
+      break;
+    case SocketServerThread:
+      type_str = "SocketServerThread";
+      break;
+    case SocketClientThread:
+      type_str = "SocketClientThread";
+      break;
+    case NdbfsThread:
+      type_str = "NdbfsThread";
+      break;
+    case BlockThread:
+    case SendThread:
+    case ReceiveThread:
+      type_str = NULL;
+      break;
+    default:
+      type_str = NULL;
+      abort();
+  }
+
+  bool real_time;
+  if (single_threaded)
+  {
+    setRealtimeScheduler(pThread, type, _realtimeScheduler, TRUE);
+  }
+  else if (type == WatchDogThread ||
+           type == SocketClientThread ||
+           type == SocketServerThread ||
+           type == NdbfsThread)
+  {
+    if (type != NdbfsThread)
+    {
+      /**
+       * IO threads are handled internally in NDBFS with
+       * regard to setting real time properties on the
+       * IO thread.
+       *
+       * WatchDog, SocketServer and SocketClient have no
+       * special handling of real-time breaks since we
+       * don't expect these threads to long without
+       * breaks.
+       */
+      real_time = m_thr_config.do_get_realtime_wd();
+      setRealtimeScheduler(pThread, type, real_time, TRUE);
+    }
     /**
      * main threads are set in ThreadConfig::ipControlLoop
      * as it's handled differently with mt
      */
+    ndbout_c("Started thread, index = %u, id = %d, type = %s",
+             i,
+             NdbThread_GetTid(pThread),
+             type_str);
     setLockCPU(pThread, type);
   }
+  /**
+   * All other thread types requires special handling of real-time
+   * property which is handled in the thread itself for multithreaded
+   * nbdmtd process.
+   */
   return i;
 }
 
 void
-Configuration::removeThreadId(Uint32 index)
+Configuration::removeThread(struct NdbThread *pThread)
 {
   NdbMutex_Lock(threadIdMutex);
-  threadInfo[index].pThread = 0;
-  threadInfo[index].type = NotInUse;
+  for (Uint32 i = 0; i < threadInfo.size(); i++)
+  {
+    if (threadInfo[i].pThread == pThread)
+    {
+      threadInfo[i].pThread = 0;
+      threadInfo[i].type = NotInUse;
+      break;
+    }
+  }
   NdbMutex_Unlock(threadIdMutex);
 }
 

@@ -1,17 +1,24 @@
 // create_def_file.js
 //
-// Copyright (c) 2009 Sun Microsystems, Inc.
+// Copyright (c) 2009, 2023, Oracle and/or its affiliates.
 // Use is subject to license terms.
 // 
 // This program is free software; you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation; version 2 of the License.
-// 
+// it under the terms of the GNU General Public License, version 2.0,
+// as published by the Free Software Foundation.
+//
+// This program is also distributed with certain software (including
+// but not limited to OpenSSL) that is licensed under separate terms,
+// as designated in a particular file or component or in included license
+// documentation.  The authors of MySQL hereby grant you an additional
+// permission to link the program and your derivative works with the
+// separately licensed software that they have included with MySQL.
+//
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-// 
+// GNU General Public License, version 2.0, for more details.
+//
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
@@ -172,8 +179,16 @@ function IsCompilerDefinedSymbol(symbol)
     (symbol.indexOf("__xmm@") != -1) ||        // SSE instruction set constants
     (symbol.indexOf("_CTA2?") != -1) ||        // std::bad_alloc
     (symbol.indexOf("_CTA3?") != -1) ||        // std::length_error
+    (symbol.indexOf("_CTA4?") != -1) ||        // std::ios_base::failure
+    (symbol.indexOf("_CTA5?") != -1) ||        // std::ios_base::failure
+    (symbol.indexOf("_CTA6?") != -1) ||        // boost::exception_detail::clone_impl<boost::exception_detail::error_info_injector<boost::bad_get>>
+    (symbol.indexOf("_CTA7?") != -1) ||        // boost::exception_detail::clone_impl<boost::exception_detail::error_info_injector<boost::bad_lexical_cast>>
     (symbol.indexOf("_TI2?") != -1) ||         // std::bad_alloc
     (symbol.indexOf("_TI3?") != -1) ||         // std::length_error
+    (symbol.indexOf("_TI4?") != -1) ||         // std::ios_base::failure
+    (symbol.indexOf("_TI5?") != -1) ||         // std::ios_base::failure
+    (symbol.indexOf("_TI6?") != -1) ||         // boost::exception_detail::clone_impl<boost::exception_detail::error_info_injector<boost::bad_get>>
+    (symbol.indexOf("_TI7?") != -1) ||         // boost::exception_detail::clone_impl<boost::exception_detail::error_info_injector<boost::bad_lexical_cast>>
     (symbol.indexOf("_RTC_") != -1) || 
     (symbol.indexOf("??_C@_") != -1) ||
     (symbol.indexOf("??_R") != -1) ||

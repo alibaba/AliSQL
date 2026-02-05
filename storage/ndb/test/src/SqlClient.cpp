@@ -1,15 +1,22 @@
 /*
-   Copyright (C) 2008 MySQL AB
+   Copyright (c) 2008, 2021, Oracle and/or its affiliates.
     All rights reserved. Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -66,7 +73,7 @@ bool
 SqlClient::isConnected(){
   if (connected == true)
   {
-    assert(mysql);
+    require(mysql);
     return true;
   }
   return connect() == 0;
@@ -183,7 +190,7 @@ SqlClient::runQuery(const char* sql,
     if (!args.contains(name.c_str()))
     {
       g_err << "param " << i << " missing" << endl;
-      assert(false);
+      require(false);
     }
     PropertiesType t;
     Uint32 val_i;
@@ -204,7 +211,7 @@ SqlClient::runQuery(const char* sql,
       g_debug << " param" << name.c_str() << ": " << val_s << endl;
       break;
     default:
-      assert(false);
+      require(false);
       break;
     }
   }
@@ -383,7 +390,7 @@ const char* SqlResultSet::column(const char* col_name){
     g_err << "ERROR: SqlResultSet::column("<< col_name << ")" << endl
           << "There is no row loaded, call next() before "
           << "acessing the column values" << endl;
-    assert(m_curr_row);
+    require(m_curr_row);
   }
   if (!m_curr_row->get(col_name, &value))
     return NULL;
@@ -396,7 +403,7 @@ uint SqlResultSet::columnAsInt(const char* col_name){
     g_err << "ERROR: SqlResultSet::columnAsInt("<< col_name << ")" << endl
           << "There is no row loaded, call next() before "
           << "acessing the column values" << endl;
-    assert(m_curr_row);
+    require(m_curr_row);
   }
   if (!m_curr_row->get(col_name, &value))
     return (uint)-1;
@@ -430,12 +437,12 @@ const char* SqlResultSet::mysqlSqlstate(void){
 
 uint SqlResultSet::get_int(const char* name){
   uint value;
-  assert(get(name, &value));
+  require(get(name, &value));
   return value;
 }
 
 const char* SqlResultSet::get_string(const char* name){
   const char* value;
-  assert(get(name, &value));
+  require(get(name, &value));
   return value;
 }

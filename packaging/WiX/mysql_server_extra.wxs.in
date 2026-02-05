@@ -1,29 +1,34 @@
-<Include xmlns="http://schemas.microsoft.com/wix/2006/wi"
-         xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs"
+         xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
 
 <!--
-   Copyright (c) 2012, 2013, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2012, 2023, Oracle and/or its affiliates.
    
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
-   
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-   
+   GNU General Public License, version 2.0, for more details.
+
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 -->
     <!-- Include shortcuts -->
-    <DirectoryRef Id='INSTALLDIR'>
-    <Directory Id="DesktopFolder"/>
-    <Directory Id="ProgramMenuFolder">
+    <StandardDirectory Id="ProgramMenuFolder">
       <Directory Id="MysqlProgramMenuFolder" Name="MySQL">
         <Directory Id="MysqlProductMenuFolder" Name="MySQL Server @MAJOR_VERSION@.@MINOR_VERSION@">
-          <Component Id="MysqlProductMenuFolder" Guid="*" @WixWin64@>
+          <Component Id="MysqlProductMenuFolder" @WixWin64@>
             <!-- Include a shortcut to the mysql command line client -->
             <Shortcut Id="MysqlCommandLineShellShortcut"
                       Name="MySQL @MAJOR_VERSION@.@MINOR_VERSION@ Command Line Client"
@@ -44,7 +49,7 @@
             <!-- Write Console settings for applications with this name to the registry -->
               <RegistryKey Root="HKCU" 
                            Key="Console\MySQL @MAJOR_VERSION@.@MINOR_VERSION@ Command Line Client - Unicode"
-                           Action="createAndRemoveOnUninstall">
+                           ForceDeleteOnUninstall="yes">
                 <RegistryValue Type="string" Name="FaceName" Value="Lucida Console"/>
                 <RegistryValue Type="integer" Name="FontWeight" Value="400"/>
               </RegistryKey>
@@ -56,21 +61,20 @@
           </Component>
         </Directory>
       </Directory>
-    </Directory>
-    </DirectoryRef>
+    </StandardDirectory>
     <Feature Id="ProgramMenu" Level="1" Display="hidden" ConfigurableDirectory="INSTALLDIR">
     <ComponentRef Id="MysqlProductMenuFolder"/>
     </Feature>    
       
     <!-- Registry -->
     <!-- We still use "MySQL AB" because we don't want to break software that expects it -->
-    <DirectoryRef Id='TARGETDIR'>
-    <Component Id="RegKeys" Guid="*">
+
+    <Component Id="RegKeys" Directory="TARGETDIR">
       <RegistryKey
         Id='MySQLKey'
         Root='HKLM'
         Key='SOFTWARE\MySQL AB\[ProductName]'
-        Action='createAndRemoveOnUninstall'>
+        ForceDeleteOnUninstall='yes'>
         <RegistryValue
           Type='string'
           Name='Location'
@@ -85,7 +89,6 @@
           Value="[DATADIR]"/>
       </RegistryKey>
     </Component>
-    </DirectoryRef>
     <Feature
     Id='RegKeys'
     Display='hidden'
@@ -95,8 +98,6 @@
 
     <!-- Datafiles that installation will copy to CommonAppData (initial database)
     They are declared Permanent and NeverOverwrite since it is user data -->
-    <DirectoryRef Id='TARGETDIR'>
-    <Directory Id="CommonAppDataFolder">
       <Directory Id="datadir.mysql" Name="MySQL">
         <Directory Id="datadir.mysql.mysqlserver"
           Name="MySQL Server @MAJOR_VERSION@.@MINOR_VERSION@">
@@ -145,8 +146,6 @@
           </Directory>
         </Directory>
       </Directory>
-    </Directory>
-    </DirectoryRef>
 
     <Feature Id='UserEditableDataFiles' 
        Title='Server data files'

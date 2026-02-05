@@ -1,13 +1,20 @@
-/* Copyright (c) 2011, 2013, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -43,7 +50,7 @@ protected:
 
 TEST_F(FatalSignalDeathTest, Abort)
 {
-#if defined(__WIN__)
+#if defined(_WIN32)
   EXPECT_DEATH_IF_SUPPORTED(abort(), ".* UTC - mysqld got exception.*");
 #else
   EXPECT_DEATH_IF_SUPPORTED(abort(), ".* UTC - mysqld got signal 6.*");
@@ -53,18 +60,26 @@ TEST_F(FatalSignalDeathTest, Abort)
 
 TEST_F(FatalSignalDeathTest, Segfault)
 {
+#if defined(_WIN32)
   int *pint= NULL;
-#if defined(__WIN__)
   /*
    After upgrading from gtest 1.5 to 1.6 this segfault is no longer
    caught by handle_fatal_signal(). We get an empty error message from the
    gtest library instead.
   */
   EXPECT_DEATH_IF_SUPPORTED(*pint= 42, "");
-#elif defined(__SANITIZE_ADDRESS__)
+#elif defined(HAVE_ASAN)
   /* gcc 4.8.1 with '-fsanitize=address -O1' */
-  EXPECT_DEATH_IF_SUPPORTED(*pint= 42, ".*ASAN:SIGSEGV.*");
+  /* Newer versions of ASAN give other error message, disable it */
+  // EXPECT_DEATH_IF_SUPPORTED(*pint= 42, ".*ASAN:SIGSEGV.*");
+#elif defined(__APPLE__) && defined(__aarch64__) && defined(NDEBUG)
+  // Disable also in non-debug mode on MacOS 11 arm, with -O1 or above, we get
+  // Result: died but not with expected error.
+  // Expected: contains regular expression ".* UTC - mysqld got signal .*"
+  // Actual msg:
+  // We do get: "Trace/BPT trap: 5" but not as part of the matcher input in
 #else
+  int *pint= NULL;
   /*
    On most platforms we get SIGSEGV == 11, but SIGBUS == 10 is also possible.
    And on Mac OsX we can get SIGILL == 4 (but only in optmized mode).
@@ -86,7 +101,7 @@ int array_size(const T (&)[size])
 TEST(PrintUtilities, Utoa)
 {
   char buff[22];
-  ulonglong intarr[]= { 0, 1, 8, 12, 1234, 88888, ULONG_MAX, ULONGLONG_MAX };
+  ulonglong intarr[]= { 0, 1, 8, 12, 1234, 88888, ULONG_MAX, ULLONG_MAX };
   char sprintbuff[22];
   for (int ix= 0; ix < array_size(intarr); ++ix)
   {
@@ -110,7 +125,7 @@ TEST(PrintUtilities, Itoa)
 {
   char buff[22];
   char sprintbuff[22];
-  longlong intarr[]= { 0, 1, 8, 12, 1234, 88888, LONG_MAX, LONGLONG_MAX };
+  longlong intarr[]= { 0, 1, 8, 12, 1234, 88888, LONG_MAX, LLONG_MAX };
 
   for (int ix= 0; ix < array_size(intarr); ++ix)
   {
@@ -171,8 +186,8 @@ TEST(PrintUtilities, Printf)
   my_safe_snprintf(buff, sizeof(buff), "hello %u hello", (unsigned) 42);
   EXPECT_STREQ("hello 42 hello", buff);
 
-  my_safe_snprintf(buff, sizeof(buff), "hello %llu hello", ULONGLONG_MAX);
-  sprintf(sprintfbuff, "hello %llu hello", ULONGLONG_MAX);
+  my_safe_snprintf(buff, sizeof(buff), "hello %llu hello", ULLONG_MAX);
+  sprintf(sprintfbuff, "hello %llu hello", ULLONG_MAX);
   EXPECT_STREQ(sprintfbuff, buff);
 
   my_safe_snprintf(buff, sizeof(buff), "hello %x hello", 42);
@@ -191,7 +206,7 @@ TEST(PrintUtilities, Printf)
   void *p= this;
   my_safe_snprintf(buff, sizeof(buff), "hello 0x%p hello", p);
   my_snprintf(sprintfbuff, sizeof(sprintfbuff), "hello %p hello", p);
-  EXPECT_STREQ(sprintfbuff, buff);
+  EXPECT_STREQ(sprintfbuff, buff) << "my_safe_snprintf:" << buff;
 }
 
 
@@ -199,7 +214,8 @@ TEST(PrintUtilities, Printf)
 TEST(HashFiloTest, TestHashFiloZeroSize)
 {
   hash_filo *t_cache;
-  t_cache= new hash_filo(5, 0, 0,
+  t_cache= new hash_filo(PSI_NOT_INSTRUMENTED,
+                         5, 0, 0,
                          (my_hash_get_key) NULL,
                          (my_hash_free_key) NULL,
                          NULL);

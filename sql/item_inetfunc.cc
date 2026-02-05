@@ -1,21 +1,31 @@
-/* Copyright (c) 2011, 2013, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "item_inetfunc.h"
+#include "derror.h"    //THD
 
-#include "my_net.h"
+#ifdef HAVE_NETINET_IN_H
+#include <netinet/in.h>
+#endif
 
 ///////////////////////////////////////////////////////////////////////////
 
@@ -29,7 +39,9 @@ static const char HEX_DIGITS[]= "0123456789abcdef";
 
 longlong Item_func_inet_aton::val_int()
 {
-  DBUG_ASSERT(fixed);
+  assert(fixed);
+  assert(arg_count == 1);
+  null_value= true;
 
   uint byte_result= 0;
   ulonglong result= 0;
@@ -41,10 +53,8 @@ longlong Item_func_inet_aton::val_int()
   String tmp(buff, sizeof (buff), &my_charset_latin1);
   String *s= args[0]->val_str_ascii(&tmp);
 
-  if (!s)       // If null value
-    goto err;
-
-  null_value= 0;
+  if (!s)       // If NULL input value, don't emit warning
+    return 0;
 
   p= s->ptr();
   end= p + s->length();
@@ -82,11 +92,22 @@ longlong Item_func_inet_aton::val_int()
     case 1: result<<= 8; /* Fall through */
     case 2: result<<= 8; /* Fall through */
     }
+    if (dot_count > 3) // Too many groups
+      goto err;
+    null_value= false;
     return (result << 8) + (ulonglong) byte_result;
   }
 
 err:
-  null_value=1;
+  char buf[256];
+  String err(buf, sizeof(buf), system_charset_info);
+  err.length(0);
+  args[0]->print(&err, QT_NO_DATA_EXPANSION);
+  push_warning_printf(current_thd, Sql_condition::SL_WARNING,
+                      ER_WRONG_VALUE_FOR_TYPE,
+                      ER_THD(current_thd, ER_WRONG_VALUE_FOR_TYPE),
+                      "string", err.c_ptr_safe(), func_name());
+
   return 0;
 }
 
@@ -94,8 +115,9 @@ err:
 
 String* Item_func_inet_ntoa::val_str(String* str)
 {
-  DBUG_ASSERT(fixed);
-
+  assert(fixed);
+  assert(arg_count == 1);
+  null_value= true;
   ulonglong n= (ulonglong) args[0]->val_int();
 
   /*
@@ -104,16 +126,27 @@ String* Item_func_inet_ntoa::val_str(String* str)
 
     Also return null if n > 255.255.255.255
   */
-  null_value= args[0]->null_value || n > (ulonglong) LL(4294967295);
-
-  if (null_value)
-    return 0;                                   // Null value
+  if (args[0]->null_value)
+    return NULL;
+  if (n > (ulonglong) 4294967295LL)
+  {
+    char buf[256];
+    String err(buf, sizeof(buf), system_charset_info);
+    err.length(0);
+    args[0]->print(&err, QT_NO_DATA_EXPANSION);
+    push_warning_printf(current_thd, Sql_condition::SL_WARNING,
+                        ER_WRONG_VALUE_FOR_TYPE,
+                        ER_THD(current_thd, ER_WRONG_VALUE_FOR_TYPE),
+                        "integer", err.c_ptr_safe(), func_name());
+    return NULL;
+  }
+  null_value= false;
 
   str->set_charset(collation.collation);
   str->length(0);
 
   uchar buf[8];
-  int4store(buf, n);
+  int4store(buf, static_cast<uint32>(n));
 
   /* Now we can assume little endian. */
 
@@ -150,7 +183,7 @@ String* Item_func_inet_ntoa::val_str(String* str)
 
 longlong Item_func_inet_bool_base::val_int()
 {
-  DBUG_ASSERT(fixed);
+  assert(fixed);
 
   if (args[0]->result_type() != STRING_RESULT) // String argument expected
     return 0;
@@ -176,24 +209,41 @@ longlong Item_func_inet_bool_base::val_int()
 
 String *Item_func_inet_str_base::val_str_ascii(String *buffer)
 {
-  DBUG_ASSERT(fixed);
+  assert(fixed);
+  assert(arg_count == 1);
+  null_value= true;
+  String *arg_str;
 
-  if (args[0]->result_type() != STRING_RESULT) // String argument expected
+  /*
+    (1) Out-of-memory happened (the error has been reported),
+    or the argument is NULL.
+    (2) String argument expected.
+  */
+  if (!(arg_str= args[0]->val_str(buffer)) ||   // (1)
+      args[0]->result_type() != STRING_RESULT)  // (2)
   {
-    null_value= true;
-    return NULL;
+    // NULL value can be checked only after calling a val_* func
+    if (args[0]->null_value)
+      return NULL;
+    goto err;
   }
 
-  String *arg_str= args[0]->val_str(buffer);
-  if (!arg_str) // Out-of memory happened. The error has been reported.
-  {             // Or: the underlying field is NULL
-    null_value= true;
-    return NULL;
+  if (calc_value(arg_str, buffer))
+  {
+    null_value= false;
+    return buffer;
   }
 
-  null_value= !calc_value(arg_str, buffer);
-
-  return null_value ? NULL : buffer;
+err:
+  char buf[256];
+  String err(buf, sizeof(buf), system_charset_info);
+  err.length(0);
+  args[0]->print(&err, QT_NO_DATA_EXPANSION);
+  push_warning_printf(current_thd, Sql_condition::SL_WARNING,
+                      ER_WRONG_VALUE_FOR_TYPE,
+                      ER_THD(current_thd, ER_WRONG_VALUE_FOR_TYPE),
+                      "string", err.c_ptr_safe(), func_name());
+  return NULL;
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -400,7 +450,7 @@ static bool str_to_ipv6(const char *str, int str_length, in6_addr *ipv6_address)
         continue;
       }
 
-      if (!*p || ((p - str) >= str_length))
+      if (((p - str) >= str_length) || !*p)
       {
         DBUG_PRINT("error", ("str_to_ipv6(%.*s): invalid IPv6 address: "
                              "ending at ':'.", str_length, str));
@@ -467,7 +517,7 @@ static bool str_to_ipv6(const char *str, int str_length, in6_addr *ipv6_address)
       group_value <<= 4;
       group_value |= hdp - HEX_DIGITS;
 
-      DBUG_ASSERT(group_value <= 0xffff);
+      assert(group_value <= 0xffff);
 
       ++chars_in_group;
     }
@@ -496,11 +546,11 @@ static bool str_to_ipv6(const char *str, int str_length, in6_addr *ipv6_address)
       return false;
     }
 
-    int bytes_to_move= dst - gap_ptr;
+    size_t bytes_to_move= dst - gap_ptr;
 
-    for (int i= 1; i <= bytes_to_move; ++i)
+    for (size_t i= 1; i <= bytes_to_move; ++i)
     {
-      ipv6_bytes_end[-i]= gap_ptr[bytes_to_move - i];
+      ipv6_bytes_end[-(static_cast<ssize_t>(i))]= gap_ptr[bytes_to_move - i];
       gap_ptr[bytes_to_move - i]= 0;
     }
 
@@ -734,7 +784,7 @@ bool Item_func_inet6_ntoa::calc_value(String *arg, String *buffer)
     ipv4_to_str((const in_addr *) arg->ptr(), str);
 
     buffer->length(0);
-    buffer->append(str, (uint32) strlen(str), &my_charset_latin1);
+    buffer->append(str, strlen(str), &my_charset_latin1);
 
     return true;
   }
@@ -745,7 +795,7 @@ bool Item_func_inet6_ntoa::calc_value(String *arg, String *buffer)
     ipv6_to_str((const in6_addr *) arg->ptr(), str);
 
     buffer->length(0);
-    buffer->append(str, (uint32) strlen(str), &my_charset_latin1);
+    buffer->append(str, strlen(str), &my_charset_latin1);
 
     return true;
   }

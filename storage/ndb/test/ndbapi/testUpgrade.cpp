@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2008, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -24,6 +31,8 @@
 #include <Bitmask.hpp>
 #include <NdbBackup.hpp>
 #include <ndb_version.h>
+#include <random.h>
+#include <NdbMutex.h>
 
 static Vector<BaseString> table_list;
 
@@ -33,6 +42,182 @@ struct NodeInfo
   int processId;
   int nodeGroup;
 };
+
+int CMT_createTableHook(Ndb* ndb,
+                        NdbDictionary::Table& table,
+                        int when,
+                        void* arg)
+{
+  if (when == 0)
+  {
+    Uint32 num = ((Uint32*) arg)[0];
+    Uint32 fragCount = ((Uint32*) arg)[1];
+
+    /* Substitute a unique name */
+    char buf[100];
+    BaseString::snprintf(buf, sizeof(buf),
+                         "%s_%u",
+                         table.getName(),
+                         num);
+    table.setName(buf);
+    if (fragCount > 0)
+      table.setFragmentCount(fragCount);
+    
+    ndbout << "Creating " << buf 
+           << " with fragment count " << fragCount 
+           << endl;
+  }
+  return 0;
+}
+
+Uint32
+determineMaxFragCount(NDBT_Context* ctx, NDBT_Step* step)
+{
+  Ndb* pNdb = GETNDB(step);
+  NdbDictionary::Dictionary* dict = pNdb->getDictionary();
+
+  /* Find max # frags we can create... */
+  ndbout << "Determining max fragment count on this cluster" << endl;
+  Uint32 fc = (ctx->getTab()->getFragmentCount() * 2);
+  ndbout << "Start point " << fc << endl;
+  bool up = true;
+  do
+  {
+    ndbout << "Trying " << fc << " ...";
+
+    NdbDictionary::HashMap hm;
+    bool ok = (dict->getDefaultHashMap(hm, fc) == 0);
+    
+    ndbout << "a" << endl;
+
+    if (!ok)
+    {
+      if (dict->initDefaultHashMap(hm, fc) == 0)
+      {
+        ndbout << "b" << endl;
+        ok = (dict->createHashMap(hm) == 0);
+      }
+      ndbout << "c" << endl;
+    }
+
+    if (ok)
+    {
+      Uint32 args[2];
+      args[0] = 0;
+      args[1] = fc;
+      
+      if (NDBT_Tables::createTable(pNdb,
+                                   ctx->getTab()->getName(), 
+                                   false,
+                                   false,
+                                   CMT_createTableHook,
+                                   &args) != 0)
+      {
+        ok = false;
+      }
+      else
+      {
+        /* Worked, drop it... */
+        char buf[100];
+        BaseString::snprintf(buf, sizeof(buf),
+                             "%s_%u",
+                             ctx->getTab()->getName(),
+                             0);
+        ndbout << "Dropping " << buf << endl;
+        pNdb->getDictionary()->dropTable(buf);
+      }
+    }
+        
+
+    if (ok)
+    {
+      ndbout << "ok" << endl;
+      if (up)
+      {
+        fc*= 2;
+      }
+      else
+      {
+        break;
+      }
+    }
+    else
+    {
+      ndbout << "failed" << endl;
+      
+      if (up)
+      {
+        up = false;
+      }
+
+      fc--;
+    }
+  } while (true);
+  
+  ndbout << "Max frag count : " << fc << endl;
+
+  return fc;
+}
+
+static const Uint32 defaultManyTableCount = 70;
+
+int 
+createManyTables(NDBT_Context* ctx, NDBT_Step* step)
+{
+  Ndb* pNdb = GETNDB(step);
+
+  Uint32 tableCount = ctx->getProperty("ManyTableCount", defaultManyTableCount);
+  Uint32 fragmentCount = ctx->getProperty("FragmentCount", Uint32(0));
+  
+  /* fragmentCount
+   * 0 = default
+   * 1..n = as requested
+   * ~Uint32(0) = max possible
+   */
+  if (fragmentCount == ~Uint32(0))
+  {
+    fragmentCount = determineMaxFragCount(ctx, step);
+  }  
+  
+  for (Uint32 tn = 1; tn < tableCount; tn++)
+  {
+    Uint32 args[2];
+    args[0] = tn;
+    args[1] = fragmentCount;
+
+    if (NDBT_Tables::createTable(pNdb, 
+                                 ctx->getTab()->getName(), 
+                                 false,
+                                 false,
+                                 CMT_createTableHook,
+                                 &args) != 0)
+    {
+      return NDBT_FAILED;
+    }
+  }
+
+  return NDBT_OK;
+}
+
+int dropManyTables(NDBT_Context* ctx, NDBT_Step* step)
+{
+  Ndb* pNdb = GETNDB(step);
+
+  Uint32 tableCount = ctx->getProperty("ManyTableCount", defaultManyTableCount);
+  char buf[100];
+  
+  for (Uint32 tn = 0; tn < tableCount; tn++)
+  {
+    BaseString::snprintf(buf, sizeof(buf),
+                         "%s_%u",
+                         ctx->getTab()->getName(),
+                         tn);
+    ndbout << "Dropping " << buf << endl;
+    pNdb->getDictionary()->dropTable(buf);
+  }
+  
+  return NDBT_OK;
+}
 
 static
 int
@@ -124,18 +309,34 @@ dropEvent(Ndb *pNdb, const NdbDictionary::Table &tab)
 }
 
 
+static NdbMutex* createDropEvent_mutex = 0;
+
 static
 int
-createDropEvent(NDBT_Context* ctx, NDBT_Step* step)
+createDropEvent(NDBT_Context* ctx, NDBT_Step* step, bool wait = true)
 {
+  if (!wait)
+  {
+    if (NdbMutex_Trylock(createDropEvent_mutex) != 0)
+    {
+      g_err << "Skipping createDropEvent since already running in other process" << endl;
+      return NDBT_OK;
+    }
+  }
+  else if (NdbMutex_Lock(createDropEvent_mutex) != 0)
+  {
+    g_err << "Error while locking createDropEvent_mutex" << endl;
+    return NDBT_FAILED;
+  }
+
   Ndb* pNdb = GETNDB(step);
   NdbDictionary::Dictionary *myDict = pNdb->getDictionary();
 
+  int res = NDBT_OK;
   if (ctx->getProperty("NoDDL", Uint32(0)) == 0)
   {
     for (unsigned i = 0; i<table_list.size(); i++)
     {
-      int res = NDBT_OK;
       const NdbDictionary::Table* tab = myDict->getTable(table_list[i].c_str());
       if (tab == 0)
       {
@@ -143,19 +344,26 @@ createDropEvent(NDBT_Context* ctx, NDBT_Step* step)
       }
       if ((res = createEvent(pNdb, *tab) != NDBT_OK))
       {
-        return res;
+        goto done;
       }
       
       
       
       if ((res = dropEvent(pNdb, *tab)) != NDBT_OK)
       {
-        return res;
+        goto done;
       }
     }
   }
 
-  return NDBT_OK;
+done:
+  if (NdbMutex_Unlock(createDropEvent_mutex) != 0)
+  {
+    g_err << "Error while unlocking createDropEvent_mutex" << endl;
+    return NDBT_FAILED;
+  }
+
+  return res;
 }
 
 /* An enum for expressing how many of the multiple nodes
@@ -439,6 +647,19 @@ runUpgrade_Half(NDBT_Context* ctx, NDBT_Step* step)
       return NDBT_FAILED;
     }
 
+    ndbout << "Half started" << endl;
+
+    if (ctx->getProperty("HalfStartedHold", (Uint32)0) != 0)
+    {
+      while (ctx->getProperty("HalfStartedHold", (Uint32)0) != 0)
+      {
+        ndbout << "Half started holding..." << endl;
+        ctx->setProperty("HalfStartedDone", (Uint32)1);
+        NdbSleep_SecSleep(30);
+      }
+      ndbout << "Got half started continue..." << endl;
+    }
+
     // Restart the remaining nodes
     cnt= 0;
     for (Uint32 i = 0; (i<nodes.size() && restartCount); i++)
@@ -592,15 +813,48 @@ int runCheckStarted(NDBT_Context* ctx, NDBT_Step* step){
   return NDBT_OK;
 }
 
+int
+runCreateIndexT1(NDBT_Context* ctx, NDBT_Step* step)
+{
+  Ndb* pNdb = GETNDB(step);
+  NdbDictionary::Dictionary* pDict = pNdb->getDictionary();
+  const NdbDictionary::Table* pTab = pDict->getTable("T1");
+  if (pTab == 0)
+  {
+    g_err << "getTable(T1) error: " << pDict->getNdbError() << endl;
+    return NDBT_FAILED;
+  }
+  NdbDictionary::Index ind;
+  ind.setName("T1X1");
+  ind.setTable("T1");
+  ind.setType(NdbDictionary::Index::OrderedIndex);
+  ind.setLogging(false);
+  ind.addColumn("KOL2");
+  ind.addColumn("KOL3");
+  ind.addColumn("KOL4");
+  if (pDict->createIndex(ind, *pTab) != 0)
+  {
+    g_err << "createIndex(T1X1) error: " << pDict->getNdbError() << endl;
+    return NDBT_FAILED;
+  }
+  return NDBT_OK;
+}
+
 int 
 runCreateAllTables(NDBT_Context* ctx, NDBT_Step* step)
 {
+  Uint32 useRangeScanT1 = ctx->getProperty("UseRangeScanT1", (Uint32)0);
+
   ndbout_c("createAllTables");
   if (NDBT_Tables::createAllTables(GETNDB(step), false, true))
     return NDBT_FAILED;
 
   for (int i = 0; i<NDBT_Tables::getNumTables(); i++)
     table_list.push_back(BaseString(NDBT_Tables::getTable(i)->getName()));
+
+  if (useRangeScanT1)
+    if (runCreateIndexT1(ctx, step) != NDBT_OK)
+      return NDBT_FAILED;
 
   return NDBT_OK;
 }
@@ -680,6 +934,8 @@ runClearAll(NDBT_Context* ctx, NDBT_Step* step)
 int
 runBasic(NDBT_Context* ctx, NDBT_Step* step)
 {
+  Uint32 useRangeScanT1 = ctx->getProperty("UseRangeScanT1", (uint32)0);
+
   Ndb* pNdb = GETNDB(step);
   NdbDictionary::Dictionary * pDict = pNdb->getDictionary();
   int records = ctx->getNumRecords();
@@ -705,6 +961,49 @@ runBasic(NDBT_Context* ctx, NDBT_Step* step)
         // (or check if it does)
         if (strcmp(tab->getName(), "T1") == 0)
           trans.pkInterpretedUpdateRecords(pNdb, records);
+        if (strcmp(tab->getName(), "T1") == 0 &&
+            useRangeScanT1)
+        {
+          const NdbDictionary::Index* pInd = pDict->getIndex("T1X1", "T1");
+          if (pInd == 0)
+          {
+            g_err << "getIndex(T1X1) error: " << pDict->getNdbError() << endl;
+            return NDBT_FAILED;
+          }
+          // bug#13834481 - bound values do not matter
+          const Uint32 lo = 0x11110000;
+          const Uint32 hi = 0xaaaa0000;
+          HugoTransactions::HugoBound bound_arr[6];
+          int bound_cnt = 0;
+          for (int j = 0; j <= 1; j++) {
+            int n = rand() % 4;
+            for (int i = 0; i < n; i++) {
+              HugoTransactions::HugoBound& b = bound_arr[bound_cnt++];
+              b.attr = i;
+              b.type = (j == 0 ? 0 : 2); // LE/GE
+              b.value = (j == 0 ? &lo : &hi);
+            }
+          }
+          g_info << "range scan T1 with " << bound_cnt << " bounds" << endl;
+          if (trans.scanReadRecords(pNdb, pInd, records, 0, 0,
+              NdbOperation::LM_Read, 0, bound_cnt, bound_arr) != 0)
+          {
+            const NdbError& err = trans.getNdbError();
+            /*
+             * bug#13834481 symptoms include timeouts and error 1231.
+             * Check for any non-temporary error.
+             */
+            if (err.status == NdbError::TemporaryError)
+            {
+              g_info << "range scan T1 temporary error: " << err << endl;
+            }
+            if (err.status != NdbError::TemporaryError)
+            {
+              g_err << "range scan T1 permanent error: " << err << endl;
+              return NDBT_FAILED;
+            }
+          }
+        }
         trans.clearTable(pNdb, records/2);
         trans.loadTable(pNdb, records/2);
         break;
@@ -714,7 +1013,7 @@ runBasic(NDBT_Context* ctx, NDBT_Step* step)
         trans.clearTable(pNdb, records/2);
         break;
       case 3:
-        if (createDropEvent(ctx, step))
+        if (createDropEvent(ctx, step, false))
         {
           return NDBT_FAILED;
         }
@@ -724,6 +1023,133 @@ runBasic(NDBT_Context* ctx, NDBT_Step* step)
     l++;
   }
   
+  return result;
+}
+
+#define CHK2(b, e) \
+  if (!(b)) { \
+    g_err << "ERR: " << #b << " failed at line " << __LINE__ \
+          << ": " << e << endl; \
+    result = NDBT_FAILED; \
+    break; \
+  }
+
+static int
+runBug14702377(NDBT_Context* ctx, NDBT_Step* step)
+{
+  Ndb* pNdb = GETNDB(step);
+  NdbDictionary::Dictionary * pDict = pNdb->getDictionary();
+  int records = ctx->getNumRecords();
+  int result = NDBT_OK;
+
+  while (ctx->getProperty("HalfStartedDone", (Uint32)0) == 0)
+  {
+    ndbout << "Wait for half started..." << endl;
+    NdbSleep_SecSleep(15);
+  }
+  ndbout << "Got half started" << endl;
+
+  while (1)
+  {
+    require(table_list.size() == 1);
+    const char* tabname = table_list[0].c_str();
+    const NdbDictionary::Table* tab = 0;
+    CHK2((tab = pDict->getTable(tabname)) != 0,
+          tabname << ": " << pDict->getNdbError());
+    const int ncol = tab->getNoOfColumns();
+
+    {
+      HugoTransactions trans(*tab);
+      CHK2(trans.loadTable(pNdb, records) == 0, trans.getNdbError());
+    }
+
+    for (int r = 0; r < records; r++)
+    {
+      // with 1000 records will surely hit bug case
+      const int lm = myRandom48(4); // 2
+      const int nval = myRandom48(ncol + 1); // most
+      const bool exist = myRandom48(2); // false
+
+      NdbTransaction* pTx = 0;
+      NdbOperation* pOp = 0;
+      CHK2((pTx = pNdb->startTransaction()) != 0,
+           pNdb->getNdbError());
+      CHK2((pOp = pTx->getNdbOperation(tab)) != 0,
+           pTx->getNdbError());
+      CHK2((pOp->readTuple((NdbOperation::LockMode)lm)) == 0,
+           pOp->getNdbError());
+
+      for (int id = 0; id <= 0; id++)
+      {
+        const NdbDictionary::Column* c = tab->getColumn(id);
+        require(c != 0 && c->getPrimaryKey() &&
+               c->getType() == NdbDictionary::Column::Unsigned);
+        Uint32 val = myRandom48(records);
+        if (!exist)
+          val = 0xaaaa0000 + myRandom48(0xffff + 1);
+        const char* valp = (const char*)&val;
+        CHK2(pOp->equal(id, valp) == 0, pOp->getNdbError());
+      }
+      CHK2(result == NDBT_OK, "failed");
+
+      for (int id = 0; id < nval; id++)
+      {
+        const NdbDictionary::Column* c = tab->getColumn(id);
+        require(c != 0 && (id == 0 || !c->getPrimaryKey()));
+        CHK2(pOp->getValue(id) != 0, pOp->getNdbError());
+      }
+      CHK2(result == NDBT_OK, "failed");
+
+      char info1[200];
+      sprintf(info1, "lm=%d nval=%d exist=%d",
+                      lm, nval, exist);
+      g_info << "PK read T1 exec: " << info1 << endl;
+      Uint64 t1 = NdbTick_CurrentMillisecond();
+      int ret = pTx->execute(NdbTransaction::NoCommit);
+      Uint64 t2 = NdbTick_CurrentMillisecond();
+      int msec = (int)(t2-t1);
+      const NdbError& txerr = pTx->getNdbError();
+      const NdbError& operr = pOp->getNdbError();
+      char info2[200];
+      sprintf(info2, "%s msec=%d ret=%d txerr=%d operr=%d",
+                      info1, msec, ret, txerr.code, operr.code);
+      g_info << "PK read T1 done: " << info2 << endl;
+
+      if (ret == 0 && txerr.code == 0 && operr.code == 0)
+      {
+        CHK2(exist, "row should not be found: " << info2);
+      }
+      else
+      if (ret == 0 && txerr.code == 626 && operr.code == 626)
+      {
+        CHK2(!exist, "row should be found: " << info2);
+      }
+      else
+      if (txerr.status == NdbError::TemporaryError)
+      {
+        g_err << "PK read T1 temporary error (tx): " << info2 << endl;
+        NdbSleep_MilliSleep(50);
+      }
+      else
+      if (operr.status == NdbError::TemporaryError)
+      {
+        g_err << "PK read T1 temporary error (op): " << info2 << endl;
+        NdbSleep_MilliSleep(50);
+      }
+      else
+      {
+        // gets 4012 before bugfix
+        CHK2(false, "unexpected error: " << info2);
+      }
+      pNdb->closeTransaction(pTx);
+      pTx = 0;
+    }
+
+    break;
+  }
+
+  g_err << "Clear half started hold..." << endl;
+  ctx->setProperty("HalfStartedHold", (Uint32)0);
   return result;
 }
 
@@ -835,7 +1261,7 @@ runPostUpgradeChecks(NDBT_Context* ctx, NDBT_Step* step)
    *   automatically by NDBT...
    *   so when we enter here, this is already tested
    */
-  NdbBackup backup(GETNDB(step)->getNodeId()+1);
+  NdbBackup backup;
 
   ndbout << "Starting backup..." << flush;
   if (backup.start() != 0)
@@ -1009,6 +1435,138 @@ int runPostUpgradeDecideDDL(NDBT_Context* ctx, NDBT_Step* step)
   return NDBT_OK;
 }
 
+static
+int
+runUpgrade_SR(NDBT_Context* ctx, NDBT_Step* step)
+{
+  /* System restart upgrade.
+   * Stop all data nodes
+   * Change versions
+   * Restart em together.
+   */
+  AtrtClient atrt;
+  NodeSet mgmdNodeSet = All;
+
+  const char * args = "";
+  bool skipMgmds = (ctx->getProperty("SkipMgmds", Uint32(0)) != 0);
+
+  SqlResultSet clusters;
+  if (!atrt.getClusters(clusters))
+    return NDBT_FAILED;
+
+  while (clusters.next())
+  {
+    uint clusterId= clusters.columnAsInt("id");
+    SqlResultSet tmp_result;
+    if (!atrt.getConnectString(clusterId, tmp_result))
+      return NDBT_FAILED;
+
+    NdbRestarter restarter(tmp_result.column("connectstring"));
+    restarter.setReconnect(true); // Restarting mgmd
+    g_err << "Cluster '" << clusters.column("name")
+          << "@" << tmp_result.column("connectstring") << "'" << endl;
+
+    if(restarter.waitClusterStarted())
+      return NDBT_FAILED;
+
+    /* Now restart to nostart state, prior to SR */
+    g_err << "Restarting all data nodes-nostart" << endl;
+    if (restarter.restartAll2(NdbRestarter::NRRF_NOSTART) != 0)
+    {
+      g_err << "Failed to restart all" << endl;
+      return NDBT_FAILED;
+    }
+    
+    ndbout << "Waiting for no-start state" << endl;
+    if (restarter.waitClusterNoStart() != 0)
+    {
+      g_err << "Failed waiting for NoStart state" << endl;
+      return NDBT_FAILED;
+    }
+    
+    // Restart ndb_mgmd(s)
+    SqlResultSet mgmds;
+    if (!atrt.getMgmds(clusterId, mgmds))
+      return NDBT_FAILED;
+
+    uint mgmdCount = mgmds.numRows();
+    uint restartCount = getNodeCount(mgmdNodeSet, mgmdCount);
+
+    if (!skipMgmds)
+    {
+      ndbout << "Restarting "
+             << restartCount << " of " << mgmdCount
+             << " mgmds" << endl;
+      
+      while (mgmds.next() && restartCount --)
+      {
+        ndbout << "Restart mgmd" << mgmds.columnAsInt("node_id") << endl;
+        if (!atrt.changeVersion(mgmds.columnAsInt("id"), ""))
+          return NDBT_FAILED;
+        
+        if(restarter.waitConnected())
+          return NDBT_FAILED;
+      }
+
+      NdbSleep_SecSleep(5); // TODO, handle arbitration
+    }
+    else
+    {
+      ndbout << "Skipping MGMD upgrade" << endl;
+    }
+
+    // Restart all ndbds
+    SqlResultSet ndbds;
+    if (!atrt.getNdbds(clusterId, ndbds))
+      return NDBT_FAILED;
+
+    uint ndbdCount = ndbds.numRows();
+    restartCount = ndbdCount;
+    
+    ndbout << "Upgrading "
+             << restartCount << " of " << ndbdCount
+             << " ndbds" << endl;
+    
+    while (ndbds.next())
+    {
+      uint nodeId = ndbds.columnAsInt("node_id");
+      uint processId = ndbds.columnAsInt("id");
+      
+      ndbout << "Upgrading node " << nodeId << endl;
+      
+      if (!atrt.changeVersion(processId, args))
+        return NDBT_FAILED;
+    }
+
+    ndbout << "Waiting for no-start state" << endl;
+    if (restarter.waitClusterNoStart() != 0)
+    {
+      g_err << "Failed waiting for NoStart state" << endl;
+      return NDBT_FAILED;
+    }
+
+    ndbout << "Starting cluster (SR)" << endl;
+    
+    if (restarter.restartAll2(0) != 0)
+    {
+      g_err << "Error restarting all nodes" << endl;
+      return NDBT_FAILED;
+    }
+
+    ndbout << "Waiting for cluster to start" << endl;
+    if (restarter.waitClusterStarted() != 0)
+    {
+      g_err << "Failed waiting for Cluster start" << endl;
+      return NDBT_FAILED;
+    }
+
+    ndbout << "Cluster started." << endl;
+  }
+
+  return NDBT_OK;
+}
+
+
 
 NDBT_TESTSUITE(testUpgrade);
 TESTCASE("Upgrade_NR1",
@@ -1063,6 +1621,7 @@ POSTUPGRADE("Upgrade_FS")
 TESTCASE("Upgrade_Traffic",
 	 "Test upgrade with traffic, all tables and restart --initial")
 {
+  TC_PROPERTY("UseRangeScanT1", (Uint32)1);
   INITIALIZER(runCheckStarted);
   INITIALIZER(runCreateAllTables);
   STEP(runUpgrade_Traffic);
@@ -1077,6 +1636,7 @@ POSTUPGRADE("Upgrade_Traffic")
 TESTCASE("Upgrade_Traffic_FS",
 	 "Test upgrade with traffic, all tables and restart using FS")
 {
+  TC_PROPERTY("UseRangeScanT1", (Uint32)1);
   TC_PROPERTY("KeepFS", 1);
   INITIALIZER(runCheckStarted);
   INITIALIZER(runCreateAllTables);
@@ -1191,6 +1751,35 @@ POSTUPGRADE("Upgrade_Mixed_MGMD_API_NDBD")
   FINALIZER(runPostUpgradeChecks);
   FINALIZER(runClearAll);
 }
+TESTCASE("Bug14702377",
+         "Dirty PK read of non-existent tuple  6.3->7.x hangs"){
+  TC_PROPERTY("HalfStartedHold", (Uint32)1);
+  INITIALIZER(runCheckStarted);
+  INITIALIZER(runCreateOneTable);
+  STEP(runUpgrade_Half);
+  STEP(runBug14702377);
+}
+POSTUPGRADE("Bug14702377")
+{
+  INITIALIZER(runCheckStarted);
+  INITIALIZER(runPostUpgradeChecks);
+}
+TESTCASE("Upgrade_SR_ManyTablesMaxFrag",
+         "Check that number of tables has no impact")
+{
+  TC_PROPERTY("SkipMgmds", Uint32(1)); /* For 7.0.14... */
+  TC_PROPERTY("FragmentCount", ~Uint32(0));
+  INITIALIZER(runCheckStarted);
+  INITIALIZER(createManyTables);
+  STEP(runUpgrade_SR);
+  VERIFIER(startPostUpgradeChecks);
+}
+POSTUPGRADE("Upgrade_SR_ManyTablesMaxFrag")
+{
+  INITIALIZER(runCheckStarted);
+  INITIALIZER(runPostUpgradeChecks);
+  INITIALIZER(dropManyTables);
+}
   
 NDBT_TESTSUITE_END(testUpgrade);
 
@@ -1198,7 +1787,16 @@ int main(int argc, const char** argv){
   ndb_init();
   NDBT_TESTSUITE_INSTANCE(testUpgrade);
   testUpgrade.setCreateAllTables(true);
-  return testUpgrade.execute(argc, argv);
+  if (0)
+  {
+    static char env[100];
+    strcpy(env, "API_SIGNAL_LOG=-"); // stdout
+    putenv(env);
+  }
+  createDropEvent_mutex = NdbMutex_Create();
+  int ret = testUpgrade.execute(argc, argv);
+  NdbMutex_Destroy(createDropEvent_mutex);
+  return ret;
 }
 
 template class Vector<NodeInfo>;

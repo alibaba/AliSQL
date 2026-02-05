@@ -1,13 +1,25 @@
-/* Copyright (c) 2000, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -21,6 +33,34 @@
 */
 
 #include "vio_priv.h"
+
+#ifdef HAVE_OPENSSL
+PSI_memory_key key_memory_vio_ssl_fd;
+#endif
+
+PSI_memory_key key_memory_vio;
+PSI_memory_key key_memory_vio_read_buffer;
+
+#ifdef HAVE_PSI_INTERFACE
+static PSI_memory_info all_vio_memory[]=
+{
+#ifdef HAVE_OPENSSL
+  {&key_memory_vio_ssl_fd, "ssl_fd", 0},
+#endif
+
+  {&key_memory_vio, "vio", 0},
+  {&key_memory_vio_read_buffer, "read_buffer", 0},
+};
+
+void init_vio_psi_keys()
+{
+  const char* category= "vio";
+  int count;
+
+  count= array_elements(all_vio_memory);
+  mysql_memory_register(category, all_vio_memory, count);
+}
+#endif
 
 #ifdef _WIN32
 
@@ -51,14 +91,6 @@ static my_bool has_no_data(Vio *vio MY_ATTRIBUTE((unused)))
   return FALSE;
 }
 
-#ifdef _WIN32
-my_bool vio_shared_memory_has_data(Vio *vio)
-{
-  return (vio->shared_memory_remain > 0);
-}
-
-#endif
-
 /*
  * Helper to fill most of the Vio* with defaults.
  */
@@ -69,9 +101,6 @@ static void vio_init(Vio *vio, enum enum_vio_type type,
   DBUG_ENTER("vio_init");
   DBUG_PRINT("enter", ("type: %d  sd: %d  flags: %d", type, sd, flags));
 
-#ifndef HAVE_VIO_READ_BUFF
-  flags&= ~VIO_BUFFERED_READ;
-#endif
   memset(vio, 0, sizeof(*vio));
   vio->type= type;
   vio->mysql_socket= MYSQL_INVALID_SOCKET;
@@ -79,7 +108,8 @@ static void vio_init(Vio *vio, enum enum_vio_type type,
   vio->localhost= flags & VIO_LOCALHOST;
   vio->read_timeout= vio->write_timeout= -1;
   if ((flags & VIO_BUFFERED_READ) &&
-      !(vio->read_buffer= (char*)my_malloc(VIO_READ_BUFFER_SIZE, MYF(MY_WME))))
+      !(vio->read_buffer= (char*)my_malloc(key_memory_vio_read_buffer,
+                                           VIO_READ_BUFFER_SIZE, MYF(MY_WME))))
     flags&= ~VIO_BUFFERED_READ;
 #ifdef _WIN32
   if (type == VIO_TYPE_NAMEDPIPE)
@@ -93,15 +123,13 @@ static void vio_init(Vio *vio, enum enum_vio_type type,
     vio->should_retry	=vio_should_retry;
     vio->was_timeout    =vio_was_timeout;
     vio->vioshutdown	=vio_shutdown_pipe;
-    vio->viocancel      =vio_cancel_pipe;
     vio->peer_addr	=vio_peer_addr;
     vio->io_wait        =no_io_wait;
     vio->is_connected   =vio_is_connected_pipe;
     vio->has_data       =has_no_data;
     DBUG_VOID_RETURN;
   }
-#endif
-#ifdef HAVE_SMEM
+#ifndef EMBEDDED_LIBRARY
   if (type == VIO_TYPE_SHARED_MEMORY)
   {
     vio->viodelete	=vio_delete_shared_memory;
@@ -113,14 +141,14 @@ static void vio_init(Vio *vio, enum enum_vio_type type,
     vio->should_retry	=vio_should_retry;
     vio->was_timeout    =vio_was_timeout;
     vio->vioshutdown	=vio_shutdown_shared_memory;
-    vio->viocancel      =vio_cancel_shared_memory;
     vio->peer_addr	=vio_peer_addr;
     vio->io_wait        =no_io_wait;
     vio->is_connected   =vio_is_connected_shared_memory;
-    vio->has_data       =vio_shared_memory_has_data;
+    vio->has_data       =has_no_data;
     DBUG_VOID_RETURN;
   }
-#endif
+#endif /* !EMBEDDED_LIBRARY */
+#endif /* _WIN32 */
 #ifdef HAVE_OPENSSL
   if (type == VIO_TYPE_SSL)
   {
@@ -133,7 +161,6 @@ static void vio_init(Vio *vio, enum enum_vio_type type,
     vio->should_retry	=vio_should_retry;
     vio->was_timeout    =vio_was_timeout;
     vio->vioshutdown	=vio_ssl_shutdown;
-    vio->viocancel      =vio_cancel;
     vio->peer_addr	=vio_peer_addr;
     vio->io_wait        =vio_io_wait;
     vio->is_connected   =vio_is_connected;
@@ -151,7 +178,6 @@ static void vio_init(Vio *vio, enum enum_vio_type type,
   vio->should_retry     =vio_should_retry;
   vio->was_timeout      =vio_was_timeout;
   vio->vioshutdown      =vio_shutdown;
-  vio->viocancel        =vio_cancel;
   vio->peer_addr        =vio_peer_addr;
   vio->io_wait          =vio_io_wait;
   vio->is_connected     =vio_is_connected;
@@ -196,7 +222,7 @@ my_bool vio_reset(Vio* vio, enum enum_vio_type type,
   DBUG_ENTER("vio_reset");
 
   /* The only supported rebind is from a socket-based transport type. */
-  DBUG_ASSERT(vio->type == VIO_TYPE_TCPIP || vio->type == VIO_TYPE_SOCKET);
+  assert(vio->type == VIO_TYPE_TCPIP || vio->type == VIO_TYPE_SOCKET);
 
   vio_init(&new_vio, type, sd, flags);
 
@@ -257,7 +283,8 @@ Vio *mysql_socket_vio_new(MYSQL_SOCKET mysql_socket, enum enum_vio_type type, ui
   my_socket sd= mysql_socket_getfd(mysql_socket);
   DBUG_ENTER("mysql_socket_vio_new");
   DBUG_PRINT("enter", ("sd: %d", sd));
-  if ((vio = (Vio*) my_malloc(sizeof(*vio),MYF(MY_WME))))
+  if ((vio = (Vio*) my_malloc(key_memory_vio,
+                              sizeof(*vio),MYF(MY_WME))))
   {
     vio_init(vio, type, sd, flags);
     vio->mysql_socket= mysql_socket;
@@ -286,7 +313,8 @@ Vio *vio_new_win32pipe(HANDLE hPipe)
 {
   Vio *vio;
   DBUG_ENTER("vio_new_handle");
-  if ((vio = (Vio*) my_malloc(sizeof(Vio),MYF(MY_WME))))
+  if ((vio = (Vio*) my_malloc(key_memory_vio,
+                              sizeof(Vio),MYF(MY_WME))))
   {
     vio_init(vio, VIO_TYPE_NAMEDPIPE, 0, VIO_LOCALHOST);
     /* Create an object for event notification. */
@@ -297,12 +325,12 @@ Vio *vio_new_win32pipe(HANDLE hPipe)
       DBUG_RETURN(NULL);
     }
     vio->hPipe= hPipe;
-    strmov(vio->desc, "named pipe");
+    my_stpcpy(vio->desc, "named pipe");
   }
   DBUG_RETURN(vio);
 }
 
-#ifdef HAVE_SMEM
+#ifndef EMBEDDED_LIBRARY
 Vio *vio_new_win32shared_memory(HANDLE handle_file_map, HANDLE handle_map,
                                 HANDLE event_server_wrote, HANDLE event_server_read,
                                 HANDLE event_client_wrote, HANDLE event_client_read,
@@ -310,7 +338,8 @@ Vio *vio_new_win32shared_memory(HANDLE handle_file_map, HANDLE handle_map,
 {
   Vio *vio;
   DBUG_ENTER("vio_new_win32shared_memory");
-  if ((vio = (Vio*) my_malloc(sizeof(Vio),MYF(MY_WME))))
+  if ((vio = (Vio*) my_malloc(key_memory_vio,
+                              sizeof(Vio),MYF(MY_WME))))
   {
     vio_init(vio, VIO_TYPE_SHARED_MEMORY, 0, VIO_LOCALHOST);
     vio->handle_file_map= handle_file_map;
@@ -322,7 +351,7 @@ Vio *vio_new_win32shared_memory(HANDLE handle_file_map, HANDLE handle_map,
     vio->event_conn_closed= event_conn_closed;
     vio->shared_memory_remain= 0;
     vio->shared_memory_pos= handle_map;
-    strmov(vio->desc, "shared memory");
+    my_stpcpy(vio->desc, "shared memory");
   }
   DBUG_RETURN(vio);
 }
@@ -392,13 +421,49 @@ void vio_delete(Vio* vio)
 */
 void vio_end(void)
 {
-#if defined(HAVE_YASSL)
-  yaSSL_CleanUp();
-#elif defined(HAVE_OPENSSL)
-  // This one is needed on the client side
-  ERR_remove_state(0);
-  ERR_free_strings();
-  EVP_cleanup();
-  CRYPTO_cleanup_all_ex_data();
+#if defined(HAVE_OPENSSL)
+  vio_ssl_end();
 #endif
 }
+
+struct vio_string
+{
+  const char * m_str;
+  int m_len;
+};
+typedef struct vio_string vio_string;
+
+/**
+  Names for each VIO TYPE.
+  Indexed by enum_vio_type.
+  If you add more, please update audit_log.cc
+*/
+static const vio_string vio_type_names[] =
+{
+  { "", 0},
+  { C_STRING_WITH_LEN("TCP/IP") },
+  { C_STRING_WITH_LEN("Socket") },
+  { C_STRING_WITH_LEN("Named Pipe") },
+  { C_STRING_WITH_LEN("SSL/TLS") },
+  { C_STRING_WITH_LEN("Shared Memory") },
+  { C_STRING_WITH_LEN("Internal") },
+  { C_STRING_WITH_LEN("Plugin") }
+};
+
+void get_vio_type_name(enum enum_vio_type vio_type, const char ** str, int * len)
+{
+  int index;
+
+  if ((vio_type >= FIRST_VIO_TYPE) && (vio_type <= LAST_VIO_TYPE))
+  {
+    index= vio_type;
+  }
+  else
+  {
+    index= 0;
+  }
+  *str= vio_type_names[index].m_str;
+  *len= vio_type_names[index].m_len;
+  return;
+}
+

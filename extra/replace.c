@@ -1,15 +1,21 @@
 /*
-   Copyright (c) 2000, 2014, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
-   This program is free software; you can redistribute it and/or
-   modify it under the terms of the GNU General Public License
-   as published by the Free Software Foundation; version 2 of
-   the License.
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-   GNU General Public License for more details.
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -107,6 +113,10 @@ int main(int argc, char *argv[])
   char word_end_chars[256],*pos;
   POINTER_ARRAY from,to;
   REPLACE *replace;
+
+  fprintf(stderr, "Warning: replace is deprecated and will be removed in a "
+          "future version.\n");
+
   MY_INIT(argv[0]);
 
   if (static_get_options(&argc,&argv))
@@ -148,8 +158,8 @@ int main(int argc, char *argv[])
 	/* Initiates DEBUG - but no debugging here ! */
 
 static int static_get_options(argc,argv)
-register int *argc;
-register char **argv[];
+int *argc;
+char **argv[];
 {
   int help,version;
   char *pos;
@@ -173,6 +183,7 @@ register char **argv[];
 	break;
       case 'V':
 	version=1;
+        // Fall through.
       case 'I':
       case '?':
 	help=1;					/* Help text written */
@@ -209,7 +220,7 @@ register char **argv[];
   if (*argc == 0)
   {
     if (!help)
-      my_message(0,"No replace options given",MYF(ME_BELL));
+      my_message(0,"No replace options given",MYF(0));
     exit(0);					/* Don't use as pipe */
   }
   return(0);
@@ -217,8 +228,8 @@ register char **argv[];
 
 
 static int get_replace_strings(argc,argv,from_array,to_array)
-register int *argc;
-register char **argv[];
+int *argc;
+char **argv[];
 POINTER_ARRAY *from_array,*to_array;
 {
   char *pos;
@@ -232,7 +243,7 @@ POINTER_ARRAY *from_array,*to_array;
     (*argv)++;
     if (!*argc || !strcmp(**argv,"--"))
     {
-      my_message(0,"No to-string for last from-string",MYF(ME_BELL));
+      my_message(0,"No to-string for last from-string",MYF(0));
       return 1;
     }
     insert_pointer_name(to_array,**argv);
@@ -247,7 +258,7 @@ POINTER_ARRAY *from_array,*to_array;
   return 0;
 }
 
-static int insert_pointer_name(reg1 POINTER_ARRAY *pa,char * name)
+static int insert_pointer_name(POINTER_ARRAY *pa,char * name)
 {
   uint i,length,old_count;
   uchar *new_pos;
@@ -257,14 +268,16 @@ static int insert_pointer_name(reg1 POINTER_ARRAY *pa,char * name)
   if (! pa->typelib.count)
   {
     if (!(pa->typelib.type_names=(const char **)
-	  my_malloc(((PC_MALLOC-MALLOC_OVERHEAD)/
+	  my_malloc(PSI_NOT_INSTRUMENTED,
+                    ((PC_MALLOC-MALLOC_OVERHEAD)/
 		     (sizeof(char *)+sizeof(*pa->flag))*
 		     (sizeof(char *)+sizeof(*pa->flag))),MYF(MY_WME))))
       DBUG_RETURN(-1);
-    if (!(pa->str= (uchar*) my_malloc((uint) (PS_MALLOC-MALLOC_OVERHEAD),
+    if (!(pa->str= (uchar*) my_malloc(PSI_NOT_INSTRUMENTED,
+                                      (uint) (PS_MALLOC-MALLOC_OVERHEAD),
 				     MYF(MY_WME))))
     {
-      my_free(pa->typelib.type_names);
+      my_free((char**)pa->typelib.type_names);
       DBUG_RETURN (-1);
     }
     pa->max_count=(PC_MALLOC-MALLOC_OVERHEAD)/(sizeof(uchar*)+
@@ -279,7 +292,8 @@ static int insert_pointer_name(reg1 POINTER_ARRAY *pa,char * name)
   {
     pa->max_length=(pa->length+length+MALLOC_OVERHEAD+PS_MALLOC-1)/PS_MALLOC;
     pa->max_length=pa->max_length*PS_MALLOC-MALLOC_OVERHEAD;
-    if (!(new_pos= (uchar*) my_realloc((uchar*) pa->str,
+    if (!(new_pos= (uchar*) my_realloc(PSI_NOT_INSTRUMENTED,
+                                       (uchar*) pa->str,
 				      (uint) pa->max_length,
 				      MYF(MY_WME))))
       DBUG_RETURN(1);
@@ -297,7 +311,8 @@ static int insert_pointer_name(reg1 POINTER_ARRAY *pa,char * name)
     int len;
     pa->array_allocs++;
     len=(PC_MALLOC*pa->array_allocs - MALLOC_OVERHEAD);
-    if (!(new_array=(const char **) my_realloc((uchar*) pa->typelib.type_names,
+    if (!(new_array=(const char **) my_realloc(PSI_NOT_INSTRUMENTED,
+                                               (uchar*) pa->typelib.type_names,
 					       (uint) len/
 					 (sizeof(uchar*)+sizeof(*pa->flag))*
 					 (sizeof(uchar*)+sizeof(*pa->flag)),
@@ -313,7 +328,7 @@ static int insert_pointer_name(reg1 POINTER_ARRAY *pa,char * name)
   pa->flag[pa->typelib.count]=0;			/* Reset flag */
   pa->typelib.type_names[pa->typelib.count++]= (char*) (pa->str+pa->length);
   pa->typelib.type_names[pa->typelib.count]= NullS;	/* Put end-mark */
-  (void) strmov((char*) pa->str + pa->length, name);
+  (void) my_stpcpy((char*) pa->str + pa->length, name);
   pa->length+=length;
   DBUG_RETURN(0);
 } /* insert_pointer_name */
@@ -321,12 +336,12 @@ static int insert_pointer_name(reg1 POINTER_ARRAY *pa,char * name)
 
 	/* free pointer array */
 
-static void free_pointer_array(reg1 POINTER_ARRAY *pa)
+static void free_pointer_array(POINTER_ARRAY *pa)
 {
   if (pa->typelib.count)
   {
     pa->typelib.count=0;
-    my_free(pa->typelib.type_names);
+    my_free((char**)pa->typelib.type_names);
     pa->typelib.type_names=0;
     my_free(pa->str);
   }
@@ -414,7 +429,7 @@ static REPLACE *init_replace(char * *from, char * *to,uint count,
     if (!len)
     {
       errno=EINVAL;
-      my_message(0,"No to-string for last from-string",MYF(ME_BELL));
+      my_message(0,"No to-string for last from-string",MYF(0));
       DBUG_RETURN(0);
     }
     states+=len+1;
@@ -429,7 +444,8 @@ static REPLACE *init_replace(char * *from, char * *to,uint count,
   if (init_sets(&sets,states))
     DBUG_RETURN(0);
   found_sets=0;
-  if (!(found_set= (FOUND_SET*) my_malloc(sizeof(FOUND_SET)*max_length*count,
+  if (!(found_set= (FOUND_SET*) my_malloc(PSI_NOT_INSTRUMENTED,
+                                          sizeof(FOUND_SET)*max_length*count,
 					  MYF(MY_WME))))
   {
     free_sets(&sets);
@@ -440,7 +456,8 @@ static REPLACE *init_replace(char * *from, char * *to,uint count,
   used_sets=-1;
   word_states=make_new_set(&sets);		/* Start of new word */
   start_states=make_new_set(&sets);		/* This is first state */
-  if (!(follow=(FOLLOWS*) my_malloc((states+2)*sizeof(FOLLOWS),MYF(MY_WME))))
+  if (!(follow=(FOLLOWS*) my_malloc(PSI_NOT_INSTRUMENTED,
+                                    (states+2)*sizeof(FOLLOWS),MYF(MY_WME))))
   {
     free_sets(&sets);
     my_free(found_set);
@@ -632,7 +649,8 @@ static REPLACE *init_replace(char * *from, char * *to,uint count,
 
 	/* Alloc replace structure for the replace-state-machine */
 
-  if ((replace=(REPLACE*) my_malloc(sizeof(REPLACE)*(sets.count)+
+  if ((replace=(REPLACE*) my_malloc(PSI_NOT_INSTRUMENTED,
+                                    sizeof(REPLACE)*(sets.count)+
 				    sizeof(REPLACE_STRING)*(found_sets+1)+
 				    sizeof(char *)*count+result_len,
 				    MYF(MY_WME | MY_ZEROFILL))))
@@ -643,7 +661,7 @@ static REPLACE *init_replace(char * *from, char * *to,uint count,
     for (i=0 ; i < count ; i++)
     {
       to_array[i]=to_pos;
-      to_pos=strmov(to_pos,to[i])+1;
+      to_pos=my_stpcpy(to_pos,to[i])+1;
     }
     rep_str[0].found=1;
     rep_str[0].replace_string=0;
@@ -677,10 +695,12 @@ static int init_sets(REP_SETS *sets,uint states)
 {
   memset(sets, 0, sizeof(*sets));
   sets->size_of_bits=((states+7)/8);
-  if (!(sets->set_buffer=(REP_SET*) my_malloc(sizeof(REP_SET)*SET_MALLOC_HUNC,
+  if (!(sets->set_buffer=(REP_SET*) my_malloc(PSI_NOT_INSTRUMENTED,
+                                              sizeof(REP_SET)*SET_MALLOC_HUNC,
 					      MYF(MY_WME))))
     return 1;
-  if (!(sets->bit_buffer=(uint*) my_malloc(sizeof(uint)*sets->size_of_bits*
+  if (!(sets->bit_buffer=(uint*) my_malloc(PSI_NOT_INSTRUMENTED,
+                                           sizeof(uint)*sets->size_of_bits*
 					   SET_MALLOC_HUNC,MYF(MY_WME))))
   {
     my_free(sets->set);
@@ -715,13 +735,15 @@ static REP_SET *make_new_set(REP_SETS *sets)
     return set;
   }
   count=sets->count+sets->invisible+SET_MALLOC_HUNC;
-  if (!(set=(REP_SET*) my_realloc((uchar*) sets->set_buffer,
+  if (!(set=(REP_SET*) my_realloc(PSI_NOT_INSTRUMENTED,
+                                  (uchar*) sets->set_buffer,
 				   sizeof(REP_SET)*count,
 				  MYF(MY_WME))))
     return 0;
   sets->set_buffer=set;
   sets->set=set+sets->invisible;
-  if (!(bit_buffer=(uint*) my_realloc((uchar*) sets->bit_buffer,
+  if (!(bit_buffer=(uint*) my_realloc(PSI_NOT_INSTRUMENTED,
+                                      (uchar*) sets->bit_buffer,
 				      (sizeof(uint)*sets->size_of_bits)*count,
 				      MYF(MY_WME))))
     return 0;
@@ -764,7 +786,7 @@ static void internal_clear_bit(REP_SET *set, uint bit)
 
 static void or_bits(REP_SET *to,REP_SET *from)
 {
-  reg1 uint i;
+  uint i;
   for (i=0 ; i < to->size_of_bits ; i++)
     to->bits[i]|=from->bits[i];
   return;
@@ -882,8 +904,8 @@ static uint replace_len(char * str)
 static uint replace_strings(REPLACE *rep, char **start, uint *max_length,
                             char *from)
 {
-  reg1 REPLACE *rep_pos;
-  reg2 REPLACE_STRING *rep_str;
+  REPLACE *rep_pos;
+  REPLACE_STRING *rep_str;
   char *to, *end, *pos, *new;
 
   end=(to= *start) + *max_length-1;
@@ -896,7 +918,8 @@ static uint replace_strings(REPLACE *rep, char **start, uint *max_length,
       if (to == end)
       {
 	(*max_length)+=8192;
-	if (!(new=my_realloc(*start,*max_length,MYF(MY_WME))))
+	if (!(new=my_realloc(PSI_NOT_INSTRUMENTED,
+                             *start,*max_length,MYF(MY_WME))))
 	  return (uint) -1;
 	to=new+(to - *start);
 	end=(*start=new)+ *max_length-1;
@@ -912,7 +935,8 @@ static uint replace_strings(REPLACE *rep, char **start, uint *max_length,
       if (to == end)
       {
 	(*max_length)*=2;
-	if (!(new=my_realloc(*start,*max_length,MYF(MY_WME))))
+	if (!(new=my_realloc(PSI_NOT_INSTRUMENTED,
+                             *start,*max_length,MYF(MY_WME))))
 	  return (uint) -1;
 	to=new+(to - *start);
 	end=(*start=new)+ *max_length-1;
@@ -936,11 +960,13 @@ static int initialize_buffer()
 {
   bufread = 8192;
   bufalloc = bufread + bufread / 2;
-  if (!(buffer = my_malloc(bufalloc+1,MYF(MY_WME))))
+  if (!(buffer = my_malloc(PSI_NOT_INSTRUMENTED,
+                           bufalloc+1,MYF(MY_WME))))
     return 1;
   bufbytes=my_eof=0;
   out_length=bufread;
-  if (!(out_buff=my_malloc(out_length,MYF(MY_WME))))
+  if (!(out_buff=my_malloc(PSI_NOT_INSTRUMENTED,
+                           out_length,MYF(MY_WME))))
     return(1);
   return 0;
 }
@@ -977,13 +1003,14 @@ int n;
       bufalloc *= 2;
       bufread *= 2;
     }
-    buffer = my_realloc(buffer, bufalloc+1, MYF(MY_WME));
+    buffer = my_realloc(PSI_NOT_INSTRUMENTED,
+                        buffer, bufalloc+1, MYF(MY_WME));
     if (! buffer)
       return(-1);
   }
 
   /* Shift stuff down. */
-  bmove(buffer,buffer+bufbytes-n,(uint) n);
+  memmove(buffer, buffer+bufbytes-n, (uint) n);
   bufbytes = n;
 
   if (my_eof)
@@ -1039,7 +1066,7 @@ FILE *in,*out;
       end_of_line++;
       if ((length=replace_strings(rep,&out_buff,&out_length,start_of_line)) ==
 	  (uint) -1)
-	return 1;
+	DBUG_RETURN(1);
       if (!my_eof)
 	out_buff[length++]=save_char;	/* Don't write added newline */
       if (my_fwrite(out, (uchar*) out_buff, length, MYF(MY_WME | MY_NABP)))
@@ -1064,7 +1091,7 @@ static int convert_file(REPLACE *rep, char * name)
 
   /* check if name is a symlink */
 #ifdef HAVE_READLINK  
-  org_name= (!my_disable_symlinks && 
+  org_name= (my_enable_symlinks &&
              !my_readlink(link_name, name, MYF(0))) ? link_name : name;
 #endif
   if (!(in= my_fopen(org_name,O_RDONLY,MYF(MY_WME))))

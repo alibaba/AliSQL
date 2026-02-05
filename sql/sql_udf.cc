@@ -1,13 +1,20 @@
-/* Copyright (c) 2000, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
@@ -27,21 +34,21 @@
    dynamic functions, so this shouldn't be a real problem.
 */
 
-#include "sql_priv.h"
-#include "unireg.h"
 #include "sql_base.h"                           // close_mysql_tables
-#include "sql_parse.h"                        // check_identifier_name
+#include "sql_parse.h"                        // check_string_char_length
 #include "sql_table.h"                        // write_bin_log
 #include "records.h"          // init_read_record, end_read_record
-#include <my_pthread.h>
 #include "lock.h"                               // MYSQL_LOCK_IGNORE_TIMEOUT
+#include "log.h"
+#include "sql_plugin.h"                         // check_valid_path
+
+#ifdef HAVE_DLFCN_H
+#include <dlfcn.h>
+#endif
 
 #ifdef HAVE_DLOPEN
-extern "C"
-{
 #include <stdarg.h>
 #include <hash.h>
-}
 
 static bool initialized = 0;
 static MEM_ROOT mem;
@@ -61,22 +68,22 @@ static char *init_syms(udf_func *tmp, char *nm)
   if (!((tmp->func= (Udf_func_any) dlsym(tmp->dlhandle, tmp->name.str))))
     return tmp->name.str;
 
-  end=strmov(nm,tmp->name.str);
+  end=my_stpcpy(nm,tmp->name.str);
 
   if (tmp->type == UDFTYPE_AGGREGATE)
   {
-    (void)strmov(end, "_clear");
+    (void)my_stpcpy(end, "_clear");
     if (!((tmp->func_clear= (Udf_func_clear) dlsym(tmp->dlhandle, nm))))
       return nm;
-    (void)strmov(end, "_add");
+    (void)my_stpcpy(end, "_add");
     if (!((tmp->func_add= (Udf_func_add) dlsym(tmp->dlhandle, nm))))
       return nm;
   }
 
-  (void) strmov(end,"_deinit");
+  (void) my_stpcpy(end,"_deinit");
   tmp->func_deinit= (Udf_func_deinit) dlsym(tmp->dlhandle, nm);
 
-  (void) strmov(end,"_init");
+  (void) my_stpcpy(end,"_init");
   tmp->func_init= (Udf_func_init) dlsym(tmp->dlhandle, nm);
 
   /*
@@ -101,12 +108,19 @@ extern "C" uchar* get_hash_key(const uchar *buff, size_t *length,
   return (uchar*) udf->name.str;
 }
 
+static PSI_memory_key key_memory_udf_mem;
+
 #ifdef HAVE_PSI_INTERFACE
 static PSI_rwlock_key key_rwlock_THR_LOCK_udf;
 
 static PSI_rwlock_info all_udf_rwlocks[]=
 {
   { &key_rwlock_THR_LOCK_udf, "THR_LOCK_udf", PSI_FLAG_GLOBAL}
+};
+
+static PSI_memory_info all_udf_memory[]=
+{
+  { &key_memory_udf_mem, "udf_mem", PSI_FLAG_GLOBAL}
 };
 
 static void init_udf_psi_keys(void)
@@ -116,6 +130,9 @@ static void init_udf_psi_keys(void)
 
   count= array_elements(all_udf_rwlocks);
   mysql_rwlock_register(category, all_udf_rwlocks, count);
+
+  count= array_elements(all_udf_memory);
+  mysql_memory_register(category, all_udf_memory, count);
 }
 #endif
 
@@ -143,10 +160,11 @@ void udf_init()
 
   mysql_rwlock_init(key_rwlock_THR_LOCK_udf, &THR_LOCK_udf);
 
-  init_sql_alloc(&mem, UDF_ALLOC_BLOCK_SIZE, 0);
+  init_sql_alloc(key_memory_udf_mem, &mem, UDF_ALLOC_BLOCK_SIZE, 0);
   THD *new_thd = new THD;
   if (!new_thd ||
-      my_hash_init(&udf_hash,system_charset_info,32,0,0,get_hash_key, NULL, 0))
+      my_hash_init(&udf_hash,system_charset_info,32,0,0,get_hash_key, NULL, 0,
+                   key_memory_udf_mem))
   {
     sql_print_error("Can't allocate memory for udf structures");
     my_hash_free(&udf_hash);
@@ -157,11 +175,14 @@ void udf_init()
   initialized = 1;
   new_thd->thread_stack= (char*) &new_thd;
   new_thd->store_globals();
-  new_thd->set_db(db, sizeof(db)-1);
+  {
+    LEX_CSTRING db_lex_cstr= { STRING_WITH_LEN(db) };
+    new_thd->set_db(db_lex_cstr);
+  }
 
   tables.init_one_table(db, sizeof(db)-1, "func", 4, "func", TL_READ);
 
-  if (open_and_lock_tables(new_thd, &tables, FALSE, MYSQL_LOCK_IGNORE_TIMEOUT))
+  if (open_and_lock_tables(new_thd, &tables, MYSQL_LOCK_IGNORE_TIMEOUT))
   {
     DBUG_PRINT("error",("Can't open udf table"));
     sql_print_error("Can't open the mysql.func table. Please "
@@ -178,8 +199,22 @@ void udf_init()
     DBUG_PRINT("info",("init udf record"));
     LEX_STRING name;
     name.str=get_field(&mem, table->field[0]);
-    name.length = (uint) strlen(name.str);
+
+    // Check the name.str is NULL or not.
+    if (name.str == NULL)
+    {
+      sql_print_error("Invalid row in mysql.func table for column 'name'");
+      continue;
+    }
+
+    name.length = strlen(name.str);
     char *dl_name= get_field(&mem, table->field[2]);
+    if (dl_name == NULL)
+    {
+      sql_print_error("Invalid row in mysql.func table for function '%.64s'",
+                      name.str);
+      continue;
+    }
     bool new_dl=0;
     Item_udftype udftype=UDFTYPE_FUNCTION;
     if (table->s->fields >= 4)			// New func table
@@ -192,8 +227,10 @@ void udf_init()
 
       On windows we must check both FN_LIBCHAR and '/'.
     */
+
+    LEX_CSTRING name_cstr= {name.str, name.length};
     if (check_valid_path(dl_name, strlen(dl_name)) ||
-        check_string_char_length(&name, "", NAME_CHAR_LEN,
+        check_string_char_length(name_cstr, "", NAME_CHAR_LEN,
                                  system_charset_info, 1))
     {
       sql_print_error("Invalid row in mysql.func table for function '%.64s'",
@@ -241,15 +278,13 @@ void udf_init()
     }
   }
   if (error > 0)
-    sql_print_error("Got unknown error: %d", my_errno);
+    sql_print_error("Got unknown error: %d", my_errno());
   end_read_record(&read_record_info);
   table->m_needs_reopen= TRUE;                  // Force close to free memory
 
 end:
   close_mysql_tables(new_thd);
   delete new_thd;
-  /* Remember that we don't have a THD */
-  my_pthread_setspecific_ptr(THR_THD,  0);
   DBUG_VOID_RETURN;
 }
 
@@ -300,7 +335,7 @@ static void del_udf(udf_func *udf)
       doesn't use it anymore
     */
     char *name= udf->name.str;
-    uint name_length=udf->name.length;
+    size_t name_length=udf->name.length;
     udf->name.str=(char*) "*";
     udf->name.length=1;
     my_hash_update(&udf_hash,(uchar*) udf,(uchar*) name,name_length);
@@ -335,7 +370,7 @@ void free_udf(udf_func *udf)
 
 /* This is only called if using_udf_functions != 0 */
 
-udf_func *find_udf(const char *name,uint length,bool mark_used)
+udf_func *find_udf(const char *name, size_t length,bool mark_used)
 {
   udf_func *udf=0;
   DBUG_ENTER("find_udf");
@@ -350,7 +385,7 @@ udf_func *find_udf(const char *name,uint length,bool mark_used)
     mysql_rwlock_rdlock(&THR_LOCK_udf);  /* Called during parsing */
 
   if ((udf=(udf_func*) my_hash_search(&udf_hash,(uchar*) name,
-                                      length ? length : (uint) strlen(name))))
+                                      length ? length : strlen(name))))
   {
     if (!udf->dlhandle)
       udf=0;					// Could not be opened
@@ -443,7 +478,8 @@ int mysql_create_function(THD *thd,udf_func *udf)
     my_message(ER_UDF_NO_PATHS, ER(ER_UDF_NO_PATHS), MYF(0));
     DBUG_RETURN(1);
   }
-  if (check_string_char_length(&udf->name, "", NAME_CHAR_LEN,
+  LEX_CSTRING udf_name_cstr= {udf->name.str, udf->name.length};
+  if (check_string_char_length(udf_name_cstr, "", NAME_CHAR_LEN,
                                system_charset_info, 1))
   {
     my_error(ER_TOO_LONG_IDENT, MYF(0), udf->name.str);
@@ -513,7 +549,7 @@ int mysql_create_function(THD *thd,udf_func *udf)
   restore_record(table, s->default_values);	// Default values for fields
   table->field[0]->store(u_d->name.str, u_d->name.length, system_charset_info);
   table->field[1]->store((longlong) u_d->returns, TRUE);
-  table->field[2]->store(u_d->dl,(uint) strlen(u_d->dl), system_charset_info);
+  table->field[2]->store(u_d->dl, strlen(u_d->dl), system_charset_info);
   if (table->s->fields >= 4)			// If not old func format
     table->field[3]->store((longlong) u_d->type, TRUE);
   error = table->file->ha_write_row(table->record[0]);
@@ -529,16 +565,16 @@ int mysql_create_function(THD *thd,udf_func *udf)
   mysql_rwlock_unlock(&THR_LOCK_udf);
 
   /* Binlog the create function. */
-  if (write_bin_log(thd, TRUE, thd->query(), thd->query_length()))
+  if (write_bin_log(thd, true, thd->query().str, thd->query().length))
   {
     /* Restore the state of binlog format */
-    DBUG_ASSERT(!thd->is_current_stmt_binlog_format_row());
+    assert(!thd->is_current_stmt_binlog_format_row());
     if (save_binlog_row_based)
       thd->set_current_stmt_binlog_format_row();
     DBUG_RETURN(1);
   }
   /* Restore the state of binlog format */
-  DBUG_ASSERT(!thd->is_current_stmt_binlog_format_row());
+  assert(!thd->is_current_stmt_binlog_format_row());
   if (save_binlog_row_based)
     thd->set_current_stmt_binlog_format_row();
   DBUG_RETURN(0);
@@ -548,7 +584,7 @@ int mysql_create_function(THD *thd,udf_func *udf)
     dlclose(dl);
   mysql_rwlock_unlock(&THR_LOCK_udf);
   /* Restore the state of binlog format */
-  DBUG_ASSERT(!thd->is_current_stmt_binlog_format_row());
+  assert(!thd->is_current_stmt_binlog_format_row());
   if (save_binlog_row_based)
     thd->set_current_stmt_binlog_format_row();
   DBUG_RETURN(1);
@@ -561,7 +597,7 @@ int mysql_drop_function(THD *thd,const LEX_STRING *udf_name)
   TABLE_LIST tables;
   udf_func *udf;
   char *exact_name_str;
-  uint exact_name_len;
+  size_t exact_name_len;
   bool save_binlog_row_based;
   int error= 1;
   DBUG_ENTER("mysql_drop_function");
@@ -608,7 +644,7 @@ int mysql_drop_function(THD *thd,const LEX_STRING *udf_name)
   table->use_all_columns();
   table->field[0]->store(exact_name_str, exact_name_len, &my_charset_bin);
   if (!table->file->ha_index_read_idx_map(table->record[0], 0,
-                                          (uchar*) table->field[0]->ptr,
+                                          table->field[0]->ptr,
                                           HA_WHOLE_KEY,
                                           HA_READ_KEY_EXACT))
   {
@@ -621,11 +657,11 @@ int mysql_drop_function(THD *thd,const LEX_STRING *udf_name)
     Binlog the drop function. Keep the table open and locked
     while binlogging, to avoid binlog inconsistency.
   */
-  if (!write_bin_log(thd, TRUE, thd->query(), thd->query_length()))
+  if (!write_bin_log(thd, true, thd->query().str, thd->query().length))
     error= 0;
 exit:
   /* Restore the state of binlog format */
-  DBUG_ASSERT(!thd->is_current_stmt_binlog_format_row());
+  assert(!thd->is_current_stmt_binlog_format_row());
   if (save_binlog_row_based)
     thd->set_current_stmt_binlog_format_row();
   DBUG_RETURN(error);

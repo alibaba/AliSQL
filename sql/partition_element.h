@@ -1,16 +1,23 @@
 #ifndef PARTITION_ELEMENT_INCLUDED
 #define PARTITION_ELEMENT_INCLUDED
 
-/* Copyright (c) 2005, 2013, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2005, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -96,12 +103,12 @@ public:
   ha_rows part_max_rows;
   ha_rows part_min_rows;
   longlong range_value;
-  char *partition_name;
-  char *tablespace_name;
+  const char *partition_name;
+  const char *tablespace_name;
   struct st_ddl_log_memory_entry *log_entry;
   char* part_comment;
-  char* data_file_name;
-  char* index_file_name;
+  const char* data_file_name;
+  const char* index_file_name;
   handlerton *engine_type;
   enum partition_state part_state;
   uint16 nodegroup_id;
@@ -132,6 +139,22 @@ public:
     nodegroup_id(part_elem->nodegroup_id),
     has_null_value(FALSE)
   {
+  }
+  inline void set_from_info(const HA_CREATE_INFO* info)
+  {
+    data_file_name= info->data_file_name;
+    index_file_name= info->index_file_name;
+    tablespace_name= info->tablespace;
+    part_max_rows= info->max_rows;
+    part_min_rows= info->min_rows;
+  }
+  inline void put_to_info(HA_CREATE_INFO* info) const
+  {
+    info->data_file_name= data_file_name;
+    info->index_file_name= index_file_name;
+    info->tablespace= tablespace_name;
+    info->max_rows= part_max_rows;
+    info->min_rows= part_min_rows;
   }
   ~partition_element() {}
 };

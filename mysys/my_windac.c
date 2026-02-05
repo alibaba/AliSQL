@@ -1,21 +1,29 @@
-/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "mysys_priv.h"
+#include "my_sys.h"
 #include "m_string.h"
-#ifdef __WIN__
+#ifdef _WIN32
 
 /* Windows NT/2000 discretionary access control utility functions. */
 
@@ -117,7 +125,8 @@ int my_security_attr_create(SECURITY_ATTRIBUTES **psa, const char **perror,
   }
   GetTokenInformation(htoken, TokenUser, 0, 0, &owner_token_length);
 
-  if (! my_multi_malloc(MYF(MY_WME),
+  if (! my_multi_malloc(key_memory_win_SECURITY_ATTRIBUTES,
+                        MYF(MY_WME),
                         &sa, ALIGN_SIZE(sizeof(SECURITY_ATTRIBUTES)) +
                              sizeof(My_security_attr),
                         &sd, sizeof(SECURITY_DESCRIPTOR),
@@ -147,7 +156,8 @@ int my_security_attr_create(SECURITY_ATTRIBUTES **psa, const char **perror,
                GetLengthSid(everyone_sid) + GetLengthSid(owner_sid);
 
   /* Create an ACL */
-  if (! (dacl= (PACL) my_malloc(dacl_length, MYF(MY_ZEROFILL|MY_WME))))
+  if (! (dacl= (PACL) my_malloc(key_memory_win_PACL,
+                                dacl_length, MYF(MY_ZEROFILL|MY_WME))))
   {
     *perror= "Failed to allocate memory for DACL";
     goto error;
@@ -214,10 +224,25 @@ void my_security_attr_free(SECURITY_ATTRIBUTES *sa)
   {
     My_security_attr *attr= (My_security_attr*)
                             (((char*)sa) + ALIGN_SIZE(sizeof(*sa)));
+
+    PACL dacl_from_descriptor= NULL;
+    BOOL dacl_present_in_descriptor= FALSE;
+    BOOL dacl_defaulted= FALSE;
+    // If the DACL in the descriptor is not the same as that in the
+    // My_security_attr, it will have been created by a call to SetEntriesInAcl
+    // and thus must be freed by a call to LocalFree.
+    if (GetSecurityDescriptorDacl(sa->lpSecurityDescriptor,
+      &dacl_present_in_descriptor,
+      &dacl_from_descriptor, &dacl_defaulted) &&
+      dacl_present_in_descriptor && !dacl_defaulted &&
+      attr->dacl != dacl_from_descriptor) {
+      LocalFree(dacl_from_descriptor);
+    }
+
     FreeSid(attr->everyone_sid);
     my_free(attr->dacl);
     my_free(sa);
   }
 }
 
-#endif /* __WIN__ */
+#endif /* _WIN32 */

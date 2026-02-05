@@ -1,13 +1,20 @@
-/* Copyright (c) 2002, 2013, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2002, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -15,33 +22,23 @@
 
 /* variable declarations are in sys_vars.cc now !!! */
 
-#include "my_global.h"                          /* NO_EMBEDDED_ACCESS_CHECKS */
-#include "sql_class.h"                   // set_var.h: session_var_ptr
+#include "debug_sync.h"
 #include "set_var.h"
-#include "sql_priv.h"
-#include "unireg.h"
-#include "mysqld.h"                             // lc_messages_dir
-#include "sys_vars_shared.h"
-#include "transaction.h"
-#include "sql_locale.h"                         // my_locale_by_number,
-                                                // my_locale_by_name
-#include "strfunc.h"      // find_set_from_flags, find_set
-#include "sql_parse.h"    // check_global_access
-#include "sql_table.h"  // reassign_keycache_tables
-#include "sql_time.h"   // date_time_format_copy,
-                        // date_time_format_make
-#include "derror.h"
-#include "tztime.h"     // my_tz_find, my_tz_SYSTEM, struct Time_zone
-#include "sql_acl.h"    // SUPER_ACL
-#include "sql_select.h" // free_underlaid_joins
-#include "sql_show.h"   // make_default_log_name, append_identifier
-#include "sql_view.h"   // updatable_views_with_limit_typelib
-#include "lock.h"                               // lock_global_read_lock,
-                                                // make_global_read_lock_block_commit,
-                                                // unlock_global_read_lock
+
+#include "hash.h"                // HASH
+#include "auth_common.h"         // SUPER_ACL
+#include "log.h"                 // sql_print_warning
+#include "mysqld.h"              // system_charset_info
+#include "sql_class.h"           // THD
+#include "sql_parse.h"           // is_supported_parser_charset
+#include "sql_select.h"          // free_underlaid_joins
+#include "sql_show.h"            // append_identifier
+#include "sys_vars_shared.h"     // PolyLock_mutex
+#include "sql_audit.h"           // mysql_audit
 
 static HASH system_variable_hash;
 static PolyLock_mutex PLock_global_system_variables(&LOCK_global_system_variables);
+ulonglong system_variable_hash_version= 0;
 
 /**
   Return variable name and length for hashing of variables.
@@ -61,10 +58,11 @@ int sys_var_init()
   DBUG_ENTER("sys_var_init");
 
   /* Must be already initialized. */
-  DBUG_ASSERT(system_charset_info != NULL);
+  assert(system_charset_info != NULL);
 
   if (my_hash_init(&system_variable_hash, system_charset_info, 100, 0,
-                   0, (my_hash_get_key) get_sys_var_length, 0, HASH_UNIQUE))
+                   0, (my_hash_get_key) get_sys_var_length, 0, HASH_UNIQUE,
+                   PSI_INSTRUMENT_ME))
     goto error;
 
   if (mysql_add_sys_var_chain(all_sys_vars.first))
@@ -73,7 +71,7 @@ int sys_var_init()
   DBUG_RETURN(0);
 
 error:
-  fprintf(stderr, "failed to initialize System variables");
+  my_message_local(ERROR_LEVEL, "failed to initialize system variables");
   DBUG_RETURN(1);
 }
 
@@ -90,7 +88,7 @@ int sys_var_add_options(std::vector<my_option> *long_options, int parse_flags)
   DBUG_RETURN(0);
 
 error:
-  fprintf(stderr, "failed to initialize System variables");
+  my_message_local(ERROR_LEVEL, "failed to initialize system variables");
   DBUG_RETURN(1);
 }
 
@@ -143,7 +141,8 @@ sys_var::sys_var(sys_var_chain *chain, const char *name_arg,
   next(0),
   binlog_status(binlog_status_arg),
   flags(flags_arg), m_parse_flag(parse_flag), show_val_type(show_val_type_arg),
-  guard(lock), offset(off), on_check(on_check_func), on_update(on_update_func),
+  guard(lock), offset(off), on_check(on_check_func),
+  pre_update(0), on_update(on_update_func),
   deprecation_substitute(substitute),
   is_os_charset(FALSE)
 {
@@ -156,11 +155,11 @@ sys_var::sys_var(sys_var_chain *chain, const char *name_arg,
     in the first (PARSE_EARLY) stage.
     See handle_options() for details.
   */
-  DBUG_ASSERT(parse_flag == PARSE_NORMAL || getopt_id <= 0 || getopt_id >= 255);
+  assert(parse_flag == PARSE_NORMAL || getopt_id <= 0 || getopt_id >= 255);
 
   name.str= name_arg;     // ER_NO_DEFAULT relies on 0-termination of name_arg
   name.length= strlen(name_arg);                // and so does this.
-  DBUG_ASSERT(name.length <= NAME_CHAR_LEN);
+  assert(name.length <= NAME_CHAR_LEN);
 
   memset(&option, 0, sizeof(option));
   option.name= name_arg;
@@ -179,6 +178,14 @@ sys_var::sys_var(sys_var_chain *chain, const char *name_arg,
 
 bool sys_var::update(THD *thd, set_var *var)
 {
+  /*
+    Invoke preparatory step for updating a system variable. Doing this action
+    before we have acquired any locks allows to invoke code which acquires other
+    locks without introducing deadlocks.
+  */
+  if (pre_update && pre_update(this, thd, var))
+    return true;
+
   enum_var_type type= var->type;
   if (type == OPT_GLOBAL || scope() == GLOBAL)
   {
@@ -194,19 +201,57 @@ bool sys_var::update(THD *thd, set_var *var)
       (on_update && on_update(this, thd, OPT_GLOBAL));
   }
   else
-    return session_update(thd, var) ||
+  {
+    bool locked= false;
+    if (!show_compatibility_56)
+    {
+      /* Block reads from other threads. */
+      mysql_mutex_lock(&thd->LOCK_thd_sysvar);
+      locked= true;
+    }
+  
+    bool ret= session_update(thd, var) ||
       (on_update && on_update(this, thd, OPT_SESSION));
+  
+    if (locked)
+      mysql_mutex_unlock(&thd->LOCK_thd_sysvar);
+
+    /*
+      Make sure we don't session-track variables that are not actually
+      part of the session. tx_isolation and and tx_read_only for example
+      exist as GLOBAL, SESSION, and one-shot ("for next transaction only").
+    */
+    if ((var->type == OPT_SESSION) || !is_trilevel())
+    {
+      if ((!ret) &&
+          thd->session_tracker.get_tracker(SESSION_SYSVARS_TRACKER)->is_enabled())
+        thd->session_tracker.get_tracker(SESSION_SYSVARS_TRACKER)->mark_as_changed(thd, &(var->var->name));
+
+      if ((!ret) &&
+          thd->session_tracker.get_tracker(SESSION_STATE_CHANGE_TRACKER)->is_enabled())
+        thd->session_tracker.get_tracker(SESSION_STATE_CHANGE_TRACKER)->mark_as_changed(thd, &var->var->name);
+    }
+
+    return ret;
+  }
 }
 
-uchar *sys_var::session_value_ptr(THD *thd, LEX_STRING *base)
+uchar *sys_var::session_value_ptr(THD *running_thd, THD *target_thd, LEX_STRING *base)
 {
-  return session_var_ptr(thd);
+  return session_var_ptr(target_thd);
 }
 
 uchar *sys_var::global_value_ptr(THD *thd, LEX_STRING *base)
 {
   return global_var_ptr();
 }
+
+uchar *sys_var::session_var_ptr(THD *thd)
+{ return ((uchar*)&(thd->variables)) + offset; }
+
+uchar *sys_var::global_var_ptr()
+{ return ((uchar*)&global_system_variables) + offset; }
+
 
 bool sys_var::check(THD *thd, set_var *var)
 {
@@ -236,26 +281,69 @@ bool sys_var::check(THD *thd, set_var *var)
   return false;
 }
 
-uchar *sys_var::value_ptr(THD *thd, enum_var_type type, LEX_STRING *base)
+uchar *sys_var::value_ptr(THD *running_thd, THD *target_thd, enum_var_type type, LEX_STRING *base)
 {
   if (type == OPT_GLOBAL || scope() == GLOBAL)
   {
     mysql_mutex_assert_owner(&LOCK_global_system_variables);
     AutoRLock lock(guard);
-    return global_value_ptr(thd, base);
+    return global_value_ptr(running_thd, base);
   }
   else
-    return session_value_ptr(thd, base);
+    return session_value_ptr(running_thd, target_thd, base);
+}
+
+uchar *sys_var::value_ptr(THD *thd, enum_var_type type, LEX_STRING *base)
+{
+  return value_ptr(thd, thd, type, base);
 }
 
 bool sys_var::set_default(THD *thd, set_var* var)
 {
+  DBUG_ENTER("sys_var::set_default");
   if (var->type == OPT_GLOBAL || scope() == GLOBAL)
     global_save_default(thd, var);
   else
     session_save_default(thd, var);
 
-  return check(thd, var) || update(thd, var);
+  bool ret= check(thd, var) || update(thd, var);
+  DBUG_RETURN(ret);
+}
+
+Sys_var_tracker::Sys_var_tracker(sys_var *var)
+{
+  m_is_dynamic = (var->cast_pluginvar() != NULL);
+  m_name = (m_is_dynamic ? current_thd->strmake(var->name) : var->name);
+  m_var = (m_is_dynamic ? NULL : var);
+}
+
+sys_var *Sys_var_tracker::bind_system_variable(THD *thd) {
+  if (!m_is_dynamic ||                                               // (1)
+      (m_var != NULL &&                                              // (2)
+       thd->state == Query_arena::STMT_INITIALIZED_FOR_SP))          // (3)
+  {
+    /*
+      Return a previous cached value of a system variable:
+
+      - if this is a static variable (1) then always return its cached value.
+
+      - if SP body evaluation is in the process (3), and if this is not
+        a resolver phase (2): the resolver phase caches the value and the
+        executor phase reuses it; this can work since SQL statements
+        referencing SP calls don't release plugins acquired by those SP
+        calls until the SPs removed from the server memory.
+    */
+    return m_var;
+  }
+
+  m_var= find_sys_var(thd, m_name.str, m_name.length);
+  if (m_var == NULL)
+  {
+    my_error(ER_UNKNOWN_SYSTEM_VARIABLE, MYF(0), m_name.str);
+    return NULL;
+  }
+
+  return m_var;
 }
 
 void sys_var::do_deprecated_warning(THD *thd)
@@ -273,7 +361,7 @@ void sys_var::do_deprecated_warning(THD *thd)
       ? ER_WARN_DEPRECATED_SYNTAX_NO_REPLACEMENT
       : ER_WARN_DEPRECATED_SYNTAX;
     if (thd)
-      push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN,
+      push_warning_printf(thd, Sql_condition::SL_WARNING,
                           ER_WARN_DEPRECATED_SYNTAX, ER(errmsg),
                           buf1, deprecation_substitute);
     else
@@ -310,7 +398,7 @@ bool throw_bounds_warning(THD *thd, const char *name,
       my_error(ER_WRONG_VALUE_FOR_VAR, MYF(0), name, buf);
       return true;
     }
-    push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN,
+    push_warning_printf(thd, Sql_condition::SL_WARNING,
                         ER_TRUNCATED_WRONG_VALUE,
                         ER(ER_TRUNCATED_WRONG_VALUE), name, buf);
   }
@@ -323,14 +411,14 @@ bool throw_bounds_warning(THD *thd, const char *name, bool fixed, double v)
   {
     char buf[64];
 
-    my_gcvt(v, MY_GCVT_ARG_DOUBLE, sizeof(buf) - 1, buf, NULL);
+    my_gcvt(v, MY_GCVT_ARG_DOUBLE, static_cast<int>(sizeof(buf)) - 1, buf, NULL);
 
     if (thd->variables.sql_mode & MODE_STRICT_ALL_TABLES)
     {
       my_error(ER_WRONG_VALUE_FOR_VAR, MYF(0), name, buf);
       return true;
     }
-    push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN,
+    push_warning_printf(thd, Sql_condition::SL_WARNING,
                         ER_TRUNCATED_WRONG_VALUE,
                         ER(ER_TRUNCATED_WRONG_VALUE), name, buf);
   }
@@ -406,10 +494,14 @@ int mysql_add_sys_var_chain(sys_var *first)
     /* this fails if there is a conflicting variable name. see HASH_UNIQUE */
     if (my_hash_insert(&system_variable_hash, (uchar*) var))
     {
-      fprintf(stderr, "*** duplicate variable name '%s' ?\n", var->name.str);
+      my_message_local(ERROR_LEVEL, "duplicate variable name '%s'!?",
+                       var->name.str);
       goto error;
     }
   }
+
+  /* Update system_variable_hash version. */
+  system_variable_hash_version++;
   return 0;
 
 error:
@@ -440,66 +532,116 @@ int mysql_del_sys_var_chain(sys_var *first)
   for (sys_var *var= first; var; var= var->next)
     result|= my_hash_delete(&system_variable_hash, (uchar*) var);
 
+  /* Update system_variable_hash version. */
+  system_variable_hash_version++;
+
   return result;
 }
 
-
-static int show_cmp(SHOW_VAR *a, SHOW_VAR *b)
+/*
+  Comparison function for std::sort.
+  @param a  SHOW_VAR element
+  @param b  SHOW_VAR element
+  
+  @retval
+    True if a < b.
+  @retval
+    False if a >= b.
+*/
+static int show_cmp(const void *a, const void *b)
 {
-  return strcmp(a->name, b->name);
+  return strcmp(((SHOW_VAR *)a)->name, ((SHOW_VAR *)b)->name);
 }
 
+/*
+  Number of records in the system_variable_hash.
+  Requires lock on LOCK_system_variables_hash.
+*/
+ulong get_system_variable_hash_records(void)
+{
+  return (system_variable_hash.records);
+}
+
+/*
+  Current version of the system_variable_hash.
+  Requires lock on LOCK_system_variables_hash.
+*/
+ulonglong get_system_variable_hash_version(void)
+{
+  return (system_variable_hash_version);
+}
 
 /**
   Constructs an array of system variables for display to the user.
 
-  @param thd       current thread
-  @param sorted    If TRUE, the system variables should be sorted
-  @param type      OPT_GLOBAL or OPT_SESSION for SHOW GLOBAL|SESSION VARIABLES
-
-  @retval
-    pointer     Array of SHOW_VAR elements for display
-  @retval
-    NULL        FAILURE
+  @param thd            Current thread
+  @param show_var_array Prealloced_array of SHOW_VAR elements for display 
+  @param sort           If TRUE, the system variables should be sorted
+  @param query_scope    OPT_GLOBAL or OPT_SESSION for SHOW GLOBAL|SESSION VARIABLES
+  @param strict         Use strict scope checking
+  @retval               True on error, false otherwise
 */
-
-SHOW_VAR* enumerate_sys_vars(THD *thd, bool sorted, enum enum_var_type type)
+bool enumerate_sys_vars(THD *thd, Show_var_array *show_var_array,
+                        bool sort,
+                        enum enum_var_type query_scope,
+                        bool strict)
 {
-  int count= system_variable_hash.records, i;
-  int size= sizeof(SHOW_VAR) * (count + 1);
-  SHOW_VAR *result= (SHOW_VAR*) thd->alloc(size);
+  assert(show_var_array != NULL);
+  assert(query_scope == OPT_SESSION || query_scope == OPT_GLOBAL);
+  int count= system_variable_hash.records;
+  
+  /* Resize array if necessary. */
+  if (show_var_array->reserve(count+1))
+    return true;
 
-  if (result)
+  if (show_var_array)
   {
-    SHOW_VAR *show= result;
-
-    for (i= 0; i < count; i++)
+    for (int i= 0; i < count; i++)
     {
-      sys_var *var= (sys_var*) my_hash_element(&system_variable_hash, i);
+      sys_var *sysvar= (sys_var*) my_hash_element(&system_variable_hash, i);
 
-      // don't show session-only variables in SHOW GLOBAL VARIABLES
-      if (type == OPT_GLOBAL && var->check_type(type))
+      if (strict)
+      {
+        /*
+          Strict scope match (5.7). Success if this is a:
+            - global query and the variable scope is GLOBAL or SESSION, OR
+            - session query and the variable scope is SESSION or ONLY_SESSION.
+        */
+        if (!sysvar->check_scope(query_scope))
+          continue;
+      }
+      else
+      {
+        /*
+          Non-strict scope match (5.6). Success if this is a:
+            - global query and the variable scope is GLOBAL or SESSION, OR
+            - session query and the variable scope is GLOBAL, SESSION or ONLY_SESSION.
+        */
+        if (query_scope == OPT_GLOBAL && !sysvar->check_scope(query_scope))
+          continue;
+      }
+
+      /* Don't show non-visible variables. */
+      if (sysvar->not_visible())
         continue;
 
-      /* don't show non-visible variables */
-      if (var->not_visible())
-        continue;
-
-      show->name= var->name.str;
-      show->value= (char*) var;
-      show->type= SHOW_SYS;
-      show++;
+      SHOW_VAR show_var;
+      show_var.name=  sysvar->name.str;
+      show_var.value= (char*)sysvar;
+      show_var.type=  SHOW_SYS;
+      show_var.scope= SHOW_SCOPE_UNDEF; /* not used for sys vars */
+      show_var_array->push_back(show_var);
     }
 
-    /* sort into order */
-    if (sorted)
-      my_qsort(result, show-result, sizeof(SHOW_VAR),
-               (qsort_cmp) show_cmp);
+    if (sort)
+      std::qsort(show_var_array->begin(), show_var_array->size(),
+                 show_var_array->element_size(), show_cmp);
 
-    /* make last element empty */
-    memset(show, 0, sizeof(SHOW_VAR));
+    /* Make last element empty. */
+    show_var_array->push_back(st_mysql_show_var());
   }
-  return result;
+  
+  return false;
 }
 
 /**
@@ -515,7 +657,7 @@ SHOW_VAR* enumerate_sys_vars(THD *thd, bool sorted, enum enum_var_type type)
     0           Unknown variable (error message is given)
 */
 
-sys_var *intern_find_sys_var(const char *str, uint length)
+sys_var *intern_find_sys_var(const char *str, size_t length)
 {
   sys_var *var;
 
@@ -574,13 +716,68 @@ int sql_set_variables(THD *thd, List<set_var_base> *var_list)
   }
 
 err:
-  free_underlaid_joins(thd, &thd->lex->select_lex);
+  it.rewind();
+  while ((var= it++))
+  {
+    var->cleanup();
+  }
+  free_underlaid_joins(thd, thd->lex->select_lex);
   DBUG_RETURN(error);
+}
+
+/**
+  This function is used to check if key management UDFs like
+  keying_key_generate/store/remove should proceed or not. If global
+  variable @@keyring_operations is OFF then above said udfs will fail.
+
+  @return Operation status
+    @retval 0 OK
+    @retval 1 ERROR, keyring operations are not allowed
+
+  @sa Sys_keyring_operations
+*/
+bool keyring_access_test()
+{
+  bool keyring_operations;
+  mysql_mutex_lock(&LOCK_keyring_operations);
+  keyring_operations= !opt_keyring_operations;
+  mysql_mutex_unlock(&LOCK_keyring_operations);
+  return keyring_operations;
 }
 
 /*****************************************************************************
   Functions to handle SET mysql_internal_variable=const_expr
 *****************************************************************************/
+
+set_var::set_var(enum_var_type type_arg, sys_var *var_arg,
+                 const LEX_STRING *base_name_arg, Item *value_arg)
+  :var(NULL), type(type_arg), base(*base_name_arg), var_tracker(var_arg)
+{
+  /*
+    If the set value is a field, change it to a string to allow things like
+    SET table_type=MYISAM;
+  */
+  if (value_arg && value_arg->type() == Item::FIELD_ITEM)
+  {
+    Item_field *item= (Item_field*) value_arg;
+    if (item->field_name)
+    {
+      if (!(value= new Item_string(item->field_name,
+                                   strlen(item->field_name),
+                                   system_charset_info))) // names are utf8
+        value= value_arg;			/* Give error message later */
+    }
+    else
+    {
+      /* Both Item_field and Item_insert_value will return the type as
+         Item::FIELD_ITEM. If the item->field_name is NULL, we assume the
+         object to be Item_insert_value. */
+      value= value_arg;
+    }
+  }
+  else
+    value= value_arg;
+}
 
 /**
   Verify that the supplied value is correct.
@@ -594,33 +791,55 @@ err:
 
 int set_var::check(THD *thd)
 {
+  DBUG_ENTER("set_var::check");
+  DEBUG_SYNC(current_thd, "after_error_checking");
+
+  assert(var == NULL);
+  var= var_tracker.bind_system_variable(thd);
+  if (var == NULL)
+  {
+    DBUG_RETURN(-1);
+  }
+
   var->do_deprecated_warning(thd);
   if (var->is_readonly())
   {
     my_error(ER_INCORRECT_GLOBAL_LOCAL_VAR, MYF(0), var->name.str, "read only");
-    return -1;
+    DBUG_RETURN(-1);
   }
-  if (var->check_type(type))
+  if (!var->check_scope(type))
   {
     int err= type == OPT_GLOBAL ? ER_LOCAL_VARIABLE : ER_GLOBAL_VARIABLE;
     my_error(err, MYF(0), var->name.str);
-    return -1;
+    DBUG_RETURN(-1);
   }
   if ((type == OPT_GLOBAL && check_global_access(thd, SUPER_ACL)))
-    return 1;
+    DBUG_RETURN(1);
   /* value is a NULL pointer if we are using SET ... = DEFAULT */
   if (!value)
-    return 0;
+    DBUG_RETURN(0);
 
   if ((!value->fixed &&
        value->fix_fields(thd, &value)) || value->check_cols(1))
-    return -1;
+    DBUG_RETURN(-1);
   if (var->check_update_type(value->result_type()))
   {
     my_error(ER_WRONG_TYPE_FOR_VAR, MYF(0), var->name.str);
-    return -1;
+    DBUG_RETURN(-1);
   }
-  return var->check(thd, this) ? -1 : 0;
+  int ret= var->check(thd, this) ? -1 : 0;
+
+#ifndef EMBEDDED_LIBRARY
+  if (!ret && type == OPT_GLOBAL)
+  {
+    ret= mysql_audit_notify(thd, AUDIT_EVENT(MYSQL_AUDIT_GLOBAL_VARIABLE_SET),
+                            var->name.str,
+                            value->item_name.ptr(),
+                            value->item_name.length());
+  }
+#endif
+
+  DBUG_RETURN(ret);
 }
 
 
@@ -638,7 +857,13 @@ int set_var::check(THD *thd)
 */
 int set_var::light_check(THD *thd)
 {
-  if (var->check_type(type))
+  var= var_tracker.bind_system_variable(thd);
+  if (var == NULL)
+  {
+    return 1;
+  }
+
+  if (!var->check_scope(type))
   {
     int err= type == OPT_GLOBAL ? ER_LOCAL_VARIABLE : ER_GLOBAL_VARIABLE;
     my_error(err, MYF(0), var->name);
@@ -667,6 +892,8 @@ int set_var::light_check(THD *thd)
 */
 int set_var::update(THD *thd)
 {
+  assert(var != NULL);
+
   return value ? var->update(thd, this) : var->set_default(thd, this);
 }
 
@@ -737,6 +964,8 @@ int set_var_user::update(THD *thd)
     my_message(ER_SET_CONSTANTS_ONLY, ER(ER_SET_CONSTANTS_ONLY), MYF(0));
     return -1;
   }
+  if (thd->session_tracker.get_tracker(SESSION_STATE_CHANGE_TRACKER)->is_enabled())
+    thd->session_tracker.get_tracker(SESSION_STATE_CHANGE_TRACKER)->mark_as_changed(thd, NULL);
   return 0;
 }
 
@@ -754,9 +983,6 @@ void set_var_user::print(THD *thd, String *str)
 /**
   Check the validity of the SET PASSWORD request
 
-  User name and no host is used for SET PASSWORD =
-  No user name and no host used for SET PASSWORD for CURRENT_USER() =
-
   @param  thd  The current thread
   @return      status code
   @retval 0    failure
@@ -765,24 +991,6 @@ void set_var_user::print(THD *thd, String *str)
 int set_var_password::check(THD *thd)
 {
 #ifndef NO_EMBEDDED_ACCESS_CHECKS
-  if (!user->host.str)
-  {
-    DBUG_ASSERT(thd->security_ctx->priv_host);
-    user->host.str= (char *) thd->security_ctx->priv_host;
-    user->host.length= strlen(thd->security_ctx->priv_host);
-  }
-  /*
-    In case of anonymous user, user->user is set to empty string with length 0.
-    But there might be case when user->user.str could be NULL. For Ex:
-    "set password for current_user() = password('xyz');". In this case,
-    set user information as of the current user.
-  */
-  if (!user->user.str)
-  {
-    DBUG_ASSERT(thd->security_ctx->user);
-    user->user.str= (char *) thd->security_ctx->user;
-    user->user.length= strlen(thd->security_ctx->user);
-  }
   /* Returns 1 as the function sends error to client */
   return check_change_password(thd, user->host.str, user->user.str,
                                password, strlen(password)) ? 1 : 0;
@@ -842,6 +1050,22 @@ int set_var_collation_client::update(THD *thd)
   thd->variables.character_set_results= character_set_results;
   thd->variables.collation_connection= collation_connection;
   thd->update_charset();
+
+  /* Mark client collation variables as changed */
+  if (thd->session_tracker.get_tracker(SESSION_SYSVARS_TRACKER)->is_enabled())
+  {
+    LEX_CSTRING cs_client= {"character_set_client",
+                            sizeof("character_set_client") - 1};
+    thd->session_tracker.get_tracker(SESSION_SYSVARS_TRACKER)->mark_as_changed(thd, &cs_client);
+    LEX_CSTRING cs_results= {"character_set_results",
+                             sizeof("character_set_results") -1};
+    thd->session_tracker.get_tracker(SESSION_SYSVARS_TRACKER)->mark_as_changed(thd, &cs_results);
+    LEX_CSTRING cs_connection= {"character_set_connection",
+                                sizeof("character_set_connection") - 1};
+    thd->session_tracker.get_tracker(SESSION_SYSVARS_TRACKER)->mark_as_changed(thd, &cs_connection);
+  }
+  if (thd->session_tracker.get_tracker(SESSION_STATE_CHANGE_TRACKER)->is_enabled())
+    thd->session_tracker.get_tracker(SESSION_STATE_CHANGE_TRACKER)->mark_as_changed(thd, NULL);
   thd->protocol_text.init(thd);
   thd->protocol_binary.init(thd);
   return 0;

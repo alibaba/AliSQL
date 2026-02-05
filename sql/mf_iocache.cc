@@ -1,13 +1,20 @@
-/* Copyright (c) 2000, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
@@ -32,9 +39,8 @@
   flush_io_cache().  
 */
 
-#include "sql_priv.h"
-#include "sql_class.h"                          // THD
 #ifdef HAVE_REPLICATION
+#include "sql_class.h"                          // THD
 
 extern "C" {
 
@@ -48,11 +54,11 @@ extern "C" {
 */
 
 
-int _my_b_net_read(register IO_CACHE *info, uchar *Buffer,
+int _my_b_net_read(IO_CACHE *info, uchar *Buffer,
 		   size_t Count MY_ATTRIBUTE((unused)))
 {
   ulong read_length;
-  NET *net= &(current_thd)->net;
+  NET *net= current_thd->get_protocol_classic()->get_net();
   DBUG_ENTER("_my_b_net_read");
 
   if (!info->end_of_file)
@@ -69,7 +75,7 @@ int _my_b_net_read(register IO_CACHE *info, uchar *Buffer,
     DBUG_RETURN(1);
   }
   /* to set up stuff for my_b_get (no _) */
-  info->read_end = (info->read_pos = (uchar*) net->read_pos) + read_length;
+  info->read_end = (info->read_pos = net->read_pos) + read_length;
   Buffer[0] = info->read_pos[0];		/* length is always 1 */
 
   /*

@@ -1,14 +1,21 @@
 /*
- Copyright (c) 2010, Oracle and/or its affiliates. All rights reserved.
+ Copyright (c) 2010, 2021, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
- it under the terms of the GNU General Public License as published by
- the Free Software Foundation; version 2 of the License.
+ it under the terms of the GNU General Public License, version 2.0,
+ as published by the Free Software Foundation.
+
+ This program is also distributed with certain software (including
+ but not limited to OpenSSL) that is licensed under separate terms,
+ as designated in a particular file or component or in included license
+ documentation.  The authors of MySQL hereby grant you an additional
+ permission to link the program and your derivative works with the
+ separately licensed software that they have included with MySQL.
 
  This program is distributed in the hope that it will be useful,
  but WITHOUT ANY WARRANTY; without even the implied warranty of
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- GNU General Public License for more details.
+ GNU General Public License, version 2.0, for more details.
 
  You should have received a copy of the GNU General Public License
  along with this program; if not, write to the Free Software
@@ -18,8 +25,10 @@
  * myapi_test.cpp
  */
 
+#include <my_config.h>
 #include <assert.h> // not using namespaces yet
 #include <stdio.h> // not using namespaces yet
+#include <stdlib.h> // not using namespaces yet
 
 #include "myapi.hpp"
 #include "helpers.hpp"
@@ -38,21 +47,6 @@ test1()
 {
     printf("\ntesting primitive type functions: fxx(0) ...\n");
 
-    f11(0);
-    f12(0);
-    f13(0);
-    f14(0);
-    f15(0);
-    f16(0);
-    f17(0);
-    f18(0);
-    f19(0);
-    f20(0);
-    f21(0);
-    f22(0);
-    f23(0);
-    f24(0);
-    f25(0);
 
     f31(0);
     f32(0);
@@ -77,18 +71,6 @@ test2()
     printf("\ntesting basic functions: f1xx(f0xx()) ...\n");
 
     for (int i = 0; i < 2; i++) {
-        f111(f011());
-        f112(f012());
-        f113(f013());
-        f114(f014());
-        f115(f015());
-        f116(f016());
-        f117(f017());
-        f118(f018());
-        f121(f021());
-        f122(f022());
-        f123(f023());
-        f124(f024());
 
         f131(f031());
         f132(f032());
@@ -171,31 +153,7 @@ test4()
         f543(f443());
         f544(f444());
 
-        f551(f451());
-        f552(f452());
-        f553(f453());
-        f554(f454());
-        f555(f455());
-        f556(f456());
-        f557(f457());
-        f558(f458());
-        f561(f461());
-        f562(f462());
-        f563(f463());
-        f564(f464());
 
-        f571(f471());
-        f572(f472());
-        f573(f473());
-        f574(f474());
-        f575(f475());
-        f576(f476());
-        f577(f477());
-        f578(f478());
-        f581(f481());
-        f582(f482());
-        f583(f483());
-        f584(f484());
     }
 }
 
@@ -231,31 +189,7 @@ test5()
         f743(f643());
         f744(f644());
 
-        f751(f651());
-        f752(f652());
-        f753(f653());
-        f754(f654());
-        f755(f655());
-        f756(f656());
-        f757(f657());
-        f758(f658());
-        f761(f661());
-        f762(f662());
-        f763(f663());
-        f764(f664());
 
-        f771(f671());
-        f772(f672());
-        f773(f673());
-        f774(f674());
-        f775(f675());
-        f776(f676());
-        f777(f677());
-        f778(f678());
-        f781(f681());
-        f782(f682());
-        f783(f683());
-        f784(f684());
     }
 }
 
@@ -272,16 +206,16 @@ test6()
     printf("... delete new A(int)\n");
     n = A::f0s();
     printf("... A::f0s() = %d\n", n);
-    assert (n == 10);
+    assert(n == 10);
     n = a->f0s();
     printf("... a->f0s() = %d\n", n);
-    assert (n == 10);
+    assert(n == 10);
     n = a->f0n();
     printf("... a->f0n() = %d\n", n);
-    assert (n == 11);
+    assert(n == 11);
     n = a->f0v();
     printf("... a->f0v() = %d\n", n);
-    assert (n == 12);
+    assert(n == 12);
 
     printf("\nA::take_ptr(A::deliver_ptr())...\n");
     A::take_ptr(A::deliver_ptr());
@@ -302,38 +236,38 @@ test6()
     printf("\naccessing A...\n");
     n = ++A::d0s;
     printf("... ++A::d0s = %d\n", n);
-    assert (n == 11);
+    assert(n == 11);
     n = A::d0sc;
     printf("... A::d0sc = %d\n", n);
-    assert (n == -10);
+    assert(n == -10);
     n = ++a->d0s;
     printf("... ++a->d0s = %d\n", n);
-    assert (n == 12);
+    assert(n == 12);
     n = a->d0sc;
     printf("... a->d0sc = %d\n", n);
-    assert (n == -10);
+    assert(n == -10);
     n = ++a->d0;
     printf("... ++a->d0 = %d\n", n);
-    assert (n == 12);
+    assert(n == 12);
     n = a->d0c;
     printf("... a->d0c = %d\n", n);
-    assert (n == -11);
+    assert(n == -11);
 
     printf("\ncalling B0...\n");
     B0 & b0b0 = *a->newB0();
     printf("... a->newB0() = %p\n", &b0b0);
     n = B0::f0s();
     printf("... B0::f0s() = %d\n", n);
-    assert (n == 20);
+    assert(n == 20);
     n = b0b0.f0s();
     printf("... b0b0.f0s() = %d\n", n);
-    assert (n == 20);
+    assert(n == 20);
     n = b0b0.f0n();
     printf("... b0b0.f0n() = %d\n", n);
-    assert (n == 21);
+    assert(n == 21);
     n = b0b0.f0v();
     printf("... b0b0.f0v() = %d\n", n);
-    assert (n == 22);
+    assert(n == 22);
     a->del(b0b0);
     printf("... a->del(b0b0)\n");
 
@@ -342,22 +276,22 @@ test6()
     printf("... a->newB0() = %p\n", &b0);
     n = ++B0::d0s;
     printf("... ++B0::d0s = %d\n", n);
-    assert (n == 21);
+    assert(n == 21);
     n = B0::d0sc;
     printf("... B0::d0sc = %d\n", n);
-    assert (n == -20);
+    assert(n == -20);
     n = ++b0.d0s;
     printf("... ++b0.d0s = %d\n", n);
-    assert (n == 22);
+    assert(n == 22);
     n = b0.d0sc;
     printf("... b0.d0sc = %d\n", n);
-    assert (n == -20);
+    assert(n == -20);
     n = ++b0.d0;
     printf("... ++b0.d0 = %d\n", n);
-    assert (n == 22);
+    assert(n == 22);
     n = b0.d0c;
     printf("... b0.d0c = %d\n", n);
-    assert (n == -21);
+    assert(n == -21);
     a->del(b0);
     printf("... a->del(b0)\n");
 
@@ -367,16 +301,16 @@ test6()
     printf("... a->newB1() = %p\n", &b0b1);
     n = B1::f0s();
     printf("... B1::f0s() = %d\n", n);
-    assert (n == 30);
+    assert(n == 30);
     n = b0b1.f0s();
     printf("... b0b1.f0s() = %d\n", n);
-    assert (n == 20);
+    assert(n == 20);
     n = b0b1.f0n();
     printf("... b0b1.f0n() = %d\n", n);
-    assert (n == 21);
+    assert(n == 21);
     n = b0b1.f0v();
     printf("... b0b1.f0v() = %d\n", n);
-    assert (n == 32);
+    assert(n == 32);
     a->del(b1b1);
     printf("... a->del(b1b1)\n");
 
@@ -385,22 +319,22 @@ test6()
     printf("... a->newB1() = %p\n", &b1);
     n = ++B1::d0s;
     printf("... ++B1::d0s = %d\n", n);
-    assert (n == 31);
+    assert(n == 31);
     n = B1::d0sc;
     printf("... B1::d0sc = %d\n", n);
-    assert (n == -30);
+    assert(n == -30);
     n = ++b1.d0s;
     printf("... ++b1.d0s = %d\n", n);
-    assert (n == 32);
+    assert(n == 32);
     n = b1.d0sc;
     printf("... b1.d0sc = %d\n", n);
-    assert (n == -30);
+    assert(n == -30);
     n = ++b1.d0;
     printf("... ++b1.d0 = %d\n", n);
-    assert (n == 32);
+    assert(n == 32);
     n = b1.d0c;
     printf("... b1.d0c = %d\n", n);
-    assert (n == -31);
+    assert(n == -31);
     a->del(b1);
     printf("... a->del(b1)\n");
 
@@ -425,17 +359,8 @@ test7()
     s130(s032());
     s132(s032());
 
-    s150(s050());
-    s150(s052());
-    s152(s052());
 
-    s150(s070());
-    s150(s072());
-    s152(s072());
 
-    s170(s070());
-    s170(s072());
-    s172(s072());
 
     s310(s210());
     s310(s212());
@@ -449,17 +374,8 @@ test7()
     s330(s232());
     s332(s232());
 
-    s350(s250());
-    s350(s252());
-    s352(s252());
 
-    s350(s270());
-    s350(s272());
-    s352(s272());
 
-    s370(s270());
-    s370(s272());
-    s372(s272());
 }
 
 void
@@ -634,7 +550,16 @@ test10()
 
     printf("\ndelete[] (new C0[0])\n");
     C0 * c0a0 = new C0[0];
-    assert(c0a0 != NULL);
+#if __GNUC__ == 4 && __GNUC_MINOR__ == 7 && __GNUC_PATCHLEVEL__ >= 0
+    // workaround for GCC 4.7.x bug
+    // no initialization of var for const zero-length obj array expr;
+    // compile warning: "'c0a0' is used uninitialized in this function"
+    // see http://gcc.gnu.org/bugzilla/show_bug.cgi?id=53330
+    c0a0 = new C0[atoi("0")];
+#endif
+
+    // check that zero-length array new worked
+    assert(c0a0);
     delete[] c0a0;
 
     const int n = 3;
@@ -643,8 +568,6 @@ test10()
     C1 * c1a = new C1[n];
     const C1 * c1ca = c1a;
 
-    // for debugging
-    //for (int i = 0; i < n; i++) {
     for (int i = 0; i < 0; i++) {
         printf("\nc0a[i].print()\n");
         c0a[i].print();
@@ -734,11 +657,11 @@ test12()
     printf("\ncall< E::EE, E::take_EE1 >(e)...\n");
     call< E::EE, E::take_EE1 >(e);
 
-    printf("\nE::take_EE1c(E::deliver_EE1c())...\n");
-    E::take_EE1c(E::deliver_EE1c());
+    printf("\nE::take_EE1c(E::deliver_EE1())...\n");
+    E::take_EE1c(E::deliver_EE1());
 
-    printf("\ncall< E::EE, E::deliver_EE1c >()...\n");
-    const E::EE ec = call< const E::EE, E::deliver_EE1c >();
+    printf("\ncall< E::EE, E::deliver_EE1 >()...\n");
+    const E::EE ec = call< E::EE, E::deliver_EE1 >();
     assert(ec == E::EE1);
 
     printf("\ncall< E::EE, E::take_EE1c >(e)...\n");

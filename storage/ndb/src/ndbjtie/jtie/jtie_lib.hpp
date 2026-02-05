@@ -1,15 +1,21 @@
 /*
- Copyright 2010 Sun Microsystems, Inc.
- All rights reserved. Use is subject to license terms.
+ Copyright (c) 2010, 2021, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
- it under the terms of the GNU General Public License as published by
- the Free Software Foundation; version 2 of the License.
+ it under the terms of the GNU General Public License, version 2.0,
+ as published by the Free Software Foundation.
+
+ This program is also distributed with certain software (including
+ but not limited to OpenSSL) that is licensed under separate terms,
+ as designated in a particular file or component or in included license
+ documentation.  The authors of MySQL hereby grant you an additional
+ permission to link the program and your derivative works with the
+ separately licensed software that they have included with MySQL.
 
  This program is distributed in the hope that it will be useful,
  but WITHOUT ANY WARRANTY; without even the implied warranty of
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- GNU General Public License for more details.
+ GNU General Public License, version 2.0, for more details.
 
  You should have received a copy of the GNU General Public License
  along with this program; if not, write to the Free Software
@@ -36,27 +42,27 @@
 // JTie Library: Global Variable Definitions & Template Instantiations
 // ---------------------------------------------------------------------------
 
-JTIE_INSTANTIATE_CLASS_MEMBER_INFO(_ByteBuffer_isReadOnly,
+JTIE_INSTANTIATE_CLASS_MEMBER_INFO_0(_ByteBuffer_isReadOnly,
                                    "java/nio/ByteBuffer",
                                    "isReadOnly",
                                    "()Z")
 
-JTIE_INSTANTIATE_CLASS_MEMBER_INFO(_ByteBuffer_asReadOnlyBuffer,
+JTIE_INSTANTIATE_CLASS_MEMBER_INFO_0(_ByteBuffer_asReadOnlyBuffer,
                                    "java/nio/ByteBuffer",
                                    "asReadOnlyBuffer",
                                    "()Ljava/nio/ByteBuffer;")
 
-JTIE_INSTANTIATE_CLASS_MEMBER_INFO(_ByteBuffer_remaining,
+JTIE_INSTANTIATE_CLASS_MEMBER_INFO_0(_ByteBuffer_remaining,
                                    "java/nio/ByteBuffer",
                                    "remaining",
                                    "()I")
 
-JTIE_INSTANTIATE_CLASS_MEMBER_INFO(_ByteBuffer_position,
+JTIE_INSTANTIATE_CLASS_MEMBER_INFO_0(_ByteBuffer_position,
                                    "java/nio/ByteBuffer",
                                    "position",
                                    "()I")
 
-JTIE_INSTANTIATE_CLASS_MEMBER_INFO(_Wrapper_cdelegate,
+JTIE_INSTANTIATE_CLASS_MEMBER_INFO_0(_Wrapper_cdelegate,
                                    "com/mysql/jtie/Wrapper",
                                    "cdelegate",
                                    "J")

@@ -14,7 +14,7 @@ include/sync_slave_sql_with_master.inc
 DROP TABLE t;
 include/sync_slave_sql_with_master.inc
 include/rpl_reset.inc
-CREATE TABLE t (a int, b int, c int, key(b));
+CREATE TABLE t (a int, b int, c int, key(b)) ENGINE=MyISAM;
 include/sync_slave_sql_with_master.inc
 ALTER TABLE t DISABLE KEYS;
 INSERT INTO t VALUES (1,2,4);

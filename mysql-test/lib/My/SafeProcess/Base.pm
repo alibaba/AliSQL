@@ -1,15 +1,22 @@
 # -*- cperl -*-
-# Copyright (c) 2007 MySQL AB, 2008, 2009 Sun Microsystems, Inc.
+# Copyright (c) 2007, 2023, Oracle and/or its affiliates.
 # Use is subject to license terms.
 #
 # This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; version 2 of the License.
+# it under the terms of the GNU General Public License, version 2.0,
+# as published by the Free Software Foundation.
+#
+# This program is also distributed with certain software (including
+# but not limited to OpenSSL) that is licensed under separate terms,
+# as designated in a particular file or component or in included license
+# documentation.  The authors of MySQL hereby grant you an additional
+# permission to link the program and your derivative works with the
+# separately licensed software that they have included with MySQL.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# GNU General Public License, version 2.0, for more details.
 #
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
@@ -107,7 +114,7 @@ sub create_process {
   my $input    = delete($opts{'input'});
   my $output   = delete($opts{'output'});
   my $error    = delete($opts{'error'});
-
+  my $pid_file = delete($opts{'pid_file'});
   my $open_mode= $opts{append} ? ">>" : ">";
 
   if ($^O eq "MSWin32"){
@@ -176,6 +183,14 @@ sub create_process {
     # Parent
     $pipe->reader();
     my $line= <$pipe>; # Wait for child to say it's ready
+    # if pid-file is defined, read process id from pid-file.
+    if ( defined $pid_file ) {
+      sleep 1 until -e $pid_file;
+      open FILE, $pid_file;
+      chomp(my $pid_val = <FILE>);
+      close FILE;
+      return $pid_val
+    }
     return $pid;
   }
 
@@ -206,13 +221,12 @@ sub create_process {
     }
   }
 
-  # Tell parent to continue
-  $pipe->writer();
-  print $pipe "ready\n";
-
   if ( !exec($path, @$args) ){
     croak("Failed to exec '$path': $!");
   }
+  # Tell parent to continue
+  $pipe->writer();
+  print $pipe "ready\n";
 
   croak("Should never come here");
 

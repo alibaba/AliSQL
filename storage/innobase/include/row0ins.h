@@ -1,14 +1,22 @@
 /*****************************************************************************
 
-Copyright (c) 1996, 2016, Oracle and/or its affiliates. All Rights Reserved.
+Copyright (c) 1996, 2023, Oracle and/or its affiliates.
 
-This program is free software; you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation; version 2 of the License.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License, version 2.0,
+as published by the Free Software Foundation.
 
-This program is distributed in the hope that it will be useful, but WITHOUT
-ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+This program is also distributed with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have included with MySQL.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License, version 2.0, for more details.
 
 You should have received a copy of the GNU General Public License along with
 this program; if not, write to the Free Software Foundation, Inc.,
@@ -39,7 +47,6 @@ which lock either the success or the failure of the constraint. NOTE that
 the caller must have a shared latch on dict_foreign_key_check_lock.
 @return DB_SUCCESS, DB_LOCK_WAIT, DB_NO_REFERENCED_ROW, or
 DB_ROW_IS_REFERENCED */
-UNIV_INTERN
 dberr_t
 row_ins_check_foreign_constraint(
 /*=============================*/
@@ -56,8 +63,7 @@ row_ins_check_foreign_constraint(
 	MY_ATTRIBUTE((nonnull, warn_unused_result));
 /*********************************************************************//**
 Creates an insert node struct.
-@return	own: insert node struct */
-UNIV_INTERN
+@return own: insert node struct */
 ins_node_t*
 ins_node_create(
 /*============*/
@@ -68,7 +74,6 @@ ins_node_create(
 Sets a new row to insert for an INS_DIRECT node. This function is only used
 if we have constructed the row separately, which is a rare case; this
 function is quite slow. */
-UNIV_INTERN
 void
 ins_node_set_new_row(
 /*=================*/
@@ -85,7 +90,6 @@ the delete marked record.
 @retval DB_LOCK_WAIT on lock wait when !(flags & BTR_NO_LOCKING_FLAG)
 @retval DB_FAIL if retry with BTR_MODIFY_TREE is needed
 @return error code */
-UNIV_INTERN
 dberr_t
 row_ins_clust_index_entry_low(
 /*==========================*/
@@ -97,8 +101,12 @@ row_ins_clust_index_entry_low(
 	ulint		n_uniq,	/*!< in: 0 or index->n_uniq */
 	dtuple_t*	entry,	/*!< in/out: index entry to insert */
 	ulint		n_ext,	/*!< in: number of externally stored columns */
-	que_thr_t*	thr)	/*!< in: query thread or NULL */
-	MY_ATTRIBUTE((nonnull, warn_unused_result));
+	que_thr_t*	thr,	/*!< in: query thread or NULL */
+	bool		dup_chk_only)
+				/*!< in: if true, just do duplicate check
+				and return. don't execute actual insert. */
+	MY_ATTRIBUTE((warn_unused_result));
+
 /***************************************************************//**
 Tries to insert an entry into a secondary index. If a record with exactly the
 same fields is found, the other record is necessarily marked deleted.
@@ -107,7 +115,6 @@ It is then unmarked. Otherwise, the entry is just inserted to the index.
 @retval DB_LOCK_WAIT on lock wait when !(flags & BTR_NO_LOCKING_FLAG)
 @retval DB_FAIL if retry with BTR_MODIFY_TREE is needed
 @return error code */
-UNIV_INTERN
 dberr_t
 row_ins_sec_index_entry_low(
 /*========================*/
@@ -122,13 +129,26 @@ row_ins_sec_index_entry_low(
 	dtuple_t*	entry,	/*!< in/out: index entry to insert */
 	trx_id_t	trx_id,	/*!< in: PAGE_MAX_TRX_ID during
 				row_log_table_apply(), or 0 */
-	que_thr_t*	thr)	/*!< in: query thread */
-	MY_ATTRIBUTE((nonnull, warn_unused_result));
+	que_thr_t*	thr,	/*!< in: query thread */
+	bool		dup_chk_only)
+				/*!< in: if true, just do duplicate check
+				and return. don't execute actual insert. */
+	MY_ATTRIBUTE((warn_unused_result));
+/** Sets the values of the dtuple fields in entry from the values of appropriate
+columns in row.
+@param[in]	index	index handler
+@param[out]	entry	index entry to make
+@param[in]	row	row */
+dberr_t
+row_ins_index_entry_set_vals(
+	const dict_index_t*	index,
+	dtuple_t*		entry,
+	const dtuple_t*		row);
+
 /***************************************************************//**
 Tries to insert the externally stored fields (off-page columns)
 of a clustered index entry.
 @return DB_SUCCESS or DB_OUT_OF_FILE_SPACE */
-UNIV_INTERN
 dberr_t
 row_ins_index_entry_big_rec_func(
 /*=============================*/
@@ -138,52 +158,55 @@ row_ins_index_entry_big_rec_func(
 	mem_heap_t**		heap,	/*!< in/out: memory heap */
 	dict_index_t*		index,	/*!< in: index */
 	const char*		file,	/*!< in: file name of caller */
-#ifndef DBUG_OFF
+#ifndef NDEBUG
 	const void*		thd,	/*!< in: connection, or NULL */
-#endif /* DBUG_OFF */
+#endif /* NDEBUG */
 	ulint			line)	/*!< in: line number of caller */
 	MY_ATTRIBUTE((nonnull(1,2,3,4,5,6), warn_unused_result));
-#ifdef DBUG_OFF
+#ifdef NDEBUG
 # define row_ins_index_entry_big_rec(e,big,ofs,heap,index,thd,file,line) \
 	row_ins_index_entry_big_rec_func(e,big,ofs,heap,index,file,line)
-#else /* DBUG_OFF */
+#else /* NDEBUG */
 # define row_ins_index_entry_big_rec(e,big,ofs,heap,index,thd,file,line) \
 	row_ins_index_entry_big_rec_func(e,big,ofs,heap,index,file,thd,line)
-#endif /* DBUG_OFF */
+#endif /* NDEBUG */
 /***************************************************************//**
 Inserts an entry into a clustered index. Tries first optimistic,
 then pessimistic descent down the tree. If the entry matches enough
 to a delete marked record, performs the insert by updating or delete
 unmarking the delete marked record.
-@return	DB_SUCCESS, DB_LOCK_WAIT, DB_DUPLICATE_KEY, or some other error code */
-UNIV_INTERN
+@return DB_SUCCESS, DB_LOCK_WAIT, DB_DUPLICATE_KEY, or some other error code */
 dberr_t
 row_ins_clust_index_entry(
 /*======================*/
 	dict_index_t*	index,	/*!< in: clustered index */
 	dtuple_t*	entry,	/*!< in/out: index entry to insert */
 	que_thr_t*	thr,	/*!< in: query thread */
-	ulint		n_ext)	/*!< in: number of externally stored columns */
-	MY_ATTRIBUTE((nonnull, warn_unused_result));
+	ulint		n_ext,	/*!< in: number of externally stored columns */
+	bool		dup_chk_only)
+				/*!< in: if true, just do duplicate check
+				and return. don't execute actual insert. */
+	MY_ATTRIBUTE((warn_unused_result));
 /***************************************************************//**
 Inserts an entry into a secondary index. Tries first optimistic,
 then pessimistic descent down the tree. If the entry matches enough
 to a delete marked record, performs the insert by updating or delete
 unmarking the delete marked record.
-@return	DB_SUCCESS, DB_LOCK_WAIT, DB_DUPLICATE_KEY, or some other error code */
-UNIV_INTERN
+@return DB_SUCCESS, DB_LOCK_WAIT, DB_DUPLICATE_KEY, or some other error code */
 dberr_t
 row_ins_sec_index_entry(
 /*====================*/
 	dict_index_t*	index,	/*!< in: secondary index */
 	dtuple_t*	entry,	/*!< in/out: index entry to insert */
-	que_thr_t*	thr)	/*!< in: query thread */
-	MY_ATTRIBUTE((nonnull, warn_unused_result));
+	que_thr_t*	thr,	/*!< in: query thread */
+	bool		dup_chk_only)
+				/*!< in: if true, just do duplicate check
+				and return. don't execute actual insert. */
+	MY_ATTRIBUTE((warn_unused_result));
 /***********************************************************//**
 Inserts a row to a table. This is a high-level function used in
 SQL execution graphs.
-@return	query thread to run next or NULL */
-UNIV_INTERN
+@return query thread to run next or NULL */
 que_thr_t*
 row_ins_step(
 /*=========*/

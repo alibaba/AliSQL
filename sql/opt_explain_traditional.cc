@@ -1,13 +1,20 @@
-/* Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
@@ -52,12 +59,16 @@ static const char *traditional_extra_tags[ET_total]=
   "const row not found",               // ET_CONST_ROW_NOT_FOUND
   "unique row not found",              // ET_UNIQUE_ROW_NOT_FOUND
   "Impossible ON condition",           // ET_IMPOSSIBLE_ON_CONDITION
-  ""                                   // ET_PUSHED_JOIN
+  "",                                  // ET_PUSHED_JOIN
+  "Ft_hints:"                          // ET_FT_HINTS
 };
 
+static const char *mod_type_name[]=
+{
+  "NONE", "INSERT", "UPDATE", "DELETE", "REPLACE"
+};
 
-
-bool Explain_format_traditional::send_headers(select_result *result)
+bool Explain_format_traditional::send_headers(Query_result *result)
 {
   return ((nil= new Item_null) == NULL ||
           Explain_format::send_headers(result) ||
@@ -111,7 +122,7 @@ static bool push(List<Item> *items, const qep_row::column<uint> &c,
 }
 
 
-static bool push(List<Item> *items, const qep_row::column<longlong> &c,
+static bool push(List<Item> *items, const qep_row::column<ulonglong> &c,
                  Item_null *nil)
 {
   if (c.is_empty())
@@ -133,7 +144,7 @@ static bool push(List<Item> *items, const qep_row::column<float> &c,
 
 bool Explain_format_traditional::push_select_type(List<Item> *items)
 {
-  DBUG_ASSERT(!column_buffer.col_select_type.is_empty());
+  assert(!column_buffer.col_select_type.is_empty());
   StringBuffer<32> buff;
   if (column_buffer.is_dependent)
   {
@@ -145,32 +156,50 @@ bool Explain_format_traditional::push_select_type(List<Item> *items)
     if (buff.append(STRING_WITH_LEN("UNCACHEABLE "), system_charset_info))
       return true;
   }
-  const char *type=
-    SELECT_LEX::get_type_str(column_buffer.col_select_type.get());
+  const SELECT_LEX::type_enum sel_type= column_buffer.col_select_type.get();
+  const char *type= (column_buffer.mod_type != MT_NONE &&
+                     (sel_type == SELECT_LEX::SLT_PRIMARY ||
+                      sel_type == SELECT_LEX::SLT_SIMPLE)) ?
+    mod_type_name[column_buffer.mod_type] :
+    SELECT_LEX::get_type_str(sel_type);
+
   if (buff.append(type))
     return true;
+
   Item_string *item= new Item_string(buff.dup(current_thd->mem_root),
                                      buff.length(), system_charset_info);
   return item == NULL || items->push_back(item);
 }
 
+class Buffer_cleanup
+{
+public:
+  explicit Buffer_cleanup(qep_row *row)
+    : m_row(row)
+  {}
+  ~Buffer_cleanup()
+  {
+    m_row->cleanup();
+  }
+private:
+  qep_row *m_row;
+};
 
 bool Explain_format_traditional::flush_entry()
 {
+  Buffer_cleanup bc(&column_buffer); // release column_buffer
   List<Item> items;
   if (push(&items, column_buffer.col_id, nil) ||
       push_select_type(&items) ||
       push(&items, column_buffer.col_table_name, nil) ||
-      (current_thd->lex->describe & DESCRIBE_PARTITIONS &&
-       push(&items, column_buffer.col_partitions, nil)) ||
+      push(&items, column_buffer.col_partitions, nil) ||
       push(&items, column_buffer.col_join_type, nil) ||
       push(&items, column_buffer.col_possible_keys, nil) ||
       push(&items, column_buffer.col_key, nil) ||
       push(&items, column_buffer.col_key_len, nil) ||
       push(&items, column_buffer.col_ref, nil) ||
       push(&items, column_buffer.col_rows, nil) ||
-      (current_thd->lex->describe & DESCRIBE_EXTENDED &&
-       push(&items, column_buffer.col_filtered, nil)))
+      push(&items, column_buffer.col_filtered, nil))
     return true;
 
   if (column_buffer.col_message.is_empty() &&
@@ -186,7 +215,7 @@ bool Explain_format_traditional::flush_entry()
     qep_row::extra *e;
     while ((e= it++))
     {
-      DBUG_ASSERT(traditional_extra_tags[e->tag] != NULL);
+      assert(traditional_extra_tags[e->tag] != NULL);
       if (buff.append(traditional_extra_tags[e->tag]))
         return true;
       if (e->data)
@@ -232,7 +261,5 @@ bool Explain_format_traditional::flush_entry()
 
   if (output->send_data(items))
     return true;
-
-  column_buffer.cleanup();
   return false;
 }

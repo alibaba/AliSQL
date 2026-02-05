@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -44,6 +51,9 @@
 
 #include <signaldata/DbinfoScan.hpp>
 #include <signaldata/TransIdAI.hpp>
+
+#define JAM_FILE_ID 400
+
 
 /**************************************************************************
  * ------------------------------------------------------------------------
@@ -149,6 +159,7 @@ DbUtil::releaseTransaction(TransactionPtr transPtr){
     opPtr.p->attrInfo.release();
     opPtr.p->keyInfo.release();
     opPtr.p->rs.release();
+    opPtr.p->transPtrI = RNIL;
     if (opPtr.p->prepOp != 0 && opPtr.p->prepOp_i != RNIL) {
       if (opPtr.p->prepOp->releaseFlag) {
 	PreparedOperationPtr prepOpPtr;
@@ -158,7 +169,7 @@ DbUtil::releaseTransaction(TransactionPtr transPtr){
       }
     }
   }
-  transPtr.p->operations.release();
+  while (transPtr.p->operations.releaseFirst());
   c_runningTransactions.release(transPtr);
 }
 
@@ -186,31 +197,31 @@ DbUtil::execREAD_CONFIG_REQ(Signal* signal)
   {
     SLList<Prepare> tmp(c_preparePool);
     PreparePtr ptr;
-    while(tmp.seize(ptr))
+    while (tmp.seizeFirst(ptr))
       new (ptr.p) Prepare(c_pagePool);
-    tmp.release();
+    while (tmp.releaseFirst());
   }
   {
     SLList<Operation> tmp(c_operationPool);
     OperationPtr ptr;
-    while(tmp.seize(ptr))
+    while (tmp.seizeFirst(ptr))
       new (ptr.p) Operation(c_dataBufPool, c_dataBufPool, c_dataBufPool);
-    tmp.release();
+    while (tmp.releaseFirst());
   }
   {
     SLList<PreparedOperation> tmp(c_preparedOperationPool);
     PreparedOperationPtr ptr;
-    while(tmp.seize(ptr))
+    while (tmp.seizeFirst(ptr))
       new (ptr.p) PreparedOperation(c_attrMappingPool, 
 				    c_dataBufPool, c_dataBufPool);
-    tmp.release();
+    while (tmp.releaseFirst());
   }
   {
     SLList<Transaction> tmp(c_transactionPool);
     TransactionPtr ptr;
-    while(tmp.seize(ptr))
+    while (tmp.seizeFirst(ptr))
       new (ptr.p) Transaction(c_pagePool, c_operationPool);
-    tmp.release();
+    while (tmp.releaseFirst());
   }
 
   c_lockQueuePool.setSize(5);
@@ -289,7 +300,7 @@ DbUtil::get_systab_tableid(Signal* signal)
 
   LinearSectionPtr ptr[1];
   ptr[0].p = buf;
-  ptr[0].sz = sizeof(NAME);
+  ptr[0].sz = sizeof(buf) / sizeof(Uint32);
   sendSignal(DBDICT_REF, GSN_GET_TABINFOREQ, signal,
              GetTabInfoReq::SignalLength, JBB, ptr,1);
 }
@@ -312,7 +323,7 @@ void
 DbUtil::connectTc(Signal* signal){
   
   TransactionPtr ptr;
-  while(c_seizingTransactions.seize(ptr)){
+  while (c_seizingTransactions.seizeFirst(ptr)){
     signal->theData[0] = ptr.i << 1; // See TcCommitConf
     signal->theData[1] = reference();
     sendSignal(DBTC_REF, GSN_TCSEIZEREQ, signal, 2, JBB);
@@ -606,6 +617,7 @@ DbUtil::execDUMP_STATE_ORD(Signal* signal){
 
     switch (signal->theData[1]) {
     case 1:
+    {
       // ** Print a specific record **
       if (signal->length() >= 3) {
 	PreparePtr prepPtr;
@@ -631,7 +643,7 @@ DbUtil::execDUMP_STATE_ORD(Signal* signal){
 	c_runningPrepares.next(prepPtr);
       }
       return;
-
+    }
     case 2:
       // ** Print a specific record **
       if (signal->length() >= 3) {
@@ -1006,7 +1018,7 @@ DbUtil::execUTIL_PREPARE_REQ(Signal* signal)
   SectionHandle handle(this, signal);
   
   jam();
-  if(!c_runningPrepares.seize(prepPtr)) {
+  if (!c_runningPrepares.seizeFirst(prepPtr)) {
     jam();
     releaseSections(handle);
     sendUtilPrepareRef(signal, UtilPrepareRef::PREPARE_SEIZE_ERROR,
@@ -1246,6 +1258,7 @@ DbUtil::prepareOperation(Signal* signal,
   ndbrequire(prepPagesReader.next());
   ndbrequire(prepPagesReader.getKey() == UtilPrepareReq::OperationType);
   const Uint32 operationType = prepPagesReader.getUint32();
+  prepOpPtr.p->operationType =(UtilPrepareReq::OperationTypeValue)operationType;
   
   ndbrequire(prepPagesReader.next());
   
@@ -1537,7 +1550,7 @@ DbUtil::prepareOperation(Signal* signal,
   
   TcKeyReq::setAbortOption(requestInfo, TcKeyReq::AbortOnError);
   TcKeyReq::setKeyLength(requestInfo, tableDesc.KeyLength);  
-  switch(operationType) {
+  switch((UtilPrepareReq::OperationTypeValue)operationType) {
   case(UtilPrepareReq::Read):
     prepOpPtr.p->rsLen =
       attrLength + 
@@ -1566,6 +1579,14 @@ DbUtil::prepareOperation(Signal* signal,
     prepOpPtr.p->noOfAttr = tableDesc.NoOfKeyAttr;
     prepOpPtr.p->tckey.attrLen = 0;
     TcKeyReq::setOperationType(requestInfo, ZDELETE);
+    break;
+  case(UtilPrepareReq::Probe):
+    // The number of attributes should equal the size of the primary key
+    ndbrequire(tableDesc.KeyLength == attrLength);
+    prepOpPtr.p->rsLen = 0;
+    prepOpPtr.p->noOfAttr = tableDesc.NoOfKeyAttr;
+    prepOpPtr.p->tckey.attrLen = 0;
+    TcKeyReq::setOperationType(requestInfo, ZREAD);
     break;
   case(UtilPrepareReq::Write):
     prepOpPtr.p->rsLen = 0; 
@@ -1803,11 +1824,11 @@ DbUtil::execUTIL_SEQUENCE_REQ(Signal* signal){
    * 1 Transaction with 1 operation
    */
   TransactionPtr transPtr;
-  ndbrequire(c_runningTransactions.seize(transPtr));
+  ndbrequire(c_runningTransactions.seizeFirst(transPtr));
   
   OperationPtr opPtr;
-  ndbrequire(transPtr.p->operations.seize(opPtr));
-  
+  ndbrequire(transPtr.p->operations.seizeFirst(opPtr));
+  ndbrequire(opPtr.p->transPtrI == RNIL);
   ndbrequire(opPtr.p->keyInfo.seize(1));
 
   transPtr.p->gci_hi = 0;
@@ -2073,13 +2094,14 @@ DbUtil::execUTIL_EXECUTE_REQ(Signal* signal)
   /************************************************************
    * Seize Transaction record
    ************************************************************/
-  ndbrequire(c_runningTransactions.seize(transPtr));
+  ndbrequire(c_runningTransactions.seizeFirst(transPtr));
   transPtr.p->gci_hi = 0;
   transPtr.p->gci_lo = 0;
   transPtr.p->gsn        = GSN_UTIL_EXECUTE_REQ;
   transPtr.p->clientRef  = clientRef;
   transPtr.p->clientData = clientData;
-  ndbrequire(transPtr.p->operations.seize(opPtr));
+  ndbrequire(transPtr.p->operations.seizeFirst(opPtr));
+  ndbrequire(opPtr.p->transPtrI == RNIL);
   opPtr.p->prepOp   = prepOpPtr.p;
   opPtr.p->prepOp_i = prepOpPtr.i;
   opPtr.p->m_scanTakeOver = scanTakeOver;
@@ -2121,14 +2143,17 @@ DbUtil::execUTIL_EXECUTE_REQ(Signal* signal)
       res = keyInfo->append(bufStart + header.getHeaderSize(), 
 			    header.getDataSize());
 
-    switch (TcKeyReq::getOperationType(prepOpPtr.p->tckey.requestInfo)) {
-    case ZREAD:
+    switch (prepOpPtr.p->operationType) {
+    case UtilPrepareReq::Read:
       res &= attrInfo->append(bufStart, header.getHeaderSize());
       break;
-    case ZDELETE:
+    case UtilPrepareReq::Delete:
+    case UtilPrepareReq::Probe:
       // no attrinfo for Delete
       break;
-    default:
+    case UtilPrepareReq::Insert:
+    case UtilPrepareReq::Update:
+    case UtilPrepareReq::Write:
       res &= attrInfo->append(bufStart,
 			      header.getHeaderSize() + header.getDataSize());
     }
@@ -2417,12 +2442,55 @@ DbUtil::execTRANSID_AI(Signal* signal){
     dataLen = signal->length() - 3;
   }
 
-  Operation * opP = c_operationPool.getPtr(opI);
+  bool validSignal = false;
+  Operation * opP;
   TransactionPtr transPtr;
-  c_runningTransactions.getPtr(transPtr, opP->transPtrI);
+  do
+  {
+    /* Lookup op record carefully, it may have been released if the
+     * transaction was aborted and the TRANSID_AI was delayed
+     */
+    OperationPtr opPtr;
+    opPtr.i = opI;
+    c_operationPool.getPtrIgnoreAlloc(opPtr);
+    opP = opPtr.p;
+    
+    /* Use transPtrI == RNIL as test of op record validity */
+    if (opP->transPtrI == RNIL)
+    {
+      jam();
+      break;
+    }
+    
+#ifdef ARRAY_GUARD
+    /* Op was valid, do normal debug-only allocation double-check */
+    ndbrequire(c_operationPool.isSeized(opI));
+#endif
 
-  ndbrequire(transId1 == transPtr.p->transId[0] && 
-	     transId2 == transPtr.p->transId[1]);
+    /* Valid op record must always point to allocated transaction record */
+    c_runningTransactions.getPtr(transPtr, opP->transPtrI);
+
+    /* Transaction may have different transid since this op was
+     * executed - e.g. if it is retried due to a temp error.
+     */
+    validSignal = (transId1 == transPtr.p->transId[0] && 
+                   transId2 == transPtr.p->transId[1]);
+  } while(0);
+  
+  if (unlikely(!validSignal))
+  {
+    /* Can get strays as TRANSID_AI takes a different path
+     * to LQHKEYCONF/TCKEYCONF/LQHKEYREF/TCKEYREF/TCROLLBACKREP
+     * and we may have retried (with different transid), or
+     * given up since then
+     */
+    jam();
+    releaseSections(handle);
+    return;
+  }
+
+  jam();
+
   opP->rsRecv += dataLen;
   
   /**

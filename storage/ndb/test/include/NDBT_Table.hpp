@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -37,7 +44,7 @@ public:
                  Uint32 defaultValBytes = 0):
     NdbDictionary::Column(_name)
   {
-    assert(_name != 0);
+    require(_name != 0);
     
     setType(_type);
     setLength(_length);
@@ -58,7 +65,6 @@ class NDBT_Table : public NdbDictionary::Table {
    * Print meta information about table 
    * (information on how it is strored, what the attributes look like etc.)
    */
-  friend class NdbOut& operator <<(class NdbOut&, const NDBT_Table &);
 public: 
   
   NDBT_Table(const char* name, 
@@ -66,7 +72,7 @@ public:
 	     const NdbDictionary::Column attributes[])
     : NdbDictionary::Table(name)
   {
-    assert(name != 0);
+    require(name != 0);
     
     //setStoredTable(stored);
     for(int i = 0; i<noOfAttributes; i++)
@@ -76,7 +82,7 @@ public:
     NdbError error;
     int ret = aggregate(error);
     (void)ret;
-    assert(ret == 0);
+    require(ret == 0);
   }
 
   NDBT_Table(const char* name, 
@@ -84,7 +90,7 @@ public:
 	     NdbDictionary::Column* attributePtrs[])
     : NdbDictionary::Table(name)
   {
-    assert(name != 0);
+    require(name != 0);
     
     //setStoredTable(stored);
     for(int i = 0; i<noOfAttributes; i++)
@@ -93,7 +99,8 @@ public:
     // validate() might cause initialization order problem with charset
     NdbError error;
     int ret = aggregate(error);
-    assert(ret == 0);
+    (void)ret;
+    require(ret == 0);
   }
   
   static const NdbDictionary::Table * discoverTableFromDb(Ndb* ndb,
@@ -105,14 +112,5 @@ const NdbDictionary::Table *
 NDBT_Table::discoverTableFromDb(Ndb* ndb, const char * name){
   return ndb->getDictionary()->getTable(name);
 }
-
-
-/**
- * Print meta information about index
- * (information on how it is strored, what the attributes look like etc.)
- */
-class NdbOut& operator <<(class NdbOut&, const NdbDictionary::Index &);
-
-
 
 #endif

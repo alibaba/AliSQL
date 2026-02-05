@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2011, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -39,13 +46,6 @@ enum THD_NDB_OPTIONS
     lock, as one other mysqld already has the lock.
   */
   TNO_NO_LOCK_SCHEMA_OP= 1 << 1
-  /*
-    Skip drop of ndb table in delete_table.  Used when calling
-    mysql_rm_table_part2 in "show tables", as we do not want to
-    remove ndb tables "by mistake".  The table should not exist
-    in ndb in the first place.
-  */
-  ,TNO_NO_NDB_DROP_TABLE=    1 << 2
 };
 
 enum THD_NDB_TRANS_OPTIONS
@@ -61,6 +61,11 @@ class Thd_ndb
 
   Thd_ndb(THD*);
   ~Thd_ndb();
+  const bool m_slave_thread; // cached value of thd->slave_thread
+
+  /* Skip binlog setup in ndbcluster_find_files() */
+  bool m_skip_binlog_setup_in_find_files;
+
 public:
   static Thd_ndb* seize(THD*);
   static void release(Thd_ndb* thd_ndb);
@@ -81,6 +86,7 @@ public:
 
   uint32 options;
   uint32 trans_options;
+  void transaction_checks(void);
   List<NDB_SHARE> changed_tables;
   HASH open_tables;
   /*
@@ -94,6 +100,7 @@ public:
   */
   uint m_unsent_bytes;
   uint m_batch_size;
+  bool add_row_check_if_batch_full(uint size);
 
   uint m_execute_count;
 
@@ -134,9 +141,29 @@ public:
   uint schema_locks_count; // Number of global schema locks taken by thread
   bool has_required_global_schema_lock(const char* func);
 
+  /**
+     Epoch of last committed transaction in this session, 0 if none so far
+   */
+  Uint64 m_last_commit_epoch_session;
+
   unsigned m_connect_count;
-  bool valid_ndb(void);
-  bool recycle_ndb(THD* thd);
+  bool valid_ndb(void) const;
+  bool recycle_ndb(void);
+
+  bool is_slave_thread(void) const { return m_slave_thread; }
+
+  void set_skip_binlog_setup_in_find_files(bool value)
+  {
+    // Only alloow toggeling the value
+    assert(m_skip_binlog_setup_in_find_files != value);
+
+    m_skip_binlog_setup_in_find_files = value;
+  }
+
+  bool skip_binlog_setup_in_find_files(void) const
+  {
+    return m_skip_binlog_setup_in_find_files;
+  }
 };
 
 #endif

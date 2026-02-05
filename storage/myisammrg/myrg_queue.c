@@ -1,13 +1,20 @@
-/* Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -53,7 +60,7 @@ int _myrg_init_queue(MYRG_INFO *info,int inx,enum ha_rkey_function search_flag)
 		     (myisam_readnext_vec[search_flag] == SEARCH_SMALLER),
 		     queue_key_cmp,
 		     info->open_tables->table->s->keyinfo[inx].seg))
-	error=my_errno;
+	error=my_errno();
     }
     else
     {
@@ -61,7 +68,7 @@ int _myrg_init_queue(MYRG_INFO *info,int inx,enum ha_rkey_function search_flag)
 		       (myisam_readnext_vec[search_flag] == SEARCH_SMALLER),
 		       queue_key_cmp,
 		       info->open_tables->table->s->keyinfo[inx].seg))
-	error=my_errno;
+	error=my_errno();
     }
   }
   else
@@ -73,8 +80,9 @@ int _myrg_init_queue(MYRG_INFO *info,int inx,enum ha_rkey_function search_flag)
       this branch with underlying table that has less keys than merge table
       have.
     */
-    DBUG_ASSERT(!info->tables);
-    error= my_errno= HA_ERR_END_OF_FILE;
+    assert(!info->tables);
+    error= HA_ERR_END_OF_FILE;
+    set_my_errno(error);
   }
   return error;
 }
@@ -86,5 +94,5 @@ int _myrg_mi_read_record(MI_INFO *info, uchar *buf)
     info->update|= HA_STATE_AKTIV;		/* Record is read */
     return 0;
   }
-  return my_errno;
+  return my_errno();
 }

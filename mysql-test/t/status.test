@@ -1,8 +1,17 @@
+# The include statement below is a temp one for tests that are yet to
+#be ported to run with InnoDB,
+#but needs to be kept for tests that would need MyISAM in future.
+--source include/force_myisam_default.inc
+
 # This test requires that --log-output includes 'table', and the general
 # log is on
 
 # embedded server causes different stat
 -- source include/not_embedded.inc
+
+# When running with valgrind, we switch off --check-testcases, and get
+# different connection_id below, and a content mismatch error.
+-- source include/not_valgrind.inc
 
 # Save the initial number of concurrent sessions
 --source include/count_sessions.inc
@@ -23,14 +32,15 @@ SET GLOBAL LOG_OUTPUT = 'FILE';
 
 connect (con1,localhost,root,,);
 connect (con2,localhost,root,,);
+connection default;
 
 flush status;
 
 show status like 'Table_lock%';
+--disable_warnings
 select * from information_schema.session_status where variable_name like 'Table_lock%';
+--enable_warnings
 
-connection con1;
---echo # Switched to connection: con1
 set sql_log_bin=0;
 set @old_general_log = @@global.general_log;
 set global general_log = 'OFF';
@@ -40,40 +50,52 @@ drop table if exists t1;
 
 create table t1(n int) engine=myisam;
 insert into t1 values(1);
-# Execute dummy select in order to ensure that tables used in the
-# previous statement are unlocked and closed.
-select 1;
+select get_lock('mysqltest_lock', 100);
 
 connection con2;
 --echo # Switched to connection: con2
-lock tables t1 read;
-unlock tables;
-lock tables t1 read;
+--echo # Sending:
+--send update t1 set n = get_lock('mysqltest_lock', 100) 
 
 connection con1;
 --echo # Switched to connection: con1
+--echo # Wait for the first UPDATE to get blocked.
+let $wait_condition= select count(*) from INFORMATION_SCHEMA.PROCESSLIST
+                     where STATE = "User lock" and
+                           INFO = "update t1 set n = get_lock('mysqltest_lock', 100)";
+--source include/wait_condition.inc
+
 let $ID= `select connection_id()`;
+--echo # Sending:
 --send update t1 set n = 3
 
-connection con2;
---echo # Switched to connection: con2
-# wait for the other query to start executing
+connection default;
+--echo # Switched to connection: default
+--echo # wait for the second UPDATE to get blocked
 let $wait_condition= select 1 from INFORMATION_SCHEMA.PROCESSLIST
                      where ID = $ID and STATE = "Waiting for table level lock";
 --source include/wait_condition.inc
-unlock tables;
+select release_lock('mysqltest_lock');
+
+connection con2;
+--echo # Switched to connection: con2
+--echo # Reaping first UPDATE
+--reap
+select release_lock('mysqltest_lock');
 
 connection con1;
 --echo # Switched to connection: con1
+--echo # Reaping second UPDATE
 reap;
 show status like 'Table_locks_waited';
+
+connection default;
+--echo # Switched to connection: default
 drop table t1;
 set global general_log = @old_general_log;
 
 disconnect con2;
 disconnect con1;
-connection default;
---echo # Switched to connection: default
 
 # End of 4.1 tests
 
@@ -137,7 +159,9 @@ while ($wait_more)
 
 # Prerequisite.
 SHOW STATUS LIKE 'max_used_connections';
+--disable_warnings
 SELECT * FROM INFORMATION_SCHEMA.SESSION_STATUS WHERE VARIABLE_NAME LIKE 'max_used_connections';
+--enable_warnings
 
 # Save original setting.
 SET @save_thread_cache_size=@@thread_cache_size;
@@ -151,7 +175,9 @@ disconnect con2;
 
 # Check that max_used_connections still reflects maximum value.
 SHOW STATUS LIKE 'max_used_connections';
+--disable_warnings
 SELECT * FROM INFORMATION_SCHEMA.SESSION_STATUS WHERE VARIABLE_NAME LIKE 'max_used_connections';
+--enable_warnings
 
 # Check that after flush max_used_connections equals to current number
 # of connections.  First wait for previous disconnect to finish.
@@ -175,18 +201,24 @@ while ($wait_more)
 --enable_result_log
 # Check that we don't count disconnected thread any longer.
 SHOW STATUS LIKE 'max_used_connections';
+--disable_warnings
 SELECT * FROM INFORMATION_SCHEMA.SESSION_STATUS WHERE VARIABLE_NAME LIKE 'max_used_connections';
+--enable_warnings
 
 # Check that max_used_connections is updated when cached thread is
 # reused...
 connect (con2,localhost,root,,);
 SHOW STATUS LIKE 'max_used_connections';
+--disable_warnings
 SELECT * FROM INFORMATION_SCHEMA.SESSION_STATUS WHERE VARIABLE_NAME LIKE 'max_used_connections';
+--enable_warnings
 
 # ...and when new thread is created.
 connect (con3,localhost,root,,);
 SHOW STATUS LIKE 'max_used_connections';
+--disable_warnings
 SELECT * FROM INFORMATION_SCHEMA.SESSION_STATUS WHERE VARIABLE_NAME LIKE 'max_used_connections';
+--enable_warnings
 
 # Restore original setting.
 connection default;
@@ -228,29 +260,6 @@ SHOW SESSION STATUS LIKE 'Last_query_cost';
 DROP TABLE t1;
 
 
-# End of 5.0 tests
-
-#
-# Ensure that SHOW STATUS only changes global status variables
-#
-
-connect (con1,localhost,root,,);
-let $rnd_next = `show global status like 'handler_read_rnd_next'`;
-let $tmp_table = `show global status like 'Created_tmp_tables'`;
-show status like 'com_show_status';
-show status like 'hand%write%';
-show status like '%tmp%';
-show status like 'hand%write%';
-show status like '%tmp%';
-show status like 'com_show_status';
-let $rnd_next2 = `show global status like 'handler_read_rnd_next'`;
-let $tmp_table2 = `show global status like 'Created_tmp_tables'`;
---disable_query_log
-eval select substring_index('$rnd_next2',0x9,-1)-substring_index('$rnd_next',0x9,-1) as rnd_diff, substring_index('$tmp_table2',0x9,-1)-substring_index('$tmp_table',0x9,-1) as tmp_table_diff;
---enable_query_log
-disconnect con1;
-connection default;
-
 #
 # Bug#30252 Com_create_function is not incremented.
 #
@@ -281,7 +290,10 @@ create database db37908;
 --enable_warnings
 create table db37908.t1(f1 int);
 insert into db37908.t1 values(1);
+set @orig_sql_mode = @@sql_mode;
+set sql_mode=(select replace(@@sql_mode,'NO_AUTO_CREATE_USER',''));
 grant usage,execute on test.* to mysqltest_1@localhost;
+set sql_mode= @orig_sql_mode;
 delimiter |;
 create procedure proc37908() begin select 1; end |
 create function func37908() returns int sql security invoker
@@ -422,6 +434,55 @@ show status like 'table_open_cache_%';
 set @@global.table_open_cache= @old_table_open_cache;
 drop tables t1, t2, t3;
 
+#
+# Bug#11766596: UPDATE A TIMESTAMP VARIABLE EVERY TIME REACHES MAX_USED_CONNECTIONS
+#
+
+connect (con1,localhost,root,,);
+--replace_regex /[0-9]*-[0-9]*-[0-9]* [0-9]*:[0-9]*:[0-9]*/DTVALUE/
+SHOW STATUS LIKE 'max_used_connections_time';
+--sleep 1
+connect (con2,localhost,root,,);
+--sleep 1
+connect (con3,localhost,root,,);
+
+--echo # Should report 4
+SHOW STATUS LIKE 'max_used_connections';
+
+let $time_1=`SELECT VARIABLE_VALUE FROM INFORMATION_SCHEMA.SESSION_STATUS WHERE VARIABLE_NAME LIKE 'max_used_connections_time'`;
+--sleep 1
+disconnect con2;
+let $time_2=`SELECT VARIABLE_VALUE FROM INFORMATION_SCHEMA.SESSION_STATUS WHERE VARIABLE_NAME LIKE 'max_used_connections_time'`;
+--sleep 1
+connect (con4,localhost,root,,);
+
+--echo # Should report 4
+SHOW STATUS LIKE 'max_used_connections';
+
+let $time_3=`SELECT VARIABLE_VALUE FROM INFORMATION_SCHEMA.SESSION_STATUS WHERE VARIABLE_NAME LIKE 'max_used_connections_time'`;
+
+--echo # This should report 0 as it must have the same value as above
+--replace_regex /[0-9]*-[0-9]*-[0-9]* [0-9]*:[0-9]*:[0-9]*/DTVALUE/
+--disable_query_log ONCE
+--eval SELECT TIMESTAMPDIFF(SECOND,'$time_1','$time_2') <> 0
+
+--echo # This should report 0 as timestamp is updated only when connection count strictly exceeds the previos highest value
+--replace_regex /[0-9]*-[0-9]*-[0-9]* [0-9]*:[0-9]*:[0-9]*/DTVALUE/
+--disable_query_log ONCE
+--eval SELECT TIMESTAMPDIFF(SECOND,'$time_1','$time_3') <> 0
+
+disconnect con1;
+disconnect con3;
+--sleep 1
+FLUSH STATUS;
+let $time_4=`SELECT VARIABLE_VALUE FROM INFORMATION_SCHEMA.SESSION_STATUS WHERE VARIABLE_NAME LIKE 'max_used_connections_time'`;
+
+--echo # This should not report 0 as FLUSH STATUS is called.
+--replace_regex /[0-9]*-[0-9]*-[0-9]* [0-9]*:[0-9]*:[0-9]*/DTVALUE/
+--disable_query_log ONCE
+--eval SELECT TIMESTAMPDIFF(SECOND,'$time_4','$time_3') <> 0
+
+disconnect con4;
 
 # Restore global concurrent_insert value. Keep in the end of the test file.
 --connection default

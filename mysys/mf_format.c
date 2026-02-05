@@ -1,19 +1,32 @@
-/* Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "mysys_priv.h"
+#include "my_sys.h"
 #include <m_string.h>
 
 /*
@@ -28,12 +41,11 @@ char * fn_format(char * to, const char *name, const char *dir,
 {
   char dev[FN_REFLEN], buff[FN_REFLEN], *pos, *startpos;
   const char *ext;
-  reg1 size_t length;
+  size_t length;
   size_t dev_length;
-  my_bool not_used;
   DBUG_ENTER("fn_format");
-  DBUG_ASSERT(name != NULL);
-  DBUG_ASSERT(extension != NULL);
+  assert(name != NULL);
+  assert(extension != NULL);
   DBUG_PRINT("enter",("name: %s  dir: %s  extension: %s  flag: %d",
 		       name,dir,extension,flag));
 
@@ -41,13 +53,13 @@ char * fn_format(char * to, const char *name, const char *dir,
   name+=(length=dirname_part(dev, (startpos=(char *) name), &dev_length));
   if (length == 0 || (flag & MY_REPLACE_DIR))
   {
-    DBUG_ASSERT(dir != NULL);
+    assert(dir != NULL);
     /* Use given directory */
     convert_dirname(dev,dir,NullS);		/* Fix to this OS */
   }
   else if ((flag & MY_RELATIVE_PATH) && !test_if_hard_path(dev))
   {
-    DBUG_ASSERT(dir != NULL);
+    assert(dir != NULL);
     /* Put 'dir' before the given path */
     strmake(buff,dev,sizeof(buff)-1);
     pos=convert_dirname(dev,dir,NullS);
@@ -57,7 +69,7 @@ char * fn_format(char * to, const char *name, const char *dir,
   if (flag & MY_PACK_FILENAME)
     pack_dirname(dev,dev);			/* Put in ./.. and ~/.. */
   if (flag & MY_UNPACK_FILENAME)
-    (void) unpack_dirname(dev, dev, &not_used);	/* Replace ~/.. with dir */
+    (void) unpack_dirname(dev,dev);		/* Replace ~/.. with dir */
 
   if (!(flag & MY_APPEND_EXT) &&
       (pos= (char*) strchr(name,FN_EXTCHAR)) != NullS)
@@ -94,11 +106,11 @@ char * fn_format(char * to, const char *name, const char *dir,
   {
     if (to == startpos)
     {
-      bmove(buff,(uchar*) name,length);		/* Save name for last copy */
+      memmove(buff, name, length);              /* Save name for last copy */
       name=buff;
     }
-    pos=strmake(strmov(to,dev),name,length);
-    (void) strmov(pos,ext);			/* Don't convert extension */
+    pos=strmake(my_stpcpy(to,dev),name,length);
+    (void) my_stpcpy(pos,ext);			/* Don't convert extension */
   }
   /*
     If MY_RETURN_REAL_PATH and MY_RESOLVE_SYMLINK is given, only do
@@ -109,7 +121,7 @@ char * fn_format(char * to, const char *name, const char *dir,
 				   MY_RESOLVE_LINK: 0));
   else if (flag & MY_RESOLVE_SYMLINKS)
   {
-    strmov(buff,to);
+    my_stpcpy(buff,to);
     (void) my_readlink(to, buff, MYF(0));
   }
   DBUG_RETURN(to);
@@ -123,8 +135,8 @@ char * fn_format(char * to, const char *name, const char *dir,
 
 size_t strlength(const char *str)
 {
-  reg1 const char * pos;
-  reg2 const char * found;
+  const char * pos;
+  const char * found;
   DBUG_ENTER("strlength");
 
   pos= found= str;

@@ -50,42 +50,11 @@ INSERT INTO t1 VALUES (1);
 
 # Create another gtid transaction at Master
 --connection master
-# Also, we introduce 'hold_dump_thread_inside_inner_loop' debug simulation now
-# to see what happens if dump thread is killed when the logic is
-# in inner while loop. The server code resets this debug point
-# after it is trigged once. So the sync of the following 'drop table'
-# statement will happen with the second dump thread that will be created
-# after slave triggers for another dump request after slave_net_timeout(10)
-# seconds.
---source include/stop_dump_threads.inc
-SET GLOBAL DEBUG='+d,hold_dump_thread_inside_inner_loop';
 DROP TABLE t1;
-# Start the Replication
-# This will create a dump thread on Master and because of
-# debug point, it will wait in inner loop.
---connection slave
---source include/start_slave.inc
-
---connection master
-SET DEBUG_SYNC='now WAIT_FOR signal_inside_inner_loop';
-
-# When a dump thread is waiting inside inner loop,
-# restart slave threads which will kill the existing
-# dump thread and will recreate it.
---connection slave
---source include/stop_slave.inc
-
-# Reset debug point for the next dump thread to ignore it
---connection master
-SET GLOBAL DEBUG='-d,hold_dump_thread_inside_inner_loop';
 
 # Start slave thread
 --connection slave
 --source include/start_slave.inc
-
-# Signal the zombie dump thread to go ahead.
---connection master
-SET DEBUG_SYNC='now signal signal_continue';
 
 # Now Dump thread-I/O thread communitcation protocol will detect that
 # it does not have recent gtid transaction(drop table) and Master

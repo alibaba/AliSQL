@@ -1,3 +1,8 @@
+# The include statement below is a temp one for tests that are yet to
+#be ported to run with InnoDB,
+#but needs to be kept for tests that would need MyISAM in future.
+--source include/force_myisam_default.inc
+
 # test uses mysqldump and hence not in embedded
 -- source include/not_embedded.inc
 -- source include/have_ndb.inc
@@ -21,7 +26,7 @@ CREATE TABLESPACE ts1
 ADD DATAFILE 'datafile_ts1_01.dat'
 USE LOGFILE GROUP lg1
 EXTENT_SIZE 1M
-INITIAL_SIZE 6M
+INITIAL_SIZE 32M
 ENGINE NDB;
 
 ALTER TABLESPACE ts1

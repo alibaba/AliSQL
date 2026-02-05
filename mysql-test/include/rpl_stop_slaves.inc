@@ -8,7 +8,7 @@
 #
 # [--let $rpl_only_running_threads= 1]
 # [--let $rpl_debug= 1]
-# [--let $rpl_timeout= NUMBER]
+# [--let $slave_timeout= NUMBER]
 # --source include/rpl_stop_slaves.inc
 #
 # Parameters:
@@ -27,7 +27,7 @@
 --source include/begin_include_file.inc
 
 --let $rpl_source_file= include/stop_slave.inc
---source include/rpl_for_each_slave.inc
+--source include/rpl_for_each_connection.inc
 
 --let $include_filename= rpl_stop_slaves.inc
 --source include/end_include_file.inc

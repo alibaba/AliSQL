@@ -1,23 +1,29 @@
 #ifndef SQL_PREPARE_H
 #define SQL_PREPARE_H
-/* Copyright (c) 2009, 2013, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2009, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
    51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
 
-#include "sql_error.h"
+#include "sql_class.h"  // Query_arena
 
-class THD;
 struct LEX;
 
 /**
@@ -51,6 +57,8 @@ struct LEX;
 class Reprepare_observer
 {
 public:
+  Reprepare_observer() : m_invalidated(FALSE), m_attempt(0) {}
+
   /**
     Check if a change of metadata is OK. In future
     the signature of this method may be extended to accept the old
@@ -58,23 +66,48 @@ public:
     simple, we only need the THD to report an error.
   */
   bool report_error(THD *thd);
+  /**
+    @returns true if some table metadata is changed and statement should be
+                  re-prepared.
+  */
   bool is_invalidated() const { return m_invalidated; }
   void reset_reprepare_observer() { m_invalidated= FALSE; }
+  /// @returns true if prepared statement can (and will) be retried
+  bool can_retry() const {
+    // Only call for a statement that is invalidated
+    assert(is_invalidated());
+    return m_attempt <= MAX_REPREPARE_ATTEMPTS &&
+           DBUG_EVALUATE_IF("simulate_max_reprepare_attempts_hit_case", false,
+                            true);
+  }
+
 private:
   bool m_invalidated;
+  int m_attempt;
+
+  /*
+    We take only 3 attempts to reprepare the query, otherwise we might end up
+    in endless loop.
+  */
+  static const int MAX_REPREPARE_ATTEMPTS = 3;
 };
 
 
-void mysqld_stmt_prepare(THD *thd, const char *packet, uint packet_length);
-void mysqld_stmt_execute(THD *thd, char *packet, uint packet_length);
-void mysqld_stmt_close(THD *thd, char *packet, uint packet_length);
+void mysqld_stmt_prepare(THD *thd, const char *query, uint length);
+void mysqld_stmt_execute(THD *thd, ulong stmt_id, ulong flags, uchar *params,
+                         ulong params_length);
+void mysqld_stmt_close(THD *thd, ulong stmt_id);
 void mysql_sql_stmt_prepare(THD *thd);
 void mysql_sql_stmt_execute(THD *thd);
 void mysql_sql_stmt_close(THD *thd);
-void mysqld_stmt_fetch(THD *thd, char *packet, uint packet_length);
-void mysqld_stmt_reset(THD *thd, char *packet, uint packet_length);
-void mysql_stmt_get_longdata(THD *thd, char *pos, ulong packet_length);
-void reinit_stmt_before_use(THD *thd, LEX *lex);
+void mysqld_stmt_fetch(THD *thd, ulong stmt_id, ulong num_rows);
+void mysqld_stmt_reset(THD *thd, ulong stmt_id);
+void mysql_stmt_get_longdata(THD *thd, ulong stmt_id, uint param_number,
+                             uchar *longdata, ulong length);
+bool reinit_stmt_before_use(THD *thd, LEX *lex);
+bool select_like_stmt_cmd_test(THD *thd,
+                               class Sql_cmd_dml *cmd,
+                               ulong setup_tables_done_option);
 
 /**
   Execute a fragment of server code in an isolated context, so that
@@ -214,7 +247,7 @@ public:
     @sa Documentation for C API function
     mysql_field_count()
   */
-  ulong get_field_count() const
+  size_t get_field_count() const
   {
     return m_current_rset ? m_current_rset->get_field_count() : 0;
   }
@@ -252,18 +285,23 @@ public:
   */
   ulong get_warn_count() const
   {
-    return m_diagnostics_area.warn_count();
+    return m_diagnostics_area.warn_count(m_thd);
   }
 
   /**
-    The following members are only valid if execute_direct()
+    The following three members are only valid if execute_direct()
     or move_to_next_result() returned an error.
     They never fail, but if they are called when there is no
     result, or no error, the result is not defined.
   */
-  const char *get_last_error() const { return m_diagnostics_area.message(); }
-  unsigned int get_last_errno() const { return m_diagnostics_area.sql_errno(); }
-  const char *get_last_sqlstate() const { return m_diagnostics_area.get_sqlstate(); }
+  const char *get_last_error() const
+  { return m_diagnostics_area.message_text(); }
+
+  unsigned int get_last_errno() const
+  { return m_diagnostics_area.mysql_errno(); }
+
+  const char *get_last_sqlstate() const
+  { return m_diagnostics_area.returned_sqlstate(); }
 
   /**
     Provided get_field_count() is not 0, this never fails. You don't
@@ -342,7 +380,7 @@ public:
   }
   const Ed_column *get_column(const unsigned int column_index) const
   {
-    DBUG_ASSERT(column_index < size());
+    assert(column_index < size());
     return m_column_array + column_index;
   }
   size_t size() const { return m_column_count; }
@@ -354,6 +392,129 @@ public:
 private:
   Ed_column *m_column_array;
   size_t m_column_count; /* TODO: change to point to metadata */
+};
+
+
+/**
+  A result class used to send cursor rows using the binary protocol.
+*/
+
+class Query_fetch_protocol_binary: public Query_result_send
+{
+  Protocol_binary protocol;
+public:
+  Query_fetch_protocol_binary(THD *thd);
+  virtual bool send_result_set_metadata(List<Item> &list, uint flags);
+  virtual bool send_data(List<Item> &items);
+  virtual bool send_eof();
+#ifdef EMBEDDED_LIBRARY
+  void begin_dataset()
+  {
+    protocol.begin_dataset();
+  }
+#endif
+};
+
+
+class Server_side_cursor;
+
+/**
+  Prepared_statement: a statement that can contain placeholders.
+*/
+
+class Prepared_statement: public Query_arena
+{
+  enum flag_values
+  {
+    IS_IN_USE= 1,
+    IS_SQL_PREPARE= 2
+  };
+
+public:
+  THD *thd;
+  Item_param **param_array;
+  Server_side_cursor *cursor;
+  uint param_count;
+  uint last_errno;
+  char last_error[MYSQL_ERRMSG_SIZE];
+
+  /*
+    Uniquely identifies each statement object in thread scope; change during
+    statement lifetime.
+  */
+  const ulong id;
+
+  LEX *lex;                                     // parse tree descriptor
+
+  /**
+    The query associated with this statement.
+  */
+  LEX_CSTRING m_query_string;
+
+  /* Performance Schema interface for a prepared statement. */
+  PSI_prepared_stmt* m_prepared_stmt;
+
+private:
+  Query_fetch_protocol_binary result;
+  uint flags;
+  bool with_log;
+  LEX_CSTRING m_name; /* name for named prepared statements */
+  /**
+    Name of the current (default) database.
+
+    If there is the current (default) database, "db" contains its name. If
+    there is no current (default) database, "db" is NULL and "db_length" is
+    0. In other words, "db", "db_length" must either be NULL, or contain a
+    valid database name.
+
+    @note this attribute is set and alloced by the slave SQL thread (for
+    the THD of that thread); that thread is (and must remain, for now) the
+    only responsible for freeing this member.
+  */
+  LEX_CSTRING m_db;
+
+  /**
+    The memory root to allocate parsed tree elements (instances of Item,
+    SELECT_LEX and other classes).
+  */
+  MEM_ROOT main_mem_root;
+public:
+  Prepared_statement(THD *thd_arg);
+  virtual ~Prepared_statement();
+  virtual void cleanup_stmt();
+  bool set_name(const LEX_CSTRING &name);
+  const LEX_CSTRING &name() const
+  { return m_name; }
+  void close_cursor();
+  bool is_in_use() const { return flags & (uint) IS_IN_USE; }
+  bool is_sql_prepare() const { return flags & (uint) IS_SQL_PREPARE; }
+  void set_sql_prepare() { flags|= (uint) IS_SQL_PREPARE; }
+  bool prepare(const char *packet, size_t packet_length);
+  bool execute_loop(bool open_cursor,
+                    uchar *packet_arg, uchar *packet_end_arg);
+  bool execute_server_runnable(Server_runnable *server_runnable);
+#ifdef HAVE_PSI_PS_INTERFACE
+  PSI_prepared_stmt* get_PS_prepared_stmt();
+#endif
+  /* Destroy this statement */
+  void deallocate();
+private:
+  void setup_set_params();
+  bool set_db(const LEX_CSTRING &db_length);
+  bool set_parameters(String *expanded_query,
+                      uchar *packet, uchar *packet_end);
+  bool execute(String *expanded_query, bool open_cursor);
+  bool reprepare();
+  bool validate_metadata(Prepared_statement  *copy);
+  void swap_prepared_statement(Prepared_statement *copy);
+  bool insert_params_from_vars(List<LEX_STRING>& varnames,
+                               String *query);
+#ifndef EMBEDDED_LIBRARY
+  bool insert_params(uchar *null_array, uchar *read_pos, uchar *data_end,
+                     String *query);
+#else
+  bool emb_insert_params(String *query);
+#endif
 };
 
 #endif // SQL_PREPARE_H

@@ -1,16 +1,23 @@
 #ifndef PROCEDURE_INCLUDED
 #define PROCEDURE_INCLUDED
 
-/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -19,13 +26,7 @@
 
 /* When using sql procedures */
 
-/*
-  It is necessary to include set_var.h instead of item.h because there
-  are dependencies on include order for set_var.h and item.h. This
-  will be resolved later.
-*/
-#include "sql_class.h"                          /* select_result, set_var.h: THD */
-#include "set_var.h"                            /* Item */
+#include "item.h"
 
 /* Procedure items used by procedures to store values for send_result_set_metadata */
 
@@ -37,10 +38,10 @@ public:
      this->item_name.set(name_par);
   }
   enum Type type() const { return Item::PROC_ITEM; }
-  virtual void set(const char *str,uint length, const CHARSET_INFO *cs)=0;
+  virtual void set(const char *str, size_t length, const CHARSET_INFO *cs)=0;
   virtual void set(longlong nr)=0;
   virtual enum_field_types field_type() const=0;
-  void set(const char *str) { set(str,(uint) strlen(str), default_charset()); }
+  void set(const char *str) { set(str, strlen(str), default_charset()); }
   unsigned int size_of() { return sizeof(*this);}  
 };
 
@@ -54,13 +55,13 @@ public:
   enum Item_result result_type () const { return INT_RESULT; }
   enum_field_types field_type() const { return MYSQL_TYPE_LONGLONG; }
   void set(longlong nr) { value=nr; }
-  void set(const char *str,uint length, const CHARSET_INFO *cs)
+  void set(const char *str, size_t length, const CHARSET_INFO *cs)
   { int err; value=my_strntoll(cs,str,length,10,NULL,&err); }
   double val_real() { return (double) value; }
   longlong val_int() { return value; }
   String *val_str(String *s) { s->set(value, default_charset()); return s; }
   my_decimal *val_decimal(my_decimal *);
-  bool get_date(MYSQL_TIME *ltime, uint fuzzydate)
+  bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate)
   {
     return get_date_from_int(ltime, fuzzydate);
   }
@@ -80,7 +81,7 @@ public:
   enum Item_result result_type () const { return STRING_RESULT; }
   enum_field_types field_type() const { return MYSQL_TYPE_VARCHAR; }
   void set(longlong nr) { str_value.set(nr, default_charset()); }
-  void set(const char *str, uint length, const CHARSET_INFO *cs)
+  void set(const char *str, size_t length, const CHARSET_INFO *cs)
   { str_value.copy(str,length,cs); }
   double val_real()
   {
@@ -96,7 +97,7 @@ public:
     const CHARSET_INFO *cs=str_value.charset();
     return my_strntoll(cs,str_value.ptr(),str_value.length(),10,NULL,&err);
   }
-  bool get_date(MYSQL_TIME *ltime, uint fuzzydate)
+  bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate)
   {
     return get_date_from_string(ltime, fuzzydate);
   }
@@ -106,7 +107,7 @@ public:
   }
   String *val_str(String*)
   {
-    return null_value ? (String*) 0 : (String*) &str_value;
+    return null_value ? (String*) 0 : &str_value;
   }
   my_decimal *val_decimal(my_decimal *);
   unsigned int size_of() { return sizeof(*this);}  

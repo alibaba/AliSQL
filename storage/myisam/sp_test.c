@@ -1,14 +1,21 @@
-/* Copyright (c) 2002, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2002, 2023, Oracle and/or its affiliates.
    
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
-   
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-   
+   GNU General Public License, version 2.0, for more details.
+
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
@@ -17,8 +24,6 @@
 /* Written by Alex Barkov, who has a shared copyright to this code */
 
 #include "myisam.h"
-
-#ifdef HAVE_SPATIAL
 #include "sp_defs.h"
 
 #define MAX_REC_LENGTH 1024
@@ -370,7 +375,7 @@ static void print_key(const uchar *key,const char * tail)
   printf("     key=");
   for (i=0; i<2*SPDIMS; i++)
   {
-    float8get(c,key);
+    float8get(&c,key);
     key+=sizeof(c);
     printf("%.14g ",c);
   }
@@ -417,7 +422,7 @@ static void rtree_PrintWKB(uchar *wkb, uint n_dims)
       printf("POINT(");
       for (i=0; i < n_dims; ++i)
       {
-        float8get(ord, wkb);
+        float8get(&ord, wkb);
         wkb += 8;
         printf("%.14g", ord);
         if (i < n_dims - 1)
@@ -440,7 +445,7 @@ static void rtree_PrintWKB(uchar *wkb, uint n_dims)
       {
         for (i=0; i < n_dims; ++i)
         {
-          float8get(ord, wkb);
+          float8get(&ord, wkb);
           wkb += 8;
           printf("%.14g", ord);
           if (i < n_dims - 1)
@@ -485,12 +490,5 @@ static void rtree_PrintWKB(uchar *wkb, uint n_dims)
     }
   }
 }
-
-#else
-int main(int argc MY_ATTRIBUTE((unused)),char *argv[] MY_ATTRIBUTE((unused)))
-{
-  exit(0);
-}
-#endif /*HAVE_SPATIAL*/
 
 #include "mi_extrafunc.h"

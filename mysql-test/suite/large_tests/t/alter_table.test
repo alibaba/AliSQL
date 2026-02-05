@@ -7,6 +7,8 @@
 --source include/big_test.inc
 #   Hence we skip on debug builds.
 --source include/have_nodebug.inc
+# Start server with MyISAM
+--source include/force_myisam_default.inc
 
 #
 # Bug#27029 alter table ... enable keys crashes mysqld on large table

@@ -1,3 +1,8 @@
+# The include statement below is a temp one for tests that are yet to
+#be ported to run with InnoDB,
+#but needs to be kept for tests that would need MyISAM in future.
+--source include/force_myisam_default.inc
+
 -- source include/have_ndb.inc
 
 --disable_warnings
@@ -11,7 +16,8 @@ CREATE TABLE `test` (
 
 # Add user1@localhost with a specific password
 # and connect as that user
-GRANT USAGE ON *.* TO user1@localhost IDENTIFIED BY 'pass';
+CREATE USER user1@localhost IDENTIFIED BY 'pass';
+GRANT USAGE ON *.* TO user1@localhost;
 connect (user1,localhost,user1,pass,*NO-ONE*);
 
 # Run the query 100 times

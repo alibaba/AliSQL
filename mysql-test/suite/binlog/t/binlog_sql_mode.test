@@ -1,3 +1,4 @@
+
 # ==== Purpose ====
 #
 # Test that sql_mode can correct restore before generating the binlog event

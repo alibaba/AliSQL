@@ -1,14 +1,22 @@
 /*****************************************************************************
 
-Copyright (c) 2006, 2009, Oracle and/or its affiliates. All Rights Reserved.
+Copyright (c) 2006, 2023, Oracle and/or its affiliates.
 
-This program is free software; you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation; version 2 of the License.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License, version 2.0,
+as published by the Free Software Foundation.
 
-This program is distributed in the hope that it will be useful, but WITHOUT
-ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+This program is also distributed with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have included with MySQL.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License, version 2.0, for more details.
 
 You should have received a copy of the GNU General Public License along with
 this program; if not, write to the Free Software Foundation, Inc.,
@@ -64,7 +72,6 @@ freeing it when done with the vector.
 
 /********************************************************************
 Create a new vector with the given initial size. */
-UNIV_INTERN
 ib_vector_t*
 ib_vector_create(
 /*=============*/
@@ -124,7 +131,6 @@ ib_vector_size(
 
 /********************************************************************
 Increase the size of the vector. */
-UNIV_INTERN
 void
 ib_vector_resize(
 /*=============*/
@@ -142,7 +148,7 @@ ib_vector_is_empty(
 
 /****************************************************************//**
 Get the n'th element.
-@return	n'th element */
+@return n'th element */
 UNIV_INLINE
 void*
 ib_vector_get(
@@ -161,7 +167,7 @@ ib_vector_get_const(
 	ulint			n);	/* in: element index to get */
 /****************************************************************//**
 Get last element. The vector must not be empty.
-@return	last element */
+@return last element */
 UNIV_INLINE
 void*
 ib_vector_get_last(
@@ -261,53 +267,6 @@ UNIV_INLINE
 void
 ib_heap_allocator_free(
 /*===================*/
-	ib_alloc_t*	ib_ut_alloc);	/* in: alloc instace to free */
-
-/********************************************************************
-Wrapper for ut_free(). */
-UNIV_INLINE
-void
-ib_ut_free(
-/*=======*/
-	ib_alloc_t*	allocator,	/* in: allocator */
-	void*		ptr);		/* in: size in bytes */
-
-/********************************************************************
-Wrapper for ut_malloc(). */
-UNIV_INLINE
-void*
-ib_ut_malloc(
-/*=========*/
-					/* out: pointer to allocated memory */
-	ib_alloc_t*	allocator,	/* in: allocator */
-	ulint		size);		/* in: size in bytes */
-
-/********************************************************************
-Wrapper for ut_realloc(). */
-UNIV_INLINE
-void*
-ib_ut_resize(
-/*=========*/
-					/* out: pointer to reallocated
-					memory */
-	ib_alloc_t*	allocator,	/* in: allocator */
-	void*		old_ptr,	/* in: pointer to memory */
-	ulint		old_size,	/* in: old size in bytes */
-	ulint		new_size);	/* in: new size in bytes */
-
-/********************************************************************
-Create a heap allocator that uses the passed in heap. */
-UNIV_INLINE
-ib_alloc_t*
-ib_ut_allocator_create(void);
-/*=========================*/
-
-/********************************************************************
-Create a heap allocator that uses the passed in heap. */
-UNIV_INLINE
-void
-ib_ut_allocator_free(
-/*=================*/
 	ib_alloc_t*	ib_ut_alloc);	/* in: alloc instace to free */
 
 /* Allocator used by ib_vector_t. */

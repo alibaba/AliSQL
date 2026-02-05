@@ -1,16 +1,28 @@
 #ifndef MYSYS_MY_HANDLER_ERRORS_INCLUDED
 #define MYSYS_MY_HANDLER_ERRORS_INCLUDED
 
-/* Copyright (c) 2008, 2013, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
@@ -95,10 +107,30 @@ static const char *handler_error_messages[]=
   "Temporary file write failure",
   "Operation not allowed when innodb_forced_recovery > 0",
   "Too many words in a FTS phrase or proximity search",
+  "Foreign key cascade delete/update exceeds max depth",
+  "Required Create option missing",
+  "Out of memory in storage engine",
+  "Table corrupted",
+  "Query interrupted",
+  "Tablespace cannot be accessed",
+  "Tablespace is not empty",
+  "Incorrect file name",
+  "Operation is not allowed",
+  "Compute generate value failed",
+  "Too many nested sub-expressions in a full-text search",
   "Sequence has run out",
   "Sequence structure or number is invalid",
-  "Sequence is not yet defined in this session",
-  "Sequence access error"
+  "Sequence is not yet defined in current session",
+  "Sequence access failure",
+  "Duckdb create table failed",
+  "Duckdb execute dml failed",
+  "Duckdb open table failed",
+  "Duckdb unsupported data type",
+  "DuckDB rename table failed",
+  "DuckDB drop table failed",
+  "DuckDB truncate table failed",
+  "DuckDB cannot participate XA transaction",
+  "DuckDB appender failed"
 };
 
 extern void my_handler_error_register(void);

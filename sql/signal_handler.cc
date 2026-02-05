@@ -1,13 +1,20 @@
-/* Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -18,9 +25,11 @@
 
 #include "sys_vars.h"
 #include "my_stacktrace.h"
-#include "global_threads.h"
+#include "connection_handler_manager.h"  // Connection_handler_manager
+#include "mysqld_thd_manager.h"          // Global_THD_manager
+#include "sql_class.h"
 
-#ifdef __WIN__
+#ifdef _WIN32
 #include <crtdbg.h>
 #define SIGNAL_FMT "exception 0x%x"
 #else
@@ -33,7 +42,6 @@
   to guarantee that we read some consistent value.
  */
 static volatile sig_atomic_t segfaulted= 0;
-extern ulong max_used_connections;
 extern volatile sig_atomic_t calling_initgroups;
 
 /**
@@ -52,17 +60,17 @@ extern volatile sig_atomic_t calling_initgroups;
  *
  * @param sig Signal number
 */
-extern "C" sig_handler handle_fatal_signal(int sig)
+extern "C" void handle_fatal_signal(int sig)
 {
   if (segfaulted)
   {
     my_safe_printf_stderr("Fatal " SIGNAL_FMT " while backtracing\n", sig);
-    _exit(1); /* Quit without running destructors */
+    _exit(MYSQLD_FAILURE_EXIT); /* Quit without running destructors */
   }
 
   segfaulted = 1;
 
-#ifdef __WIN__
+#ifdef _WIN32
   SYSTEMTIME utc_time;
   GetSystemTime(&utc_time);
   const long hrs=  utc_time.wHour;
@@ -95,9 +103,9 @@ extern "C" sig_handler handle_fatal_signal(int sig)
     "or misconfigured. This error can also be caused by malfunctioning hardware.\n");
 
   my_safe_printf_stderr("%s",
-    "We will try our best to scrape up some info that will hopefully help\n"
-    "diagnose the problem, but since we have already crashed, \n"
-    "something is definitely wrong and this may fail.\n\n");
+    "Attempting to collect some information that could help diagnose the problem.\n"
+    "As this is a crash and something is definitely wrong, the information\n"
+    "collection process might fail.\n\n");
 
   my_safe_printf_stderr("key_buffer_size=%lu\n",
                         (ulong) dflt_key_cache->key_cache_mem_size);
@@ -106,14 +114,18 @@ extern "C" sig_handler handle_fatal_signal(int sig)
                         (long) global_system_variables.read_buff_size);
 
   my_safe_printf_stderr("max_used_connections=%lu\n",
-                        (ulong) max_used_connections);
+                        Connection_handler_manager::max_used_connections);
 
-  my_safe_printf_stderr("max_threads=%u\n",
-                        (uint) thread_scheduler->max_threads);
+  uint max_threads= 1;
+#ifndef EMBEDDED_LIBRARY
+  max_threads= Connection_handler_manager::max_threads;
+#endif
+  my_safe_printf_stderr("max_threads=%u\n", max_threads);
 
-  my_safe_printf_stderr("thread_count=%u\n", get_thread_count());
+  my_safe_printf_stderr("thread_count=%u\n", Global_THD_manager::global_thd_count);
 
-  my_safe_printf_stderr("connection_count=%u\n", (uint) connection_count);
+  my_safe_printf_stderr("connection_count=%u\n",
+                        Connection_handler_manager::connection_count);
 
   my_safe_printf_stderr("It is possible that mysqld could use up to \n"
                         "key_buffer_size + "
@@ -121,32 +133,15 @@ extern "C" sig_handler handle_fatal_signal(int sig)
                         "%lu K  bytes of memory\n",
                         ((ulong) dflt_key_cache->key_cache_mem_size +
                          (global_system_variables.read_buff_size +
-                          global_system_variables.sortbuff_size) *
-                         thread_scheduler->max_threads +
+                         global_system_variables.sortbuff_size) *
+                         max_threads +
                          max_connections * sizeof(THD)) / 1024);
 
   my_safe_printf_stderr("%s",
     "Hope that's ok; if not, decrease some variables in the equation.\n\n");
 
-#if defined(HAVE_LINUXTHREADS)
-#define UNSAFE_DEFAULT_LINUX_THREADS 200
-  if (sizeof(char*) == 4 && thread_count > UNSAFE_DEFAULT_LINUX_THREADS)
-  {
-    my_safe_printf_stderr(
-      "You seem to be running 32-bit Linux and have "
-      "%d concurrent connections.\n"
-      "If you have not changed STACK_SIZE in LinuxThreads "
-      "and built the binary \n"
-      "yourself, LinuxThreads is quite likely to steal "
-      "a part of the global heap for\n"
-      "the thread stack. Please read "
-      "http://dev.mysql.com/doc/mysql/en/linux-installation.html\n\n"
-      thread_count);
-  }
-#endif /* HAVE_LINUXTHREADS */
-
 #ifdef HAVE_STACKTRACE
-  THD *thd=current_thd;
+  THD *thd= my_thread_get_THR_THD();
 
   if (!(test_flags & TEST_NO_STACKTRACE))
   {
@@ -175,6 +170,9 @@ extern "C" sig_handler handle_fatal_signal(int sig)
     case THD::KILL_QUERY:
       kreason= "KILL_QUERY";
       break;
+    case THD::KILL_TIMEOUT:
+      kreason= "KILL_TIMEOUT";
+      break;
     case THD::KILLED_NO_VALUE:
       kreason= "KILLED_NO_VALUE";
       break;
@@ -183,10 +181,10 @@ extern "C" sig_handler handle_fatal_signal(int sig)
       "Trying to get some variables.\n"
       "Some pointers may be invalid and cause the dump to abort.\n");
 
-    my_safe_printf_stderr("Query (%p): ", thd->query());
-    my_safe_print_str(thd->query(), MY_MIN(1024U, thd->query_length()));
-    my_safe_printf_stderr("Connection ID (thread ID): %lu\n",
-                          (ulong) thd->thread_id);
+    my_safe_printf_stderr("Query (%p): ", thd->query().str);
+    my_safe_puts_stderr(thd->query().str, MY_MIN(1024U, thd->query().length));
+    my_safe_printf_stderr("Connection ID (thread ID): %u\n",
+                          thd->thread_id());
     my_safe_printf_stderr("Status: %s\n\n", kreason);
   }
   my_safe_printf_stderr("%s",
@@ -223,19 +221,17 @@ extern "C" sig_handler handle_fatal_signal(int sig)
       "\"mlockall\" bugs.\n");
   }
 
-#ifdef HAVE_WRITE_CORE
   if (test_flags & TEST_CORE_ON_SIGNAL)
   {
     my_safe_printf_stderr("%s", "Writing a core file\n");
     my_write_core(sig);
   }
-#endif
 
-#ifndef __WIN__
+#ifndef _WIN32
   /*
      Quit, without running destructors (etc.)
      On Windows, do not terminate, but pass control to exception filter.
   */
-  _exit(1);  // Using _exit(), since exit() is not async signal safe
+  _exit(MYSQLD_FAILURE_EXIT);  // Using _exit(), since exit() is not async signal safe
 #endif
 }

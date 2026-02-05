@@ -1,16 +1,24 @@
+# The include statement below is a temp one for tests that are yet to
+#be ported to run with InnoDB,
+#but needs to be kept for tests that would need MyISAM in future.
+--source include/force_myisam_default.inc
+
+--source include/no_valgrind_without_big.inc
+
 # This test  uses grants, which can't get tested for embedded server
 -- source include/not_embedded.inc
 
 #Don't run this test when thread_pool active
 --source include/not_threadpool.inc
 
-# check that CSV engine was compiled in, as the result of the test depends
-# on the presence of the log tables (which are CSV-based).
---source include/have_csv.inc
-
 # Save the initial number of concurrent sessions
 --source include/count_sessions.inc
 
+#
+# Remove NO_AUTO_CREATE_USER sql mode (default since 5.7).
+#
+set @orig_sql_mode= @@sql_mode;
+set sql_mode= (select replace(@@sql_mode,'NO_AUTO_CREATE_USER',''));
 
 # Test for information_schema.schemata &
 # show databases
@@ -26,7 +34,9 @@ DROP VIEW IF EXISTS v1;
 --echo #
 select table_name, data_type, column_type from information_schema.columns  where column_name = 'numeric_precision' and table_schema = 'information_schema';
 
+--disable_warnings
 show variables where variable_name like "skip_show_database";
+--enable_warnings
 grant select, update, execute on test.* to mysqltest_2@localhost;
 grant select, update on test.* to mysqltest_1@localhost;
 create user mysqltest_3@localhost;
@@ -218,7 +228,7 @@ create view v4 (c) as select COLLATION_NAME from information_schema.collations
 where COLLATION_NAME like "latin1%";
 select * from v4;
 show keys from v4;
-select * from information_schema.views where TABLE_NAME like "v%";
+select * from information_schema.views where TABLE_SCHEMA != 'sys' and TABLE_NAME like "v%";
 drop view v0, v1, v2, v3, v4;
 
 #
@@ -244,20 +254,20 @@ drop table t1;
 # Test for KEY_COLUMN_USAGE & TABLE_CONSTRAINTS tables
 #
 
-create table t1 (a int null, primary key(a));
+create table t1 (a int not null, primary key(a));
 alter table t1 add constraint constraint_1 unique (a);
 alter table t1 add constraint unique key_1(a);
 alter table t1 add constraint constraint_2 unique key_2(a);
 show create table t1;
 select * from information_schema.TABLE_CONSTRAINTS where
 TABLE_SCHEMA= "test";
-select * from information_schema.KEY_COLUMN_USAGE where
+select * from information_schema.key_column_usage where
 TABLE_SCHEMA= "test";
 
 connection user2;
 select table_name from information_schema.TABLES where table_schema like "test%";
 select table_name,column_name from information_schema.COLUMNS where table_schema like "test%";
-select ROUTINE_NAME from information_schema.ROUTINES;
+select ROUTINE_NAME from information_schema.ROUTINES where ROUTINE_SCHEMA != 'sys';
 disconnect user2;
 connection default;
 delete from mysql.user where user='mysqltest_1';
@@ -269,10 +279,10 @@ create table t1(a int);
 create view v1 (c) as select a from t1 with check option;
 create view v2 (c) as select a from t1 WITH LOCAL CHECK OPTION;
 create view v3 (c) as select a from t1 WITH CASCADED CHECK OPTION;
-select * from information_schema.views;
+select * from information_schema.views where table_schema != 'sys';
 grant select (a) on test.t1 to joe@localhost with grant option;
-select * from INFORMATION_SCHEMA.COLUMN_PRIVILEGES;
-select * from INFORMATION_SCHEMA.TABLE_PRIVILEGES;
+select * from INFORMATION_SCHEMA.COLUMN_PRIVILEGES WHERE table_schema != 'sys';
+select * from INFORMATION_SCHEMA.TABLE_PRIVILEGES WHERE table_schema NOT IN ('sys','mysql');
 drop view v1, v2, v3;
 drop table t1;
 delete from mysql.user where user='joe';
@@ -301,7 +311,7 @@ end;//
 call px5()//
 call px5()//
 delimiter ;//
-select sql_mode from information_schema.ROUTINES;
+select sql_mode from information_schema.ROUTINES where ROUTINE_SCHEMA != 'sys';
 drop procedure px5;
 --enable_parsing
 
@@ -360,7 +370,7 @@ create view vo as select 'a' union select 'a';
 show index from vo;
 select * from information_schema.TABLE_CONSTRAINTS where
 TABLE_NAME= "vo";
-select * from information_schema.KEY_COLUMN_USAGE where
+select * from information_schema.key_column_usage where
 TABLE_NAME= "vo";
 drop view vo;
 
@@ -439,9 +449,11 @@ where table_schema="mysql" and table_name="user";
 # test for 'show open tables ... where'
 show open tables where `table` like "user";
 # test for 'show status ... where'
+--disable_warnings
 show status where variable_name like "%database%";
 # test for 'show variables ... where'
 show variables where variable_name like "skip_show_databas";
+--enable_warnings
 
 #
 # Bug#7981 SHOW GLOBAL STATUS crashes server
@@ -494,11 +506,11 @@ drop table t_crashme;
 # Bug#7217 information_schema: columns are varbinary() instead of timestamp
 #
 select table_schema, table_name, column_name from information_schema.columns
-where table_schema not like 'performance_schema'
+where table_schema not in ('performance_schema', 'sys')
   and data_type = 'longtext';
 
 select table_name, column_name, data_type from information_schema.columns
-where table_schema not like 'performance_schema'
+where table_schema not in ('performance_schema', 'sys')
   and data_type = 'datetime'
   and table_name not like 'innodb_%';
 
@@ -580,7 +592,10 @@ begin
   end if;
 end|
 delimiter ;|
+
+--replace_column 6 #
 show triggers;
+--replace_column 17 #
 select * from information_schema.triggers where trigger_schema in ('mysql', 'information_schema', 'test', 'mysqltest');
 
 drop trigger trg1;
@@ -627,10 +642,10 @@ connection con4;
 select * from information_schema.column_privileges where grantee like '%user%'
 order by grantee;
 select * from information_schema.table_privileges where grantee like '%user%'
-order by grantee;
+and table_schema !='mysql' order by grantee;
 select * from information_schema.schema_privileges where grantee like '%user%'
-order by grantee;
-select * from information_schema.user_privileges where grantee like '%user%'
+and table_schema !='performance_schema' order by grantee;
+select * from information_schema.user_privileges where grantee like '%user%' and grantee not like '%session%'
 order by grantee;
 show grants;
 connection default;
@@ -653,7 +668,7 @@ drop procedure if exists p2;
 create procedure p1 () modifies sql data set @a = 5;
 create procedure p2 () set @a = 5;
 select sql_data_access from information_schema.routines
-where specific_name like 'p%';
+where specific_name like 'p%' and ROUTINE_SCHEMA != 'sys';
 drop procedure p1;
 drop procedure p2;
 
@@ -817,7 +832,7 @@ CREATE FUNCTION func2() RETURNS BIGINT RETURN 1;
 delimiter //;
 CREATE FUNCTION func1() RETURNS BIGINT
 BEGIN
-  RETURN ( SELECT COUNT(*) FROM INFORMATION_SCHEMA.VIEWS);
+  RETURN ( SELECT COUNT(*) FROM INFORMATION_SCHEMA.VIEWS WHERE TABLE_SCHEMA != 'sys');
 END//
 delimiter ;//
 
@@ -1013,7 +1028,8 @@ select t.table_name, group_concat(t.table_schema, '.', t.table_name),
 from information_schema.tables t
 inner join information_schema.columns c1
 on t.table_schema = c1.table_schema AND t.table_name = c1.table_name
-where t.table_schema = 'information_schema' and
+where t.table_name not like 'ndb%' and
+      t.table_schema = 'information_schema' and
         c1.ordinal_position =
         (select isnull(c2.column_type) -
          isnull(group_concat(c2.table_schema, '.', c2.table_name)) +
@@ -1032,7 +1048,7 @@ create table t1(f1 int);
 create view v1 as select f1+1 as a from t1;
 create table t2 (f1 int, f2 int);
 create view v2 as select f1+1 as a, f2 as b from t2;
-select table_name, is_updatable from information_schema.views;
+select table_name, is_updatable from information_schema.views where table_schema != 'sys';
 #
 # Note: we can perform 'delete' for non updatable view.
 #
@@ -1060,12 +1076,14 @@ grant select(b) on mysqltest.t1 to mysqltest_1@localhost;
 
 select trigger_name from information_schema.triggers
 where event_object_table='t1';
+--replace_column 6 #
 show triggers from mysqltest;
 
 connect (con27629,localhost,mysqltest_1,,mysqltest);
 show columns from t1;
 select column_name from information_schema.columns where table_name='t1';
 
+--replace_column 6 #
 show triggers;
 select trigger_name from information_schema.triggers
 where event_object_table='t1';
@@ -1241,8 +1259,8 @@ WHERE TABLE_SCHEMA='mysql' and TABLE_NAME= 'db';
 #
 select * from information_schema.columns where table_schema = NULL;
 select * from `information_schema`.`COLUMNS` where `TABLE_NAME` = NULL;
-select * from `information_schema`.`KEY_COLUMN_USAGE` where `TABLE_SCHEMA` = NULL;
-select * from `information_schema`.`KEY_COLUMN_USAGE` where `TABLE_NAME` = NULL;
+select * from `information_schema`.`key_column_usage` where `TABLE_SCHEMA` = NULL;
+select * from `information_schema`.`key_column_usage` where `TABLE_NAME` = NULL;
 select * from `information_schema`.`PARTITIONS` where `TABLE_SCHEMA` = NULL;
 select * from `information_schema`.`PARTITIONS` where `TABLE_NAME` = NULL;
 select * from `information_schema`.`REFERENTIAL_CONSTRAINTS` where `CONSTRAINT_SCHEMA` = NULL;
@@ -1255,7 +1273,9 @@ select * from information_schema.tables where table_catalog = NULL;
 select * from information_schema.tables where table_name = NULL;
 select * from `information_schema`.`TABLE_CONSTRAINTS` where `TABLE_SCHEMA` = NULL;
 select * from `information_schema`.`TABLE_CONSTRAINTS` where `TABLE_NAME` = NULL;
+--replace_column 17 #
 select * from `information_schema`.`TRIGGERS` where `EVENT_OBJECT_SCHEMA` = NULL;
+--replace_column 17 #
 select * from `information_schema`.`TRIGGERS` where `EVENT_OBJECT_TABLE` = NULL;
 select * from `information_schema`.`VIEWS` where `TABLE_SCHEMA` = NULL;
 select * from `information_schema`.`VIEWS` where `TABLE_NAME` = NULL;
@@ -1379,10 +1399,12 @@ set global init_connect="";
 # Bug#34517 SHOW GLOBAL STATUS does not work properly in embedded server.
 #
 
+--disable_warnings
 create table t0 select * from information_schema.global_status where VARIABLE_NAME='COM_SELECT';
 SELECT 1;
 select a.VARIABLE_VALUE - b.VARIABLE_VALUE from t0 b, information_schema.global_status a
    where a.VARIABLE_NAME = b.VARIABLE_NAME;
+--enable_warnings
 drop table t0;
 
 #
@@ -1447,7 +1469,7 @@ CREATE TABLE ubig (a BIGINT, b BIGINT UNSIGNED);
 SELECT TABLE_NAME, COLUMN_NAME, NUMERIC_PRECISION 
   FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='ubig';
 
-INSERT INTO ubig VALUES (0xFFFFFFFFFFFFFFFF,0xFFFFFFFFFFFFFFFF);
+INSERT IGNORE INTO ubig VALUES (0xFFFFFFFFFFFFFFFF,0xFFFFFFFFFFFFFFFF);
 SELECT length(CAST(b AS CHAR)) FROM ubig;
 
 DROP TABLE ubig;
@@ -1522,13 +1544,13 @@ drop tables t1, t3;
 #
 # Bug#39270 I_S optimization algorithm does not work properly in some cases
 #
-EXPLAIN SELECT * FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE;
-EXPLAIN SELECT * FROM INFORMATION_SCHEMA.PARTITIONS WHERE TABLE_NAME='t1';
-EXPLAIN SELECT * FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS
+EXPLAIN SELECT * FROM information_schema.key_column_usage;
+EXPLAIN SELECT * FROM information_schema.partitions WHERE TABLE_NAME='t1';
+EXPLAIN SELECT * FROM information_schema.referential_constraints
   WHERE CONSTRAINT_SCHEMA='test';
-EXPLAIN SELECT * FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+EXPLAIN SELECT * FROM information_schema.table_constraints
   WHERE TABLE_NAME='t1' and TABLE_SCHEMA='test';
-EXPLAIN SELECT * FROM INFORMATION_SCHEMA.TRIGGERS
+EXPLAIN SELECT * FROM information_schema.triggers
   WHERE EVENT_OBJECT_SCHEMA='test';
 
 #
@@ -1586,7 +1608,7 @@ disconnect con7;
 #
 
 SELECT *
-FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+FROM INFORMATION_SCHEMA.key_column_usage
 LEFT JOIN INFORMATION_SCHEMA.COLUMNS
 USING (TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME)
 WHERE COLUMNS.TABLE_SCHEMA = 'test'
@@ -1623,7 +1645,7 @@ let $wait_condition=
           info = "flush tables";
 --source include/wait_condition.inc
 --vertical_results
-select * from information_schema.views;
+select * from information_schema.views where table_schema != 'sys';
 --horizontal_results
 unlock tables;
 
@@ -1845,14 +1867,18 @@ use test;
 --disable_result_log
 SELECT * FROM INFORMATION_SCHEMA.TABLES;
 --enable_result_log
+--disable_warnings
 SELECT VARIABLE_VALUE INTO @val1 FROM INFORMATION_SCHEMA.GLOBAL_STATUS WHERE
   VARIABLE_NAME LIKE 'Opened_tables';
+--enable_warnings
 --disable_result_log
 SELECT ENGINE FROM INFORMATION_SCHEMA.TABLES;
 --enable_result_log
+--disable_warnings
 --echo # The below SELECT query should give same output as above SELECT query.
 SELECT VARIABLE_VALUE INTO @val2 FROM INFORMATION_SCHEMA.GLOBAL_STATUS WHERE
   VARIABLE_NAME LIKE 'Opened_tables';
+--enable_warnings
 --echo # The below select should return '1'
 SELECT @val1 = @val2;
 
@@ -1878,9 +1904,104 @@ DROP TABLE t1;
 --error ER_DBACCESS_DENIED_ERROR
 CREATE PROCEDURE information_schema.is() BEGIN END;
 
+
+--echo #
+--echo # Bug#26877788 SELECT FROM INFORMATION_SCHEMA.FILES RETURNS NO RECORDS WHEN ORDER BY IS USED
+--echo #
+
+SELECT ENGINE, SUPPORT, TRANSACTIONS FROM INFORMATION_SCHEMA.ENGINES
+WHERE
+SUPPORT IN (
+SELECT DISTINCT SUPPORT
+FROM INFORMATION_SCHEMA.ENGINES
+WHERE
+ENGINE IN (
+SELECT DISTINCT ENGINE FROM INFORMATION_SCHEMA.ENGINES
+WHERE ENGINE IN ('MEMORY')))
+ORDER BY ENGINE
+LIMIT 1;
+
+
 --echo #
 --echo # End of 5.6 tests
 --echo #
 
 # Wait till all disconnects are completed
 --source include/wait_until_count_sessions.inc
+
+--echo #
+--echo # Bug#19307777 ASSERTION `QEP_TAB->CONDITION() == QEP_TAB->CONDITION_OPTIM()' FAILED
+--echo #
+
+let $query=
+select * from
+information_schema . innodb_cmp as table1
+left outer join mysql . procs_priv as table2
+on ( table2 . routine_name = table1 . compress_time )
+where not table1 . compress_time <> '2006-09-03 10:11:37.046313'
+having  table2 . grantor <> '2008-02-28 22:17:05.025739' limit 9;
+
+eval EXPLAIN $query;
+eval $query;
+
+--echo #
+--echo # Bug#20665051 SQL_SHOW.CC:7764: ASSERTION `QEP_TAB->CONDITION() == QEP_TAB->CONDITION_OPTIM()
+--echo #
+
+let query=
+SELECT 1
+FROM DUAL
+WHERE (SELECT 1 FROM information_schema.tables
+        WHERE table_schema
+        ORDER BY table_name
+        LIMIT 1);
+eval EXPLAIN $query;
+--disable_warnings
+eval $query;
+--enable_warnings
+
+let $query=
+SELECT 1 AS F1 FROM information_schema.tables
+WHERE "CHARACTER_SETS"=
+      (SELECT CAST(TABLE_NAME AS CHAR)
+      FROM information_schema.tables
+      WHERE table_schema != 'PERFORMANCE_SCHEMA'
+      ORDER BY table_name
+      LIMIT 1)
+LIMIT 1;
+
+eval EXPLAIN $query;
+eval $query;
+
+--echo #
+--echo # WL#2284: Increase the length of a user name
+--echo #
+
+connection default;
+
+--character_set utf8
+set names utf8;
+
+CREATE USER user_name_len_22_01234@localhost;
+GRANT SELECT ON *.* TO user_name_len_22_01234@localhost;
+connect (con_user22,localhost,user_name_len_22_01234,,test);
+connection con_user22;
+SELECT user,db FROM information_schema.processlist;
+connection default;
+
+# 32 characters user name
+CREATE USER очень_очень_очень_длинный_юзер__@localhost;
+GRANT SELECT ON *.* TO очень_очень_очень_длинный_юзер__@localhost;
+connect (con_user32_utf8,localhost,очень_очень_очень_длинный_юзер__,,test);
+connection con_user32_utf8;
+SELECT user,db FROM information_schema.processlist;
+connection default;
+
+# cleanup
+disconnect con_user22;
+disconnect con_user32_utf8;
+DROP USER user_name_len_22_01234@localhost;
+DROP USER очень_очень_очень_длинный_юзер__@localhost;
+set names default;
+
+set sql_mode= @orig_sql_mode;

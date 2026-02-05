@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -24,23 +31,22 @@
 #define MYSQL_SERVER
 #endif
 
-#if MYSQL_VERSION_ID >= 50501
-/* Include files for sql/ was split in 5.5, and ha_ndb*  uses a few.. */
-#include "sql_priv.h"
-#include "unireg.h"         // REQUIRED: for other includes
 #include "sql_table.h"      // build_table_filename,
                             // tablename_to_filename,
                             // filename_to_tablename
-#include "sql_partition.h"  // HA_CAN_*, partition_info, part_id_range
+#include "sql_partition.h"  // HA_CAN_*, part_id_range
+#include "partition_info.h" // partition_info
 #include "sql_base.h"       // close_cached_tables
 #include "discover.h"       // readfrm
-#include "sql_acl.h"        // wild_case_compare
+#include "auth_common.h"    // wild_case_compare
 #include "transaction.h"
+#include "item_cmpfunc.h"   // Item_func_like
 #include "sql_test.h"       // print_where
 #include "key.h"            // key_restore
-#else
-#include "mysql_priv.h"
-#endif
+#include "rpl_constants.h"  // Transid in Binlog
+#include "rpl_slave.h"      // Silent retry definition
+#include "log_event.h"      // my_strmov_quoted_identifier
+#include "log.h"            // sql_print_error
 
 #include "sql_show.h"       // init_fill_schema_files_row,
                             // schema_table_store_record
@@ -55,38 +61,20 @@ void my_free(void* ptr, myf MyFlags)
   my_free(ptr);
 }
 
-
-/* close_cached_tables has new signature, emulate old */
-static inline
-bool close_cached_tables(THD *thd, TABLE_LIST *tables, bool have_lock,
-                         bool wait_for_refresh, bool wait_for_placeholders)
-{
-  return close_cached_tables(thd, tables, wait_for_refresh, LONG_TIMEOUT);
-}
-
 /* thd has no version field anymore */
 #define NDB_THD_HAS_NO_VERSION
-
-/* thd->binlog_query has new parameter "direct" */
-#define NDB_THD_BINLOG_QUERY_HAS_DIRECT
 
 /* No mysql_rm_table_part2 anymore in 5.5.8 */
 #define NDB_NO_MYSQL_RM_TABLE_PART2
 
 #endif
 
-extern ulong opt_server_id_mask;
-
 static inline
 uint32 thd_unmasked_server_id(const THD* thd)
 {
-#ifndef NDB_WITHOUT_SERVER_ID_BITS
   const uint32 unmasked_server_id = thd->unmasked_server_id;
   assert(thd->server_id == (thd->unmasked_server_id & opt_server_id_mask));
   return unmasked_server_id;
-#else
-  return thd->server_id;
-#endif
 }
 
 
@@ -114,7 +102,7 @@ void thd_set_command(THD* thd, enum enum_server_command command)
 #endif
 }
 
-/* get pointer to diagnostic area for statement from THD */
+/* get pointer to Diagnostics Area for statement from THD */
 static inline
 Diagnostics_area* thd_stmt_da(THD* thd)
 {
@@ -173,68 +161,6 @@ int mysql_cond_timedwait(mysql_cond_t* cond, mysql_mutex_t* mutex,
 {
   return pthread_cond_timedwait(cond, mutex, abstime);
 }
-
-#endif
-
-static inline
-uint partition_info_num_full_part_fields(const partition_info* part_info)
-{
-#if MYSQL_VERSION_ID < 50500
-  return part_info->no_full_part_fields;
-#else
-  /* renamed to 'num_full_part_fields' and no accessor function*/
-  return part_info->num_full_part_fields;
-#endif
-}
-
-static inline
-uint partition_info_num_parts(const partition_info* part_info)
-{
-#if MYSQL_VERSION_ID < 50500
-  return part_info->no_parts;
-#else
-  /* renamed to 'num_parts' and no accessor function */
-  return part_info->num_parts;
-#endif
-}
-
-static inline
-uint partition_info_num_list_values(const partition_info* part_info)
-{
-#if MYSQL_VERSION_ID < 50500
-  return part_info->no_list_values;
-#else
-  /* renamed to 'num_list_values' and no accessor function */
-  return part_info->num_list_values;
-#endif
-}
-
-static inline
-bool partition_info_use_default_num_partitions(const partition_info* part_info)
-{
-#if MYSQL_VERSION_ID < 50500
-  return part_info->use_default_no_partitions;
-#else
-  /* renamed to 'use_default_num_partitions' and no accessor function */
-  return part_info->use_default_num_partitions;
-#endif
-}
-
-static inline
-uint partition_info_num_subparts(const partition_info* part_info)
-{
-#if MYSQL_VERSION_ID < 50500
-  return part_info->no_subparts;
-#else
-  /* renamed to 'num_subparts' and no accessor function */
-  return part_info->num_subparts;
-#endif
-}
-
-#if MYSQL_VERSION_ID >= 50600
-
-/* New multi range read interface replaced original mrr */
-#define NDB_WITH_NEW_MRR_INTERFACE
 
 #endif
 

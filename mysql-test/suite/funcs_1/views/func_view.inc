@@ -167,23 +167,28 @@ DROP VIEW  IF EXISTS v1;
 #    id FROM t1_values';
 #    might be a very long
 # Bug#38427 "Data too long" ... tests "<ENGINE>_func_view" fail
-CREATE TABLE t1_selects
+# CREATE TABLE t1_selects
+#   my_select VARCHAR(1000) NOT NULL,
+eval CREATE TABLE t1_selects
 (
    id BIGINT AUTO_INCREMENT,
-   my_select VARCHAR(1000) NOT NULL,
+   my_select VARCHAR(700) NOT NULL,
    disable_result ENUM('Yes','No') NOT NULL default 'No',
    PRIMARY KEY(id),
    UNIQUE (my_select)
-) ENGINE=MyISAM;
+) ENGINE=$type;
+# ) ENGINE=MyISAM;
 
 # MODES to be checked
-CREATE TABLE t1_modes
+# CREATE TABLE t1_modes
+eval CREATE TABLE t1_modes
 (
    id BIGINT AUTO_INCREMENT,
    my_mode VARCHAR(200) NOT NULL,
    PRIMARY KEY(id),
    UNIQUE (my_mode)
-) ENGINE=MyISAM;
+) ENGINE=$type;
+# ) ENGINE=MyISAM;
 --enable_query_log
 
 # The table to be used in the FROM parts of the SELECTs
@@ -211,12 +216,14 @@ ALTER TABLE t1_values ADD my_varbinary_1000 VARBINARY(1000);
 ALTER TABLE t1_values ADD my_datetime       DATETIME;
 ALTER TABLE t1_values ADD my_date           DATE;
 ALTER TABLE t1_values ADD ts_dummy          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 ALTER TABLE t1_values ADD my_timestamp      TIMESTAMP NOT NULL DEFAULT '0000-00-00 00:00:00';
 ALTER TABLE t1_values ADD my_time           TIME;
 ALTER TABLE t1_values ADD my_year           YEAR;
 ALTER TABLE t1_values ADD my_bigint         BIGINT;
 ALTER TABLE t1_values ADD my_double         DOUBLE;
 ALTER TABLE t1_values ADD my_decimal        DECIMAL(64,30);
+SET sql_mode = default;
 --enable_abort_on_error
 
 #-------------------------------------------------------------------------------
@@ -285,7 +292,7 @@ INSERT INTO t1_values SET
 #               other interesting value
 #     numbers   -> 0
 #     strings, blobs, binaries -> not full length of used data type, "exotic"
-#                                 characters and preceeding and trailing spaces
+#                                 characters and preceding and trailing spaces
 #     FIXME enum, set ??
 INSERT INTO t1_values SET
        my_char_30 = ' ---äÖüß@µ*$-- ',

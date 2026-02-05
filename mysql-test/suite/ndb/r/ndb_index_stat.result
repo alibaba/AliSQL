@@ -2,16 +2,14 @@ DROP TABLE IF EXISTS t1, t2;
 set @is_enable_default = @@global.ndb_index_stat_enable;
 set @is_enable = 1;
 set @is_enable = NULL;
-# is_enable_on=1 is_enable_off=0
+# is_enable_on=0 is_enable_off=0
 # ndb_index_stat_enable - before
 show global variables like 'ndb_index_stat_enable';
 Variable_name	Value
-ndb_index_stat_enable	OFF
+ndb_index_stat_enable	ON
 show local variables like 'ndb_index_stat_enable';
 Variable_name	Value
-ndb_index_stat_enable	OFF
-set @@global.ndb_index_stat_enable = 1;
-set @@local.ndb_index_stat_enable = 1;
+ndb_index_stat_enable	ON
 # ndb_index_stat_enable - after
 show global variables like 'ndb_index_stat_enable';
 Variable_name	Value
@@ -21,18 +19,18 @@ Variable_name	Value
 ndb_index_stat_enable	ON
 show global variables like 'ndb_index_stat_option';
 Variable_name	Value
-ndb_index_stat_option	loop_checkon=1000ms,loop_idle=1000ms,loop_busy=100ms,update_batch=1,read_batch=4,idle_batch=32,check_batch=32,check_delay=1m,delete_batch=8,clean_delay=0,error_batch=4,error_delay=1m,evict_batch=8,evict_delay=1m,cache_limit=32M,cache_lowpct=90
+ndb_index_stat_option	loop_enable=1000ms,loop_idle=1000ms,loop_busy=100ms,update_batch=1,read_batch=4,idle_batch=32,check_batch=8,check_delay=10m,delete_batch=8,clean_delay=1m,error_batch=4,error_delay=1m,evict_batch=8,evict_delay=1m,cache_limit=32M,cache_lowpct=90,zero_total=0
 set @save_option = @@global.ndb_index_stat_option;
 set @@global.ndb_index_stat_option = 'loop_idle=3333,cache_limit=44M';
 set @@global.ndb_index_stat_option = 'cache_lowpct=85,evict_delay=55';
 set @@global.ndb_index_stat_option = 'check_delay=234s';
 show global variables like 'ndb_index_stat_option';
 Variable_name	Value
-ndb_index_stat_option	loop_checkon=1000ms,loop_idle=3333ms,loop_busy=100ms,update_batch=1,read_batch=4,idle_batch=32,check_batch=32,check_delay=234s,delete_batch=8,clean_delay=0,error_batch=4,error_delay=1m,evict_batch=8,evict_delay=55s,cache_limit=44M,cache_lowpct=85
+ndb_index_stat_option	loop_enable=1000ms,loop_idle=3333ms,loop_busy=100ms,update_batch=1,read_batch=4,idle_batch=32,check_batch=8,check_delay=234s,delete_batch=8,clean_delay=1m,error_batch=4,error_delay=1m,evict_batch=8,evict_delay=55s,cache_limit=44M,cache_lowpct=85,zero_total=0
 set @@global.ndb_index_stat_option = @save_option;
 show global variables like 'ndb_index_stat_option';
 Variable_name	Value
-ndb_index_stat_option	loop_checkon=1000ms,loop_idle=1000ms,loop_busy=100ms,update_batch=1,read_batch=4,idle_batch=32,check_batch=32,check_delay=1m,delete_batch=8,clean_delay=0,error_batch=4,error_delay=1m,evict_batch=8,evict_delay=1m,cache_limit=32M,cache_lowpct=90
+ndb_index_stat_option	loop_enable=1000ms,loop_idle=1000ms,loop_busy=100ms,update_batch=1,read_batch=4,idle_batch=32,check_batch=8,check_delay=10m,delete_batch=8,clean_delay=1m,error_batch=4,error_delay=1m,evict_batch=8,evict_delay=1m,cache_limit=32M,cache_lowpct=90,zero_total=0
 create table t1 (
 a1 int unsigned not null,
 b1 int unsigned not null,
@@ -56,49 +54,67 @@ test.t2	analyze	status	OK
 # must use b1x
 explain select * from t1
 where b1 = 5 and c1 = 5;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	b1x,c1x	b1x	4	const	#	Using where with pushed condition
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	p0,p1,p2,p3,p4,p5,p6,p7	ref	b1x,c1x	b1x	4	const	#	#	Using where with pushed condition (`test`.`t1`.`c1` = 5)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a1` AS `a1`,`test`.`t1`.`b1` AS `b1`,`test`.`t1`.`c1` AS `c1` from `test`.`t1` where ((`test`.`t1`.`c1` = 5) and (`test`.`t1`.`b1` = 5))
 # must use c2x
 explain select * from t2
 where b2 = 5 and c2 = 5;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t2	ref	b2x,c2x	c2x	4	const	#	Using where with pushed condition
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t2	p0,p1,p2,p3,p4,p5,p6,p7	ref	b2x,c2x	c2x	4	const	#	#	Using where with pushed condition (`test`.`t2`.`b2` = 5)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t2`.`a2` AS `a2`,`test`.`t2`.`b2` AS `b2`,`test`.`t2`.`c2` AS `c2` from `test`.`t2` where ((`test`.`t2`.`c2` = 5) and (`test`.`t2`.`b2` = 5))
 # must use b1x, c2x
 explain select * from t1, t2
 where c1 = c2 and b1 = 5 and b2 = 5;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	b1x,c1x	b1x	4	const	#	Parent of 2 pushed join@1
-1	SIMPLE	t2	ref	b2x,c2x	c2x	4	test.t1.c1	#	Child of 't1' in pushed join@1; Using where with pushed condition
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	p0,p1,p2,p3,p4,p5,p6,p7	ref	b1x,c1x	b1x	4	const	#	#	Parent of 2 pushed join@1
+1	SIMPLE	t2	p0,p1,p2,p3,p4,p5,p6,p7	ref	b2x,c2x	c2x	4	test.t1.c1	#	#	Child of 't1' in pushed join@1; Using where with pushed condition (`test`.`t2`.`b2` = 5)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a1` AS `a1`,`test`.`t1`.`b1` AS `b1`,`test`.`t1`.`c1` AS `c1`,`test`.`t2`.`a2` AS `a2`,`test`.`t2`.`b2` AS `b2`,`test`.`t2`.`c2` AS `c2` from `test`.`t1` join `test`.`t2` where ((`test`.`t2`.`b2` = 5) and (`test`.`t1`.`b1` = 5) and (`test`.`t2`.`c2` = `test`.`t1`.`c1`))
 # must use c2x, b1x
 explain select * from t1, t2
 where b1 = b2 and c1 = 5 and c2 = 5;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t2	ref	b2x,c2x	c2x	4	const	#	Parent of 2 pushed join@1
-1	SIMPLE	t1	ref	b1x,c1x	b1x	4	test.t2.b2	#	Child of 't2' in pushed join@1; Using where with pushed condition
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t2	p0,p1,p2,p3,p4,p5,p6,p7	ref	b2x,c2x	c2x	4	const	#	#	Parent of 2 pushed join@1
+1	SIMPLE	t1	p0,p1,p2,p3,p4,p5,p6,p7	ref	b1x,c1x	b1x	4	test.t2.b2	#	#	Child of 't2' in pushed join@1; Using where with pushed condition (`test`.`t1`.`c1` = 5)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a1` AS `a1`,`test`.`t1`.`b1` AS `b1`,`test`.`t1`.`c1` AS `c1`,`test`.`t2`.`a2` AS `a2`,`test`.`t2`.`b2` AS `b2`,`test`.`t2`.`c2` AS `c2` from `test`.`t1` join `test`.`t2` where ((`test`.`t2`.`c2` = 5) and (`test`.`t1`.`c1` = 5) and (`test`.`t1`.`b1` = `test`.`t2`.`b2`))
 # must use t1, c2x
 explain select * from t1, t2
 where c1 = c2;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ALL	c1x	NULL	NULL	NULL	#	Parent of 2 pushed join@1
-1	SIMPLE	t2	ref	c2x	c2x	4	test.t1.c1	#	Child of 't1' in pushed join@1
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	p0,p1,p2,p3,p4,p5,p6,p7	ALL	c1x	NULL	NULL	NULL	#	#	Parent of 2 pushed join@1
+1	SIMPLE	t2	p0,p1,p2,p3,p4,p5,p6,p7	ref	c2x	c2x	4	test.t1.c1	#	#	Child of 't1' in pushed join@1
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a1` AS `a1`,`test`.`t1`.`b1` AS `b1`,`test`.`t1`.`c1` AS `c1`,`test`.`t2`.`a2` AS `a2`,`test`.`t2`.`b2` AS `b2`,`test`.`t2`.`c2` AS `c2` from `test`.`t1` join `test`.`t2` where (`test`.`t2`.`c2` = `test`.`t1`.`c1`)
 # must use t2, b1x
 explain select * from t1, t2
 where b1 = b2;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t2	ALL	b2x	NULL	NULL	NULL	#	Parent of 2 pushed join@1
-1	SIMPLE	t1	ref	b1x	b1x	4	test.t2.b2	#	Child of 't2' in pushed join@1
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t2	p0,p1,p2,p3,p4,p5,p6,p7	ALL	b2x	NULL	NULL	NULL	#	#	Parent of 2 pushed join@1
+1	SIMPLE	t1	p0,p1,p2,p3,p4,p5,p6,p7	ref	b1x	b1x	4	test.t2.b2	#	#	Child of 't2' in pushed join@1
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a1` AS `a1`,`test`.`t1`.`b1` AS `b1`,`test`.`t1`.`c1` AS `c1`,`test`.`t2`.`a2` AS `a2`,`test`.`t2`.`b2` AS `b2`,`test`.`t2`.`c2` AS `c2` from `test`.`t1` join `test`.`t2` where (`test`.`t1`.`b1` = `test`.`t2`.`b2`)
 # should NOT say: Using index for group-by
 explain select distinct (a1) from t1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ALL	NULL	NULL	NULL	NULL	#	
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	p0,p1,p2,p3,p4,p5,p6,p7	ALL	NULL	NULL	NULL	NULL	#	#	NULL
+Warnings:
+Note	1003	/* select#1 */ select distinct `test`.`t1`.`a1` AS `a1` from `test`.`t1`
 # must say: Using index for group by
 explain select distinct (b1) from t1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	index	NULL	b1x	4	NULL	#	
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	p0,p1,p2,p3,p4,p5,p6,p7	index	NULL	b1x	4	NULL	#	#	NULL
+Warnings:
+Note	1003	/* select#1 */ select distinct `test`.`t1`.`b1` AS `b1` from `test`.`t1`
 # must say: Using index for group by
 explain select distinct (c1) from t1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	index	NULL	c1x	4	NULL	#	
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	p0,p1,p2,p3,p4,p5,p6,p7	index	NULL	c1x	4	NULL	#	#	NULL
+Warnings:
+Note	1003	/* select#1 */ select distinct `test`.`t1`.`c1` AS `c1` from `test`.`t1`
 drop table t1, t2;
 create table t1 (a int, b int, c varchar(10) not null,
 primary key using hash (a), index(b,c)) engine=ndb;
@@ -483,9 +499,11 @@ Table	Op	Msg_type	Msg_text
 test.t1	analyze	status	OK
 test.t2	analyze	status	OK
 explain select * from t1, t2 where b2 = b1 and a1 = 1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	PRIMARY,a1	a1	5	const	2	#
-1	SIMPLE	t2	ref	PRIMARY	PRIMARY	4	test.t1.b1	50	#
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	p0	ref	PRIMARY,a1	a1	5	const	#	100.00	Parent of 2 pushed join@1
+1	SIMPLE	t2	p0	ref	PRIMARY	PRIMARY	4	test.t1.b1	#	100.00	Child of 't1' in pushed join@1
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a1` AS `a1`,`test`.`t1`.`b1` AS `b1`,`test`.`t2`.`b2` AS `b2`,`test`.`t2`.`c2` AS `c2` from `test`.`t1` join `test`.`t2` where ((`test`.`t1`.`a1` = 1) and (`test`.`t2`.`b2` = `test`.`t1`.`b1`))
 drop table t1, t2;
 CREATE TABLE t1(
 K INT NOT NULL AUTO_INCREMENT,
@@ -536,21 +554,47 @@ ANALYZE TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	analyze	status	OK
 explain SELECT count(*) as Count FROM t1 WHERE I = 5;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	I	I	5	const	256	
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	p0	ref	I	I	5	const	256	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `Count` from `test`.`t1` where (`test`.`t1`.`I` = 5)
 SELECT count(*) as Count FROM t1 WHERE I = 5;
 Count
 256
 explain SELECT count(*) as Count FROM t1 WHERE L = 5;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	L	L	5	const	256	
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	p0	ref	L	L	5	const	256	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `Count` from `test`.`t1` where (`test`.`t1`.`L` = 5)
 SELECT count(*) as Count FROM t1 WHERE L = 5;
 Count
 256
 drop table t1;
+create table t1 (
+a int unsigned not null,
+b char(180) not null,
+primary key using hash (a),
+index (b)
+) engine=ndb charset=binary;
+insert into t1 values (1,'a'),(2,'b'),(3,'c');
+analyze table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+analyze table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+analyze table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+drop table t1;
+use test;
+CREATE TABLE t1 (id int unsigned NOT NULL auto_increment PRIMARY KEY,
+val int unsigned, UNIQUE (val)) ENGINE=NDBCluster;
+INSERT INTO test.t1 values (1,1), (2,2);
+DROP TABLE t1;
 set @is_enable = @is_enable_default;
 set @is_enable = NULL;
-# is_enable_on=0 is_enable_off=1
+# is_enable_on=0 is_enable_off=0
 # ndb_index_stat_enable - before
 show global variables like 'ndb_index_stat_enable';
 Variable_name	Value
@@ -558,14 +602,10 @@ ndb_index_stat_enable	ON
 show local variables like 'ndb_index_stat_enable';
 Variable_name	Value
 ndb_index_stat_enable	ON
-set @@local.ndb_index_stat_enable = 0;
-set @@global.ndb_index_stat_enable = 0;
-drop table mysql.ndb_index_stat_sample;
-drop table mysql.ndb_index_stat_head;
 # ndb_index_stat_enable - after
 show global variables like 'ndb_index_stat_enable';
 Variable_name	Value
-ndb_index_stat_enable	OFF
+ndb_index_stat_enable	ON
 show local variables like 'ndb_index_stat_enable';
 Variable_name	Value
-ndb_index_stat_enable	OFF
+ndb_index_stat_enable	ON

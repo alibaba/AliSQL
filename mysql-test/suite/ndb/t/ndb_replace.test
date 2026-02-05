@@ -1,3 +1,8 @@
+# The include statement below is a temp one for tests that are yet to
+#be ported to run with InnoDB,
+#but needs to be kept for tests that would need MyISAM in future.
+--source include/force_myisam_default.inc
+
 -- source include/have_ndb.inc
 
 #
@@ -107,6 +112,8 @@ drop table t1;
 #             'Replace Into'"
 #
 
+# Turn off STRICT since test intentionally generate warnings
+--source suite/ndb/include/turn_off_strict_sql_mode.inc
 
 CREATE TABLE t1(c1 INT NOT NULL PRIMARY KEY,
                 c2 INT NOT NULL DEFAULT 3,
@@ -131,3 +138,5 @@ DELETE FROM t1;
 INSERT INTO t1 (c1) VALUES (5);
 SELECT * FROM t1;
 DROP TABLE t1;
+
+--source suite/ndb/include/restore_sql_mode_after_turn_off_strict.inc

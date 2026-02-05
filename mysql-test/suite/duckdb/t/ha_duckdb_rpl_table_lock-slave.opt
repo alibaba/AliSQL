@@ -1,0 +1,3 @@
+--skip-log-bin
+--enforce-gtid-consistency=on
+--gtid-mode=on

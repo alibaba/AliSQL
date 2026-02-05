@@ -1,16 +1,25 @@
-/* Copyright (c) 2000, 2014, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
 
-   There are special exceptions to the terms and conditions of the GPL as it
-   is applied to this software.
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -81,18 +90,22 @@ const char *client_errors[]=
   "Attempt to read a row while there is no result set associated with the statement",
   "This feature is not implemented yet",
   "Lost connection to MySQL server at '%s', system error: %d",
-  "Statement closed indirectly because of a preceeding %s() call",
+  "Statement closed indirectly because of a preceding %s() call",
   "The number of columns in the result set differs from the number of bound buffers. You must reset the statement, rebind the result set columns, and execute the statement again",
   "This handle is already connected. Use a separate handle for each connection.",
   "Authentication plugin '%s' cannot be loaded: %s",
   "There is an attribute with the same name already",
   "Authentication plugin '%s' reported error: %s",
+  "Insecure API function call: '%s' Use instead: '%s'",
+  "'%-.32s' character set is having more than 1 byte minimum character "
+  "length, which cannot be used as a client character set. Please use any "
+  "of the single byte minimum ones, e.g. utf8mb4, latin1 etc.",
   ""
 };
 
-const char** get_client_errmsgs()
+const char* get_client_errmsg(int nr)
 {
-  return client_errors;
+  return client_errors[nr - CR_ERROR_FIRST];
 }
 
 /*
@@ -109,7 +122,7 @@ void init_client_errs(void)
 {
   compile_time_assert(array_elements(client_errors) ==
                       (CR_ERROR_LAST - CR_ERROR_FIRST + 2));
-  (void) my_error_register(get_client_errmsgs, CR_ERROR_FIRST, CR_ERROR_LAST);
+  (void) my_error_register(get_client_errmsg, CR_ERROR_FIRST, CR_ERROR_LAST);
 }
 
 

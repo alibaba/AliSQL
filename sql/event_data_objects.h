@@ -1,15 +1,22 @@
 #ifndef _EVENT_DATA_OBJECTS_H_
 #define _EVENT_DATA_OBJECTS_H_
-/* Copyright (c) 2004, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2004, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
@@ -22,13 +29,28 @@
   @file event_data_objects.h
 */
 
-#include "event_parse_data.h"
-#include "thr_lock.h"                           /* thr_lock_type */
+#include "my_global.h"
+#include "m_string.h"                   // LEX_CSTRING
+#include "my_alloc.h"                   // MEM_ROOT
+#include "my_time.h"                    // my_time_t
+#include "mysql/mysql_lex_string.h"     // LEX_STRING
+
+#include "my_thread.h"                  // Needed for psi.h
+#include <pfs_stage_provider.h>
+#include <mysql/psi/mysql_stage.h>
+
+#include <pfs_statement_provider.h>
+#include <mysql/psi/mysql_statement.h>
 
 class Field;
+class String;
 class THD;
 class Time_zone;
 struct TABLE;
+typedef ulonglong sql_mode_t;
+typedef struct st_mysql_lex_string LEX_STRING;
+
+void init_scheduler_psi_keys(void);
 
 class Event_queue_element_for_exec
 {
@@ -44,10 +66,21 @@ public:
   bool dropped;
   THD *thd;
 
+  void claim_memory_ownership();
+
 private:
   /* Prevent use of these */
   Event_queue_element_for_exec(const Event_queue_element_for_exec &);
   void operator=(Event_queue_element_for_exec &);
+#ifdef HAVE_PSI_INTERFACE
+public:
+  PSI_statement_info* get_psi_info()
+  {
+    return & psi_info;
+  }
+
+  static PSI_statement_info psi_info;
+#endif
 };
 
 
@@ -124,8 +157,8 @@ class Event_timed : public Event_queue_element
 public:
   LEX_STRING body;
 
-  LEX_STRING definer_user;
-  LEX_STRING definer_host;
+  LEX_CSTRING definer_user;
+  LEX_CSTRING definer_host;
 
   LEX_STRING comment;
 
@@ -155,8 +188,8 @@ class Event_job_data : public Event_basic
 {
 public:
   LEX_STRING body;
-  LEX_STRING definer_user;
-  LEX_STRING definer_host;
+  LEX_CSTRING definer_user;
+  LEX_CSTRING definer_host;
 
   sql_mode_t sql_mode;
 
@@ -172,12 +205,25 @@ public:
 private:
   bool
   construct_sp_sql(THD *thd, String *sp_sql);
-  bool
-  construct_drop_event_sql(THD *thd, String *sp_sql);
-
   Event_job_data(const Event_job_data &);       /* Prevent use of these */
   void operator=(Event_job_data &);
 };
+
+/**
+  Build an SQL drop event string.
+
+  @param[in]     thd         Thread handle
+  @param[in,out] sp_sql      Pointer to String object where the SQL query will
+                             be stored
+  @param[in]     db_name     The schema name
+  @param[in]     event_name  The event name
+
+  @retval        false       The drop event SQL query is built
+  @retval        true        Otherwise
+*/
+bool construct_drop_event_sql(THD *thd, String *sp_sql,
+                              const LEX_STRING &db_name,
+                              const LEX_STRING &event_name);
 
 
 /* Compares only the schema part of the identifier */

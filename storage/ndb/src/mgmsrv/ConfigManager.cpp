@@ -1,13 +1,20 @@
-/* Copyright (c) 2008, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -33,6 +40,13 @@ extern EventLogger * g_eventLogger;
 
 extern "C" const char* opt_ndb_connectstring;
 extern "C" int opt_ndb_nodeid;
+
+#if defined VM_TRACE || defined ERROR_INSERT
+extern int g_errorInsert;
+#define ERROR_INSERTED(x) (g_errorInsert == x)
+#else
+#define ERROR_INSERTED(x) false
+#endif
 
 ConfigManager::ConfigManager(const MgmtSrvr::MgmtOpts& opts,
                              const char* configdir) :
@@ -123,7 +137,8 @@ ConfigManager::find_nodeid_from_configdir(void)
   BaseString config_name;
   NdbDir::Iterator iter;
 
-  if (iter.open(m_configdir) != 0)
+  if (!m_configdir ||
+      iter.open(m_configdir) != 0)
     return 0;
 
   const char* name;
@@ -332,9 +347,21 @@ ConfigManager::init(void)
   if (!init_nodeid())
     DBUG_RETURN(false);
 
-  if (m_opts.initial && !delete_saved_configs())
-    DBUG_RETURN(false);
-
+  if (m_opts.initial)
+  {
+    /**
+     * Verify valid -f before delete_saved_configs()
+     */
+    Config* conf = load_config();
+    if (conf == NULL)
+      DBUG_RETURN(false);
+    
+    delete conf;
+    
+    if (!delete_saved_configs())
+      DBUG_RETURN(false);
+  }
+    
   if (failed_config_change_exists())
     DBUG_RETURN(false);
 
@@ -424,6 +451,15 @@ ConfigManager::init(void)
 
       /* Use the fetched config for now */
       set_config(conf);
+
+      if (!m_opts.config_cache)
+      {
+        assert(!m_configdir); // Running without configdir
+        g_eventLogger->info("Fetched configuration, " \
+                            "generation: %d, name: '%s'. ",
+                            m_config->getGeneration(), m_config->getName());
+        DBUG_RETURN(true);
+      }
 
       if (m_config->getGeneration() == 0)
       {
@@ -531,7 +567,7 @@ ConfigManager::prepareConfigChange(const Config* config)
     return false;
   }
 
-#ifdef __WIN__
+#ifdef _WIN32
   /*
 	File is opened with the commit flag "c" so
 	that the contents of the file buffer are written
@@ -1329,6 +1365,12 @@ ConfigManager::execCONFIG_CHECK_REQ(SignalSender& ss, SimpleSignal* sig)
 
   Uint32 generation = m_config->getGeneration();
 
+  if (ERROR_INSERTED(100) && nodeId != ss.getOwnNodeId())
+  {
+    g_eventLogger->debug("execCONFIG_CHECK_REQ() ERROR_INSERTED(100) => exit()");
+    exit(0);
+  }
+
   // checksum
   Uint32 checksum = config_check_checksum(m_config);
   Uint32 other_checksum = req->checksum;
@@ -1911,7 +1953,7 @@ ConfigManager::run()
         CAST_CONSTPTR(NFCompleteRep, sig->getDataPtr());
       NodeId nodeId= rep->failedNodeId;
 
-      if (m_all_mgm.get(nodeId)) // Not mgm node
+      if (!m_all_mgm.get(nodeId)) // Not mgm node
         break;
 
       ndbout_c("Node %d failed", nodeId);
@@ -2068,7 +2110,7 @@ ConfigManager::fetch_config(void)
 
   if (tmp == NULL) {
     g_eventLogger->error("%s", m_config_retriever.getErrorString());
-    DBUG_RETURN(false);
+    DBUG_RETURN(NULL);
   }
 
   DBUG_RETURN(new Config(tmp));
@@ -2101,6 +2143,12 @@ bool
 ConfigManager::delete_saved_configs(void) const
 {
   NdbDir::Iterator iter;
+
+  if (!m_configdir)
+  {
+    // No configdir -> no files to delete
+    return true;
+  }
 
   if (iter.open(m_configdir) != 0)
     return false;
@@ -2144,8 +2192,9 @@ ConfigManager::saved_config_exists(BaseString& config_name) const
 {
   NdbDir::Iterator iter;
 
-  if (iter.open(m_configdir) != 0)
-    return false;
+  if (!m_configdir ||
+      iter.open(m_configdir) != 0)
+    return 0;
 
   const char* name;
   unsigned nodeid;
@@ -2182,8 +2231,9 @@ ConfigManager::failed_config_change_exists() const
 {
   NdbDir::Iterator iter;
 
-  if (iter.open(m_configdir) != 0)
-    return false;
+  if (!m_configdir ||
+      iter.open(m_configdir) != 0)
+    return 0;
 
   const char* name;
   char tmp;
@@ -2531,24 +2581,51 @@ check_dynamic_port_configured(const Config* config,
 
 bool
 ConfigManager::set_dynamic_port(int node1, int node2, int value,
-                                BaseString& msg){
+                                BaseString& msg)
+{
+  MgmtSrvr::DynPortSpec port = { node2, value };
 
+  return set_dynamic_ports(node1, &port, 1, msg);
+}
+
+
+bool
+ConfigManager::set_dynamic_ports(int node, MgmtSrvr::DynPortSpec ports[],
+                                 unsigned num_ports, BaseString &msg)
+{
   Guard g(m_config_mutex);
-  if (!check_dynamic_port_configured(m_config,
-                                     node1, node2, msg))
-    return false;
 
-  if (!m_dynamic_ports.set(node1, node2, value))
+  // Check that all ports to set are configured as dynamic
+  for(unsigned i = 0; i < num_ports; i++)
   {
-    msg.assfmt("Could not set dynamic port for %d -> %d", node1, node2);
-    return false;
+    const int node2 = ports[i].node;
+    if (!check_dynamic_port_configured(m_config,
+                                       node, node2, msg))
+    {
+      return false;
+    }
+  }
+
+  // Set the dynamic ports
+  bool result = true;
+  for(unsigned i = 0; i < num_ports; i++)
+  {
+    const int node2 = ports[i].node;
+    const int value = ports[i].port;
+    if (!m_dynamic_ports.set(node, node2, value))
+    {
+      // Failed to set one port, report problem but since it's very unlikley
+      // that this step fails, continue and attempt to set remaining ports.
+      msg.assfmt("Failed to set dynamic port(s)");
+      result =  false;
+    }
   }
 
   // Removed cache of packed config, need to be recreated
   // to include the new dynamic port
   m_packed_config.clear();
 
-  return true;
+  return result;
 }
 
 
@@ -2630,8 +2707,8 @@ ConfigManager::DynamicPorts::set_in_config(Config* config)
       continue; // Not configured as dynamic port
 
     Uint32 n1, n2;
-    require(iter.get(CFG_CONNECTION_NODE_1, &n1) == 0 &&
-            iter.get(CFG_CONNECTION_NODE_2, &n2) == 0);
+    require(iter.get(CFG_CONNECTION_NODE_1, &n1) == 0);
+    require(iter.get(CFG_CONNECTION_NODE_2, &n2) == 0);
 
     int dyn_port;
     if (!get(n1, n2, &dyn_port) || dyn_port == 0)

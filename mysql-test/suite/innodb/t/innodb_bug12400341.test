@@ -2,24 +2,26 @@
 
 -- source include/have_innodb.inc
 
+--disable_warnings
 if (`select count(*)=0 from information_schema.global_variables where variable_name = 'INNODB_TRX_RSEG_N_SLOTS_DEBUG'`)
 {
   --skip Test requires InnoDB built with UNIV_DEBUG definition.
 }
+--enable_warnings
 
 # Don't test under valgrind, undo slots of the previous test might exist still
 # and cause unstable result.
 --source include/not_valgrind.inc
 
-call mtr.add_suppression("InnoDB: Warning: cannot find a free slot for an undo log. Do you have too");
-
 --disable_query_log
+call mtr.add_suppression("\\[Warning\\] InnoDB: Cannot find a free slot for an undo log. Do you have too");
+
 set @old_innodb_trx_rseg_n_slots_debug = @@innodb_trx_rseg_n_slots_debug;
 set global innodb_trx_rseg_n_slots_debug = 32;
 --enable_query_log
 
-set @old_innodb_undo_logs = @@innodb_undo_logs;
-set global innodb_undo_logs=1;
+set @old_innodb_rollback_segments = @@innodb_rollback_segments;
+set global innodb_rollback_segments=1;
 
 show variables like "max_connections";
 show variables like "innodb_thread_concurrency";
@@ -38,7 +40,7 @@ CREATE TABLE mysqltest.transtable (id int unsigned NOT NULL PRIMARY KEY, val int
 # because the cached insert_undo can be reused at "CREATE TABLE" statement later.
 #
 START TRANSACTION;
-let $c = 1024;
+let $c = 4096;
 while ($c)
 {
   eval INSERT INTO mysqltest.transtable (id) VALUES ($c);
@@ -105,7 +107,7 @@ while ($c)
 #
 drop database mysqltest;
 
-set global innodb_undo_logs = @old_innodb_undo_logs;
+set global innodb_rollback_segments = @old_innodb_rollback_segments;
 
 --disable_query_log
 set global innodb_trx_rseg_n_slots_debug = @old_innodb_trx_rseg_n_slots_debug;

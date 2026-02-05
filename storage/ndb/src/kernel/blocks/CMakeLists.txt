@@ -1,13 +1,20 @@
-# Copyright (c) 2008, 2010, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; version 2 of the License.
+# it under the terms of the GNU General Public License, version 2.0,
+# as published by the Free Software Foundation.
+#
+# This program is also distributed with certain software (including
+# but not limited to OpenSSL) that is licensed under separate terms,
+# as designated in a particular file or component or in included license
+# documentation.  The authors of MySQL hereby grant you an additional
+# permission to link the program and your derivative works with the
+# separately licensed software that they have included with MySQL.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# GNU General Public License, version 2.0, for more details.
 #
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
@@ -27,7 +34,7 @@ ELSE()
   SET(EXTRA_SRC ndbfs/PosixAsyncFile.cpp)
 ENDIF()
 
-ADD_LIBRARY(ndbblocks STATIC
+ADD_CONVENIENCE_LIBRARY(ndbblocks
     tsman.cpp lgman.cpp pgman.cpp diskpage.cpp restore.cpp
     cmvmi/Cmvmi.cpp
     dbacc/DbaccInit.cpp dbacc/DbaccMain.cpp
@@ -35,6 +42,7 @@ ADD_LIBRARY(ndbblocks STATIC
     dbdih/DbdihInit.cpp dbdih/DbdihMain.cpp
     dblqh/DblqhInit.cpp dblqh/DblqhMain.cpp
     dbtc/DbtcInit.cpp dbtc/DbtcMain.cpp
+    dbgdm/DbgdmProxy.cpp
     dbspj/DbspjInit.cpp dbspj/DbspjMain.cpp dbspj/DbspjProxy.cpp
     dbtup/DbtupExecQuery.cpp dbtup/DbtupBuffer.cpp
     dbtup/DbtupRoutines.cpp dbtup/DbtupCommit.cpp
@@ -72,11 +80,13 @@ ADD_LIBRARY(ndbblocks STATIC
     dblqh/DblqhCommon.cpp
     PgmanProxy.cpp
     dbtup/DbtupClient.cpp
-    ${EXTRA_SRC})
+    ${EXTRA_SRC}
+    thrman.cpp
+    trpman.cpp)
 
 MYSQL_ADD_EXECUTABLE(ndb_print_file
   print_file.cpp
   diskpage.cpp
   dbtup/tuppage.cpp
   COMPONENT ClusterTools)
-TARGET_LINK_LIBRARIES(ndb_print_file ndbclient)
+TARGET_LINK_LIBRARIES(ndb_print_file ndbclient_static)

@@ -244,6 +244,14 @@ mysqltest: At line 1: Unknown SQL error name 'E9999'
 mysqltest: At line 1: Invalid argument to error: '999e9' - the errno may only consist of digits[0-9]
 mysqltest: At line 1: Invalid argument to error: '9b' - the errno may only consist of digits[0-9]
 mysqltest: At line 1: Too many errorcodes specified
+DROP TABLE table_does_not_exist;
+ERROR 42S02: Unknown table 'test.table_does_not_exist'
+DROP TABLE table_does_not_exist;
+ERROR 42S02: Unknown table 'test.table_does_not_exist'
+DROP TABLE table_does_not_exist;
+ERROR 42S02: Unknown table 'test.table_does_not_exist'
+DROP TABLE table_does_not_exist;
+ERROR 42S02: Unknown table 'test.table_does_not_exist'
 CREATE TABLE t1 (a INT);
 CREATE TABLE t1 (a INT);
 ERROR 42S01: Table 't1' already exists
@@ -375,7 +383,7 @@ drop table t1;
 mysqltest: At line 1: query 'let $var2= `failing query`' failed: 1064: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'failing query' at line 1
 mysqltest: At line 1: Missing required argument 'filename' to command 'source'
 mysqltest: At line 1: Could not open './non_existingFile' for reading, errno: 2
-mysqltest: In included file "MYSQLTEST_VARDIR/tmp/recursive.sql": 
+mysqltest: In included file MYSQLTEST_VARDIR/tmp/recursive.sql at line 1:
 included from MYSQLTEST_VARDIR/tmp/recursive.sql at line 1:
 included from MYSQLTEST_VARDIR/tmp/recursive.sql at line 1:
 included from MYSQLTEST_VARDIR/tmp/recursive.sql at line 1:
@@ -390,10 +398,10 @@ included from MYSQLTEST_VARDIR/tmp/recursive.sql at line 1:
 included from MYSQLTEST_VARDIR/tmp/recursive.sql at line 1:
 included from MYSQLTEST_VARDIR/tmp/recursive.sql at line 1:
 included from MYSQLTEST_VARDIR/tmp/recursive.sql at line 1:
-included from MYSQLTEST_VARDIR/tmp/recursive.sql at line 1:
+included from <stdin> at line 1:
 At line 1: Source directives are nesting too deep
-mysqltest: In included file "MYSQLTEST_VARDIR/tmp/error.sql": 
-included from MYSQLTEST_VARDIR/tmp/error.sql at line 1:
+mysqltest: In included file MYSQLTEST_VARDIR/tmp/error.sql at line 1:
+included from <stdin> at line 1:
 At line 1: query 'garbage ' failed: 1064: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'garbage' at line 1
 
 2 = outer loop variable after while
@@ -521,8 +529,8 @@ counter is 6
 counter is 7
 1
 Testing while with not
-mysqltest: In included file "MYSQLTEST_VARDIR/tmp/mysqltest_while.inc": 
-included from MYSQLTEST_VARDIR/tmp/mysqltest_while.inc at line 65:
+mysqltest: In included file MYSQLTEST_VARDIR/tmp/mysqltest_while.inc at line 65:
+included from <stdin> at line 1:
 At line 64: Nesting too deeply
 mysqltest: At line 1: missing '(' in while
 mysqltest: At line 1: missing ')' in while
@@ -573,11 +581,11 @@ mysqltest: At line 1: query 'connect  con2,localhost,root,,illegal_db' failed: 1
 mysqltest: At line 1: Illegal argument for port: 'illegal_port'
 mysqltest: At line 1: Illegal option to connect: SMTP
 200 connects succeeded
-mysqltest: In included file "MYSQLTEST_VARDIR/tmp/mysqltest.sql": 
-included from MYSQLTEST_VARDIR/tmp/mysqltest.sql at line 3:
+mysqltest: In included file MYSQLTEST_VARDIR/tmp/mysqltest.sql at line 3:
+included from <stdin> at line 1:
 At line 3: connection 'test_con1' not found in connection pool
-mysqltest: In included file "MYSQLTEST_VARDIR/tmp/mysqltest.sql": 
-included from MYSQLTEST_VARDIR/tmp/mysqltest.sql at line 2:
+mysqltest: In included file MYSQLTEST_VARDIR/tmp/mysqltest.sql at line 2:
+included from <stdin> at line 1:
 At line 2: Connection test_con1 already exists
 show tables;
 ERROR 3D000: No database selected
@@ -709,8 +717,8 @@ Abcd
 select * from t1;;
 f1
 Abcd
-mysqltest: At line 2: Cannot run query on connection between send and reap
 select * from t1;;
+mysqltest: At line 2: Cannot run query on connection between send and reap
 drop table t1;
 mysqltest: At line 1: Missing required argument 'filename' to command 'remove_file'
 mysqltest: At line 1: Missing required argument 'directory' to command 'remove_files_wildcard'
@@ -935,9 +943,9 @@ a	int(11)	YES		NULL
 b	varchar(255)	YES		NULL	
 c	datetime	YES		NULL	
 drop table t1;
-mysqltest: At line 1: change user failed: Unknown database 'inexistent'
-mysqltest: At line 1: change user failed: Access denied for user 'inexistent'@'localhost' (using password: NO)
-mysqltest: At line 1: change user failed: Access denied for user 'root'@'localhost' (using password: YES)
+ERROR 42000: Unknown database 'inexistent'
+ERROR 28000: Access denied for user 'inexistent'@'localhost' (using password: NO)
+ERROR 28000: Access denied for user 'root'@'localhost' (using password: YES)
 REPLACED_FILE1.txt
 file1.txt
 file2.txt
@@ -970,3 +978,68 @@ con2
 con2
 -closed_connection-
 End of tests
+# To test cat_file command can handle \r\n at the 256th place
+# This test file will contain \r at the 256th position and in its
+# multiples.Extra characters to fill space,some more extra characters
+###############
+# inserting carraige return and line feed
+# Next in line is to add \r followed by \n but \r not being in 256th
+# position but in 255th position followed by \n 
+###### ###### ###### ######
+###### ###### ###### ######
+######## ###### ###### ###### ######
+# inserting carraige return and line feed
+
+# just a random carriage return and line feed
+
+# just a random carriage return only
+
+Bug#21963113 MYSQLTESTS REPLACE_REGEX CANNOT
+MATCH ^ (BEGINNING OF LINE) ATOM
+
+select "a" as a;
+R
+R
+select "R" Rs R;
+R
+R
+select "a" as R;
+R
+R
+#
+# Bug#23280117: 5.7 BUG XXXXX TEST REPLACE NUMBER ROUND+GIS PRECISION
+# DIFFERENCES (CONTRIBUTION)
+#
+# Insert values to be tested into a table
+CREATE TABLE t1(f FLOAT, k DOUBLE);
+INSERT INTO t1 VALUES(124.7892,1.23456e200);
+INSERT INTO t1 VALUES(6.9999999,1.000000000);
+INSERT INTO t1 VALUES(12900.019,37489e-12);
+SELECT * FROM t1;
+f	k
+124.79	1.23e+200
+7	1
+12900	0
+DROP TABLE t1;
+# Verify that the function rounds numeric values when they
+# are padded with characters
+SELECT 'aaaa(12.12348)';
+aaaa(12.12348)
+aaaa(12.12348)
+# Test case with precision 0. Value should be rounded off
+# to nearest whole number.
+SELECT 20;
+20
+20
+# An error is thrown if parameter count is 0
+mysqltest: At line 1: Missing required argument 'precision' to command 'replace_numeric_round'
+# The maximum value which can be passed is 16
+mysqltest: At line 1: A number between 0 and 16 is required for the precision in replace_numeric_round
+# The minimum value which can be passed is 0
+mysqltest: At line 1: A number between 0 and 16 is required for the precision in replace_numeric_round
+#
+# BUG#26630826: MTR: REPLACE_RESULT IS NOT ABLE TO REPLACE LONG
+#               STRINGS IN PATH NAME
+#
+REPLACE_STRING
+mysqltest: At line 1: query 'SELECT REPLACE_STRING FROM t1' failed: 1146: Table 'test.t1' doesn't exist

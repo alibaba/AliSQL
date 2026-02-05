@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2016, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -29,6 +36,9 @@
 #include "consumer_restore.hpp"
 #include "consumer_printer.hpp"
 #include "../src/ndbapi/NdbDictionaryImpl.hpp"
+
+#define TMP_TABLE_PREFIX "#sql"
+#define TMP_TABLE_PREFIX_LEN 4
 
 extern FilteredNdbOut err;
 extern FilteredNdbOut info;
@@ -58,7 +68,7 @@ const char *opt_ndb_table= NULL;
 unsigned int opt_verbose;
 unsigned int opt_hex_format;
 unsigned int opt_progress_frequency;
-NDB_TICKS g_report_next;
+NDB_TICKS g_report_prev;
 Vector<BaseString> g_databases;
 Vector<BaseString> g_tables;
 Vector<BaseString> g_include_tables, g_exclude_tables;
@@ -88,6 +98,11 @@ static bool ga_restore = false;
 static bool ga_print = false;
 static bool ga_skip_table_check = false;
 static bool ga_exclude_missing_columns = false;
+static bool ga_exclude_missing_tables = false;
+static bool opt_exclude_intermediate_sql_tables = true;
+#ifdef ERROR_INSERT 
+static unsigned int _error_insert = 0;
+#endif
 static int _print = 0;
 static int _print_meta = 0;
 static int _print_data = 0;
@@ -277,8 +292,18 @@ static struct my_option my_long_options[] =
     (uchar**) &ga_exclude_missing_columns,
     (uchar**) &ga_exclude_missing_columns, 0,
     GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
+  { "exclude-missing-tables", NDB_OPT_NOSHORT,
+    "Ignore tables present in backup but not in database",
+    (uchar**) &ga_exclude_missing_tables,
+    (uchar**) &ga_exclude_missing_tables, 0,
+    GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
+  { "exclude-intermediate-sql-tables", NDB_OPT_NOSHORT,
+    "Do not restore intermediate tables with #sql-prefixed names",
+    (uchar**) &opt_exclude_intermediate_sql_tables,
+    (uchar**) &opt_exclude_intermediate_sql_tables, 0,
+    GET_BOOL, NO_ARG, 1, 0, 0, 0, 0, 0 },
   { "disable-indexes", NDB_OPT_NOSHORT,
-    "Disable indexes",
+    "Disable indexes and foreign keys",
     (uchar**) &ga_disable_indexes,
     (uchar**) &ga_disable_indexes, 0,
     GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
@@ -293,6 +318,12 @@ static struct my_option my_long_options[] =
   { "skip-broken-objects", 256, "Skip broken object when parsing backup",
     (uchar**) &ga_skip_broken_objects, (uchar**) &ga_skip_broken_objects, 0,
     GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
+#ifdef ERROR_INSERT
+  { "error-insert", NDB_OPT_NOSHORT,
+    "Insert errors (testing option)",
+    (uchar **)&_error_insert, (uchar **)&_error_insert, 0,
+    GET_INT, REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
+#endif
   { 0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0}
 };
 
@@ -418,7 +449,7 @@ static my_bool
 get_one_option(int optid, const struct my_option *opt MY_ATTRIBUTE((unused)),
 	       char *argument)
 {
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   opt_debug= "d:t:O,/tmp/ndb_restore.trace";
 #endif
   ndb_std_get_one_option(optid, opt, argument);
@@ -558,7 +589,7 @@ readArguments(int *pargc, char*** pargv)
   const char *load_default_groups[]= { "mysql_cluster","ndb_restore",0 };
 
   init_nodegroup_map();
-  load_defaults("my",load_default_groups,pargc,pargv);
+  ndb_load_defaults(NULL,load_default_groups,pargc,pargv);
   debug << "handle_options" << endl;
 
   ndb_opt_set_usage_funcs(short_usage_sub, usage);
@@ -606,6 +637,7 @@ o verify nodegroup mapping
                                              opt_ndb_nodeid,
                                              opt_nodegroup_map,
                                              opt_nodegroup_map_len,
+                                             ga_nodeId,
                                              ga_nParallelism);
   if (restore == NULL) 
   {
@@ -646,6 +678,14 @@ o verify nodegroup mapping
   {
     //    ga_restore = true;
     restore->m_restore_meta = true;
+    if(ga_exclude_missing_tables)
+    {
+      //conflict in options
+      err << "Conflicting arguments found : "
+          << "Cannot use `restore-meta` and "
+          << "`exclude-missing-tables` together. Exiting..." << endl;
+      return false;
+    }
   }
 
   if (_no_restore_disk)
@@ -784,7 +824,7 @@ o verify nodegroup mapping
     for (src = it.first(); src != NULL; src = it.next()) {
       const char * dst = NULL;
       bool r = g_rewrite_databases.get(src, &dst);
-      assert(r && (dst != NULL));
+      require(r && (dst != NULL));
       info << " (" << src << "->" << dst << ")";
     }
     info << endl;
@@ -932,7 +972,7 @@ static void parse_rewrite_database(char * argument)
     const BaseString dst = args[1];
     const bool replace = true;
     bool r = g_rewrite_databases.put(src.c_str(), dst.c_str(), replace);
-    assert(r);
+    require(r);
     return; // ok
   }
 
@@ -1035,6 +1075,17 @@ static bool check_include_exclude(BaseString database, BaseString table)
   return do_include;
 }
 
+static bool
+check_intermediate_sql_table(const char *table_name)
+{
+  BaseString tbl(table_name);
+  Vector<BaseString> fields;
+  tbl.split(fields, "/");
+  if((fields.size() == 3) && !fields[2].empty() && strncmp(fields[2].c_str(), TMP_TABLE_PREFIX, TMP_TABLE_PREFIX_LEN) == 0) 
+    return true;  
+  return false;
+}
+  
 static inline bool
 checkDoRestore(const TableS* table)
 {
@@ -1064,6 +1115,11 @@ checkDbAndTableName(const TableS* table)
   if (table->isBroken())
     return false;
 
+  const char *table_name = getTableName(table);
+  if(opt_exclude_intermediate_sql_tables && (check_intermediate_sql_table(table_name) == true)) {
+    return false;
+  }
+
   // If new options are given, ignore the old format
   if (opt_include_tables || g_exclude_tables.size() > 0 ||
       opt_include_databases || opt_exclude_databases ) {
@@ -1077,8 +1133,6 @@ checkDbAndTableName(const TableS* table)
     g_databases.push_back("TEST_DB");
 
   // Filter on the main table name for indexes and blobs
-  const char *table_name= getTableName(table);
-
   unsigned i;
   for (i= 0; i < g_databases.size(); i++)
   {
@@ -1110,6 +1164,38 @@ checkDbAndTableName(const TableS* table)
 }
 
 static void
+exclude_missing_tables(const RestoreMetaData& metaData)
+{
+  Uint32 i, j;
+  bool isMissing;
+  Vector<BaseString> missingTables;
+  for(i = 0; i < metaData.getNoOfTables(); i++)
+  {
+    const TableS *table= metaData[i];
+    isMissing = false;
+    for(j = 0; j < g_consumers.size(); j++)
+      isMissing |= g_consumers[j]->isMissingTable(*table);
+    if( isMissing )
+    {
+      /* add missing tables to exclude list */
+      g_exclude_tables.push_back(table->getTableName());
+      BaseString tableName = makeExternalTableName(table->getTableName());
+      save_include_exclude(OPT_EXCLUDE_TABLES, (char*)tableName.c_str());
+      missingTables.push_back(tableName);
+    }
+  }
+
+  if(missingTables.size() > 0){
+    info << "Excluded Missing tables: ";
+    for (i=0 ; i < missingTables.size(); i++)
+    {
+      info << missingTables[i] << " ";
+    }
+    info << endl;
+  }
+}
+
+static void
 free_data_callback()
 {
   for(Uint32 i= 0; i < g_consumers.size(); i++) 
@@ -1127,8 +1213,7 @@ static void exitHandler(int code)
 
 static void init_progress()
 {
-  Uint64 now = NdbTick_CurrentMillisecond() / 1000;
-  g_report_next = now + opt_progress_frequency;
+  g_report_prev = NdbTick_getCurrentTicks();
 }
 
 static int check_progress()
@@ -1136,11 +1221,11 @@ static int check_progress()
   if (!opt_progress_frequency)
     return 0;
 
-  NDB_TICKS now = NdbTick_CurrentMillisecond() / 1000;
+  const NDB_TICKS now = NdbTick_getCurrentTicks();
   
-  if (now  >= g_report_next)
+  if (NdbTick_Elapsed(g_report_prev, now).seconds() >= opt_progress_frequency)
   {
-    g_report_next = now + opt_progress_frequency;
+    g_report_prev = now;
     return 1;
   }
   return 0;
@@ -1210,6 +1295,8 @@ main(int argc, char** argv)
     g_options.appfmt(" -d");
   if (ga_exclude_missing_columns)
     g_options.append(" --exclude-missing-columns");
+  if (ga_exclude_missing_tables)
+    g_options.append(" --exclude-missing-tables");
   if (ga_disable_indexes)
     g_options.append(" --disable-indexes");
   if (ga_rebuild_indexes)
@@ -1227,6 +1314,13 @@ main(int argc, char** argv)
    */
   debug << "Start restoring meta data" << endl;
   RestoreMetaData metaData(ga_backupPath, ga_nodeId, ga_backupId);
+#ifdef ERROR_INSERTED 
+  if(_error_insert > 0)
+  {
+    metaData.error_insert(_error_insert);
+  }
+#endif 
+
   if (!metaData.readHeader())
   {
     err << "Failed to read " << metaData.getFilename() << endl << endl;
@@ -1308,6 +1402,9 @@ main(int argc, char** argv)
     }
 
   }
+
+  if(ga_exclude_missing_tables)
+    exclude_missing_tables(metaData);
 
   /* report to clusterlog if applicable */
   for (i = 0; i < g_consumers.size(); i++)
@@ -1398,13 +1495,36 @@ main(int argc, char** argv)
            << metaData.getNoOfTables() << endl;
     }
   }
+
+  debug << "Save foreign key info" << endl;
+  for(i = 0; i<metaData.getNoOfObjects(); i++)
+  {
+    for(Uint32 j= 0; j < g_consumers.size(); j++)
+      if (!g_consumers[j]->fk(metaData.getObjType(i),
+			      metaData.getObjPtr(i)))
+      {
+        // no error is possible 
+        assert(false);
+      } 
+  }
+
   debug << "Close tables" << endl; 
   for(i= 0; i < g_consumers.size(); i++)
+  {
     if (!g_consumers[i]->endOfTables())
     {
       err << "Restore: Failed while closing tables" << endl;
       exitHandler(NDBT_FAILED);
     } 
+    if (!ga_disable_indexes && !ga_rebuild_indexes)
+    {
+      if (!g_consumers[i]->endOfTablesFK())
+      {
+        err << "Restore: Failed while closing tables FKs" << endl;
+        exitHandler(NDBT_FAILED);
+      } 
+    }
+  }
   /* report to clusterlog if applicable */
   for(i= 0; i < g_consumers.size(); i++)
   {
@@ -1420,17 +1540,47 @@ main(int argc, char** argv)
         if (checkSysTable(metaData, i) &&
             checkDbAndTableName(metaData[i]))
         {
+          TableS & tableS = *metaData[i]; // not const
           for(Uint32 j= 0; j < g_consumers.size(); j++)
           {
-            if (!g_consumers[j]->table_compatible_check(*metaData[i]))
+            if (!g_consumers[j]->table_compatible_check(tableS))
             {
               err << "Restore: Failed to restore data, ";
-              err << metaData[i]->getTableName() << " table structure incompatible with backup's ... Exiting " << endl;
+              err << tableS.getTableName() << " table structure incompatible with backup's ... Exiting " << endl;
               exitHandler(NDBT_FAILED);
             } 
+            if (tableS.m_staging &&
+                !g_consumers[j]->prepare_staging(tableS))
+            {
+              err << "Restore: Failed to restore data, ";
+              err << tableS.getTableName() << " failed to prepare staging table for data conversion ... Exiting " << endl;
+              exitHandler(NDBT_FAILED);
+            }
           } 
         }
       }
+      for (i=0; i < metaData.getNoOfTables(); i++)
+      {
+        if (checkSysTable(metaData, i) &&
+            checkDbAndTableName(metaData[i]))
+        {
+          // blob table checks use data which is populated by table compatibility checks
+          TableS & tableS = *metaData[i];
+          if(isBlobTable(&tableS))
+          {
+            for(Uint32 j= 0; j < g_consumers.size(); j++)
+            {
+              if (!g_consumers[j]->check_blobs(tableS))
+              {
+                  err << "Restore: Failed to restore data, ";
+                  err << tableS.getTableName() << " table's blobs incompatible with backup's ... Exiting " << endl;
+                  exitHandler(NDBT_FAILED);
+              }
+            }
+          }
+        }
+      }
+        
       RestoreDataIterator dataIter(metaData, &free_data_callback);
       
       // Read data file header
@@ -1531,6 +1681,28 @@ main(int argc, char** argv)
       }
     }
     
+    /* move data from staging table to real table */
+    if(_restore_data)
+    {
+      for (i = 0; i < metaData.getNoOfTables(); i++)
+      {
+        const TableS* table = metaData[i];
+        if (table->m_staging)
+        {
+          for(Uint32 j= 0; j < g_consumers.size(); j++)
+          {
+            if (!g_consumers[j]->finalize_staging(*table))
+            {
+              err << "Restore: Failed staging data to table: ";
+              err << table->getTableName() << ". ";
+              err << "Exiting... " << endl;
+              exitHandler(NDBT_FAILED);
+            }
+          }
+        }
+      }
+    }
+
     if(_restore_data)
     {
       for(i = 0; i < metaData.getNoOfTables(); i++)
@@ -1586,6 +1758,11 @@ main(int argc, char** argv)
         if (!g_consumers[j]->rebuild_indexes(* table))
           return -1;
       }
+    }
+    for(Uint32 j= 0; j < g_consumers.size(); j++)
+    {
+      if (!g_consumers[j]->endOfTablesFK())
+        return -1;
     }
   }
 

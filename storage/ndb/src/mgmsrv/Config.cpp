@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2015, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -541,7 +548,8 @@ diff_connections(const Config* a, const Config* b, Properties& diff)
     ConfigValues::ConstIterator itB(b->m_configValues->m_config);
     require(itB.openSection(CFG_SECTION_CONNECTION, sectionNo) == true);
 
-    Uint32 nodeId1_B, nodeId2_B;
+    Uint32 nodeId1_B = 0; /* Silence compiler warning */
+    Uint32 nodeId2_B = 0; /* Silence compiler warning */
     require(itB.get(CFG_CONNECTION_NODE_1, &nodeId1_B) == true);
     require(itB.get(CFG_CONNECTION_NODE_2, &nodeId2_B) == true);
     require(nodeId1_A == nodeId1_B && nodeId2_A == nodeId2_B);
@@ -755,7 +763,10 @@ bool Config::illegal_change(const Properties& diff_list) const {
       Uint32 type;
       require(what->get("Type", &type));
       if (type == DT_ILLEGAL_CHANGE)
+      {
         illegal= true;
+        break;
+      }
     }
   }
   return illegal;

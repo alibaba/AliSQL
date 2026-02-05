@@ -1,13 +1,20 @@
-/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -24,17 +31,15 @@
 #include <m_ctype.h>
 #include <mysql/get_password.h>
 
-#if defined(HAVE_BROKEN_GETPASS) && !defined(HAVE_GETPASSPHRASE)
-#undef HAVE_GETPASS
-#endif
-
 #ifdef HAVE_GETPASS
 #ifdef HAVE_PWD_H
 #include <pwd.h>
 #endif /* HAVE_PWD_H */
 #else /* ! HAVE_GETPASS */
-#ifndef __WIN__
+#ifndef _WIN32
+#ifdef HAVE_SYS_IOCTL_H
 #include <sys/ioctl.h>
+#endif
 #ifdef HAVE_TERMIOS_H				/* For tty-password */
 #include	<termios.h>
 #define TERMIO	struct termios
@@ -47,20 +52,16 @@
 #define TERMIO	struct sgttyb
 #endif
 #endif
-#ifdef alpha_linux_port
-#include <asm/ioctls.h>				/* QQ; Fix this in configure */
-#include <asm/termiobits.h>
-#endif
 #else
 #include <conio.h>
-#endif /* __WIN__ */
+#endif /* _WIN32 */
 #endif /* HAVE_GETPASS */
 
 #ifdef HAVE_GETPASSPHRASE			/* For Solaris */
 #define getpass(A) getpassphrase(A)
 #endif
 
-#ifdef __WIN__
+#ifdef _WIN32
 /* were just going to fake it here and get input from
    the keyboard */
 
@@ -167,7 +168,7 @@ char *get_tty_password_ext(const char *opt_message,
   passbuff = getpass(opt_message ? opt_message : "Enter password: ");
 
   /* copy the password to buff and clear original (static) buffer */
-  strnmov(buff, passbuff, sizeof(buff) - 1);
+  my_stpnmov(buff, passbuff, sizeof(buff) - 1);
 #ifdef _PASSWORD_LEN
   memset(passbuff, 0, _PASSWORD_LEN);
 #endif
@@ -211,9 +212,14 @@ char *get_tty_password_ext(const char *opt_message,
   DBUG_RETURN(strdup_function(buff,MYF(MY_FAE)));
 }
 
-#endif /*__WIN__*/
+#endif /* _WIN32 */
+
+static char * my_strdup_fct(const char *str, myf flags)
+{
+  return my_strdup(PSI_NOT_INSTRUMENTED, str, flags);
+}
 
 char *get_tty_password(const char *opt_message)
 {
-  return get_tty_password_ext(opt_message, my_strdup);
+  return get_tty_password_ext(opt_message, my_strdup_fct);
 }

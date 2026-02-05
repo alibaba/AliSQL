@@ -1,14 +1,22 @@
 /*****************************************************************************
 
-Copyright (c) 2006, 2009, Oracle and/or its affiliates. All Rights Reserved.
+Copyright (c) 2006, 2023, Oracle and/or its affiliates.
 
-This program is free software; you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation; version 2 of the License.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License, version 2.0,
+as published by the Free Software Foundation.
 
-This program is distributed in the hope that it will be useful, but WITHOUT
-ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+This program is also distributed with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have included with MySQL.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License, version 2.0, for more details.
 
 You should have received a copy of the GNU General Public License along with
 this program; if not, write to the Free Software Foundation, Inc.,
@@ -54,8 +62,7 @@ struct ib_list_node_t;
 /****************************************************************//**
 Create a new list using mem_alloc. Lists created with this function must be
 freed with ib_list_free.
-@return	list */
-UNIV_INTERN
+@return list */
 ib_list_t*
 ib_list_create(void);
 /*=================*/
@@ -64,8 +71,7 @@ ib_list_create(void);
 /****************************************************************//**
 Create a new list using the given heap. ib_list_free MUST NOT BE CALLED for
 lists created with this function.
-@return	list */
-UNIV_INTERN
+@return list */
 ib_list_t*
 ib_list_create_heap(
 /*================*/
@@ -73,7 +79,6 @@ ib_list_create_heap(
 
 /****************************************************************//**
 Free a list. */
-UNIV_INTERN
 void
 ib_list_free(
 /*=========*/
@@ -81,8 +86,7 @@ ib_list_free(
 
 /****************************************************************//**
 Add the data to the start of the list.
-@return	new list node */
-UNIV_INTERN
+@return new list node */
 ib_list_node_t*
 ib_list_add_first(
 /*==============*/
@@ -92,8 +96,7 @@ ib_list_add_first(
 
 /****************************************************************//**
 Add the data to the end of the list.
-@return	new list node */
-UNIV_INTERN
+@return new list node */
 ib_list_node_t*
 ib_list_add_last(
 /*=============*/
@@ -103,8 +106,7 @@ ib_list_add_last(
 
 /****************************************************************//**
 Add the data after the indicated node.
-@return	new list node */
-UNIV_INTERN
+@return new list node */
 ib_list_node_t*
 ib_list_add_after(
 /*==============*/
@@ -116,7 +118,6 @@ ib_list_add_after(
 
 /****************************************************************//**
 Remove the node from the list. */
-UNIV_INTERN
 void
 ib_list_remove(
 /*===========*/
@@ -125,7 +126,7 @@ ib_list_remove(
 
 /****************************************************************//**
 Get the first node in the list.
-@return	first node, or NULL */
+@return first node, or NULL */
 UNIV_INLINE
 ib_list_node_t*
 ib_list_get_first(
@@ -134,7 +135,7 @@ ib_list_get_first(
 
 /****************************************************************//**
 Get the last node in the list.
-@return	last node, or NULL */
+@return last node, or NULL */
 UNIV_INLINE
 ib_list_node_t*
 ib_list_get_last(

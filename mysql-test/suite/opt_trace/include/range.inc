@@ -275,7 +275,7 @@ CREATE INDEX i1_i2_idx ON t1 (i2,i1);
 ANALYZE TABLE t1;
 
 --echo
---echo # Covering ROR intersect not chosen: cost
+--echo # Covering ROR intersect not chosen: Index with more keyparts found.
 EXPLAIN SELECT v FROM t1 WHERE i1 = 1 AND i2 = 1  AND v = 'a' AND pk < 3;
 --echo
 SELECT * FROM information_schema.OPTIMIZER_TRACE;
@@ -303,12 +303,6 @@ SELECT * FROM information_schema.OPTIMIZER_TRACE;
 
 --echo
 drop table t1;
-
---echo #
---echo # Tracing of when test_if_skip_sort_order() switches to another
---echo # index and we abandon ICP,
---echo # see "disabling_pushed_condition_on_old_index" in trace.
---echo #
 
 CREATE TABLE t1 (
   c1 VARCHAR(2) NOT NULL,

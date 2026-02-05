@@ -1,3 +1,6 @@
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 DROP TABLE IF EXISTS t1;
 SET CHARACTER SET latin1;
 CREATE TABLE t1 (
@@ -9,14 +12,14 @@ Table	Create Table
 t1	CREATE TABLE `t1` (
   `comment` char(32) CHARACTER SET latin1 NOT NULL,
   `koi8_ru_f` char(32) CHARACTER SET koi8r NOT NULL DEFAULT ''
-) ENGINE=MyISAM DEFAULT CHARSET=latin5
+) ENGINE=ENGINE DEFAULT CHARSET=latin5
 ALTER TABLE t1 CHANGE comment comment CHAR(32) CHARACTER SET latin2 NOT NULL;
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `comment` char(32) CHARACTER SET latin2 NOT NULL,
   `koi8_ru_f` char(32) CHARACTER SET koi8r NOT NULL DEFAULT ''
-) ENGINE=MyISAM DEFAULT CHARSET=latin5
+) ENGINE=ENGINE DEFAULT CHARSET=latin5
 ALTER TABLE t1 ADD latin5_f CHAR(32) NOT NULL;
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -24,7 +27,7 @@ t1	CREATE TABLE `t1` (
   `comment` char(32) CHARACTER SET latin2 NOT NULL,
   `koi8_ru_f` char(32) CHARACTER SET koi8r NOT NULL DEFAULT '',
   `latin5_f` char(32) NOT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin5
+) ENGINE=ENGINE DEFAULT CHARSET=latin5
 ALTER TABLE t1 DEFAULT CHARSET=latin2;
 ALTER TABLE t1 ADD latin2_f CHAR(32) NOT NULL;
 SHOW CREATE TABLE t1;
@@ -34,14 +37,14 @@ t1	CREATE TABLE `t1` (
   `koi8_ru_f` char(32) CHARACTER SET koi8r NOT NULL DEFAULT '',
   `latin5_f` char(32) CHARACTER SET latin5 NOT NULL,
   `latin2_f` char(32) NOT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin2
+) ENGINE=ENGINE DEFAULT CHARSET=latin2
 ALTER TABLE t1 DROP latin2_f, DROP latin5_f;
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `comment` char(32) NOT NULL,
   `koi8_ru_f` char(32) CHARACTER SET koi8r NOT NULL DEFAULT ''
-) ENGINE=MyISAM DEFAULT CHARSET=latin2
+) ENGINE=ENGINE DEFAULT CHARSET=latin2
 INSERT INTO t1 (koi8_ru_f,comment) VALUES ('a','LAT SMALL A');
 INSERT INTO t1 (koi8_ru_f,comment) VALUES ('b','LAT SMALL B');
 INSERT INTO t1 (koi8_ru_f,comment) VALUES ('c','LAT SMALL C');
@@ -1703,7 +1706,7 @@ Warning	1292	Truncated incorrect BINARY(0) value: '1.'
 #
 #
 # WL#1213 Implement 4-byte UTF8, UTF16 and UTF32
-# Testing that only utf8mb4 is superset for utf8
+# Testing that utf8mb4 and utf32 are superset for all Unicode
 # No other Unicode character set pairs have superset/subset relations
 #
 CREATE TABLE t1 (
@@ -1722,40 +1725,52 @@ ERROR HY000: Illegal mix of collations (utf8_general_ci,IMPLICIT) and (ucs2_gene
 SELECT CHARSET(CONCAT(utf8, utf16)) FROM t1;
 ERROR HY000: Illegal mix of collations (utf8_general_ci,IMPLICIT) and (utf16_general_ci,IMPLICIT) for operation 'concat'
 SELECT CHARSET(CONCAT(utf8, utf32)) FROM t1;
-ERROR HY000: Illegal mix of collations (utf8_general_ci,IMPLICIT) and (utf32_general_ci,IMPLICIT) for operation 'concat'
+CHARSET(CONCAT(utf8, utf32))
+utf32
 SELECT CHARSET(CONCAT(utf8mb4, utf8)) FROM t1;
 CHARSET(CONCAT(utf8mb4, utf8))
 utf8mb4
 SELECT CHARSET(CONCAT(utf8mb4, ucs2)) FROM t1;
-ERROR HY000: Illegal mix of collations (utf8mb4_general_ci,IMPLICIT) and (ucs2_general_ci,IMPLICIT) for operation 'concat'
+CHARSET(CONCAT(utf8mb4, ucs2))
+utf8mb4
 SELECT CHARSET(CONCAT(utf8mb4, utf16)) FROM t1;
-ERROR HY000: Illegal mix of collations (utf8mb4_general_ci,IMPLICIT) and (utf16_general_ci,IMPLICIT) for operation 'concat'
+CHARSET(CONCAT(utf8mb4, utf16))
+utf8mb4
 SELECT CHARSET(CONCAT(utf8mb4, utf32)) FROM t1;
-ERROR HY000: Illegal mix of collations (utf8mb4_general_ci,IMPLICIT) and (utf32_general_ci,IMPLICIT) for operation 'concat'
+CHARSET(CONCAT(utf8mb4, utf32))
+utf8mb4
 SELECT CHARSET(CONCAT(ucs2, utf8)) FROM t1;
 ERROR HY000: Illegal mix of collations (ucs2_general_ci,IMPLICIT) and (utf8_general_ci,IMPLICIT) for operation 'concat'
 SELECT CHARSET(CONCAT(ucs2, utf8mb4)) FROM t1;
-ERROR HY000: Illegal mix of collations (ucs2_general_ci,IMPLICIT) and (utf8mb4_general_ci,IMPLICIT) for operation 'concat'
+CHARSET(CONCAT(ucs2, utf8mb4))
+utf8mb4
 SELECT CHARSET(CONCAT(ucs2, utf16)) FROM t1;
 ERROR HY000: Illegal mix of collations (ucs2_general_ci,IMPLICIT) and (utf16_general_ci,IMPLICIT) for operation 'concat'
 SELECT CHARSET(CONCAT(ucs2, utf32)) FROM t1;
-ERROR HY000: Illegal mix of collations (ucs2_general_ci,IMPLICIT) and (utf32_general_ci,IMPLICIT) for operation 'concat'
+CHARSET(CONCAT(ucs2, utf32))
+utf32
 SELECT CHARSET(CONCAT(utf16, utf8)) FROM t1;
 ERROR HY000: Illegal mix of collations (utf16_general_ci,IMPLICIT) and (utf8_general_ci,IMPLICIT) for operation 'concat'
 SELECT CHARSET(CONCAT(utf16, ucs2)) FROM t1;
 ERROR HY000: Illegal mix of collations (utf16_general_ci,IMPLICIT) and (ucs2_general_ci,IMPLICIT) for operation 'concat'
 SELECT CHARSET(CONCAT(utf16, utf8mb4)) FROM t1;
-ERROR HY000: Illegal mix of collations (utf16_general_ci,IMPLICIT) and (utf8mb4_general_ci,IMPLICIT) for operation 'concat'
+CHARSET(CONCAT(utf16, utf8mb4))
+utf8mb4
 SELECT CHARSET(CONCAT(utf16, utf32)) FROM t1;
-ERROR HY000: Illegal mix of collations (utf16_general_ci,IMPLICIT) and (utf32_general_ci,IMPLICIT) for operation 'concat'
+CHARSET(CONCAT(utf16, utf32))
+utf32
 SELECT CHARSET(CONCAT(utf32, utf8)) FROM t1;
-ERROR HY000: Illegal mix of collations (utf32_general_ci,IMPLICIT) and (utf8_general_ci,IMPLICIT) for operation 'concat'
+CHARSET(CONCAT(utf32, utf8))
+utf32
 SELECT CHARSET(CONCAT(utf32, ucs2)) FROM t1;
-ERROR HY000: Illegal mix of collations (utf32_general_ci,IMPLICIT) and (ucs2_general_ci,IMPLICIT) for operation 'concat'
+CHARSET(CONCAT(utf32, ucs2))
+utf32
 SELECT CHARSET(CONCAT(utf32, utf8mb4)) FROM t1;
-ERROR HY000: Illegal mix of collations (utf32_general_ci,IMPLICIT) and (utf8mb4_general_ci,IMPLICIT) for operation 'concat'
+CHARSET(CONCAT(utf32, utf8mb4))
+utf32
 SELECT CHARSET(CONCAT(utf32, utf16)) FROM t1;
-ERROR HY000: Illegal mix of collations (utf32_general_ci,IMPLICIT) and (utf16_general_ci,IMPLICIT) for operation 'concat'
+CHARSET(CONCAT(utf32, utf16))
+utf32
 DROP TABLE t1;
 #
 # Bug#58321 No warning when characters outside BMP0 is converted to UCS2
@@ -1787,3 +1802,4 @@ SELECT * FROM t2 WHERE a=(SELECT a FROM t1) AND a=_LATIN1'x';
 ERROR 21000: Subquery returns more than 1 row
 DROP TABLE t2;
 DROP TABLE t1;
+SET sql_mode = default;

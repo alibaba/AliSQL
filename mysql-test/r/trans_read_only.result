@@ -7,18 +7,26 @@
 SELECT @@tx_read_only;
 @@tx_read_only
 1
+Warnings:
+Warning	1287	'@@tx_read_only' is deprecated and will be removed in a future release. Please use '@@transaction_read_only' instead
 # Also for new connections. Switching to con1
 SELECT @@tx_read_only;
 @@tx_read_only
 1
+Warnings:
+Warning	1287	'@@tx_read_only' is deprecated and will be removed in a future release. Please use '@@transaction_read_only' instead
 SET SESSION TRANSACTION READ WRITE;
 SELECT @@tx_read_only;
 @@tx_read_only
 0
+Warnings:
+Warning	1287	'@@tx_read_only' is deprecated and will be removed in a future release. Please use '@@transaction_read_only' instead
 # Connection default
 SELECT @@tx_read_only;
 @@tx_read_only
 1
+Warnings:
+Warning	1287	'@@tx_read_only' is deprecated and will be removed in a future release. Please use '@@transaction_read_only' instead
 #
 # Test 10: SET TRANSACTION / START TRANSACTION + implicit commit.
 SET SESSION TRANSACTION READ WRITE;
@@ -29,12 +37,4 @@ SET TRANSACTION READ ONLY;
 CREATE TABLE t1 (a INT);
 START TRANSACTION READ ONLY;
 # The same happens with START TRANSACTION
-DROP TABLE t1;
-#
-# Test 11: INSERT DELAYED
-CREATE TABLE t1(a INT);
-START TRANSACTION READ ONLY;
-INSERT DELAYED INTO t1 VALUES (1);
-ERROR 25006: Cannot execute statement in a READ ONLY transaction.
-COMMIT;
 DROP TABLE t1;

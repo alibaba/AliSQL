@@ -1,32 +1,39 @@
-# Copyright (c) 2003, 2011, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; version 2 of the License.
+# it under the terms of the GNU General Public License, version 2.0,
+# as published by the Free Software Foundation.
+#
+# This program is also distributed with certain software (including
+# but not limited to OpenSSL) that is licensed under separate terms,
+# as designated in a particular file or component or in included license
+# documentation.  The authors of MySQL hereby grant you an additional
+# permission to link the program and your derivative works with the
+# separately licensed software that they have included with MySQL.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# GNU General Public License, version 2.0, for more details.
 #
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-Next QMGR 938
-Next NDBCNTR 1002
+Next QMGR 943
+Next NDBCNTR 1006
 Next NDBFS 2000
 Next DBACC 3002
-Next DBTUP 4035
-Next DBLQH 5072
-Next DBDICT 6026
-Next DBDIH 7229
-Next DBTC 8092
+Next DBTUP 4039
+Next DBLQH 5088
+Next DBDICT 6216
+Next DBDIH 7245
+Next DBTC 8109
 Next CMVMI 9000
 Next BACKUP 10042
 Next DBUTIL 11002
 Next DBTUX 12010
-Next SUMA 13047
+Next SUMA 13049
 Next LGMAN 15001
 Next TSMAN 16001
 Next DBSPJ 17000
@@ -122,6 +129,34 @@ Delay GCP_SAVEREQ by 10 secs
 
 7194: Force removeNodeFromStored to complete in the middle of MASTER_LCPCONF
 
+Following are used to test GCP Monitor and take an extra argument
+which default to 0, but if 1 will disable 'normal' handling of
+GCP Stop so that isolation is required to remove a node.
+
+7241: Delay COPY_GCIREQ processing indefinitely
+7242: No initiation of GCP_COMMIT from Master
+7243: No initiation of GCP_SAVE_REQ from Master
+7237: Delay GCP_SAVEREQ processing indefinitely
+7238: Delay GCP_PREPARE processing indefinitely
+7239: Delay GCP_COMMIT processing indefinitely
+7244: Delay SUB_GCP_COMPLETE_REP processing indefinitely
+
+Related (LQH):
+  5085 : Ignore request to kill via DUMP 2305
+  5087 : Treat request to kill via DUMP 2305 as CRASH_INSERTION
+         (expected way for testcase to kill node)
+
+Related (NDBCNTR)
+  1004 : Ignore SYSTEM_ERROR for GCP Stop
+  1005 : Treat SYSTEM_ERROR for GCP Stop as CRASH_INSERTION
+         (expected way for testcase to kill node)
+
+Related (QMGR)
+  942  : Test 'forced isolation' (ISOLATE_ORD) by other nodes
+         - Ignore ISOLATE_ORD signals
+         - Ignore FAIL_REP signals for us with forced-isolation cause
+         - Treat DISCONNECT_REP of others as CRASH_INSERTION
+
 ERROR CODES FOR TESTING NODE FAILURE, LOCAL CHECKPOINT HANDLING:
 -----------------------------------------------------------------
 
@@ -205,6 +240,17 @@ And crash when all have "not" been sent
 7214: in GCP_TCFINISHED kill specified node
 
 7215: set c_fragments_per_node = 1 (needs to be done at startup)
+
+7236: while doing LCP init, delay the last CONTINUEB with ZINIT_LCP so
+      that all the tables are TLS_ACTIVE but the global c_lcpStatus.lcpState 
+      is not yet changed from LCP_INIT_TABLES to LCP_STATUS_ACTIVE. 
+
+LQH
+5086: Ignore DUMP 2309, used by LCP Scan Frag watchdog to kill process
+
+QMGR
+942:  (See above) 
+
 
 ERROR CODES FOR TESTING NODE FAILURE, FAILURE IN COPY FRAGMENT PROCESS:
 -----------------------------------------------------------------------
@@ -336,6 +382,12 @@ ERROR CODES FOR TESTING TIME-OUT HANDLING IN DBTC
 8018: Throw away a COMMITTED signal
 8019: Throw away a COMPLETED signal
 
+ERROR CODES FOR TESTING TIME-OUT HANDLING IN DBTUP
+--------------------------------------------------
+4035: Randomly add a random delay to disk data access
+4037: Delay TRANSID_AI while sending packed result to API 
+4038: Delay data-node internal TRANSID_AI send for 10 millis
+
 TESTING TAKE-OVER FUNCTIONALITY IN DBTC
 ---------------------------------------
 
@@ -393,10 +445,29 @@ DBTC LONG SIGNAL TESTING
 8085: Simulate execFIRE_TRIG_ORD DataBuffer exhaustion
 8086: Simulate execFIRE_TRIG_ORD segmented section exhaustion
 
+8087: Simulate commit ack marker exhaustion
+8096: Simulate commit ack marker databuffer exhaustion
+
 DBLQH LONG SIGNAL TESTING
 -------------------------
 5051: Send short LQHKEYREQ to next replica
 5052: Fail to store KeyInfo from TUP in long section
+
+DBTC TCINDXREQ TESTING
+----------------------
+
+8100: Force TCINDXREQ to recycle a connection record of ongoing abort, phase 1 (set by test case). Will block TCROLLBACKREP.
+
+8101: Force TCINDXREQ to recycle a connection record of ongoing abort, phase 2 (set internally). Will release TCROLLBACKREP.
+
+8102: simulate out of memory (segments,attributes) in fk_scanFromChildTable
+8103: simulate out of memory in fk_constructAttrInfoUpdateCascade
+8104: simulate ZGET_DATAREC_ERROR (218) in fk_buildKeyInfo
+8105: prevent fix (bugXXX) to failed trigger op handling
+8106: simulate out of memory in fk_constructAttrInfoSetNull
+8107: Cause transaction abort with timeout error
+
+8108: Cause transaction timeout (error 4012) by failing to send TC_COMMITCONF
 
 CMVMI
 -----
@@ -451,17 +522,17 @@ Test Crashes in handling take over
 7135: Crash master after copying table 0 to starting node
 7136: Crash master after completing copy of tables
 7137: Crash master after adding a fragment before copying it
-7138: Crash when receiving CREATE_FRAGREQ in prepare phase
-7139: Crash when receiving CREATE_FRAGREQ in commit phase
-7140: Crash master when receiving all CREATE_FRAGCONF in prepare phase
-7141: Crash master when receiving all CREATE_FRAGCONF in commit phase
+7138: Crash when receiving UPDATE_FRAG_STATEREQ in prepare phase
+7139: Crash when receiving UPDATE_FRAG_STATEREQ in commit phase
+7140: Crash master when receiving all UPDATE_FRAG_STATECONF in prepare phase
+7141: Crash master when receiving all UPDATE_FRAG_STATECONF in commit phase
 7142: Crash master when receiving COPY_FRAGCONF
 7143: Crash master when receiving COPY_ACTIVECONF
 7144: Crash when receiving END_TOREQ
 7145: Crash master after receiving first END_TOCONF
 7146: Crash master after receiving all END_TOCONF
 7147: Crash master after receiving first START_TOCONF
-7148: Crash master after receiving first CREATE_FRAGCONF
+7148: Crash master after receiving first UPDATE_FRAG_STATECONF
 7152: Crash master after receiving first UPDATE_TOCONF
 7153: Crash master after receiving all UPDATE_TOCONF
 7154: Crash when receiving UPDATE_TOREQ
@@ -474,8 +545,8 @@ Test failures in various states in take over functionality
 7158: Block take over at sending of START_TOREQ
 7159: Block take over at selecting next fragment
 7160: Block take over at creating new fragment
-7161: Block take over at sending of CREATE_FRAGREQ in prepare phase
-7162: Block take over at sending of CREATE_FRAGREQ in commit phase
+7161: Block take over at sending of UPDATE_FRAG_STATEREQ in prepare phase
+7162: Block take over at sending of UPDATE_FRAG_STATEREQ in commit phase
 7163: Block take over at sending of UPDATE_TOREQ at end of copy frag
 7164: Block take over at sending of END_TOREQ
 7169: Block take over at sending of UPDATE_TOREQ at end of copy
@@ -675,6 +746,8 @@ Dbdict:
 6201 Set error code after handleTabInfoInit in master (index)
 6202 Set error code before CREATE_FRAGMENTATION in master
 6203 Set error code before CREATE_FRAGMENTATION in master (index)
+
+6215 Randomly fail GET_TABINFOREQ with Busy (no CLEAR_ERROR_INSERT_VALUE)
 
 Dbtup:
 4014 - handleInsert - Out of undo buffer

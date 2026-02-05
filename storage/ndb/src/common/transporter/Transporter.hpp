@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -43,6 +50,12 @@ public:
   virtual ~Transporter();
 
   /**
+   * Clear any data buffered in the transporter.
+   * Should only be called in a disconnected state.
+   */
+  virtual void resetBuffers() {};
+
+  /**
    * None blocking
    *    Use isConnected() to check status
    */
@@ -53,7 +66,7 @@ public:
   /**
    * Blocking
    */
-  virtual void doDisconnect();
+  void doDisconnect();
 
   /**
    * Are we currently connected
@@ -73,26 +86,26 @@ public:
   /**
    * Get port we're connecting to (signed)
    */
-  int get_s_port() { return m_s_port; };
+  int get_s_port() const {
+    return m_s_port;
+  }
   
   /**
    * Set port to connect to (signed)
    */
   void set_s_port(int port) {
     m_s_port = port;
-    if(port<0)
-      port= -port;
-    if(m_socket_client)
-      m_socket_client->set_port(port);
-  };
+  }
 
   void update_status_overloaded(Uint32 used)
   {
     m_transporter_registry.set_status_overloaded(remoteNodeId,
                                                  used >= m_overload_limit);
+    m_transporter_registry.set_status_slowdown(remoteNodeId,
+                                               used >= m_slowdown_limit);
   }
 
-  virtual int doSend() = 0;
+  virtual bool doSend() = 0;
 
   bool has_data_to_send()
   {
@@ -101,6 +114,13 @@ public:
 
   /* Get the configured maximum send buffer usage. */
   Uint32 get_max_send_buffer() { return m_max_send_buffer; }
+
+  Uint32 get_connect_count() { return m_connect_count; }
+
+  void inc_overload_count() { m_overload_count++; }
+  Uint32 get_overload_count() { return m_overload_count; }
+  void inc_slowdown_count() { m_slowdown_count++; }
+  Uint32 get_slowdown_count() { return m_slowdown_count; }
 
 protected:
   Transporter(TransporterRegistry &,
@@ -139,8 +159,6 @@ protected:
    */
   char remoteHostName[256];
   char localHostName[256];
-  struct in_addr remoteHostAddress;
-  struct in_addr localHostAddress;
 
   int m_s_port;
 
@@ -149,8 +167,6 @@ protected:
   
   const bool isServer;
 
-  unsigned createIndex;
-  
   int byteOrder;
   bool compressionUsed;
   bool checksumUsed;
@@ -159,6 +175,13 @@ protected:
   Uint32 m_max_send_buffer;
   /* Overload limit, as configured with the OverloadLimit config parameter. */
   Uint32 m_overload_limit;
+  Uint32 m_slowdown_limit;
+  void resetCounters();
+  Uint64 m_bytes_sent;
+  Uint64 m_bytes_received;
+  Uint32 m_connect_count;
+  Uint32 m_overload_count;
+  Uint32 m_slowdown_count;
 
 private:
 

@@ -1,8 +1,31 @@
+# Copyright (c) 2010, 2021, Oracle and/or its affiliates.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License, version 2.0,
+# as published by the Free Software Foundation.
+#
+# This program is also distributed with certain software (including
+# but not limited to OpenSSL) that is licensed under separate terms,
+# as designated in a particular file or component or in included license
+# documentation.  The authors of MySQL hereby grant you an additional
+# permission to link the program and your derivative works with the
+# separately licensed software that they have included with MySQL.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License, version 2.0, for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+
 #------------------------------------------------------------------------------
 
-  SRC		= ./src
+  SRC	= ./src/cpp
 
-.PHONY:	all help dep dbg opt prf clean mostlclean clobber distclean check
+.PHONY:	all help dep dbg opt prf clean mostlclean clobber distclean \
+	run.ndbapi run.crund
 all:	dbg
 
 help:
@@ -14,31 +37,29 @@ help:
 	@echo "clean		-- delete temporary files"
 	@echo "mostlyclean	-- also delete all generated files"
 	@echo "distclean	-- delete also database and server log files"
-	@echo "check		-- perform self-tests (if any)"
+	@echo ""
+	@echo "benchmark execution targets:"
+	@echo "run.crund (generic driver, uses property 'loads')"
+	@echo "run.ndbapi"
 
-dep dbg opt prf clean mostlyclean clobber check:
+dep dbg opt prf clean mostlyclean clobber:
 	ant $@
-	@cd $(SRC)/crundndb && $(MAKE) $(MFLAGS) $@
+	@cd $(SRC) && $(MAKE) $(MFLAGS) $@
 
 distclean:
 	rm -rf scripts/ndblog
 	rm -f *~
 	ant $@
 	rm -f ./.ant-targets-build.xml
-	@cd $(SRC)/crundndb && $(MAKE) $(MFLAGS) $@
+	@cd $(SRC) && $(MAKE) $(MFLAGS) $@
 
 #------------------------------------------------------------------------------
 
 # read the generic settings
 include	env.properties
 
-# not sure if needed:
-#	LD_LIBRARY_PATH=${NDB_LIBDIR}:$(SRC)/crundndb/Driver 
-run.driver:	$(SRC)/crundndb/NdbApiDriver
-	$(SRC)/crundndb/NdbApiDriver \
-	-p crundRun.properties -p crundNdbapi.properties
-#
-#run.driver:
-#	@cd $(SRC)/crundndb && $(MAKE) $(MFLAGS) $@
+run.ndbapi run.crund:	$(SRC)/crund
+	$(SRC)/crund \
+	-p crundRun.properties -p crundNdb.properties
 
 #------------------------------------------------------------------------------

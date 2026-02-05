@@ -47,19 +47,7 @@
 --source include/rpl_connection_slave.inc
 CALL mtr.add_suppression("Recovery from master pos");
 # Kill the slave server
---exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.2.expect
-let PID_FILE= `SELECT @@pid_file`;
-perl;
-use strict;
-my $file= $ENV{'PID_FILE'} or die "Pid file not set";
-open(FILE, "$file") or die("Unable to open $file: $!\n");
-my $pid=0;
-while (<FILE>) {
-      $pid = $_;
-}
-close(FILE);
-kill 9, $pid;
-EOF
+--source include/kill_mysqld.inc
 
 # Restart the slave server
 --let $rpl_server_number= 2

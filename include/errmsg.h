@@ -1,16 +1,23 @@
 #ifndef ERRMSG_INCLUDED
 #define ERRMSG_INCLUDED
 
-/* Copyright (c) 2000, 2014, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -33,7 +40,8 @@ extern const char *client_errors[];	/* Error messages */
 #define CR_MAX_ERROR		2999
 #if !defined(ER)
 #define ER(X) (((X) >= CR_ERROR_FIRST && (X) <= CR_ERROR_LAST)? \
-               client_errors[(X)-CR_ERROR_FIRST]: client_errors[CR_UNKNOWN_ERROR])
+               client_errors[(X)-CR_ERROR_FIRST]: \
+               client_errors[CR_UNKNOWN_ERROR -CR_ERROR_FIRST])
 
 #endif
 #define CLIENT_ERRMAP		2	/* Errormap used by my_error() */
@@ -93,7 +101,7 @@ extern const char *client_errors[];	/* Error messages */
 #define CR_SHARED_MEMORY_CONNECT_SET_ERROR      2046
 #define CR_CONN_UNKNOW_PROTOCOL 		2047
 #define CR_INVALID_CONN_HANDLE			2048
-#define CR_SECURE_AUTH                          2049
+#define CR_UNUSED_1                             2049
 #define CR_FETCH_CANCELED                       2050
 #define CR_NO_DATA                              2051
 #define CR_NO_STMT_METADATA                     2052
@@ -106,7 +114,9 @@ extern const char *client_errors[];	/* Error messages */
 #define CR_AUTH_PLUGIN_CANNOT_LOAD              2059
 #define CR_DUPLICATE_CONNECTION_ATTR            2060
 #define CR_AUTH_PLUGIN_ERR                      2061
-#define CR_ERROR_LAST  /*Copy last error nr:*/  2061
+#define CR_INSECURE_API_ERR                     2062
+#define CR_INVALID_CLIENT_CHARSET               2063
+#define CR_ERROR_LAST  /*Copy last error nr:*/  2063
 /* Add error numbers before CR_ERROR_LAST and change it accordingly. */
 
 #endif /* ERRMSG_INCLUDED */

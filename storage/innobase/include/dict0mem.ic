@@ -1,14 +1,22 @@
 /*****************************************************************************
 
-Copyright (c) 1996, 2009, Oracle and/or its affiliates. All Rights Reserved.
+Copyright (c) 1996, 2023, Oracle and/or its affiliates.
 
-This program is free software; you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation; version 2 of the License.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License, version 2.0,
+as published by the Free Software Foundation.
 
-This program is distributed in the hope that it will be useful, but WITHOUT
-ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+This program is also distributed with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have included with MySQL.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License, version 2.0, for more details.
 
 You should have received a copy of the GNU General Public License along with
 this program; if not, write to the Free Software Foundation, Inc.,
@@ -51,13 +59,10 @@ dict_mem_fill_index_struct(
 		index->name = mem_heap_strdup(heap, index_name);
 		index->fields = (dict_field_t*) mem_heap_alloc(
 			heap, 1 + n_fields * sizeof(dict_field_t));
-		index->n_null_arr = (unsigned int*) mem_heap_alloc(
-			heap, 1 + n_fields * sizeof(unsigned int));
 	} else {
 		index->name = index_name;
 		index->heap = NULL;
 		index->fields = NULL;
-		index->n_null_arr = NULL;
 	}
 
 	/* Assign a ulint to a 4-bit-mapped field.
@@ -66,11 +71,19 @@ dict_mem_fill_index_struct(
 #ifndef UNIV_HOTBACKUP
 	index->space = (unsigned int) space;
 	index->page = FIL_NULL;
+	index->merge_threshold = DICT_INDEX_MERGE_THRESHOLD_DEFAULT;
 #endif /* !UNIV_HOTBACKUP */
 	index->table_name = table_name;
 	index->n_fields = (unsigned int) n_fields;
 	/* The '1 +' above prevents allocation
 	of an empty mem block */
+	index->allow_duplicates = false;
+	index->nulls_equal = false;
+	index->disable_ahi = false;
+	index->last_ins_cur = NULL;
+	index->last_sel_cur = NULL;
+	new (&index->rec_cache) rec_cache_t();
+
 #ifdef UNIV_DEBUG
 	index->magic_n = DICT_INDEX_MAGIC_N;
 #endif /* UNIV_DEBUG */

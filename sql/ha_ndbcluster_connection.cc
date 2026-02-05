@@ -1,15 +1,21 @@
 /*
-   Copyright (C) 2000-2003 MySQL AB
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -17,8 +23,6 @@
 */
 
 #include "ha_ndbcluster_glue.h"
-
-#ifdef WITH_NDBCLUSTER_STORAGE_ENGINE
 #include <ndbapi/NdbApi.hpp>
 #include <portlib/NdbTick.h>
 #include "ha_ndbcluster_connection.h"
@@ -28,7 +32,7 @@ Ndb_cluster_connection* g_ndb_cluster_connection= NULL;
 static Ndb_cluster_connection **g_pool= NULL;
 static uint g_pool_alloc= 0;
 static uint g_pool_pos= 0;
-static pthread_mutex_t g_pool_mutex;
+static native_mutex_t g_pool_mutex;
 
 /*
   Global flag in ndbapi to specify if api should wait to connect
@@ -41,14 +45,13 @@ extern int global_flag_skip_waiting_for_clean_cache;
 
 int
 ndbcluster_connect(int (*connect_callback)(void),
-                   ulong wait_connected,
+                   ulong wait_connected, // Timeout in seconds
                    uint connection_pool_size,
                    bool optimized_node_select,
                    const char* connect_string,
-                   uint force_nodeid)
+                   uint force_nodeid,
+                   uint recv_thread_activation_threshold)
 {
-  NDB_TICKS end_time;
-
 #ifndef EMBEDDED_LIBRARY
   const char mysqld_name[]= "mysqld";
 #else
@@ -67,7 +70,7 @@ ndbcluster_connect(int (*connect_callback)(void),
   {
     sql_print_error("NDB: failed to allocate global ndb cluster connection");
     DBUG_PRINT("error", ("Ndb_cluster_connection(%s)", connect_string));
-    my_errno= HA_ERR_OUT_OF_MEM;
+    set_my_errno(HA_ERR_OUT_OF_MEM);
     DBUG_RETURN(-1);
   }
   {
@@ -77,13 +80,15 @@ ndbcluster_connect(int (*connect_callback)(void),
     g_ndb_cluster_connection->set_name(buf);
   }
   g_ndb_cluster_connection->set_optimized_node_selection(optimized_node_select);
+  g_ndb_cluster_connection->set_recv_thread_activation_threshold(
+                                      recv_thread_activation_threshold);
 
   // Create a Ndb object to open the connection  to NDB
   if ( (g_ndb= new Ndb(g_ndb_cluster_connection, "sys")) == 0 )
   {
     sql_print_error("NDB: failed to allocate global ndb object");
     DBUG_PRINT("error", ("failed to create global ndb object"));
-    my_errno= HA_ERR_OUT_OF_MEM;
+    set_my_errno(HA_ERR_OUT_OF_MEM);
     DBUG_RETURN(-1);
   }
   if (g_ndb->init() != 0)
@@ -96,12 +101,12 @@ ndbcluster_connect(int (*connect_callback)(void),
 
   /* Connect to management server */
 
-  end_time= NdbTick_CurrentMillisecond();
-  end_time+= 1000 * wait_connected;
+  const NDB_TICKS start= NdbTick_getCurrentTicks();
 
   while ((res= g_ndb_cluster_connection->connect(0,0,0)) == 1)
   {
-    if (NdbTick_CurrentMillisecond() > end_time)
+    const NDB_TICKS now = NdbTick_getCurrentTicks();
+    if (NdbTick_Elapsed(start,now).seconds() > wait_connected)
       break;
     do_retry_sleep(100);
     if (abort_loop)
@@ -111,9 +116,10 @@ ndbcluster_connect(int (*connect_callback)(void),
   {
     g_pool_alloc= connection_pool_size;
     g_pool= (Ndb_cluster_connection**)
-      my_malloc(g_pool_alloc * sizeof(Ndb_cluster_connection*),
+      my_malloc(PSI_INSTRUMENT_ME,
+                g_pool_alloc * sizeof(Ndb_cluster_connection*),
                 MYF(MY_WME | MY_ZEROFILL));
-    pthread_mutex_init(&g_pool_mutex,
+    native_mutex_init(&g_pool_mutex,
                        MY_MUTEX_INIT_FAST);
     g_pool[0]= g_ndb_cluster_connection;
     for (uint i= 1; i < g_pool_alloc; i++)
@@ -135,6 +141,7 @@ ndbcluster_connect(int (*connect_callback)(void),
         g_pool[i]->set_name(buf);
       }
       g_pool[i]->set_optimized_node_selection(optimized_node_select);
+      g_pool[i]->set_recv_thread_activation_threshold(recv_thread_activation_threshold);
     }
   }
 
@@ -161,12 +168,13 @@ ndbcluster_connect(int (*connect_callback)(void),
                   g_pool[i]->get_connected_host(),
                   g_pool[i]->get_connected_port()));
 
-      NDB_TICKS now_time;
+      Uint64 waited;
       do
       {
         res= g_pool[i]->wait_until_ready(1, 1);
-        now_time= NdbTick_CurrentMillisecond();
-      } while (res != 0 && now_time < end_time);
+        const NDB_TICKS now = NdbTick_getCurrentTicks();
+        waited = NdbTick_Elapsed(start,now).seconds();
+      } while (res != 0 && waited < wait_connected);
 
       const char *msg= 0;
       if (res == 0)
@@ -197,7 +205,7 @@ ndbcluster_connect(int (*connect_callback)(void),
         DBUG_RETURN(-1);
       }
     }
-#ifndef DBUG_OFF
+#ifndef NDEBUG
     {
       char buf[1024];
       DBUG_PRINT("info",
@@ -210,7 +218,7 @@ ndbcluster_connect(int (*connect_callback)(void),
   }
   else
   {
-    DBUG_ASSERT(res == -1);
+    assert(res == -1);
     DBUG_PRINT("error", ("permanent error"));
     sql_print_error("NDB: error (%u) %s",
                     g_ndb_cluster_connection->get_latest_error(),
@@ -236,7 +244,7 @@ void ndbcluster_disconnect(void)
           delete g_pool[i];
       }
       my_free((uchar*) g_pool, MYF(MY_ALLOW_ZERO_PTR));
-      pthread_mutex_destroy(&g_pool_mutex);
+      native_mutex_destroy(&g_pool_mutex);
       g_pool= 0;
     }
     g_pool_alloc= 0;
@@ -250,12 +258,12 @@ void ndbcluster_disconnect(void)
 
 Ndb_cluster_connection *ndb_get_cluster_connection()
 {
-  pthread_mutex_lock(&g_pool_mutex);
+  native_mutex_lock(&g_pool_mutex);
   Ndb_cluster_connection *connection= g_pool[g_pool_pos];
   g_pool_pos++;
   if (g_pool_pos == g_pool_alloc)
     g_pool_pos= 0;
-  pthread_mutex_unlock(&g_pool_mutex);
+  native_mutex_unlock(&g_pool_mutex);
   return connection;
 }
 
@@ -289,6 +297,48 @@ int ndb_has_node_id(uint id)
   return 0;
 }
 
+int ndb_set_recv_thread_activation_threshold(Uint32 threshold)
+{
+  for (uint i= 0; i < g_pool_alloc; i++)
+  {
+    g_pool[i]->set_recv_thread_activation_threshold(threshold);
+  }
+  return 0;
+}
+
+int
+ndb_set_recv_thread_cpu(Uint16 *cpuid_array,
+                        Uint32 cpuid_array_size)
+{
+  Uint32 num_cpu_needed = g_pool_alloc;
+
+  if (cpuid_array_size == 0)
+  {
+    for (Uint32 i = 0; i < g_pool_alloc; i++)
+    {
+      g_pool[i]->unset_recv_thread_cpu(0);
+    }
+    return 0;
+  }
+
+  if (cpuid_array_size < num_cpu_needed)
+  {
+    /* Ignore cpu masks that is too short */
+    sql_print_information(
+      "Ignored receive thread CPU mask, mask too short,"
+      " %u CPUs needed in mask, only %u CPUs provided",
+      num_cpu_needed, cpuid_array_size);
+    return 0;
+  }
+  for (Uint32 i = 0; i < g_pool_alloc; i++)
+  {
+    g_pool[i]->set_recv_thread_cpu(&cpuid_array[i],
+                                   (Uint32)1,
+                                   0);
+  }
+  return 0;
+}
+
 void ndb_get_connection_stats(Uint64* statsArr)
 {
   Uint64 connectionStats[ Ndb::NumClientStatistics ];
@@ -303,4 +353,119 @@ void ndb_get_connection_stats(Uint64* statsArr)
   }
 }
 
-#endif /* WITH_NDBCLUSTER_STORAGE_ENGINE */
+static ST_FIELD_INFO ndb_transid_mysql_connection_map_fields_info[] =
+{
+  {
+    "mysql_connection_id",
+    MY_INT64_NUM_DECIMAL_DIGITS,
+    MYSQL_TYPE_LONGLONG,
+    0,
+    MY_I_S_UNSIGNED,
+    "",
+    SKIP_OPEN_TABLE
+  },
+
+  {
+    "node_id",
+    MY_INT64_NUM_DECIMAL_DIGITS,
+    MYSQL_TYPE_LONG,
+    0,
+    MY_I_S_UNSIGNED,
+    "",
+    SKIP_OPEN_TABLE
+  },
+  {
+    "ndb_transid",
+    MY_INT64_NUM_DECIMAL_DIGITS,
+    MYSQL_TYPE_LONGLONG,
+    0,
+    MY_I_S_UNSIGNED,
+    "",
+    SKIP_OPEN_TABLE
+  },
+
+  { 0, 0, MYSQL_TYPE_NULL, 0, 0, "", SKIP_OPEN_TABLE }
+};
+
+#include <mysql/innodb_priv.h>
+
+static
+int
+ndb_transid_mysql_connection_map_fill_table(THD* thd, TABLE_LIST* tables,
+                                            Item*)
+{
+  DBUG_ENTER("ndb_transid_mysql_connection_map_fill_table");
+
+  const bool all = (check_global_access(thd, PROCESS_ACL) == 0);
+  const ulonglong self = thd_get_thread_id(thd);
+
+  TABLE* table= tables->table;
+  for (uint i = 0; i<g_pool_alloc; i++)
+  {
+    if (g_pool[i])
+    {
+      g_pool[i]->lock_ndb_objects();
+      const Ndb * p = g_pool[i]->get_next_ndb_object(0);
+      while (p)
+      {
+        Uint64 connection_id = p->getCustomData64();
+        if ((connection_id == self) || all)
+        {
+          table->field[0]->set_notnull();
+          table->field[0]->store(p->getCustomData64(), true);
+          table->field[1]->set_notnull();
+          table->field[1]->store(g_pool[i]->node_id());
+          table->field[2]->set_notnull();
+          table->field[2]->store(p->getNextTransactionId(), true);
+          schema_table_store_record(thd, table);
+        }
+        p = g_pool[i]->get_next_ndb_object(p);
+      }
+      g_pool[i]->unlock_ndb_objects();
+    }
+  }
+
+  DBUG_RETURN(0);
+}
+
+static
+int
+ndb_transid_mysql_connection_map_init(void *p)
+{
+  DBUG_ENTER("ndb_transid_mysql_connection_map_init");
+  ST_SCHEMA_TABLE* schema = reinterpret_cast<ST_SCHEMA_TABLE*>(p);
+  schema->fields_info = ndb_transid_mysql_connection_map_fields_info;
+  schema->fill_table = ndb_transid_mysql_connection_map_fill_table;
+  DBUG_RETURN(0);
+}
+
+static
+int
+ndb_transid_mysql_connection_map_deinit(void *p)
+{
+  DBUG_ENTER("ndb_transid_mysql_connection_map_deinit");
+  DBUG_RETURN(0);
+}
+
+#include <mysql/plugin.h>
+static struct st_mysql_information_schema i_s_info =
+{
+  MYSQL_INFORMATION_SCHEMA_INTERFACE_VERSION
+};
+
+struct st_mysql_plugin i_s_ndb_transid_mysql_connection_map_plugin =
+{
+  MYSQL_INFORMATION_SCHEMA_PLUGIN,
+  &i_s_info,
+  "ndb_transid_mysql_connection_map",
+  "Oracle Corporation",
+  "Map between mysql connection id and ndb transaction id",
+  PLUGIN_LICENSE_GPL,
+  ndb_transid_mysql_connection_map_init,
+  ndb_transid_mysql_connection_map_deinit,
+  0x0001,
+  NULL,
+  NULL,
+  NULL,
+  0
+};

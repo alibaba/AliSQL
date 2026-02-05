@@ -3,10 +3,10 @@
  *  memcached - memory caching daemon
  *
  *       http://www.danga.com/memcached/
- *  Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ *  Copyright (c) 2015, 2023, Oracle and/or its affiliates.
  *  Copyright 2003 Danga Interactive, Inc.  All rights reserved.
- *  This file was modified by Oracle on 28-08-2015.
- *  Modifications copyright (c) 2015, Oracle and/or its affiliates.
+ *  This file was modified by Oracle on 28-08-2015 and 23-03-2016.
+ *  Modifications Copyright (c) 2015, 2023, Oracle and/or its affiliates.
  *  All rights reserved.
  *
  *  Use and distribution licensed under the BSD license.  See
@@ -35,6 +35,7 @@
 #include <ctype.h>
 #include <stdarg.h>
 #include <stddef.h>
+#include <dlfcn.h>
 
 #include "memcached_mysql.h"
 
@@ -88,7 +89,7 @@ static inline void item_set_cas(const void *cookie, item *it, uint64_t cas) {
 #define STATS_MISS(conn, op, key, nkey) \
     STATS_TWO(conn, op##_misses, cmd_##op, key, nkey)
 
-#if defined(HAVE_GCC_ATOMIC_BUILTINS)
+#if defined(HAVE_GCC_SYNC_BUILTINS)
 
 #define STATS_NOKEY(conn, op)	\
 do { \
@@ -114,7 +115,7 @@ do { \
 
 #define MEMCACHED_ATOMIC_MSG	"InnoDB MEMCACHED: Memcached uses atomic increment \n"
 
-#else /* HAVE_GCC_ATOMIC_BUILTINS */
+#else /* HAVE_GCC_SYNC_BUILTINS */
 #define STATS_NOKEY(conn, op) { \
     struct thread_stats *thread_stats = \
         get_thread_stats(conn); \
@@ -141,7 +142,7 @@ do { \
 }
 
 #define MEMCACHED_ATOMIC_MSG	"InnoDB Memcached: Memcached DOES NOT use atomic increment"
-#endif /* HAVE_GCC_ATOMIC_BUILTINS */
+#endif /* HAVE_GCC_SYNC_BUILTINS */
 
 volatile sig_atomic_t memcached_shutdown;
 volatile sig_atomic_t memcached_initialized;
@@ -2171,6 +2172,8 @@ static void process_bin_sasl_auth(conn *c) {
     int nkey = c->binary_header.request.keylen;
     int vlen = c->binary_header.request.bodylen - nkey;
 
+    assert(vlen >= 0);
+
     if (nkey > MAX_SASL_MECH_LEN) {
         write_bin_packet(c, PROTOCOL_BINARY_RESPONSE_EINVAL, vlen);
         c->write_and_go = conn_swallow;
@@ -2903,9 +2906,15 @@ static RESPONSE_HANDLER response_handlers[256] = {
 static void dispatch_bin_command(conn *c) {
     int protocol_error = 0;
 
-    int extlen = c->binary_header.request.extlen;
+    uint8_t extlen = c->binary_header.request.extlen;
     uint16_t keylen = c->binary_header.request.keylen;
     uint32_t bodylen = c->binary_header.request.bodylen;
+
+    if (keylen > bodylen || keylen + extlen > bodylen) {
+        write_bin_packet(c, PROTOCOL_BINARY_RESPONSE_UNKNOWN_COMMAND, 0);
+        c->write_and_go = conn_closing;
+        return;
+    }
 
     if (settings.require_sasl && !authenticated(c)) {
         write_bin_packet(c, PROTOCOL_BINARY_RESPONSE_AUTH_ERROR, 0);
@@ -3238,6 +3247,8 @@ static void process_bin_append_prepend(conn *c) {
     key = binary_get_key(c);
     nkey = c->binary_header.request.keylen;
     vlen = c->binary_header.request.bodylen - nkey;
+
+    assert(vlen >= 0);
 
     if (settings.verbose > 1) {
         settings.extensions.logger->log(EXTENSION_LOG_DEBUG, c,
@@ -3582,7 +3593,12 @@ static size_t tokenize_command(char *command, token_t *tokens, const size_t max_
     return ntokens;
 }
 
-static void detokenize(token_t *tokens, int ntokens, char **out, int *nbytes) {
+#ifdef INNODB_MEMCACHED
+static void detokenize(token_t *tokens, size_t ntokens, char **out, int *nbytes)
+#else
+static void detokenize(token_t *tokens, int ntokens, char **out, int *nbytes)
+#endif
+{
     int i, nb;
     char *buf, *p;
 
@@ -7020,9 +7036,8 @@ daemon_memcached_make_option(char* option, int* option_argc,
 		num_arg++;
 	}
 
-	free(my_str);
-
-	my_str = option;
+	/* reset my_str, since strtok_r could alter it */
+	strncpy(my_str, option, strlen(option));
 
 	*option_argv = (char**) malloc((num_arg + 1)
 				       * sizeof(**option_argv));
@@ -7030,7 +7045,7 @@ daemon_memcached_make_option(char* option, int* option_argc,
 	for (opt_str = strtok_r(my_str, sep, &last);
 	     opt_str;
 	     opt_str = strtok_r(NULL, sep, &last)) {
-		(*option_argv)[i] = my_strdupl(opt_str, strlen(opt_str));
+		(*option_argv)[i] = opt_str;
 		i++;
 	}
 
@@ -7081,6 +7096,8 @@ int main (int argc, char **argv) {
     int option_argc = 0;
     char** option_argv = NULL;
     eng_config_info_t my_eng_config;
+
+    memcached_initialized = 0;
 
     if (m_config->m_engine_library) {
 	engine = m_config->m_engine_library;
@@ -7985,6 +8002,14 @@ func_exit:
     /* Clean up strdup() call for bind() address */
     if (settings.inter)
       free(settings.inter);
+
+#ifdef INNODB_MEMCACHED
+    /* free event base */
+    if (main_base) {
+        event_base_free(main_base);
+        main_base = NULL;
+    }
+#endif
 
     memcached_shutdown = 2;
     memcached_initialized = 2;

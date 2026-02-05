@@ -1,13 +1,20 @@
-/* Copyright (c) 2005, 2015, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2005, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -16,24 +23,18 @@
 #ifndef SQL_SHOW_H
 #define SQL_SHOW_H
 
-#include "sql_list.h"                           /* List */
-#include "handler.h"                            /* enum_schema_tables */
-#include "table.h"                              /* enum_schema_table_state */
+#include "my_global.h"
+#include "handler.h"                            // enum_schema_tables
+#include "table.h"                              // enum_schema_table_state
+#include "set_var.h"                            // enum_var_type
 
 /* Forward declarations */
 class JOIN;
-class String;
-class THD;
 class sp_name;
-struct TABLE_LIST;
-struct st_ha_create_information;
 typedef class st_select_lex SELECT_LEX;
-typedef st_ha_create_information HA_CREATE_INFO;
-struct LEX;
-typedef struct st_mysql_show_var SHOW_VAR;
-typedef struct st_schema_table ST_SCHEMA_TABLE;
-struct TABLE;
 typedef struct system_status_var STATUS_VAR;
+// TODO: allocator based on my_malloc.
+typedef std::vector<st_mysql_show_var> Status_var_array;
 
 enum find_files_result {
   FIND_FILES_OK,
@@ -62,6 +63,7 @@ enum find_files_result {
 #define IS_COLUMNS_EXTRA                       17
 #define IS_COLUMNS_PRIVILEGES                  18
 #define IS_COLUMNS_COLUMN_COMMENT              19
+#define IS_COLUMNS_GENERATION_EXPRESSION       20
 
 /* Define fields' indexes for ROUTINES table of I_S tables */
 #define IS_ROUTINES_SPECIFIC_NAME               0
@@ -155,53 +157,111 @@ enum find_files_result {
 #define IS_FILES_STATUS              36
 #define IS_FILES_EXTRA               37
 
+/**
+  Condition pushdown used for INFORMATION_SCHEMA / SHOW queries.
+  This structure is to implement an optimization when
+  accessing data dictionary data in the INFORMATION_SCHEMA
+  or SHOW commands.
+  When the query contain a TABLE_SCHEMA or TABLE_NAME clause,
+  narrow the search for data based on the constraints given.
+*/
+typedef struct st_lookup_field_values
+{
+  /**
+    Value of a TABLE_SCHEMA clause.
+    Note that this value length may exceed @c NAME_LEN.
+    @sa wild_db_value
+  */
+  LEX_STRING db_value;
+  /**
+    Value of a TABLE_NAME clause.
+    Note that this value length may exceed @c NAME_LEN.
+    @sa wild_table_value
+  */
+  LEX_STRING table_value;
+  /**
+    True when @c db_value is a LIKE clause,
+    false when @c db_value is an '=' clause.
+  */
+  bool wild_db_value;
+  /**
+    True when @c table_value is a LIKE clause,
+    false when @c table_value is an '=' clause.
+  */
+  bool wild_table_value;
+} LOOKUP_FIELD_VALUES;
+
 find_files_result find_files(THD *thd, List<LEX_STRING> *files, const char *db,
                              const char *path, const char *wild, bool dir,
-                             MEM_ROOT *tmp_mem_root);
+                             MEM_ROOT *tmp_mem_root, bool skip_priv = false);
 
 int store_create_info(THD *thd, TABLE_LIST *table_list, String *packet,
                       HA_CREATE_INFO  *create_info_arg, bool show_database);
 int view_store_create_info(THD *thd, TABLE_LIST *table, String *buff);
 
 int copy_event_to_schema_table(THD *thd, TABLE *sch_table, TABLE *event_table);
-int get_quote_char_for_identifier(THD *thd, const char *name, uint length);
 
-void append_identifier(THD *thd, String *packet, const char *name, uint length,
+void append_identifier(THD *thd, String *packet, const char *name, size_t length,
                        const CHARSET_INFO *from_cs, const CHARSET_INFO *to_cs);
-inline void append_identifier(THD *thd, String *packet, const char *name,
-                              uint length)
+
+inline void append_identifier(THD *thd, String *packet, const char *name, size_t length)
 {
   append_identifier(thd, packet, name, length, NULL, NULL);
 }
 inline void append_identifier(THD *thd, String *packet, Simple_cstring str)
 {
-  append_identifier(thd, packet, str.ptr(), static_cast<uint>(str.length()));
+  append_identifier(thd, packet, str.ptr(), str.length());
 }
 void mysqld_list_fields(THD *thd,TABLE_LIST *table, const char *wild);
 bool mysqld_show_create(THD *thd, TABLE_LIST *table_list);
 bool mysqld_show_create_db(THD *thd, char *dbname, HA_CREATE_INFO *create);
 
 void mysqld_list_processes(THD *thd,const char *user,bool verbose);
-void mysqld_list_sql_filters(THD *thd);
 int mysqld_show_status(THD *thd);
 int mysqld_show_variables(THD *thd,const char *wild);
 bool mysqld_show_storage_engines(THD *thd);
 bool mysqld_show_privileges(THD *thd);
 char *make_backup_log_name(char *buff, const char *name, const char* log_ext);
 void calc_sum_of_all_status(STATUS_VAR *to);
-void append_definer(THD *thd, String *buffer, const LEX_STRING *definer_user,
-                    const LEX_STRING *definer_host);
-int add_status_vars(SHOW_VAR *list);
+void append_definer(THD *thd, String *buffer, const LEX_CSTRING &definer_user,
+                    const LEX_CSTRING &definer_host);
+int add_status_vars(const SHOW_VAR *list);
+DYNAMIC_ARRAY *get_status_vars();
+
 void remove_status_vars(SHOW_VAR *list);
 void init_status_vars();
 void free_status_vars();
-bool get_status_var(THD* thd, SHOW_VAR *list, const char *name, char * const buff);
+bool get_status_var(THD *thd, SHOW_VAR *list, const char *name,
+                    char * const buff, enum_var_type var_type, size_t *length);
 void reset_status_vars();
+ulonglong get_status_vars_version(void);
 bool show_create_trigger(THD *thd, const sp_name *trg_name);
 void view_store_options(THD *thd, TABLE_LIST *table, String *buff);
 
 void init_fill_schema_files_row(TABLE* table);
 bool schema_table_store_record(THD *thd, TABLE *table);
+
+/**
+  Store record to I_S table, convert HEAP table to InnoDB table if necessary.
+
+  @param[in]  thd            thread handler
+  @param[in]  table          Information schema table to be updated
+  @param[in]  make_ondisk    if true, convert heap table to on disk table.
+                             default value is true.
+  @return 0 on success
+  @return error code on failure.
+*/
+int schema_table_store_record2(THD *thd, TABLE *table, bool make_ondisk);
+
+/**
+  Convert HEAP table to InnoDB table if necessary
+
+  @param[in] thd     thread handler
+  @param[in] table   Information schema table to be converted.
+  @param[in] error   the error code returned previously.
+  @return false on success, true on error.
+*/
+bool convert_heap_table_to_ondisk(THD *thd, TABLE *table, int error);
 void initialize_information_schema_acl();
 
 ST_SCHEMA_TABLE *find_schema_table(THD *thd, const char* table_name);
@@ -213,15 +273,38 @@ bool get_schema_tables_result(JOIN *join,
                               enum enum_schema_table_state executed_place);
 enum enum_schema_tables get_schema_table_idx(ST_SCHEMA_TABLE *schema_table);
 
-/* These functions were under INNODB_COMPATIBILITY_HOOKS */
-int get_quote_char_for_identifier(THD *thd, const char *name, uint length);
+const char* get_one_variable(THD *thd, const SHOW_VAR *variable,
+                             enum_var_type value_type, SHOW_TYPE show_type,
+                             system_status_var *status_var,
+                             const CHARSET_INFO **charset, char *buff,
+                             size_t *length);
 
-/* Handle the ignored database directories list for SHOW/I_S. */
-bool ignore_db_dirs_init();
+const char* get_one_variable_ext(THD *running_thd, THD *target_thd,
+                                 const SHOW_VAR *variable,
+                                 enum_var_type value_type, SHOW_TYPE show_type,
+                                 system_status_var *status_var,
+                                 const CHARSET_INFO **charset, char *buff,
+                                 size_t *length);
+
+/* These functions were under INNODB_COMPATIBILITY_HOOKS */
+int get_quote_char_for_identifier(THD *thd, const char *name, size_t length);
+
+/* Handle the ignored database directories list for SHOW/I_S/initialize. */
+void ignore_db_dirs_init();
 void ignore_db_dirs_free();
 void ignore_db_dirs_reset();
 bool ignore_db_dirs_process_additions();
 bool push_ignored_db_dir(char *path);
 extern char *opt_ignore_db_dirs;
+bool is_in_ignore_db_dirs_list(const char *directory);
+
+int make_db_list(THD *thd, List<LEX_STRING> *files,
+                 LOOKUP_FIELD_VALUES *lookup_field_vals,
+                 bool *with_i_schema, MEM_ROOT *tmp_mem_root);
+
+int make_table_name_list(THD *thd, List<LEX_STRING> *table_names, LEX *lex,
+                         LOOKUP_FIELD_VALUES *lookup_field_vals,
+                         bool with_i_schema, LEX_STRING *db_name,
+                         MEM_ROOT *tmp_mem_root, bool skip_priv = false);
 
 #endif /* SQL_SHOW_H */

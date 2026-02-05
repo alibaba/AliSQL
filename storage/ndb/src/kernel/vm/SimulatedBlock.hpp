@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -39,7 +46,7 @@
 #include <ErrorReporter.hpp>
 #include <ErrorHandlingMacros.hpp>
 
-#include "DLList.hpp"
+#include "IntrusiveList.hpp"
 #include "ArrayPool.hpp"
 #include "DLHashTable.hpp"
 #include "WOPool.hpp"
@@ -59,6 +66,9 @@
 
 #include "Ndbinfo.hpp"
 
+#define JAM_FILE_ID 248
+
+
 #ifdef VM_TRACE
 #define D(x) \
   do { \
@@ -74,6 +84,13 @@
 #undef V
 #endif
 
+/**
+ * LCP scans and Backup scans always use batch size 16, there are even
+ * optimisations in allocation and handling LCP scans and Backup scans
+ * keeping proper rates using this particular batch size. This is also
+ * true for Node recovery scans as started by COPY_FRAGREQ.
+ */
+#define ZRESERVED_SCAN_BATCH_SIZE 16
 /**
  * Something for filesystem access
  */
@@ -103,7 +120,287 @@ struct Block_context
   class Ndbd_mem_manager& m_mm;
 };
 
-class SimulatedBlock {
+struct PackedWordsContainer
+{
+  BlockReference hostBlockRef;
+  Uint32 noOfPackedWords;
+  Uint32 packedWords[30];
+}; // 128 bytes
+
+/**
+  Description of NDB Software Architecture
+  ----------------------------------------
+
+  The NDB software architecture has two foundations, blocks and signals.
+  The base object for the blocks is the below SimulatedBlock class and
+  the signal object is the base class Signal defined in VMSignal.hpp.
+
+  Blocks are intended as software units that owns its own data and it
+  communicates with other blocks only through signals. Each block owns
+  its own set of data which it entirely controls. There has been some
+  optimisations where blocks always executing in the same thread can do
+  some shortcuts by calling functions in a different block directly.
+  There is even some code to call functions in a block in a different
+  thread, in this case however some mutex is required to protect the
+  data.
+
+  Blocks are gathered together in threads. Threads are gathered into nodes.
+  So when sending a signal you need to send it to an address. The address is
+  a 32-bit word. It is a bit similar to IPv4 addresses. The address is
+  setup in the following manner:
+
+  -- Bit 0-8 ------- Bit 9-15 ------ Bit 16-31 ------
+  | Block number  | Thread id   |       NodeId      |
+  ---------------------------------------------------
+
+  So when delivering a signal we start by checking the node id. If the node
+  id is our own node id, then we will continue checking thread id. If it
+  is destined to another node, then we move the signal sending to the module
+  that takes care of transporting the signal to another node in the cluster.
+  
+  Each other node is found using a socket over TCP/IP. The architecture
+  supports also other ways to transport signals such as using some form
+  of shared memory between processes on the same or different machines.
+  It would also be possible to extend the architecture such that we
+  might use different sockets for different threads in the node.
+
+  If the signal is destined for a different thread then we transport the
+  signal to that thread, we use a separate memory buffer for each two
+  threads that communicate such that the communication between threads is
+  completely lock-free.
+
+  One block number can be used in several threads. So e.g. the LDM threads
+  all contain its own instance of the DBLQH block. The method instance()
+  gets the instance number of the currently executing block. The method
+  reference() gets the block reference of the currently executing block.
+
+  If we send to ourselves we put the signal in the memory buffer for
+  communication with our own thread.
+
+  The current limits of the architecture is a maximum of 512 block numbers.
+  We currently use less than 25 of those numbers. The maximum number of
+  threads are 128 threads. We currently can use at most 72 threads.
+  The current node limit is 255 nodes and node id 0 is a special case.
+
+  So there is still a lot of space in the addressing mechanism for growth
+  in terms of number of threads, blocks and nodes and even for introduction
+  of new addressable units like subthreads or similar things.
+
+  The software architecture also contains a structure for how signals are
+  structured. Each signal is sent at a certain priority level. Finally also
+  there is a concept of sending delayed signals to blocks within the same
+  thread.
+
+  Priority level on signals
+  -------------------------
+  So starting with priority level a signal can be sent on high priority
+  (JBA) and normal priority (JBB). The priority level can be used also when
+  sending to other nodes. The priority will however not be used to prioritise
+  the signal in sending it over the socket to the receiving node.
+
+  Each thread has its own buffer for A-priority signals. In the scheduler
+  we will always execute all signals in the A-priority buffer first. If
+  new A-priority signals are sent during these signals, then they will also
+  be executed until no more signals exist on A-priority level. So it's not
+  allowed to have a flow of signals all executing at A-level. We always have
+  to insert a signal in the flow that either goes down to B-level or use some
+  form of delayed signal.
+
+  If an A-level signal is sent from a B-level signal it will be handled
+  differently in the single threaded ndbd and the multi-threaded ndbmtd. In
+  ndbmtd it will be executed after executing up to 128 B-level signals. In
+  ndbd it will be executed as the next signal. So one cannot assume that an
+  A-level signal will be executed before a specific B-level signal. A B-level
+  signal can even be executed before an A-level signal although it was sent
+  after the A-level signal.
+
+  Delayed signals
+  ---------------
+  Delayed signals are used to create threads of activities that execute without
+  consuming too much CPU activity. Delayed signals can only be sent internally
+  within the same thread. When the signal has been delayed and is taken out of
+  its timer queue its inserted into the priority A buffer.
+
+  Bounded delay signals
+  ---------------------
+  A special form of delayed signal also exists, this is sent with delay equal to
+  the constant BOUNDED_DELAY. This means that the signal will be executed as a
+  priority A task as soon as the current set of B-level tasks are done. This is
+  similar to sending an A-level signal from a B-level job in ndbmtd. However for
+  ndbd it's not the same thing and also when sending an A-level signal from an
+  A-level signal it is also not the same thing.
+
+  So a delayed signal with delay BOUNDED_DELAY is a special type of signal
+  with a bounded delay. The bound is that no more than 100 B-level signals will
+  be executed before this signal is executed. Given our design requirements
+  a B-level signal should mostly be executed within at most 5-10 microseconds
+  or so, mostly much shorter than this even, so a normal execution time of
+  a signal would be below 1 microsecond. So 100 signals should almost never
+  execute for more than 1000 microseconds and rarely go beyond even 100
+  microseconds.
+
+  So these bounded delay signals are a good tool to ensure that activitites
+  such as backups, checkpoints, node recovery activities, altering of tables
+  and similar things gets executed at a certain rate. Without any possibility
+  of bounded delay signals it is very hard to implement an activity that gets
+  executed at a certain rate.
+
+  So in a sense we're using the bounded delay signals to implement a form of
+  time-sharing priority, certain activities are allowed to use a proportion
+  of the available CPU resources, not too much, but also not too little. If
+  an LCP gets bogged down by user transactions then the system will eventually
+  run out of REDO log space. If a node recovery activity gets bogged down by
+  user transactions then we will run for too long with only one replica in the
+  node group which is bad for system availability.
+
+  Execute direct signals
+  ----------------------
+  If the receiving block is within the same thread, then it is possible to
+  send the signal using the method EXECUTE_DIRECT. This execution will
+  happen immediately and won't be scheduled for later, it will be done in
+  the same fashion as a function call.
+
+  Signals
+  -------
+  Signals are carried with a certain structure:
+  1) Each signal has a signal number. This number also is mapped to a name.
+     When executing a signal with a certain number which e.g. has the name
+     TCKEYREQ, then this signal is implemented by a method called
+     execTCKEYREQ in the receiving block. More than one block could have
+     such a method since a signal is not tied to a certain block.
+
+  2) Each signal has 4 areas that can be sent in the signal. The first is
+     always sent in the signal, this is the fixed part. The fixed part
+     consists of at least 1 and at most 25 32-bit words. Many signals have
+     a class that defines this part of the signal. This is however not
+     absolutely necessary. Then there are up to 3 sections that can carry
+     longer information bits. So e.g. a TCKEYREQ has one section that contains
+     the primary key and another part that contains the attribute information.
+     The attribute information could be seen as a program sent to MySQL
+     Cluster data nodes to read, update the row specified in the key
+     section. The attribute information could also contain interpreted
+     programs that can do things like increment, decrement, conditional
+     update and so forth.
+
+   3) As mentioned above each signal carries a certain priority level to
+      execute it on. It is currently not possible to check the prio
+      level you're currently executing on, but it would be real simple
+      to add this capability if necessary.
+
+   4) When executing a certain signal it gets a signal id, this id is
+      local to the thread and is incremented by one each new signal that
+      is executed. This signal id is available in the Signal class and
+      can e.g. be used to deduce if the thread is currently at high load.
+
+   A signal is sent over the socket using a special protocol that is called
+   Protocol6. This is not discussed more here, it is a feature of the
+   transport mechanisms of the NDB Software Architecture.
+
+   CONTINUEB
+   ---------
+   CONTINUEB is a special signal used by almost all blocks. This signal is
+   used to handle background thread activities. Often the CONTINUEB signals
+   are used as part of implementing a more complex action. One example is
+   when DBDIH starts up a new LCP. It sends various forms of CONTINUEB
+   signals to itself to move ahead through the LCP actions it needs to do
+   as part of starting up a new LCP. The first word contains the type of
+   CONTINUEB signal, so this is in a sense a bit like a second level of
+   signal number. Based on this number the CONTINUEB data is treated
+   differently.
+
+   Common patterns of signals
+   --------------------------
+   There is no absolute patterns for how signal data looks like. But it is
+   very common that a signal at least contains the destination object id,
+   the senders object id and the senders block reference. The senders block
+   reference is actually also available in the Signal class when executing
+   a signal. But we can use various forms of software routing of the
+   signal, so the senders block reference is the originator of the signal,
+   not necessarily the same as the sender of the signal since it could be
+   routed through several blocks on the way.
+
+   The basic data type in the NDB signals are unsigned 32-bit integers. So
+   all addressing is using a special form of pointers. The pointers always
+   refers to a special class of objects and the pointer is the index in an
+   array of objects of this kind. So we can have up to 4 billion objects of
+   most kinds. If one needs to send strings and 64-bit integers one follows
+   various techniques to do this. Signals are sent in the endian order of
+   the machine they were generated, so machines in a cluster has to be
+   of the same type of endian.
+
+   ROUTE_SIGNAL
+   ------------
+   ROUTE_SIGNAL is a special signal that can be used to carry a signal
+   in a special path to ensure that it arrives in the correct order to
+   the receiving block.
+
+   Signal order guarantees
+   -----------------------
+   The following signal order guarantees are maintained.
+
+   1) Sending signals at the same priority level to the same block reference
+      from one block will arrive in the order they were sent.
+
+      It is not guaranteed if the priority level is different for the signals,
+      it is also not guaranteed if they are sent through different paths.
+      Not even sending in the following pattern has a guarantee on the
+      delivery order. Signal 1: Block A -> Block B, Signal 2: Block A ->
+      Block C -> Block B. Although the signal 2 uses a longer path and is
+      destined to the same block it can still arrive before signal 1 at
+      Block B. The reason is that we execute signals from one sender at a
+      time, so we might be executing in Block C very quickly whereas the
+      thread executing Block B might be stalled and then when Block C has
+      sent its signal the thread executing Block B wakes up and decides
+      to execute signals from Block C before signals from Block A.
+
+   So as can be seen there is very little support for signal orders in the
+   NDB software architecture and so most protocols have to take into
+   account that signals can arrive in many different orders.
+
+   Fragmented signals
+   ------------------
+   It is possible to send really long signals. These signals cannot be
+   sent as one signal though. They are sent as one signal, then they will
+   be split up into multiple signals. The fixed part is the same in all
+   signals. What mainly differs is that they each contain a part of each
+   segment.
+
+   When receiving such a signal one should always call assembleFragments()
+   at first to see if the entire signal has arrived first. The signal
+   executor method is executed once for each signal fragment that is sent.
+   When all fragments have arrived then they will contain the full signal
+   with up to 3 sections that can much longer than the normal sized signals
+   that have limitations on the size of the signals.
+
+   Tracing infrastructure
+   ----------------------
+   All signals are sent through memory buffers. At crashes these memory
+   buffers can be used to print the last executed signals in each thread.
+   This will aid in looking for reasons for the crash. There will be one
+   file generated for each thread in the ndbmtd, in the case of ndbd there
+   will be only one file since there is only one file.
+
+   Jams
+   ----
+   jam() and its cousins is a set of macros used for tracing what happened
+   at the point of a crash. Each jam call executes a set of instructions
+   that inserts the line number of the jam macro into an array kept per
+   thread. There is some overhead in the jams, but it helps quite a lot in
+   debugging crashes of the NDB data nodes. At crash time we can see a few
+   thousand of the last decisions made just before the crash. This together
+   with the signal logs makes for a powerful tool to root out bugs in NDB
+   data nodes.
+
+   Trace Id
+   --------
+   Each signal also carries a signal id, this id can be used to trace certain
+   activities that go on for a longer time. This tracing can happen even in a
+   live system.
+*/
+
+class SimulatedBlock :
+  public SegmentUtils  /* SimulatedBlock implements the Interface */
+{
   friend class TraceLCP;
   friend class SafeCounter;
   friend class SafeCounterManager;
@@ -120,10 +417,12 @@ class SimulatedBlock {
   friend struct SectionHandle;
   friend class LockQueue;
   friend class SimplePropertiesSectionWriter;
+  friend class SegmentedSectionGuard;
 public:
   friend class BlockComponent;
   virtual ~SimulatedBlock();
-  
+
+  static const Uint32 BOUNDED_DELAY = 0xFFFFFF00;
 protected:
   /**
    * Constructor
@@ -139,8 +438,20 @@ protected:
   void addRecSignalImpl(GlobalSignalNumber g, ExecFunction fun, bool f =false);
   void installSimulatedBlockFunctions();
   ExecFunction theExecArray[MAX_GSN+1];
+  void handle_execute_error(GlobalSignalNumber gsn);
 
   void initCommon();
+
+  inline void executeFunction(GlobalSignalNumber gsn,
+                              Signal* signal,
+                              ExecFunction f);
+
+  inline void executeFunction(GlobalSignalNumber gsn,
+                              Signal* signal,
+                              ExecFunction f,
+                              BlockReference ref,
+                              Uint32 len);
+
 public:
   typedef void (SimulatedBlock::* CallbackFunction)(class Signal*,
 						    Uint32 callbackData,
@@ -150,15 +461,19 @@ public:
     Uint32 m_callbackData;
   };
 
-  /**
-   * 
-   */
   inline void executeFunction(GlobalSignalNumber gsn, Signal* signal);
+  inline void executeFunction_async(GlobalSignalNumber gsn, Signal* signal);
 
   /* Multiple block instances */
   Uint32 instance() const {
     return theInstance;
   }
+
+  ExecFunction getExecuteFunction(GlobalSignalNumber gsn)
+  {
+    return theExecArray[gsn];
+  }
+ 
   SimulatedBlock* getInstance(Uint32 instanceNumber) {
     ndbrequire(theInstance == 0); // valid only on main instance
     if (instanceNumber == 0)
@@ -182,6 +497,23 @@ public:
   void assignToThread(ThreadContext ctx);
   /* For multithreaded ndbd, get the id of owning thread. */
   uint32 getThreadId() const { return m_threadId; }
+  /**
+   * To call EXECUTE_DIRECT on THRMAN we need to get its instance number.
+   * Its instance number is always 1 higher than the thread id since 0
+   * is used for the proxy instance and then there is one instance per
+   * thread.
+   */
+  Uint32 getThrmanInstance() const
+  {
+    if (isNdbMt())
+    {
+      return m_threadId + 1;
+    }
+    else
+    {
+      return 0;
+    }
+  }
   static bool isMultiThreaded();
 
   /* Configuration based alternative.  Applies only to this node */
@@ -223,6 +555,22 @@ public:
   void synchronize_path(Signal*, const Uint32 blocks[],
                         const Callback&, JobBufferLevel = JBB);
 
+  /**
+   * These methods are used to assist blocks to use the TIME_SIGNAL to
+   * generate drum beats with a regular delay. elapsed_time will report
+   * back the elapsed time since last call but will never report more
+   * than max delay. max_delay = 2 * delay here.
+   */
+  void init_elapsed_time(Signal *signal,
+                         NDB_TICKS &latestTIME_SIGNAL);
+  void sendTIME_SIGNAL(Signal *signal,
+                       const NDB_TICKS currentTime,
+                       Uint32 delay);
+  Uint64 elapsed_time(Signal *signal,
+                      const NDB_TICKS currentTime,
+                      NDB_TICKS &latestTIME_SIGNAL,
+                      Uint32 max_delay);
+
 private:
   struct SyncThreadRecord
   {
@@ -240,13 +588,19 @@ private:
   void execSYNC_PATH_CONF(Signal*);
 public:
   virtual const char* get_filename(Uint32 fd) const { return "";}
+
+  void EXECUTE_DIRECT(ExecFunction f,
+                      Signal *signal);
 protected:
   static Callback TheEmptyCallback;
   void TheNULLCallbackFunction(class Signal*, Uint32, Uint32);
   static Callback TheNULLCallback;
   void execute(Signal* signal, Callback & c, Uint32 returnCode);
   
-  
+
+  void getSendBufferLevel(NodeId node, SB_LevelType &level);
+  Uint32 getSignalsInJBB();
+
   /**********************************************************
    * Send signal - dialects
    */
@@ -314,6 +668,7 @@ protected:
   // Send multiple signal with delay. In this VM the jobbufffer level has 
   // no effect on on delayed signals
   //
+
   void sendSignalWithDelay(BlockReference ref, 
 			   GlobalSignalNumber gsn, 
                            Signal* signal,
@@ -335,7 +690,11 @@ protected:
 		      Uint32 gsn, 
 		      Signal* signal, 
 		      Uint32 len,
-                      Uint32 givenInstanceNo = ZNIL);
+                      Uint32 givenInstanceNo);
+  void EXECUTE_DIRECT(Uint32 block, 
+		      Uint32 gsn, 
+		      Signal* signal, 
+		      Uint32 len);
   
   class SectionSegmentPool& getSectionSegmentPool();
   void release(SegmentedSectionPtr & ptr);
@@ -349,13 +708,14 @@ protected:
 
   bool import(Ptr<SectionSegment> & first, const Uint32 * src, Uint32 len);
   bool import(SegmentedSectionPtr& ptr, const Uint32* src, Uint32 len);
+  bool import(SectionHandle * dst, LinearSectionPtr src[3],Uint32 cnt);
+
   bool appendToSection(Uint32& firstSegmentIVal, const Uint32* src, Uint32 len);
   bool dupSection(Uint32& copyFirstIVal, Uint32 srcFirstIVal);
   bool writeToSection(Uint32 firstSegmentIVal, Uint32 offset, const Uint32* src, Uint32 len);
 
-  void handle_invalid_sections_in_send_signal(Signal*) const;
-  void handle_lingering_sections_after_execute(Signal*) const;
-  void handle_lingering_sections_after_execute(SectionHandle*) const;
+  void handle_invalid_sections_in_send_signal(const Signal*) const;
+  void handle_lingering_sections_after_execute(const Signal*) const;
   void handle_invalid_fragmentInfo(Signal*) const;
   void handle_send_failed(SendStatus, Signal*) const;
   void handle_out_of_longsignal_memory(Signal*) const;
@@ -507,7 +867,7 @@ protected:
     };
     Uint32 prevHash;
     
-    inline bool equal(FragmentInfo & p) const {
+    inline bool equal(FragmentInfo const & p) const {
       return m_senderRef == p.m_senderRef && m_fragmentId == p.m_fragmentId;
     }
     
@@ -545,7 +905,11 @@ protected:
     Uint16 m_messageSize; // Size of each fragment
     Uint32 m_fragmentId;
     union {
-      Ptr<struct SectionSegment> m_segmented;
+      // Similar to Ptr<SectionSegment> but a POD, as needed in a union.
+      struct {
+        SectionSegment* p;
+        Uint32 i;
+      } m_segmented;
       LinearSectionPtr m_linear;
     } m_sectionPtr[3];
     LinearSectionPtr m_theDataSection;
@@ -634,7 +998,9 @@ private:
    * In MT LQH main instance is the LQH proxy and the others ("workers")
    * are real LQHs run by multiple threads.
    */
-  enum { MaxInstances = 1 + MAX_NDBMT_LQH_WORKERS + 1 }; // main+lqh+extra
+protected:
+  enum { MaxInstances = NDBMT_MAX_BLOCK_INSTANCES };
+private:
   SimulatedBlock** theInstanceList; // set in main, indexed by instance
   SimulatedBlock* theMainInstance;  // set in all
   /*
@@ -794,6 +1160,12 @@ protected:
    */
   void setup_wakeup();
 
+  /**
+   * Get receiver thread index for node
+   * MAX_NODES == no receiver thread
+   */
+  Uint32 get_recv_thread_idx(NodeId nodeId);
+
 private:
   NewVARIABLE* NewVarRef;      /* New Base Address Table for block  */
   Uint16       theBATSize;     /* # entries in BAT */
@@ -884,7 +1256,9 @@ public:
     DLList<ActiveMutex> m_activeMutexes;
     
     BlockReference reference() const;
-    void progError(int line, int err_code, const char* extra = 0);
+    void progError(int line,
+                   int err_code,
+                   const char* extra = 0) ATTRIBUTE_NORETURN;
   };
   
   friend class MutexManager;
@@ -904,6 +1278,9 @@ private:
   void execUTIL_UNLOCK_REF(Signal* signal);
   void execUTIL_UNLOCK_CONF(Signal* signal);
 
+  void check_sections(Signal* signal, 
+                      Uint32 oldSecCount, 
+                      Uint32 newSecCount) const;
 protected:
 
   void fsRefError(Signal* signal, Uint32 line, const char *msg);
@@ -946,7 +1323,9 @@ protected:
   void execute(Signal* signal, CallbackPtr & cptr, Uint32 returnCode);
   const CallbackEntry& getCallbackEntry(Uint32 ci);
   void sendCallbackConf(Signal* signal, Uint32 fullBlockNo,
-                        CallbackPtr& cptr, Uint32 returnCode);
+                        CallbackPtr& cptr,
+                        Uint32 senderData, Uint32 callbackInfo,
+                        Uint32 returnCode);
   void execCALLBACK_CONF(Signal* signal);
 
   // Variable for storing inserted errors, see pc.H
@@ -998,6 +1377,18 @@ public:
                               DbinfoScanReq& req,
                               const Ndbinfo::Ratelimit& rl) const;
 
+
+protected:
+  /**
+   * SegmentUtils methods
+   */
+  virtual SectionSegment* getSegmentPtr(Uint32 iVal);
+  virtual bool seizeSegment(Ptr<SectionSegment>& p);
+  virtual void releaseSegment(Uint32 iVal);
+
+  virtual void releaseSegmentList(Uint32 firstSegmentIVal);
+
+  /** End of SegmentUtils methods */
 };
 
 // outside blocks e.g. within a struct
@@ -1021,14 +1412,63 @@ static void debugOutDefines()
 static void debugOutDefines()
 #endif
 
+inline
+void
+SimulatedBlock::executeFunction(GlobalSignalNumber gsn,
+                                Signal *signal)
+{
+  ExecFunction f = theExecArray[gsn];
+  if (unlikely(gsn > MAX_GSN))
+  {
+    handle_execute_error(gsn);
+    return;
+  }
+  executeFunction(gsn, signal, f);
+}
+
+inline
+void
+SimulatedBlock::executeFunction_async(GlobalSignalNumber gsn,
+                                      Signal *signal)
+{
+  ExecFunction f = theExecArray[gsn];
+#ifdef VM_TRACE
+  clear_global_variables();
+#endif
+  if (unlikely(gsn > MAX_GSN))
+  {
+    handle_execute_error(gsn);
+    return;
+  }
+  executeFunction(gsn, signal, f);
+}
+
+inline
+void
+SimulatedBlock::executeFunction(GlobalSignalNumber gsn,
+                                Signal* signal,
+                                ExecFunction f,
+                                BlockReference ref,
+                                Uint32 len)
+{
+  if (unlikely(gsn > MAX_GSN))
+  {
+    handle_execute_error(gsn);
+    return;
+  }
+  signal->setLength(len);
+  signal->header.theSendersBlockRef = ref;
+  executeFunction(gsn, signal, f);
+}
+
 inline 
 void 
-SimulatedBlock::executeFunction(GlobalSignalNumber gsn, Signal* signal){
-  ExecFunction f = theExecArray[gsn];
-  if(gsn <= MAX_GSN && f != 0){
-#ifdef VM_TRACE
-    clear_global_variables();
-#endif
+SimulatedBlock::executeFunction(GlobalSignalNumber gsn,
+                                Signal* signal,
+                                ExecFunction f)
+{
+  if (likely(f != 0))
+  {
     (this->*f)(signal);
 
     if (unlikely(signal->header.m_noOfSections))
@@ -1037,20 +1477,10 @@ SimulatedBlock::executeFunction(GlobalSignalNumber gsn, Signal* signal){
     }
     return;
   }
-
   /**
    * This point only passed if an error has occurred
    */
-  char errorMsg[255];
-  if (!(gsn <= MAX_GSN)) {
-    BaseString::snprintf(errorMsg, 255, "Illegal signal received (GSN %d too high)", gsn);
-    ERROR_SET(fatal, NDBD_EXIT_PRGERR, errorMsg, errorMsg);
-  }
-  if (!(theExecArray[gsn] != 0)) {
-    BaseString::snprintf(errorMsg, 255, "Illegal signal received (GSN %d not added)", gsn);
-    ERROR_SET(fatal, NDBD_EXIT_PRGERR, errorMsg, errorMsg);
-  }
-  ndbrequire(false);
+  handle_execute_error(gsn);
 }
 
 inline
@@ -1231,15 +1661,23 @@ SimulatedBlock::subTime(Uint32 gsn, Uint64 time){
 
 inline
 void
+SimulatedBlock::EXECUTE_DIRECT(ExecFunction f,
+                               Signal *signal)
+{
+  (this->*f)(signal);
+}
+
+inline
+void
 SimulatedBlock::EXECUTE_DIRECT(Uint32 block, 
 			       Uint32 gsn, 
 			       Signal* signal, 
 			       Uint32 len,
-                               Uint32 givenInstanceNo)
+                               Uint32 instanceNo)
 {
-  signal->setLength(len);
-  SimulatedBlock* b = globalData.getBlock(block);
-  ndbassert(b != 0);
+  SimulatedBlock* rec_block;
+  SimulatedBlock* main_block = globalData.getBlock(block);
+  ndbassert(main_block != 0);
   /**
    * In multithreaded NDB, blocks run in different threads, and EXECUTE_DIRECT
    * (unlike sendSignal) is generally not thread-safe.
@@ -1248,15 +1686,19 @@ SimulatedBlock::EXECUTE_DIRECT(Uint32 block,
    * by using an explicit instance argument.
    * By default instance of sender is used.  This is automatically thread-safe
    * for worker instances (instance != 0).
+   *
+   * We also need to use this function when calling blocks that don't belong
+   * to the same module, so e.g. LDM blocks can all call each other without
+   * using this method. But e.g. no block can call THRMAN using implicit
+   * instance id since the instance numbers of the LDM blocks and the THRMAN
+   * blocks are not the same. There is one THRMAN instance for each thread,
+   * not only for the LDM threads.
    */
-  Uint32 instanceNo = givenInstanceNo;
-  if (instanceNo == ZNIL)
-    instanceNo = instance();
-  if (instanceNo != 0)
-    b = b->getInstance(instanceNo);
-  ndbassert(b != 0);
-  ndbassert(givenInstanceNo != ZNIL || b->getThreadId() == getThreadId());
   signal->header.theSendersBlockRef = reference();
+  signal->setLength(len);
+  ndbassert(instanceNo < MaxInstances);
+  rec_block = main_block->getInstance(instanceNo);
+  ndbassert(rec_block != 0);
 #ifdef VM_TRACE
   if(globalData.testOn){
     signal->header.theVerId_signalNumber = gsn;
@@ -1268,24 +1710,106 @@ SimulatedBlock::EXECUTE_DIRECT(Uint32 block,
   }
 #endif
 #ifdef VM_TRACE_TIME
-  Uint32 us1, us2;
-  Uint64 ms1, ms2;
-  NdbTick_CurrentMicrosecond(&ms1, &us1);
+  const NDB_TICKS t1 = NdbTick_getCurrentTicks();
   Uint32 tGsn = m_currentGsn;
-  b->m_currentGsn = gsn;
+  rec_block->m_currentGsn = gsn;
 #endif
-  b->executeFunction(gsn, signal);
+  rec_block->executeFunction(gsn, signal);
 #ifdef VM_TRACE_TIME
-  NdbTick_CurrentMicrosecond(&ms2, &us2);
-  Uint64 diff = ms2;
-  diff -= ms1;
-  diff *= 1000000;
-  diff += us2;
-  diff -= us1;
-  b->addTime(gsn, diff);
+  const NDB_TICKS t2 = NdbTick_getCurrentTicks();
+  const Uint64 diff = NdbTick_Elapsed(t1, t2).microSec();
+  rec_block->addTime(gsn, diff);
   m_currentGsn = tGsn;
   subTime(tGsn, diff);
 #endif
+}
+
+/**
+  We implement the normal EXECUTE_DIRECT in a special function
+  since this is performance-critical although it introduces a
+  little bit of code duplication.
+*/
+inline
+void
+SimulatedBlock::EXECUTE_DIRECT(Uint32 block, 
+			       Uint32 gsn, 
+			       Signal* signal, 
+			       Uint32 len)
+{
+  /**
+    globalData.getBlock(block) gives us the pointer to the block of
+    the receiving class, it gives the pointer to instance 0. This
+    instance has all the function pointers that all other instances
+    also have, so we can reuse this block object to get the execute
+    function. This means that we will use less cache lines over the
+    system.
+  */
+  SimulatedBlock* main_block = globalData.getBlock(block);
+  Uint32 instanceNo = instance();
+  BlockReference ref = reference();
+  SimulatedBlock* rec_block;
+  signal->setLength(len);
+  ndbassert(main_block != 0);
+  ndbassert(main_block->theInstance == 0);
+  ndbassert(instanceNo < MaxInstances);
+  rec_block = main_block->theInstanceList[instanceNo];
+  if (unlikely(gsn > MAX_GSN))
+  {
+    handle_execute_error(gsn);
+    return;
+  }
+  ExecFunction f = rec_block->theExecArray[gsn];
+  signal->header.theSendersBlockRef = ref;
+  /**
+   * In this function we only allow function calls within the same thread.
+   *
+   * No InstanceList leads to immediate Segmentation Fault,
+   * so not necessary to check with ndbrequire for this.
+   */
+  ndbassert(rec_block != 0);
+  ndbassert(rec_block->getThreadId() == getThreadId());
+#ifdef VM_TRACE
+  if(globalData.testOn){
+    signal->header.theVerId_signalNumber = gsn;
+    signal->header.theReceiversBlockNumber = numberToBlock(block, instanceNo);
+    globalSignalLoggers.executeDirect(signal->header,
+				      0,        // in
+				      &signal->theData[0],
+                                      globalData.ownId);
+  }
+#endif
+#ifdef VM_TRACE_TIME
+  const NDB_TICKS t1 = NdbTick_getCurrentTicks();
+  Uint32 tGsn = m_currentGsn;
+  rec_block->m_currentGsn = gsn;
+#endif
+  rec_block->executeFunction(gsn, signal, f);
+#ifdef VM_TRACE_TIME
+  const NDB_TICKS t2 = NdbTick_getCurrentTicks();
+  const Uint64 diff = NdbTick_Elapsed(t1,t2).microSec();
+  rec_block->addTime(gsn, diff);
+  m_currentGsn = tGsn;
+  subTime(tGsn, diff);
+#endif
+}
+
+// Do a consictency check before reusing a signal.
+inline void 
+SimulatedBlock::check_sections(Signal* signal, 
+                               Uint32 oldSecCount, 
+                               Uint32 newSecCount) const
+{ 
+  // Sections from previous use should have been consumed by now.
+  if (unlikely(oldSecCount != 0))
+  { 
+    handle_invalid_sections_in_send_signal(signal); 
+  } 
+  else if (unlikely(newSecCount == 0 &&
+                    signal->header.m_fragmentInfo != 0 && 
+                    signal->header.m_fragmentInfo != 3))
+  { 
+    handle_invalid_fragmentInfo(signal); 
+  }
 }
 
 /**
@@ -1310,17 +1834,6 @@ BLOCK::addRecSignal(GlobalSignalNumber gsn, ExecSignalLocal f, bool force){ \
   addRecSignalImpl(gsn, (ExecFunction)f, force);\
 }
 
-#include "Mutex.hpp"
-
-inline
-SectionHandle::~SectionHandle()
-{
-  if (unlikely(m_cnt))
-  {
-    m_block->handle_lingering_sections_after_execute(this);
-  }
-}
-
 #ifdef ERROR_INSERT
 #define RSS_AP_SNAPSHOT(x) Uint32 rss_##x
 #define RSS_AP_SNAPSHOT_SAVE(x) rss_##x = x.getNoOfFree()
@@ -1338,6 +1851,10 @@ SectionHandle::~SectionHandle()
 #define RSS_OP_SNAPSHOT(x) Uint32 rss_##x
 #define RSS_OP_SNAPSHOT_SAVE(x) rss_##x = x
 #define RSS_OP_SNAPSHOT_CHECK(x) ndbrequire(rss_##x == x)
+
+#define RSS_DA256_SNAPSHOT(x) Uint32 rss_##x
+#define RSS_DA256_SNAPSHOT_SAVE(x) rss_##x = x.m_high_pos
+#define RSS_DA256_SNAPSHOT_CHECK(x) ndbrequire(x.m_high_pos <= rss_##x)
 #else
 #define RSS_AP_SNAPSHOT(x) struct rss_dummy0_##x { int dummy; }
 #define RSS_AP_SNAPSHOT_SAVE(x)
@@ -1356,19 +1873,65 @@ SectionHandle::~SectionHandle()
 #define RSS_OP_SNAPSHOT_SAVE(x)
 #define RSS_OP_SNAPSHOT_CHECK(x)
 
+#define RSS_DA256_SNAPSHOT(x)
+#define RSS_DA256_SNAPSHOT_SAVE(x)
+#define RSS_DA256_SNAPSHOT_CHECK(x)
 #endif
 
 struct Hash2FragmentMap
 {
-  STATIC_CONST( MAX_MAP = 240 );
+  STATIC_CONST( MAX_MAP = NDB_MAX_HASHMAP_BUCKETS );
   Uint32 m_cnt;
   Uint32 m_fragments;
-  Uint8 m_map[MAX_MAP];
+  Uint16 m_map[MAX_MAP];
   Uint32 nextPool;
   Uint32 m_object_id;
 };
 
 extern ArrayPool<Hash2FragmentMap> g_hash_map;
+
+/**
+ * Guard class for auto release of segmentedsectionptr's
+ */
+class SegmentedSectionGuard
+{
+  Uint32 cnt;
+  Uint32 ptr[3];
+  SimulatedBlock * block;
+
+public:
+  SegmentedSectionGuard(SimulatedBlock* b) : cnt(0), block(b) { }
+  SegmentedSectionGuard(SimulatedBlock* b, Uint32 ptrI) : cnt(1), block(b) {
+    ptr[0] = ptrI;
+  }
+
+  void add(Uint32 ptrI) {
+    if (ptrI != RNIL)
+    {
+      assert(cnt < NDB_ARRAY_SIZE(ptr));
+      ptr[cnt] = ptrI;
+      cnt++;
+    }
+  }
+
+  void release() {
+    for (Uint32 i = 0; i < cnt; i++) {
+      if (ptr[i] != RNIL)
+        block->releaseSection(ptr[i]);
+    }
+    cnt = 0;
+  }
+
+  void clear() {
+    cnt = 0;
+  }
+
+  ~SegmentedSectionGuard() {
+    release();
+  }
+};
+
+#undef JAM_FILE_ID
 
 #endif
 

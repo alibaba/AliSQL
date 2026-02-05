@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -458,7 +465,6 @@ NdbOperation::prepareSend(Uint32 aTC_ConnectPtr,
   }
   Uint32 TattrLen = 0;
   tcKeyReq->setAttrinfoLen(TattrLen, 0); // Not required for long signals.
-  tcKeyReq->setAPIVersion(TattrLen, NDB_VERSION);
   tcKeyReq->attrLen            = TattrLen;
 
   tcKeyReq->tableId            = tTableId;
@@ -473,6 +479,7 @@ NdbOperation::prepareSend(Uint32 aTC_ConnectPtr,
   Uint8 tNoDisk = (m_flags & OF_NO_DISK) != 0;
   Uint8 tQueable = (m_flags & OF_QUEUEABLE) != 0;
   Uint8 tDeferred = (m_flags & OF_DEFERRED_CONSTRAINTS) != 0;
+  Uint8 tDisableFk = (m_flags & OF_DISABLE_FK) != 0;
 
   /**
    * A dirty read, can not abort the transaction
@@ -492,6 +499,7 @@ NdbOperation::prepareSend(Uint32 aTC_ConnectPtr,
   tcKeyReq->setNoDiskFlag(tReqInfo, tNoDisk);
   tcKeyReq->setQueueOnRedoProblemFlag(tReqInfo, tQueable);
   tcKeyReq->setDeferredConstraints(tReqInfo, tDeferred);
+  tcKeyReq->setDisableFkConstraints(tReqInfo, tDisableFk);
 
   OperationType tOperationType = theOperationType;
   Uint8 abortOption = (ao == DefaultAbortOption) ? (Uint8) m_abortOption : (Uint8) ao;
@@ -1067,7 +1075,7 @@ NdbOperation::buildSignalsNdbRecord(Uint32 aTC_ConnectPtr,
      * header + inline data
      * Disk flag set when getValues were processed.
      */
-    const NdbRecAttr *ra= theReceiver.theFirstRecAttr;
+    const NdbRecAttr *ra= theReceiver.m_firstRecAttr;
     while (ra)
     {
       res= insertATTRINFOHdr_NdbRecord(ra->attrId(), 0);
@@ -1422,6 +1430,7 @@ NdbOperation::prepareSendNdbRecord(AbortOption ao)
 
   Uint8 tQueable = (m_flags & OF_QUEUEABLE) != 0;
   Uint8 tDeferred = (m_flags & OF_DEFERRED_CONSTRAINTS) != 0;
+  Uint8 tDisableFk = (m_flags & OF_DISABLE_FK) != 0;
 
   TcKeyReq::setAbortOption(tcKeyReq->requestInfo, m_abortOption);
   TcKeyReq::setCommitFlag(tcKeyReq->requestInfo, theCommitIndicator);
@@ -1431,6 +1440,7 @@ NdbOperation::prepareSendNdbRecord(AbortOption ao)
 
   TcKeyReq::setQueueOnRedoProblemFlag(tcKeyReq->requestInfo, tQueable);
   TcKeyReq::setDeferredConstraints(tcKeyReq->requestInfo, tDeferred);
+  TcKeyReq::setDisableFkConstraints(tcKeyReq->requestInfo, tDisableFk);
 
   theStatus= WaitResponse;
   theReceiver.prepareSend();
@@ -1458,9 +1468,7 @@ NdbOperation::fillTcKeyReqHdr(TcKeyReq *tcKeyReq,
   /* With long TCKEYREQ, we do not need to set the attrlength 
    * in the header since it is encoded as the AI section length
    */
-  UintR attrLenAPIVer= 0;
-  TcKeyReq::setAPIVersion(attrLenAPIVer, NDB_VERSION);
-  tcKeyReq->attrLen= attrLenAPIVer;
+  tcKeyReq->attrLen= 0;
 
   UintR reqInfo= 0;
   /* Dirty flag, Commit flag, Start flag, Simple flag set later
@@ -1744,7 +1752,7 @@ NdbOperation::receiveTCKEYREF(const NdbApiSignal* aSignal)
   if (aSignal->getLength() == TcKeyRef::SignalLength)
   {
     // Signal may contain additional error data
-    theError.details = (char *) aSignal->readData(5);
+    theError.details = (char *)UintPtr(aSignal->readData(5));
   }
 
   theStatus = Finished;

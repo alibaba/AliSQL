@@ -1,0 +1,20 @@
+--echo #
+--echo # Test DuckDB engine behavior with auto_increment
+--echo #
+
+# Create a table with auto_increment in DuckDB
+# DuckDB does not support auto_increment
+# The creation will succeed with the auto_increment ignored
+# We expect an warning here.
+
+CREATE TABLE t_auto_inc_duckdb (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(255)
+) ENGINE=duckdb;
+
+--let $db_name=test
+--let $table_name=t_auto_inc_duckdb
+--source suite/duckdb/include/show_duckdb_table_structure.inc
+
+DROP TABLE IF EXISTS t_auto_inc_innodb;
+DROP TABLE IF EXISTS t_auto_inc_duckdb;

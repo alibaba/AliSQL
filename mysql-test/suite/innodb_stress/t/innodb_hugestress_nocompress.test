@@ -6,8 +6,6 @@
 --source include/master-slave.inc
 --source include/big_test.inc
 
-SET GLOBAL innodb_file_format=Barracuda;
-
 # Too heavy for testing in debug mode
 --source include/have_nodebug.inc
 
@@ -38,5 +36,3 @@ let $do_compress=0;
 --let $max_rows = 200000
 
 --source suite/innodb_stress/include/innodb_stress.inc
-
-SET GLOBAL innodb_file_format=Default;

@@ -1,13 +1,20 @@
-/* Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -251,6 +258,38 @@ TEST_F(DecimalTest, Modulo)
       << " got xxx:" << buff_x
       ;
   }
+}
+
+
+// Verifies that decimal_mul() does not return negative zero.
+TEST_F(DecimalTest, NegativeZeroMultiply)
+{
+  EXPECT_EQ(E_DEC_OK, chars_2_decimal("0.0", &d1));
+  EXPECT_EQ(E_DEC_OK, chars_2_decimal("0.0", &d2));
+  EXPECT_EQ(0, my_decimal_cmp(&d1, &decimal_zero));
+  EXPECT_EQ(0, my_decimal_cmp(&d2, &decimal_zero));
+  d1.sign(true);
+  my_decimal product;
+  EXPECT_EQ(E_DEC_OK, decimal_mul(&d1, &d2, &product));
+  EXPECT_FALSE(product.sign());
+  EXPECT_EQ(0, my_decimal_cmp(&product, &decimal_zero));
+}
+
+
+// Verifies that decimal_add() *does* return negative zero.
+TEST_F(DecimalTest, NegativeZeroAdd)
+{
+  EXPECT_EQ(E_DEC_OK, chars_2_decimal("0.0", &d1));
+  EXPECT_EQ(E_DEC_OK, chars_2_decimal("0.0", &d2));
+  EXPECT_EQ(0, my_decimal_cmp(&d1, &decimal_zero));
+  EXPECT_EQ(0, my_decimal_cmp(&d2, &decimal_zero));
+  d1.sign(true);
+  d2.sign(true);
+  my_decimal sum;
+  EXPECT_EQ(E_DEC_OK, decimal_add(&d1, &d2, &sum));
+  EXPECT_TRUE(sum.sign());
+  // This one will DBUG_ASSERT
+  // EXPECT_EQ(0, my_decimal_cmp(&sum, &decimal_zero));
 }
 
 

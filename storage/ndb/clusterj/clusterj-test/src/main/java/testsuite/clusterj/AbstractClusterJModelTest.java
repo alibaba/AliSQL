@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2010, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -106,10 +113,10 @@ public abstract class AbstractClusterJModelTest extends AbstractClusterJTest {
         return result;
     }
 
-    /** Convert days, hours, minutes, and seconds into milliseconds after the Epoch, UCT.
-     * Date is index origin 1 so add one to the number of days. Default year and month,
+    /** Convert hours, minutes, and seconds into milliseconds after the Epoch, UCT.
+     * Default year, month, and day,
      * as these are assumed by Calendar to be the Epoch.
-     * @param day the number of days
+     * @param day the number of days: ignored
      * @param hour the hour (or number of hours)
      * @param minute the minute (or number of minutes)
      * @param second the second (or number of seconds)
@@ -118,7 +125,6 @@ public abstract class AbstractClusterJModelTest extends AbstractClusterJTest {
     protected static long getMillisFor(int days, int hour, int minute, int second) {
         Calendar calendar = Calendar.getInstance();
         calendar.clear();
-        calendar.set(Calendar.DATE, days + 1);
         calendar.set(Calendar.HOUR, hour);
         calendar.set(Calendar.MINUTE, minute);
         calendar.set(Calendar.SECOND, second);
@@ -156,11 +162,22 @@ public abstract class AbstractClusterJModelTest extends AbstractClusterJTest {
         return true;
     }
 
+    /** Set this to false to avoid running test (e.g. if no model class) */
+    protected boolean runTest = true;
+
     @Override
     public void localSetUp() {
         createSessionFactory();
         session = sessionFactory.getSession();
         setAutoCommit(connection, false);
+        try {
+            session.newInstance(getModelClass());
+            runTest = true;
+        } catch (Exception e) {
+            System.out.println("Ignoring test; no model class " + getModelClass().getName());
+            runTest = false;
+        }
+
         if (getModelClass() != null && getCleanupAfterTest()) {
             addTearDownClasses(getModelClass());
         }
@@ -324,8 +341,14 @@ public abstract class AbstractClusterJModelTest extends AbstractClusterJTest {
         return null;
     }
 
+    /** Subclasses may override this method to convert an int into a key value */
+    protected Object convertToKey(int i) {
+        return Integer.valueOf(i);
+    }
+
     /** Write data via JDBC and read back the data via NDB */
     protected void writeJDBCreadNDB() {
+        if (!runTest) return;
         generateInstances(getColumnDescriptors());
         removeAll(getModelClass());
         List<Object[]> result = null;
@@ -336,6 +359,7 @@ public abstract class AbstractClusterJModelTest extends AbstractClusterJTest {
 
     /** Write data via JDBC and read back the data via JDBC */
     protected void writeJDBCreadJDBC() {
+        if (!runTest) return;
         generateInstances(getColumnDescriptors());
         removeAll(getModelClass());
         List<Object[]> result = null;
@@ -346,6 +370,7 @@ public abstract class AbstractClusterJModelTest extends AbstractClusterJTest {
 
     /** Write data via NDB and read back the data via NDB */
     protected void writeNDBreadNDB() {
+        if (!runTest) return;
         generateInstances(getColumnDescriptors());
         removeAll(getModelClass());
         List<Object[]> result = null;
@@ -356,6 +381,7 @@ public abstract class AbstractClusterJModelTest extends AbstractClusterJTest {
 
     /** Write data via NDB and read back the data via JDBC */
     protected void writeNDBreadJDBC() {
+        if (!runTest) return;
         generateInstances(getColumnDescriptors());
         removeAll(getModelClass());
         List<Object[]> result = null;
@@ -419,7 +445,9 @@ public abstract class AbstractClusterJModelTest extends AbstractClusterJTest {
                 }
                 result.add(row);
             }
-            connection.commit();
+            if (!connection.getAutoCommit()) {
+                connection.commit();
+            }
         } catch (SQLException e) {
             throw new RuntimeException("Failed to read " + tableName, e);
         }
@@ -494,13 +522,18 @@ public abstract class AbstractClusterJModelTest extends AbstractClusterJTest {
             int j = 0;
             for (ColumnDescriptor columnDescriptor: columnDescriptors) {
                 Object value = getColumnValue(i, j);
+                if (debug) System.out.println("generateInstances set field " + columnDescriptor.getColumnName()
+                        + " to value "  + value);
                 // set the column value in the instance
                 columnDescriptor.setFieldValue(instance, value);
-                // set the column value in the expected result
-                if (debug) System.out.println("generateInstances set field " + columnDescriptor.getColumnName() + " to value "  + value);
+                // check that the value was set correctly
+                Object actual = columnDescriptor.getFieldValue(instance);
+                errorIfNotEqual("generateInstances value mismatch for " + columnDescriptor.getColumnName(),
+                        dump(value), dump(actual));
                 ++j;
             }
             instances.add(instance);
+            // set the column values in the expected result
             Object[] expectedRow = createRow(columnDescriptors, instance);
             expected.add(expectedRow);
         }
@@ -551,7 +584,9 @@ public abstract class AbstractClusterJModelTest extends AbstractClusterJTest {
                 }
                 preparedStatement.execute();
             }
-            connection.commit();
+            if (!connection.getAutoCommit()) {
+                connection.commit();
+            }
         } catch (SQLException e) {
             throw new RuntimeException("Failed to insert " + tableName + " at instance " + i, e);
         }
@@ -570,7 +605,7 @@ public abstract class AbstractClusterJModelTest extends AbstractClusterJTest {
         List<Object[]> result = new ArrayList<Object[]>();
         session.currentTransaction().begin();
         for (int i = 0; i < getNumberOfInstances() ; ++i) {
-            IdBase instance = session.find(modelClass, i);
+            IdBase instance = session.find(modelClass, convertToKey(i));
             if (instance != null) {
                 Object[] row = createRow(columnDescriptors, instance);
                 result.add(row);
@@ -631,7 +666,9 @@ public abstract class AbstractClusterJModelTest extends AbstractClusterJTest {
                 ++i;
                 rows.add(row);
             }
-            connection.commit();
+            if (!connection.getAutoCommit()) {
+                connection.commit();
+            }
         } catch (SQLException e) {
             throw new RuntimeException("Failed to read " + tableName + " at instance " + i, e);
         }

@@ -1,15 +1,21 @@
 /*
-   Copyright (C) 2004-2008 MySQL AB, 2009 Sun Microsystems, Inc.
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2004, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -68,8 +74,11 @@
 #define NDB_TYPE_OLDDECIMALUNSIGNED     28
 #define NDB_TYPE_DECIMAL                29
 #define NDB_TYPE_DECIMALUNSIGNED        30
+#define NDB_TYPE_TIME2                  31
+#define NDB_TYPE_DATETIME2              32
+#define NDB_TYPE_TIMESTAMP2             33
 
-#define NDB_TYPE_MAX                    31
+#define NDB_TYPE_MAX                    34
 
 
 /*
@@ -124,5 +133,32 @@
 #define NDB_INDEX_STAT_HEAD_EVENT    "ndb_index_stat_head_event"
 
 #define NDB_INDEX_STAT_PREFIX        "ndb_index_stat"
+
+/**
+ * Defines for NDB$INFO.OPERATIONS
+ */
+#define NDB_INFO_OP_UNKNOWN  0
+#define NDB_INFO_OP_READ     1
+#define NDB_INFO_OP_READ_SH  2
+#define NDB_INFO_OP_READ_EX  3
+#define NDB_INFO_OP_INSERT   4
+#define NDB_INFO_OP_UPDATE   5
+#define NDB_INFO_OP_DELETE   6
+#define NDB_INFO_OP_WRITE    7
+#define NDB_INFO_OP_UNLOCK   8
+#define NDB_INFO_OP_REFRESH  9
+#define NDB_INFO_OP_SCAN_UNKNOWN (256 + 0)
+#define NDB_INFO_OP_SCAN         (256 + 1)
+#define NDB_INFO_OP_SCAN_SH      (256 + 2)
+#define NDB_INFO_OP_SCAN_EX      (256 + 3)
+
+/**
+ * FK actions
+ */
+#define NDB_FK_NO_ACTION   0
+#define NDB_FK_RESTRICT    1
+#define NDB_FK_CASCADE     2
+#define NDB_FK_SET_NULL    3
+#define NDB_FK_SET_DEFAULT 4
 
 #endif

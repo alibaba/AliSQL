@@ -1,11 +1,9 @@
+--source include/have_myisam.inc
+# Testcases for some bug fixes need MyISAM
+
 -- source include/have_ucs2.inc
 -- source include/have_utf16.inc
 -- source include/have_utf8mb4.inc
-
-
---disable_warnings
-DROP TABLE IF EXISTS t1;
---enable_warnings
 
 --echo #
 --echo # Start of 5.5 tests
@@ -100,7 +98,7 @@ SELECT * FROM t1 WHERE a LIKE 'фЫва%' COLLATE utf16_bin ORDER BY BINARY a;
 DROP TABLE t1;
 
 CREATE TABLE t1 (word varchar(64) NOT NULL, PRIMARY KEY (word))
-ENGINE=MyISAM CHARACTER SET utf16;
+CHARACTER SET utf16;
 INSERT INTO t1 (word) VALUES ("cat");
 SELECT * FROM t1 WHERE word LIKE "c%";
 SELECT * FROM t1 WHERE word LIKE "ca_";
@@ -567,17 +565,19 @@ drop table t1;
 #
 # via alter
 #
+SET sql_mode = '';
 create table t1 (s1 varchar(50) character set ucs2);
 insert into t1 values (0xdf84);
 alter table t1 modify column s1 varchar(50) character set utf16;
 select hex(s1) from t1;
 drop table t1;
+SET sql_mode = default;
 #
 # via update
 #
 create table t1 (s1 varchar(5) character set ucs2, s2 varchar(5) character set utf16);
 insert into t1 (s1) values (0xdf84);
-update t1 set s2 = s1;
+update ignore t1 set s2 = s1;
 select hex(s2) from t1;
 drop table t1;
 
@@ -658,7 +658,7 @@ select left('aaa','1');
 #
 create table t1 (a int);
 insert into t1 values ('-1234.1e2');
-insert into t1 values ('-1234.1e2xxxx');
+insert ignore into t1 values ('-1234.1e2xxxx');
 insert into t1 values ('-1234.1e2    ');
 select * from t1;
 drop table t1;
@@ -668,25 +668,38 @@ drop table t1;
 #
 create table t1 (a int);
 insert into t1 values ('1 ');
-insert into t1 values ('1 x');
+insert ignore into t1 values ('1 x');
 select * from t1;
 drop table t1;
 
 #
 # Testing auto-conversion to TEXT
 #
+SET sql_mode = '';
 create table t1 (a varchar(17000) character set utf16);
 show create table t1;
 drop table t1;
-
+SET sql_mode = default;
 #
-# Testing that maximim possible key length is 1000 bytes
+# Testing that maximim possible key length is 1000 bytes for MyISAM
 #
-create table t1 (a varchar(250) character set utf16 primary key);
+create table t1 (a varchar(250) character set utf16 primary key) engine=MyISAM;
 show create table t1;
 drop table t1;
 --error ER_TOO_LONG_KEY
+create table t1 (a varchar(334) character set utf16 primary key) engine=MyISAM;
+
+#
+# Testing that maximim possible key length is 767 bytes for InnoDB
+#
+#Minimized the varchar length for InnoDB so that it does not throw max keylength exceeded error
+create table t1 (a varchar(150) character set utf16 primary key);
+show create table t1;
+drop table t1;
+set GLOBAL innodb_large_prefix=OFF;
+--error ER_TOO_LONG_KEY
 create table t1 (a varchar(334) character set utf16 primary key);
+set GLOBAL innodb_large_prefix=default;
 
 #
 # Conversion to utf8
@@ -809,4 +822,3 @@ set collation_connection=utf16_bin;
 --echo #
 --echo # End of 5.6 tests
 --echo #
-

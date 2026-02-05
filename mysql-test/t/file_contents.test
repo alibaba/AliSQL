@@ -1,3 +1,4 @@
+
 #
 # Testing files that were built to be packaged, both for existence and for contents
 #
@@ -17,7 +18,7 @@ if ($dir_bin =~ m|/usr/|) {
   $dir_docs =~ s|/lib|/share/doc|;
   if(-d "$dir_docs/packages") {
     # SuSE: "packages/" in the documentation path
-    $dir_docs = glob "$dir_docs/packages/*-server*";
+    $dir_docs = glob "$dir_docs/packages/mysql-*-server*";
   } else {
     # RedHat: version number in directory name
     $dir_docs = glob "$dir_docs/MySQL-server*";
@@ -35,7 +36,7 @@ if ($dir_bin =~ m|/usr/|) {
   $dir_docs = "$dir_bin/share/doc";
   if(-d "$dir_docs/packages") {
     # SuSE: "packages/" in the documentation path
-    $dir_docs = glob "$dir_docs/packages/*-server*";
+    $dir_docs = glob "$dir_docs/packages/mysql-*-server*";
   } else {
     # RedHat: version number in directory name
     $dir_docs = glob "$dir_docs/MySQL-server*";
@@ -51,7 +52,6 @@ if ($dir_bin =~ m|/usr/|) {
 } else {
   # tar.gz package, Windows, or developer work (in git)
   $dir_docs = $dir_bin;
-  $dir_docs =~ s|/lib||;
   if(-d "$dir_docs/docs") {
     $dir_docs = "$dir_docs/docs"; # package
   } else {

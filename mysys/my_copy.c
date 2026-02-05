@@ -1,34 +1,42 @@
-/* Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "mysys_priv.h"
+#include "my_sys.h"
 #include <my_dir.h> /* for stat */
 #include <m_string.h>
 #include "mysys_err.h"
-#if defined(HAVE_UTIME_H)
-#include <utime.h>
-#elif defined(HAVE_SYS_UTIME_H)
-#include <sys/utime.h>
-#elif !defined(HPUX10)
-#include <time.h>
-struct utimbuf {
-  time_t actime;
-  time_t modtime;
-};
-#endif
+#include "my_thread_local.h"
 
+#ifndef _WIN32
+#include <utime.h>
+#else
+#include <sys/utime.h>
+#endif
 
 /*
   int my_copy(const char *from, const char *to, myf MyFlags)
@@ -61,7 +69,8 @@ int my_copy(const char *from, const char *to, myf MyFlags)
   DBUG_PRINT("my",("from %s to %s MyFlags %d", from, to, MyFlags));
 
   from_file=to_file= -1;
-  DBUG_ASSERT(!(MyFlags & (MY_FNABP | MY_NABP))); /* for my_read/my_write */
+  memset(&new_stat_buff, 0, sizeof(MY_STAT));
+  assert(!(MyFlags & (MY_FNABP | MY_NABP))); /* for my_read/my_write */
   if (MyFlags & MY_HOLD_ORIGINAL_MODES)		/* Copy stat if possible */
     new_file_stat= MY_TEST(my_stat((char*) to, &new_stat_buff, MYF(0)));
 
@@ -69,7 +78,7 @@ int my_copy(const char *from, const char *to, myf MyFlags)
   {
     if (!my_stat(from, &stat_buff, MyFlags))
     {
-      my_errno=errno;
+      set_my_errno(errno);
       goto err;
     }
     if (MyFlags & MY_HOLD_ORIGINAL_MODES && new_file_stat)
@@ -109,24 +118,24 @@ int my_copy(const char *from, const char *to, myf MyFlags)
     /* Copy modes */
     if (chmod(to, stat_buff.st_mode & 07777))
     {
-      my_errno= errno;
+      set_my_errno(errno);
       if (MyFlags & (MY_FAE+MY_WME))
       {
         char  errbuf[MYSYS_STRERROR_SIZE];
-        my_error(EE_CHANGE_PERMISSIONS, MYF(ME_BELL+ME_WAITTANG), from,
+        my_error(EE_CHANGE_PERMISSIONS, MYF(0), from,
                  errno, my_strerror(errbuf, sizeof(errbuf), errno));
       }
       goto err;
     }
-#if !defined(__WIN__)
+#if !defined(_WIN32)
     /* Copy ownership */
     if (chown(to, stat_buff.st_uid, stat_buff.st_gid))
     {
-      my_errno= errno;
+      set_my_errno(errno);
       if (MyFlags & (MY_FAE+MY_WME))
       {
         char  errbuf[MYSYS_STRERROR_SIZE];
-        my_error(EE_CHANGE_OWNERSHIP, MYF(ME_BELL+ME_WAITTANG), from,
+        my_error(EE_CHANGE_OWNERSHIP, MYF(0), from,
                  errno, my_strerror(errbuf, sizeof(errbuf), errno));
       }
       goto err;

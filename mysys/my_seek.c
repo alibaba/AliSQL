@@ -1,20 +1,34 @@
-/* Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "mysys_priv.h"
+#include "my_sys.h"
 #include "mysys_err.h"
+#include "my_thread_local.h"
 
 /* 
   Seek to a position in a file.
@@ -49,12 +63,11 @@ my_off_t my_seek(File fd, my_off_t pos, int whence, myf MyFlags)
   DBUG_ENTER("my_seek");
   DBUG_PRINT("my",("fd: %d Pos: %llu  Whence: %d  MyFlags: %d",
 		   fd, (ulonglong) pos, whence, MyFlags));
-  DBUG_ASSERT(pos != MY_FILEPOS_ERROR);		/* safety check */
 
   /*
       Make sure we are using a valid file descriptor!
   */
-  DBUG_ASSERT(fd != -1);
+  assert(fd != -1);
 #if defined (_WIN32)
   newpos= my_win_lseek(fd, pos, whence);
 #else
@@ -62,12 +75,12 @@ my_off_t my_seek(File fd, my_off_t pos, int whence, myf MyFlags)
 #endif
   if (newpos == (os_off_t) -1)
   {
-    my_errno= errno;
+    set_my_errno(errno);
     if (MyFlags & MY_WME)
     {
       char errbuf[MYSYS_STRERROR_SIZE];
       my_error(EE_CANT_SEEK, MYF(0), my_filename(fd),
-               my_errno, my_strerror(errbuf, sizeof(errbuf), my_errno));
+               my_errno(), my_strerror(errbuf, sizeof(errbuf), my_errno()));
     }
     DBUG_PRINT("error", ("lseek: %llu  errno: %d", (ulonglong) newpos, errno));
     DBUG_RETURN(MY_FILEPOS_ERROR);
@@ -88,7 +101,7 @@ my_off_t my_tell(File fd, myf MyFlags)
   os_off_t pos;
   DBUG_ENTER("my_tell");
   DBUG_PRINT("my",("fd: %d  MyFlags: %d",fd, MyFlags));
-  DBUG_ASSERT(fd >= 0);
+  assert(fd >= 0);
 #if defined (HAVE_TELL) && !defined (_WIN32)
   pos= tell(fd);
 #else
@@ -96,14 +109,14 @@ my_off_t my_tell(File fd, myf MyFlags)
 #endif
   if (pos == (os_off_t) -1)
   {
-    my_errno= errno;
+    set_my_errno(errno);
     if (MyFlags & MY_WME)
     {
       char errbuf[MYSYS_STRERROR_SIZE];
       my_error(EE_CANT_SEEK, MYF(0), my_filename(fd),
-               my_errno, my_strerror(errbuf, sizeof(errbuf), my_errno));
+               my_errno(), my_strerror(errbuf, sizeof(errbuf), my_errno()));
     }
-    DBUG_PRINT("error", ("tell: %llu  errno: %d", (ulonglong) pos, my_errno));
+    DBUG_PRINT("error", ("tell: %llu  errno: %d", (ulonglong) pos, my_errno()));
   }
   DBUG_PRINT("exit",("pos: %llu", (ulonglong) pos));
   DBUG_RETURN((my_off_t) pos);

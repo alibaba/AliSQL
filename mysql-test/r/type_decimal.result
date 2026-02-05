@@ -1,5 +1,8 @@
 DROP TABLE IF EXISTS t1, t2;
 SET SQL_WARNINGS=1;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1 (
 id int(11) NOT NULL auto_increment,
 datatype_id int(11) DEFAULT '0' NOT NULL,
@@ -221,7 +224,6 @@ drop  table t1;
 create table t1 (a decimal(10,2) unsigned);
 insert into t1 values ("0.0"),("-0.0"),("+0.0"),("01.0"),("+01.0"),("-01.0");
 Warnings:
-Warning	1264	Out of range value for column 'a' at row 2
 Warning	1264	Out of range value for column 'a' at row 6
 insert into t1 values ("-.1"),("+.1"),(".1");
 Warnings:
@@ -280,7 +282,6 @@ drop  table t1;
 create table t1 (a decimal(10,2) zerofill);
 insert into t1 values ("0.0"),("-0.0"),("+0.0"),("01.0"),("+01.0"),("-01.0");
 Warnings:
-Warning	1264	Out of range value for column 'a' at row 2
 Warning	1264	Out of range value for column 'a' at row 6
 insert into t1 values ("-.1"),("+.1"),(".1");
 Warnings:
@@ -711,17 +712,17 @@ show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `d` decimal(5,0) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=latin1
 drop table t1;
 create table t1 (d decimal);
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `d` decimal(10,0) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=latin1
 drop table t1;
 create table t1 (d decimal(66,0));
-ERROR 42000: Too big precision 66 specified for column 'd'. Maximum is 65.
+ERROR 42000: Too-big precision 66 specified for 'd'. Maximum is 65.
 CREATE TABLE t1 (i INT, d1 DECIMAL(9,2), d2 DECIMAL(9,2));
 INSERT INTO t1 VALUES (1, 101.40, 21.40), (1, -80.00, 0.00),
 (2, 0.00, 0.00), (2, -13.20, 0.00), (2, 59.60, 46.40),
@@ -891,7 +892,7 @@ Table	Create Table
 t1	CREATE TABLE `t1` (
   `a` decimal(10,0) DEFAULT NULL,
   `b` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=latin1
 select round(a,b) as c from t1 order by c;
 c
 1000
@@ -994,3 +995,4 @@ GROUP BY t2.col0
 WHERE CONCAT(t1.col1, CAST(subq.col0 AS DECIMAL));
 1
 DROP TABLE t1, t2;
+SET sql_mode = default;

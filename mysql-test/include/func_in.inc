@@ -261,9 +261,9 @@ select some_id from t1 where some_id not in('-1', '0');
 
 drop table t1;
 
-#
-# BUG#20420: optimizer reports wrong keys on left join with IN
-#
+--echo #
+--echo # BUG#20420: optimizer reports wrong keys on left join with IN
+--echo #
 CREATE TABLE t1 (a int, b int, PRIMARY KEY (a));
 INSERT INTO t1 VALUES (1,1),(2,1),(3,1),(4,1),(5,1),(6,1);
 
@@ -433,9 +433,11 @@ drop table t1;
 CREATE TABLE t1(c0 INTEGER, c1 INTEGER, c2 INTEGER);
 INSERT INTO t1 VALUES(1, 1, 1), (1, 1, 1);
 
+--source include/turn_off_only_full_group_by.inc
 SELECT CASE AVG (c0) WHEN c1 * c2 THEN 1 END FROM t1;
 SELECT CASE c1 * c2 WHEN SUM(c0) THEN 1 WHEN AVG(c0) THEN 2 END FROM t1;
 SELECT CASE c1 WHEN c1 + 1 THEN 1 END, ABS(AVG(c0)) FROM t1;
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 
 DROP TABLE t1;
 
@@ -477,9 +479,9 @@ CREATE TABLE t1 (
   INDEX(c_datetime), INDEX(c_timestamp), INDEX(c_time), INDEX(c_year),
   INDEX(c_char));
 
-INSERT INTO t1 (c_int) VALUES (1), (2), (3), (4), (5);
-INSERT INTO t1 (c_int) SELECT 0 FROM t1;
-INSERT INTO t1 (c_int) SELECT 0 FROM t1;
+INSERT IGNORE INTO t1 (c_int) VALUES (1), (2), (3), (4), (5);
+INSERT IGNORE INTO t1 (c_int) SELECT 0 FROM t1;
+INSERT IGNORE INTO t1 (c_int) SELECT 0 FROM t1;
 
 --enable_warnings
 
@@ -613,7 +615,7 @@ DROP TABLE t1;
 --echo # Bug #11764651-57510: IN(string,real,string) causes invalid read in sort function
 --echo #
 
-SELECT LEFT(GEOMFROMTEXT("POINT(0 0)"),1) IN (@@global.query_cache_type,1,"");
+SELECT LEFT(ST_GEOMFROMTEXT("POINT(0 0)"),1) IN (@@global.query_cache_type,1,"");
 
 --echo # End of test BUG#11764651-57510
 

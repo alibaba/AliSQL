@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -40,6 +47,9 @@
 #include <signaldata/AttrInfo.hpp>
 
 #include <EventLogger.hpp>
+
+#define JAM_FILE_ID 424
+
 extern EventLogger * g_eventLogger;
 
 void
@@ -51,6 +61,7 @@ Dbtup::execCREATE_TAB_REQ(Signal* signal)
   CreateTabReq* req = &reqCopy;
 
   TablerecPtr regTabPtr;
+  FragoperrecPtr fragOperPtr;
   regTabPtr.i = req->tableId;
   ptrCheckGuard(regTabPtr, cnoOfTablerec, tablerec);
 
@@ -69,7 +80,6 @@ Dbtup::execCREATE_TAB_REQ(Signal* signal)
     goto sendref;
   }
 
-  FragoperrecPtr fragOperPtr;
   seizeFragoperrec(fragOperPtr);
   fragOperPtr.p->tableidFrag = regTabPtr.i;
   fragOperPtr.p->attributeCount = req->noOfAttributes;
@@ -469,7 +479,7 @@ void Dbtup::execTUP_ADD_ATTRREQ(Signal* signal)
       
       D("Logfile_client - execTUP_ADD_ATTRREQ");
       Logfile_client lgman(this, c_lgman, regFragPtr.p->m_logfile_group_id);
-      if((terrorCode = lgman.alloc_log_space(sz)))
+      if((terrorCode = lgman.alloc_log_space(sz, jamBuffer())))
       {
         jamEntry();
         addattrrefuseLab(signal, regFragPtr, fragOperPtr, regTabPtr.p, fragId);
@@ -485,6 +495,8 @@ void Dbtup::execTUP_ADD_ATTRREQ(Signal* signal)
 	signal->theData[0] = 1;
 	return;
       case -1:
+        g_eventLogger->warning("Out of space in RG_DISK_OPERATIONS resource,"
+                              " increase config parameter GlobalSharedMemory");
 	ndbrequire("NOT YET IMPLEMENTED" == 0);
 	break;
       }
@@ -713,6 +725,8 @@ void Dbtup::execTUPFRAGREQ(Signal* signal)
     return;
   }
   
+  TablerecPtr regTabPtr;
+
 #ifndef VM_TRACE
   // config mismatch - do not crash if release compiled
   if (tableId >= cnoOfTablerec)
@@ -723,7 +737,6 @@ void Dbtup::execTUPFRAGREQ(Signal* signal)
   }
 #endif
 
-  TablerecPtr regTabPtr;
   regTabPtr.i = tableId;
   ptrCheckGuard(regTabPtr, cnoOfTablerec, tablerec);
 
@@ -798,10 +811,13 @@ void Dbtup::execTUPFRAGREQ(Signal* signal)
   regFragPtr.p->m_lcp_keep_list_tail.setNull();
   regFragPtr.p->noOfPages = 0;
   regFragPtr.p->noOfVarPages = 0;
-  regFragPtr.p->m_max_page_no = 0;
+  regFragPtr.p->m_varWordsFree = 0;
+  regFragPtr.p->m_max_page_cnt = 0;
   regFragPtr.p->m_free_page_id_list = FREE_PAGE_RNIL;
   ndbrequire(regFragPtr.p->m_page_map.isEmpty());
   regFragPtr.p->m_restore_lcp_id = RNIL;
+  regFragPtr.p->m_fixedElemCount = 0;
+  regFragPtr.p->m_varElemCount = 0;
   for (Uint32 i = 0; i<MAX_FREE_LIST+1; i++)
     ndbrequire(regFragPtr.p->free_var_page_array[i].isEmpty());
 
@@ -910,7 +926,7 @@ bool Dbtup::addfragtotab(Tablerec* const regTabPtr,
                          Uint32 fragId,
                          Uint32 fragIndex)
 {
-  for (Uint32 i = 0; i < MAX_FRAG_PER_NODE; i++) {
+  for (Uint32 i = 0; i < NDB_ARRAY_SIZE(regTabPtr->fragid); i++) {
     jam();
     if (regTabPtr->fragid[i] == RNIL) {
       jam();
@@ -926,10 +942,12 @@ void Dbtup::getFragmentrec(FragrecordPtr& regFragPtr,
                            Uint32 fragId,
                            Tablerec* const regTabPtr)
 {
-  for (Uint32 i = 0; i < MAX_FRAG_PER_NODE; i++) {
-    jam();
+  EmulatedJamBuffer* const jamBuf = getThrJamBuf();
+
+  for (Uint32 i = 0; i < NDB_ARRAY_SIZE(regTabPtr->fragid); i++) {
+    thrjam(jamBuf);
     if (regTabPtr->fragid[i] == fragId) {
-      jam();
+      thrjam(jamBuf);
       regFragPtr.i= regTabPtr->fragrec[i];
       ptrCheckGuard(regFragPtr, cnoOfFragrec, fragrecord);
       return;
@@ -1015,7 +1033,7 @@ Dbtup::execALTER_TAB_REQ(Signal *signal)
   case AlterTabReq::AlterTableSumaEnable:
   {
     FragrecordPtr regFragPtr;
-    for (Uint32 i = 0; i < MAX_FRAG_PER_NODE; i++)
+    for (Uint32 i = 0; i < NDB_ARRAY_SIZE(regTabPtr.p->fragrec); i++)
     {
       jam();
       if ((regFragPtr.i = regTabPtr.p->fragrec[i]) != RNIL)
@@ -1044,7 +1062,7 @@ Dbtup::execALTER_TAB_REQ(Signal *signal)
     Uint32 gci = signal->theData[signal->getLength() - 1];
     regTabPtr.p->m_reorg_suma_filter.m_gci_hi = gci;
     FragrecordPtr regFragPtr;
-    for (Uint32 i = 0; i < MAX_FRAG_PER_NODE; i++)
+    for (Uint32 i = 0; i < NDB_ARRAY_SIZE(regTabPtr.p->fragrec); i++)
     {
       jam();
       if ((regFragPtr.i = regTabPtr.p->fragrec[i]) != RNIL)
@@ -1320,7 +1338,7 @@ Dbtup::handleAlterTableCommit(Signal *signal,
   if (AlterTableReq::getReorgFragFlag(req->changeMask))
   {
     FragrecordPtr regFragPtr;
-    for (Uint32 i = 0; i < MAX_FRAG_PER_NODE; i++)
+    for (Uint32 i = 0; i < NDB_ARRAY_SIZE(regTabPtr->fragrec); i++)
     {
       jam();
       if ((regFragPtr.i = regTabPtr->fragrec[i]) != RNIL)
@@ -1363,7 +1381,7 @@ Dbtup::handleAlterTableComplete(Signal *signal,
   if (AlterTableReq::getReorgCompleteFlag(req->changeMask))
   {
     FragrecordPtr regFragPtr;
-    for (Uint32 i = 0; i < MAX_FRAG_PER_NODE; i++)
+    for (Uint32 i = 0; i < NDB_ARRAY_SIZE(regTabPtr->fragrec); i++)
     {
       jam();
       if ((regFragPtr.i = regTabPtr->fragrec[i]) != RNIL)
@@ -1892,7 +1910,7 @@ void Dbtup::releaseAlterTabOpRec(AlterTabOperationPtr regAlterTabOpPtr)
 
 void Dbtup::deleteFragTab(Tablerec* const regTabPtr, Uint32 fragId) 
 {
-  for (Uint32 i = 0; i < MAX_FRAG_PER_NODE; i++) {
+  for (Uint32 i = 0; i < NDB_ARRAY_SIZE(regTabPtr->fragid); i++) {
     jam();
     if (regTabPtr->fragid[i] == fragId) {
       jam();
@@ -1991,7 +2009,7 @@ void Dbtup::releaseFragment(Signal* signal, Uint32 tableId,
   Uint32 fragIndex = RNIL;
   Uint32 fragId = RNIL;
   Uint32 i = 0;
-  for (i = 0; i < MAX_FRAG_PER_NODE; i++) {
+  for (i = 0; i < NDB_ARRAY_SIZE(tabPtr.p->fragid); i++) {
     jam();
     if (tabPtr.p->fragid[i] != RNIL) {
       jam();
@@ -2019,7 +2037,7 @@ void Dbtup::releaseFragment(Signal* signal, Uint32 tableId,
     Uint32 sz= sizeof(Disk_undo::Drop) >> 2;
     D("Logfile_client - releaseFragment");
     Logfile_client lgman(this, c_lgman, logfile_group_id);
-    int r0 = lgman.alloc_log_space(sz);
+    int r0 = lgman.alloc_log_space(sz, jamBuffer());
     jamEntry();
     if (r0)
     {
@@ -2036,9 +2054,11 @@ void Dbtup::releaseFragment(Signal* signal, Uint32 tableId,
       jam();
       return;
     case -1:
+      g_eventLogger->warning("Out of space in RG_DISK_OPERATIONS resource,"
+                             " increase config parameter GlobalSharedMemory");
       warningEvent("Failed to get log buffer for drop table: %u",
 		   tabPtr.i);
-      lgman.free_log_space(sz);
+      lgman.free_log_space(sz, jamBuffer());
       jamEntry();
       goto done;
       break;
@@ -2084,7 +2104,7 @@ Dbtup::drop_fragment_unmap_pages(Signal *signal,
 	  list(c_extent_pool, alloc_info.m_free_extents[0]);
 	Ptr<Extent_info> ext_ptr;
 	c_extent_pool.getPtr(ext_ptr, alloc_info.m_curr_extent_info_ptr_i);
-	list.add(ext_ptr);
+        list.addFirst(ext_ptr);
 	alloc_info.m_curr_extent_info_ptr_i= RNIL;
       }
       
@@ -2112,7 +2132,6 @@ Dbtup::drop_fragment_unmap_pages(Signal *signal,
     Page_cache_client pgman(this, c_pgman);
     int res= pgman.get_page(signal, req, flags);
     jamEntry();
-    m_pgman_ptr = pgman.m_ptr;
     switch(res)
     {
     case 0:
@@ -2177,7 +2196,9 @@ Dbtup::drop_fragment_free_extent(Signal *signal,
 	cb.m_callbackIndex = DROP_FRAGMENT_FREE_EXTENT_LOG_BUFFER_CALLBACK;
 #if NOT_YET_UNDO_FREE_EXTENT
 	Uint32 sz= sizeof(Disk_undo::FreeExtent) >> 2;
-	(void) c_lgman->alloc_log_space(fragPtr.p->m_logfile_group_id, sz);
+	(void) c_lgman->alloc_log_space(fragPtr.p->m_logfile_group_id,
+                                        sz,
+                                        jamBuffer());
         jamEntry();
 	
 	Logfile_client lgman(this, c_lgman, fragPtr.p->m_logfile_group_id);
@@ -2189,6 +2210,8 @@ Dbtup::drop_fragment_free_extent(Signal *signal,
 	  jam();
 	  return;
 	case -1:
+          g_eventLogger->warning("Out of space in RG_DISK_OPERATIONS resource,"
+                             " increase config parameter GlobalSharedMemory");
 	  ndbrequire("NOT YET IMPLEMENTED" == 0);
 	  break;
 	default:
@@ -2202,12 +2225,10 @@ Dbtup::drop_fragment_free_extent(Signal *signal,
       }
     }
     
-    ArrayPool<Page> *cheat_pool= (ArrayPool<Page>*)&m_global_page_pool;
     for(pos= 0; pos<MAX_FREE_LIST; pos++)
     {
       ndbrequire(alloc_info.m_page_requests[pos].isEmpty());
-      LocalDLList<Page> list(* cheat_pool, alloc_info.m_dirty_pages[pos]);
-      list.remove();
+      alloc_info.m_dirty_pages[pos].init(); // Clear dirty page list head
     }
   }
   
@@ -2432,10 +2453,7 @@ done:
     ndbassert(fragPtr.p->free_var_page_array[i].isEmpty());
   }
   
-  {
-    LocalDLFifoList<Page> tmp(c_page_pool, fragPtr.p->thFreeFirst);
-    tmp.remove();
-  }
+  fragPtr.p->thFreeFirst.init(); // Clear free list head
   
   /**
    * Finish
@@ -2464,11 +2482,11 @@ Dbtup::drop_fragment_fsremove_done(Signal* signal,
   Uint32 logfile_group_id = fragPtr.p->m_logfile_group_id ;
 
   Uint32 i;
-  for(i= 0; i<MAX_FRAG_PER_NODE; i++)
+  for(i= 0; i<NDB_ARRAY_SIZE(tabPtr.p->fragrec); i++)
     if(tabPtr.p->fragrec[i] == fragPtr.i)
       break;
 
-  ndbrequire(i != MAX_FRAG_PER_NODE);
+  ndbrequire(i != NDB_ARRAY_SIZE(tabPtr.p->fragrec));
   tabPtr.p->fragid[i]= RNIL;
   tabPtr.p->fragrec[i]= RNIL;
   releaseFragrec(fragPtr);
@@ -2669,10 +2687,47 @@ Dbtup::get_frag_info(Uint32 tableId, Uint32 fragId, Uint32* maxPage)
   
   if (maxPage)
   {
-    * maxPage = fragPtr.p->m_max_page_no;
+    * maxPage = fragPtr.p->m_max_page_cnt;
   }
 
   return true;
+}
+
+const Dbtup::FragStats
+Dbtup::get_frag_stats(Uint32 fragId) const
+{
+  jam();
+  ndbrequire(fragId < cnoOfFragrec);
+  Ptr<Fragrecord> fragptr;
+  fragptr.i = fragId;
+  ptrAss(fragptr, fragrecord);
+  TablerecPtr tabPtr;
+  tabPtr.i = fragptr.p->fragTableId;
+  ptrCheckGuard(tabPtr, cnoOfTablerec, tablerec);
+  
+  const Uint32 fixedWords = tabPtr.p->m_offsets[MM].m_fix_header_size;
+  FragStats fs;
+  fs.fixedRecordBytes       = static_cast<Uint32>(fixedWords * sizeof(Uint32));
+  fs.pageSizeBytes          = File_formats::NDB_PAGE_SIZE; /* 32768 */
+  // Round downwards.
+  fs.fixedSlotsPerPage      = Tup_fixsize_page::DATA_WORDS / fixedWords;
+
+  fs.fixedMemoryAllocPages  = fragptr.p->noOfPages;
+  fs.varMemoryAllocPages    = fragptr.p->noOfVarPages;
+  fs.varMemoryFreeBytes     = fragptr.p->m_varWordsFree * sizeof(Uint32);
+  // Amount of free memory should not exceed allocated memory.
+  ndbassert(fs.varMemoryFreeBytes <=
+            fs.varMemoryAllocPages*File_formats::NDB_PAGE_SIZE);
+  fs.fixedElemCount         = fragptr.p->m_fixedElemCount;
+  // Memory in use should not exceed allocated memory.
+  ndbassert(fs.fixedElemCount*fs.fixedRecordBytes <=
+            fs.fixedMemoryAllocPages*File_formats::NDB_PAGE_SIZE);
+  fs.varElemCount           = fragptr.p->m_varElemCount;
+  // Each row must has a fixed part and may have a var-sized part.
+  ndbassert(fs.varElemCount <= fs.fixedElemCount);
+  fs.logToPhysMapAllocBytes = fragptr.p->m_page_map.getByteSize();
+
+  return fs;
 }
 
 void
@@ -2694,7 +2749,7 @@ Dbtup::execDROP_FRAG_REQ(Signal* signal)
   tabPtr.p->m_dropTable.tabUserPtr = req->senderData;
 
   Uint32 fragIndex = RNIL;
-  for (Uint32 i = 0; i < MAX_FRAG_PER_NODE; i++)
+  for (Uint32 i = 0; i < NDB_ARRAY_SIZE(tabPtr.p->fragid); i++)
   {
     jam();
     if (tabPtr.p->fragid[i] == req->fragId)

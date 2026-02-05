@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -64,9 +71,9 @@ static void usage()
 int main(int argc, char** argv){
   NDB_INIT(argv[0]);
   ndb_opt_set_usage_funcs(short_usage_sub, usage);
-  load_defaults("my",load_default_groups,&argc,&argv);
+  ndb_load_defaults(NULL,load_default_groups,&argc,&argv);
   int ho_error;
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   opt_debug= "d:t:O,/tmp/ndb_delete_all.trace";
 #endif
   if ((ho_error=handle_options(&argc, &argv, my_long_options,
@@ -88,7 +95,7 @@ int main(int argc, char** argv){
 
   Ndb MyNdb(&con, _dbname );
   if(MyNdb.init() != 0){
-    ERR(MyNdb.getNdbError());
+    NDB_ERR(MyNdb.getNdbError());
     return NDBT_ProgramExit(NDBT_FAILED);
   }
   
@@ -139,7 +146,7 @@ int clear_table(Ndb* pNdb, const NdbDictionary::Table* pTab,
     if (pTrans == NULL) {
       err = pNdb->getNdbError();
       if (err.status == NdbError::TemporaryError){
-	ERR(err);
+	NDB_ERR(err);
 	NdbSleep_MilliSleep(50);
 	continue;
       }
@@ -162,7 +169,7 @@ int clear_table(Ndb* pNdb, const NdbDictionary::Table* pTab,
     if(pTrans->execute(NdbTransaction::NoCommit) != 0){
       err = pTrans->getNdbError();    
       if(err.status == NdbError::TemporaryError){
-	ERR(err);
+	NDB_ERR(err);
 	pNdb->closeTransaction(pTrans);
 	NdbSleep_MilliSleep(50);
 	continue;
@@ -190,7 +197,7 @@ int clear_table(Ndb* pNdb, const NdbDictionary::Table* pTab,
       err = pTrans->getNdbError();    
       if(check == -1){
 	if(err.status == NdbError::TemporaryError){
-	  ERR(err);
+	  NDB_ERR(err);
 	  pNdb->closeTransaction(pTrans);
 	  NdbSleep_MilliSleep(50);
 	  par = 1;
@@ -202,7 +209,7 @@ int clear_table(Ndb* pNdb, const NdbDictionary::Table* pTab,
     if(check == -1){
       err = pTrans->getNdbError();    
       if(err.status == NdbError::TemporaryError){
-	ERR(err);
+	NDB_ERR(err);
 	pNdb->closeTransaction(pTrans);
 	NdbSleep_MilliSleep(50);
 	par = 1;
@@ -222,6 +229,6 @@ int clear_table(Ndb* pNdb, const NdbDictionary::Table* pTab,
   
  failed:
   if(pTrans != 0) pNdb->closeTransaction(pTrans);
-  ERR(err);
+  NDB_ERR(err);
   return (err.code != 0 ? err.code : NDBT_FAILED);
 }

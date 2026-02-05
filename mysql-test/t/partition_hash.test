@@ -42,6 +42,7 @@ SELECT a,b,HEX(b) FROM t1 ORDER BY a, b;
 SELECT * FROM t1 WHERE b = 9223372036854775808;
 SELECT * FROM t1 WHERE b = 18446744073709551612;
 SELECT * FROM t1 WHERE b = 18446744073709551615;
+analyze table t1;
 EXPLAIN PARTITIONS SELECT * FROM t1 WHERE b = 9223372036854775808;
 EXPLAIN PARTITIONS SELECT * FROM t1 WHERE b = 18446744073709551612;
 EXPLAIN PARTITIONS SELECT * FROM t1 WHERE b = 18446744073709551615;
@@ -80,6 +81,7 @@ select * from t1 where a > 2 and a < 4;
 select * from t1 where a > 3 and a <= 6;
 select * from t1 where a > 5;
 select * from t1 where a >= 1 and a <= 5;
+analyze table t1;
 explain partitions select * from t1 where a < 0;
 explain partitions select * from t1 where a is null or (a >= 5 and a <= 7); 
 explain partitions select * from t1 where a is null;
@@ -96,6 +98,9 @@ drop table t1;
 #
 # Partition by hash, basic
 #
+CREATE TABLESPACE ts1 ADD DATAFILE 'ts1.ibd';
+CREATE TABLESPACE ts2 ADD DATAFILE 'ts2.ibd';
+CREATE TABLESPACE ts3 ADD DATAFILE 'ts3.ibd';
 CREATE TABLE t1 (
 a int not null,
 b int not null,
@@ -108,6 +113,7 @@ partitions 3
  partition x3 tablespace ts3);
 
 insert into t1 values (1,1,1);
+SHOW CREATE TABLE t1;
 insert into t1 values (2,1,1);
 insert into t1 values (3,1,1);
 insert into t1 values (4,1,1);
@@ -133,7 +139,11 @@ partitions 3
  partition x2 tablespace ts2,
  partition x3 tablespace ts3);
 select * from t1;
+SHOW CREATE TABLE t1;
 drop table t1;
+DROP TABLESPACE ts1;
+DROP TABLESPACE ts2;
+DROP TABLESPACE ts3;
 
 #
 # Partition by hash, only one partition
@@ -163,22 +173,10 @@ drop table t1;
 #
 # Bug# 15968 - crash when INSERT with f1 = -1 into partition by hash(f1)
 #
-CREATE TABLE t1 (f1 INTEGER, f2 char(20)) ENGINE = 'MYISAM' PARTITION BY HASH(f1) PARTITIONS 2;
+CREATE TABLE t1 (f1 INTEGER, f2 char(20)) PARTITION BY HASH(f1) PARTITIONS 2;
 INSERT INTO t1 SET f1 = 0 - 1, f2 = '#######';
 select * from t1;
 drop table t1;
-
-#
-# BUG# 14524 Partitions: crash if blackhole
-#
-# Disable warnings to allow this test case to run without 
-# the Blackhole storage engine.
---disable_warnings
-CREATE TABLE t1 (s1 int) ENGINE=BLACKHOLE PARTITION BY HASH (s1);
---enable_warnings
---error 0,ER_BINLOG_LOGGING_IMPOSSIBLE
-INSERT INTO t1 VALUES (0);
-DROP TABLE t1;
 
 #
 # BUG 18423 Hash partitioning can lose rows in some queries
@@ -186,7 +184,6 @@ DROP TABLE t1;
 create table t1 (c1 int DEFAULT NULL,
                  c2 varchar (30) DEFAULT NULL,
                  c3 date DEFAULT NULL)
-engine = myisam
 partition by hash (to_days(c3))
 partitions 12;
 
@@ -197,17 +194,4 @@ select * from t1;
 select * from t1 where c3 between '2002-01-01' and '2002-12-31';
 
 drop table t1;
-
-#
-# Bug#31210 - INSERT DELAYED crashes server when used on partitioned table
-#
-CREATE TABLE t1 (c1 INT) ENGINE=MyISAM PARTITION BY HASH(c1) PARTITIONS 1;
-# The test succeeds in an embedded server because normal insert is done.
-# The test fails in a normal server with
-# "DELAYED option not supported by table".
---disable_warnings
---error 0, ER_DELAYED_NOT_SUPPORTED
-INSERT DELAYED INTO t1 VALUES (1);
---enable_warnings
-DROP TABLE t1;
 

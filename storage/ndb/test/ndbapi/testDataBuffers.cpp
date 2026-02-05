@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -249,7 +256,7 @@ testcase(Ndb_cluster_connection&cc, int flag)
 	      ndbout << "-- column " << i << " size=" << c.aArraySize << endl;
 	}
 	c.buf = toAligned(c.data);
-	c.bufsiz = sizeof(c.data) - (c.buf - c.data);
+        c.bufsiz = (int)(sizeof(c.data) - (c.buf - c.data));
     }
     ndbout << "tab=" << tab << " cols=" << attrcnt
 	<< " size max=" << smax << " tot=" << stot << endl;
@@ -372,10 +379,10 @@ testcase(Ndb_cluster_connection&cc, int flag)
 		}
 		memset(c.buf, 'B', c.bufsiz);
 		if (useBuf) {
-		    if (op->getValue(c.aAttrName, c.buf + off) < 0)
+                    if (op->getValue(c.aAttrName, c.buf + off) == NULL)
 			return ndberror("getValue key=%d col=%d", key, i);
 		} else {
-		    if ((c.aRa = op->getValue(c.aAttrName)) == 0)
+                    if ((c.aRa = op->getValue(c.aAttrName)) == NULL)
 			return ndberror("getValue key=%d col=%d", key, i);
 		}
 	    }
@@ -469,7 +476,7 @@ testcase(Ndb_cluster_connection&cc, int flag)
 	for (i = 0; i < attrcnt; i++) {
 	    col& c = ccol[i];
 	    if (i == 0) {
-		if (op->getValue(c.aAttrName, (char*)&newkey) < 0)
+                if (op->getValue(c.aAttrName, (char*)&newkey) == NULL)
 		    return ndberror("getValue key=%d col=%d", key, i);
 	    } else {
 		if (xverbose) {
@@ -482,10 +489,10 @@ testcase(Ndb_cluster_connection&cc, int flag)
 		}
 		memset(c.buf, 'C', c.bufsiz);
 		if (useBuf) {
-		    if (op->getValue(c.aAttrName, c.buf + off) < 0)
+                    if (op->getValue(c.aAttrName, c.buf + off) == NULL)
 			return ndberror("getValue key=%d col=%d", key, i);
 		} else {
-		    if ((c.aRa = op->getValue(c.aAttrName)) == 0)
+                    if ((c.aRa = op->getValue(c.aAttrName)) == NULL)
 			return ndberror("getValue key=%d col=%d", key, i);
 		}
 	    }

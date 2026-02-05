@@ -1,15 +1,22 @@
 /*
-   Copyright (C) 2003-2006, 2008 MySQL AB, 2008, 2009 Sun Microsystems, Inc.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
     All rights reserved. Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -513,7 +520,7 @@ void
 PropertiesImpl::setCaseInsensitiveNames(bool value){
   m_insensitive = value;
   if(value)
-    compare = strcasecmp;
+    compare = native_strcasecmp;
   else
     compare = strcmp;
 }
@@ -662,10 +669,10 @@ PropertiesImpl::getPackedSize(Uint32 pLen) const {
       sz += 4; // Type
       sz += 4; // Name Len
       sz += 4; // Value Len
-      sz += mod4(pLen + strlen(content[i]->name)); // Name
+      sz += mod4(pLen + (unsigned)strlen(content[i]->name)); // Name
       switch(content[i]->valueType){
       case PropertiesType_char:
-	sz += mod4(strlen((char *)content[i]->value));
+	sz += mod4((unsigned)strlen((char *)content[i]->value));
 	break;
       case PropertiesType_Uint32:
 	sz += mod4(4);
@@ -734,7 +741,7 @@ PropertiesImpl::pack(Uint32 *& buf, const char * prefix, Uint32 pLen) const {
   CharBuf charBuf;
   
   for(unsigned int i = 0; i<items; i++){
-    const int strLenName      = strlen(content[i]->name);
+    const int strLenName      = (int)strlen(content[i]->name);
     
     if(content[i]->valueType == PropertiesType_Properties){
       charBuf.clear();

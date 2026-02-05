@@ -1,13 +1,20 @@
-/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -18,7 +25,17 @@
 #ifndef ITEM_CREATE_H
 #define ITEM_CREATE_H
 
+#include "my_global.h"
+#include "mysql/mysql_lex_string.h"     // LEX_STRING
+#include "item_func.h"                  // Cast_target
+
+class Item;
+class PT_item_list;
+class THD;
+
+typedef struct charset_info_st CHARSET_INFO;
 typedef struct st_udf_func udf_func;
+struct Cast_type;
 
 /**
   Public function builder interface.
@@ -55,7 +72,8 @@ public:
     @param item_list The list of arguments to the function, can be NULL
     @return An item representing the parsed function call, or NULL
   */
-  virtual Item *create_func(THD *thd, LEX_STRING name, List<Item> *item_list) = 0;
+  virtual Item *create_func(THD *thd, LEX_STRING name, PT_item_list *item_list)
+    = 0;
 
 protected:
   /** Constructor */
@@ -82,19 +100,19 @@ public:
     @param item_list The list of arguments to the function, can be NULL
     @return An item representing the parsed function call
   */
-  virtual Item *create_func(THD *thd, LEX_STRING name, List<Item> *item_list);
+  virtual Item *create_func(THD *thd, LEX_STRING name, PT_item_list *item_list);
 
   /**
     The builder create method, for qualified functions.
     @param thd The current thread
-    @param db The database name
+    @param db The database name or NULL_STR to use the default db name
     @param name The function name
     @param use_explicit_name Should the function be represented as 'db.name'?
     @param item_list The list of arguments to the function, can be NULL
     @return An item representing the parsed function call
   */
   virtual Item* create(THD *thd, LEX_STRING db, LEX_STRING name,
-                       bool use_explicit_name, List<Item> *item_list) = 0;
+                       bool use_explicit_name, PT_item_list *item_list) = 0;
 
 protected:
   /** Constructor. */
@@ -129,7 +147,7 @@ extern Create_qfunc * find_qualified_function_builder(THD *thd);
 class Create_udf_func : public Create_func
 {
 public:
-  virtual Item *create_func(THD *thd, LEX_STRING name, List<Item> *item_list);
+  virtual Item *create_func(THD *thd, LEX_STRING name, PT_item_list *item_list);
 
   /**
     The builder create method, for User Defined Functions.
@@ -138,7 +156,7 @@ public:
     @param item_list The list of arguments to the function, can be NULL
     @return An item representing the parsed function call
   */
-  Item *create(THD *thd, udf_func *fct, List<Item> *item_list);
+  Item *create(THD *thd, udf_func *fct, PT_item_list *item_list);
 
   /** Singleton. */
   static Create_udf_func s_singleton;
@@ -155,19 +173,18 @@ protected:
 /**
   Builder for cast expressions.
   @param thd The current thread
+  @param pos Location of casting expression
   @param a The item to cast
-  @param cast_type the type casted into
-  @param len TODO
-  @param dec TODO
-  @param cs The character set
+  @param type the type casted into
 */
 Item *
-create_func_cast(THD *thd, Item *a, Cast_target cast_type,
-                 const char *len, const char *dec,
-                 const CHARSET_INFO *cs);
+create_func_cast(THD *thd, const POS &pos, Item *a, const Cast_type *type);
+Item *
+create_func_cast(THD *thd, const POS &pos, Item *a, Cast_target cast_target,
+                 const CHARSET_INFO *cs_arg);
 
 Item *create_temporal_literal(THD *thd,
-                              const char *str, uint length,
+                              const char *str, size_t length,
                               const CHARSET_INFO *cs,
                               enum_field_types type, bool send_error);
 

@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -25,19 +32,14 @@
 #include <random.h>
 #include <NdbTick.h>
 #include <my_sys.h>
+#include "../../src/ndbapi/SignalSender.hpp"
+#include <GlobalSignalNumbers.h>
 
 #define MAX_NDB_OBJECTS 32678
 
 #define CHECK(b) if (!(b)) { \
-  ndbout << "ERR: failed on line " << __LINE__ << endl; \
+  g_err.println("ERR: failed on line %u", __LINE__); \
   return -1; } 
-
-#define CHECKE(b) if (!(b)) { \
-  errors++; \
-  ndbout << "ERR: "<< step->getName() \
-         << " failed on line " << __LINE__ << endl; \
-  result = NDBT_FAILED; \
-  continue; } 
 
 static const char* ApiFailTestRun = "ApiFailTestRun";
 static const char* ApiFailTestComplete = "ApiFailTestComplete";
@@ -75,7 +77,7 @@ int runTestMaxNdb(NDBT_Context* ctx, NDBT_Step* step){
       ndbVector.push_back(pNdb);
       
       if (pNdb->init()){
-	ERR(pNdb->getNdbError());
+	NDB_ERR(pNdb->getNdbError());
 	errors++;
 	continue;
       }
@@ -95,7 +97,7 @@ int runTestMaxNdb(NDBT_Context* ctx, NDBT_Step* step){
     oldi = i;
       
     
-    for(size_t j = 0;  j < ndbVector.size(); j++){
+    for(unsigned j = 0;  j < ndbVector.size(); j++){
       delete ndbVector[j];
       if(((j+1) % 250) == 0){
 	ndbout << "Deleted " << (Uint64) j << " ndb objects " << endl;
@@ -121,7 +123,7 @@ int runTestMaxTransaction(NDBT_Context* ctx, NDBT_Step* step){
     return NDBT_FAILED;  
   }
   if (pNdb->init(2048)){
-    ERR(pNdb->getNdbError());
+    NDB_ERR(pNdb->getNdbError());
     delete pNdb;
     return NDBT_FAILED;
   }
@@ -161,7 +163,7 @@ int runTestMaxTransaction(NDBT_Context* ctx, NDBT_Step* step){
       }
       
       if (pCon == NULL){
-	ERR(pNdb->getNdbError());
+	NDB_ERR(pNdb->getNdbError());
 	errors++;
 	continue;
       }
@@ -182,7 +184,7 @@ int runTestMaxTransaction(NDBT_Context* ctx, NDBT_Step* step){
     oldi = i;
       
     
-    for(size_t j = 0; j < conVector.size(); j++){
+    for(unsigned j = 0; j < conVector.size(); j++){
       pNdb->closeTransaction(conVector[j]);
     }
     conVector.clear();
@@ -211,7 +213,7 @@ int runTestMaxOperations(NDBT_Context* ctx, NDBT_Step* step){
     return NDBT_FAILED;  
   }
   if (pNdb->init(2048)){
-    ERR(pNdb->getNdbError());
+    NDB_ERR(pNdb->getNdbError());
     delete pNdb;
     return NDBT_FAILED;
   }
@@ -219,9 +221,9 @@ int runTestMaxOperations(NDBT_Context* ctx, NDBT_Step* step){
   HugoOperations hugoOps(*pTab);
 
   bool endTest = false;
-  while (!endTest && result == NDBT_OK){
+  while (!endTest){
     int errors = 0;
-    int maxErrors = 5;
+    const int maxErrors = 5;
 
     maxOpsLimit = l*1000;    
        
@@ -231,40 +233,48 @@ int runTestMaxOperations(NDBT_Context* ctx, NDBT_Step* step){
     }
     
     int i = 0;
-    while (errors < maxErrors){
-      
-      if(hugoOps.pkReadRecord(pNdb,1, 1) != NDBT_OK){
-	errors++;
-	continue;
-      }
-	        
+    do
+    {
       i++;      
 
-      if (i >= maxOpsLimit){
-	errors = maxErrors;
+      const int rowNo = (i % 256);
+      if(hugoOps.pkReadRecord(pNdb, rowNo, 1) != NDBT_OK){
+        errors++;
+        if (errors >= maxErrors){
+          result = NDBT_FAILED;
+          maxOpsLimit = i;
+        }
       }
-	
-    }
+
+      // Avoid Transporter overload by executing after max 1000 ops.
+      int execResult = 0;
+      if (i >= maxOpsLimit)
+        execResult = hugoOps.execute_Commit(pNdb); //Commit after last op
+      else if ((i%1000) == 0)
+        execResult = hugoOps.execute_NoCommit(pNdb);
+      else
+        continue;
+
+      switch(execResult){
+      case NDBT_OK:
+        break;
+
+      default:
+        result = NDBT_FAILED;
+        // Fallthrough to '233' which also terminate test, but not 'FAILED'
+      case 233:  // Out of operation records in transaction coordinator  
+        // OK - end test
+        endTest = true;
+        maxOpsLimit = i;
+        break;
+      }
+    } while (i < maxOpsLimit);
 
     ndbout << i << " operations used" << endl;
 
-    int execResult = hugoOps.execute_Commit(pNdb);
-    switch(execResult){
-    case NDBT_OK:
-      break;
-    case 233: // Out of operation records in transaction coordinator      
-      // OK - end test
-      endTest = true;
-      break;
-    default:
-      result = NDBT_FAILED;
-      break;
-    }
-    
     hugoOps.closeTransaction(pNdb);
 
     l++;
-
   }
 
   delete pNdb;
@@ -283,7 +293,7 @@ int runTestGetValue(NDBT_Context* ctx, NDBT_Step* step){
     return NDBT_FAILED;  
   }
   if (pNdb->init(2048)){
-    ERR(pNdb->getNdbError());
+    NDB_ERR(pNdb->getNdbError());
     delete pNdb;
     return NDBT_FAILED;
   }
@@ -316,7 +326,7 @@ int runTestGetValue(NDBT_Context* ctx, NDBT_Step* step){
     for(int a = 0; a<pTab->getNoOfColumns(); a++){
       if (pTab->getColumn(a)->getPrimaryKey() == true){
 	if(hugoOps.equalForAttr(pOp, a, 1) != 0){
-	  ERR(pCon->getNdbError());
+	  NDB_ERR(pCon->getNdbError());
 	  pNdb->closeTransaction(pCon);
 	  delete pNdb;
 	  return NDBT_FAILED;
@@ -330,7 +340,7 @@ int runTestGetValue(NDBT_Context* ctx, NDBT_Step* step){
 	
       if (pOp->getValue(pTab->getColumn(1)->getName()) == NULL) {
 	const NdbError err = pCon->getNdbError();
-	ERR(err);
+	NDB_ERR(err);
 	if (err.code == 0)
 	  result = NDBT_FAILED;	
 	errors++;
@@ -352,10 +362,10 @@ int runTestGetValue(NDBT_Context* ctx, NDBT_Step* step){
       case 4257: // NDBAPI - Too much AI
       case 4002: // NDBAPI - send problem
 	// OK errors
-	ERR(pCon->getNdbError());
+	NDB_ERR(pCon->getNdbError());
 	break;
       default:
-	ERR(pCon->getNdbError());
+	NDB_ERR(pCon->getNdbError());
 	ndbout << "Illegal error" << endl;
 	result= NDBT_FAILED;
 	break;
@@ -384,7 +394,7 @@ int runTestEqual(NDBT_Context* ctx, NDBT_Step* step){
     return NDBT_FAILED;  
   }
   if (pNdb->init(2048)){
-    ERR(pNdb->getNdbError());
+    NDB_ERR(pNdb->getNdbError());
     delete pNdb;
     return NDBT_FAILED;
   }
@@ -405,14 +415,14 @@ int runTestEqual(NDBT_Context* ctx, NDBT_Step* step){
       
       NdbOperation* pOp = pCon->getNdbOperation(pTab->getName());
       if (pOp == NULL){
-	ERR(pCon->getNdbError());
+	NDB_ERR(pCon->getNdbError());
 	pNdb->closeTransaction(pCon);
 	delete pNdb;
 	return NDBT_FAILED;
       }
       
       if (pOp->readTuple() != 0){
-	ERR(pCon->getNdbError());
+	NDB_ERR(pCon->getNdbError());
 	pNdb->closeTransaction(pCon);
 	delete pNdb;
 	return NDBT_FAILED;
@@ -428,7 +438,7 @@ int runTestEqual(NDBT_Context* ctx, NDBT_Step* step){
 	    if (pTab->getColumn(a)->getPrimaryKey() == true){
 	      if(hugoOps.equalForAttr(pOp, a, 1) != 0){
 		const NdbError err = pCon->getNdbError();
-		ERR(err);
+		NDB_ERR(err);
 		if (err.code == 0)
 		  result = NDBT_FAILED;
 		errors++;
@@ -441,7 +451,7 @@ int runTestEqual(NDBT_Context* ctx, NDBT_Step* step){
 	    if (pTab->getColumn(a)->getPrimaryKey() == true){
 	      if(hugoOps.equalForAttr(pOp, a, 1) != 0){
 		const NdbError err = pCon->getNdbError();
-		ERR(err);
+		NDB_ERR(err);
 		if (err.code == 0)
 		  result = NDBT_FAILED;
 		errors++;
@@ -456,7 +466,7 @@ int runTestEqual(NDBT_Context* ctx, NDBT_Step* step){
       
       if (pOp->getValue(pTab->getColumn(1)->getName()) == NULL) {
         const NdbError err = pCon->getNdbError();
-	ERR(pCon->getNdbError());
+	NDB_ERR(pCon->getNdbError());
 	pNdb->closeTransaction(pCon);
 	delete pNdb;
         if (err.code == 4225) {
@@ -471,7 +481,7 @@ int runTestEqual(NDBT_Context* ctx, NDBT_Step* step){
       
       int check = pCon->execute(Commit);
       if (check != 0){
-	ERR(pCon->getNdbError());
+	NDB_ERR(pCon->getNdbError());
       }
       
       pNdb->closeTransaction(pCon);
@@ -508,12 +518,12 @@ int runTestDeleteNdb(NDBT_Context* ctx, NDBT_Step* step){
       ndbVector.push_back(pNdb);
       
       if (pNdb->init()){
-	ERR(pNdb->getNdbError());
+	NDB_ERR(pNdb->getNdbError());
 	result = NDBT_FAILED;	
 	goto end_test;
       }
       if (pNdb->waitUntilReady() != 0){
-	ERR(pNdb->getNdbError());
+	NDB_ERR(pNdb->getNdbError());
 	result = NDBT_FAILED;	
 	goto end_test;
       }
@@ -542,7 +552,7 @@ int runTestDeleteNdb(NDBT_Context* ctx, NDBT_Step* step){
     }
     
     // Delete the ndb objects
-    for(size_t j = 0;  j < ndbVector.size(); j++)
+    for(unsigned j = 0;  j < ndbVector.size(); j++)
       delete ndbVector[j];
     ndbVector.clear();
     l++;
@@ -551,7 +561,7 @@ int runTestDeleteNdb(NDBT_Context* ctx, NDBT_Step* step){
   
  end_test:
   
-  for(size_t i = 0;  i < ndbVector.size(); i++)
+  for(unsigned i = 0;  i < ndbVector.size(); i++)
     delete ndbVector[i];
   ndbVector.clear();
   
@@ -592,7 +602,7 @@ int runTestWaitUntilReady(NDBT_Context* ctx, NDBT_Step* step){
   const NdbError err = pNdb->getNdbError();
   delete pNdb;
 
-  ERR(err);
+  NDB_ERR(err);
   if (err.code != 4256)
     return NDBT_FAILED;
   
@@ -607,7 +617,7 @@ int runGetNdbOperationNoTab(NDBT_Context* ctx, NDBT_Step* step){
     return NDBT_FAILED;  
   }
   if (pNdb->init()){
-    ERR(pNdb->getNdbError());
+    NDB_ERR(pNdb->getNdbError());
     delete pNdb;
     return NDBT_FAILED;
   }
@@ -622,7 +632,7 @@ int runGetNdbOperationNoTab(NDBT_Context* ctx, NDBT_Step* step){
   NdbOperation* pOp = pCon->getNdbOperation("HUPP76");
   if (pOp == NULL){
     NdbError err = pCon->getNdbError();
-    ERR(err);
+    NDB_ERR(err);
     if (err.code == 0){
       pNdb->closeTransaction(pCon);
       delete pNdb;
@@ -648,7 +658,7 @@ int runBadColNameHandling(NDBT_Context* ctx, NDBT_Step* step){
     return NDBT_FAILED;  
   }
   if (pNdb->init()){
-    ERR(pNdb->getNdbError());
+    NDB_ERR(pNdb->getNdbError());
     delete pNdb;
     return NDBT_FAILED;
   }
@@ -670,7 +680,7 @@ int runBadColNameHandling(NDBT_Context* ctx, NDBT_Step* step){
     NdbOperation* pOp = (i < 4 ? pCon->getNdbOperation(pTab->getName()):
                          pCon->getNdbScanOperation(pTab->getName()));
     if (pOp == NULL){
-      ERR(pCon->getNdbError());
+      NDB_ERR(pCon->getNdbError());
       pNdb->closeTransaction(pCon);  
       delete pNdb;
       return NDBT_FAILED;
@@ -683,7 +693,7 @@ int runBadColNameHandling(NDBT_Context* ctx, NDBT_Step* step){
     switch(i) {
     case 0:
       if (pOp->readTuple() != 0){
-        ERR(pCon->getNdbError());
+        NDB_ERR(pCon->getNdbError());
         pNdb->closeTransaction(pCon);
         delete pNdb;
         return NDBT_FAILED;
@@ -697,7 +707,7 @@ int runBadColNameHandling(NDBT_Context* ctx, NDBT_Step* step){
 
     case 1:
       if (pOp->readTuple() != 0){
-        ERR(pCon->getNdbError());
+        NDB_ERR(pCon->getNdbError());
         pNdb->closeTransaction(pCon);
         delete pNdb;
         return NDBT_FAILED;
@@ -711,7 +721,7 @@ int runBadColNameHandling(NDBT_Context* ctx, NDBT_Step* step){
 
     case 2:
       if (pOp->writeTuple() != 0){
-        ERR(pCon->getNdbError());
+        NDB_ERR(pCon->getNdbError());
         pNdb->closeTransaction(pCon);
         delete pNdb;
         return NDBT_FAILED;
@@ -722,7 +732,7 @@ int runBadColNameHandling(NDBT_Context* ctx, NDBT_Step* step){
         if (pTab->getColumn(a)->getPrimaryKey() == true){
           if(hugoOps.equalForAttr(pOp, a, 1) != 0){
             const NdbError err = pCon->getNdbError();
-            ERR(err);
+            NDB_ERR(err);
             pNdb->closeTransaction(pCon);
             delete pNdb;
             return NDBT_FAILED;
@@ -738,7 +748,7 @@ int runBadColNameHandling(NDBT_Context* ctx, NDBT_Step* step){
 
     case 3:
       if (pOp->readTuple() != 0){
-        ERR(pCon->getNdbError());
+        NDB_ERR(pCon->getNdbError());
         pNdb->closeTransaction(pCon);
         delete pNdb;
         return NDBT_FAILED;
@@ -754,7 +764,7 @@ int runBadColNameHandling(NDBT_Context* ctx, NDBT_Step* step){
     {
       NdbScanOperation* sop= (NdbScanOperation*) pOp;
       if (sop->readTuples() != 0){
-        ERR(pCon->getNdbError());
+        NDB_ERR(pCon->getNdbError());
         pNdb->closeTransaction(pCon);
         delete pNdb;
         return NDBT_FAILED;
@@ -778,8 +788,8 @@ int runBadColNameHandling(NDBT_Context* ctx, NDBT_Step* step){
     {
       const NdbError opErr= pOp->getNdbError();
       const NdbError transErr = pCon->getNdbError();
-      ERR(opErr);
-      ERR(transErr);
+      NDB_ERR(opErr);
+      NDB_ERR(transErr);
       if (opErr.code != transErr.code) {
         ndbout << "Error reporting mismatch, expected " 
                << expectedError << endl;
@@ -817,7 +827,7 @@ int runMissingOperation(NDBT_Context* ctx, NDBT_Step* step){
     return NDBT_FAILED;  
   }
   if (pNdb->init()){
-    ERR(pNdb->getNdbError());
+    NDB_ERR(pNdb->getNdbError());
     delete pNdb;
     return NDBT_FAILED;
   }
@@ -831,7 +841,7 @@ int runMissingOperation(NDBT_Context* ctx, NDBT_Step* step){
     
   NdbOperation* pOp = pCon->getNdbOperation(pTab->getName());
   if (pOp == NULL){
-    ERR(pCon->getNdbError());
+    NDB_ERR(pCon->getNdbError());
     pNdb->closeTransaction(pCon);  
     delete pNdb;
     return NDBT_FAILED;
@@ -842,7 +852,7 @@ int runMissingOperation(NDBT_Context* ctx, NDBT_Step* step){
   // Call getValue should not work
   if (pOp->getValue(pTab->getColumn(1)->getName()) == NULL) {
     const NdbError err = pCon->getNdbError();
-    ERR(err);
+    NDB_ERR(err);
     if (err.code == 0){
       ndbout << "hupp" << endl;
       result = NDBT_FAILED;	
@@ -867,7 +877,7 @@ int runGetValueInUpdate(NDBT_Context* ctx, NDBT_Step* step){
     return NDBT_FAILED;  
   }
   if (pNdb->init()){
-    ERR(pNdb->getNdbError());
+    NDB_ERR(pNdb->getNdbError());
     delete pNdb;
     return NDBT_FAILED;
   }
@@ -881,7 +891,7 @@ int runGetValueInUpdate(NDBT_Context* ctx, NDBT_Step* step){
     
   NdbOperation* pOp = pCon->getNdbOperation(pTab->getName());
   if (pOp == NULL){
-    ERR(pCon->getNdbError());
+    NDB_ERR(pCon->getNdbError());
     pNdb->closeTransaction(pCon);  
     delete pNdb;
     return NDBT_FAILED;
@@ -897,7 +907,7 @@ int runGetValueInUpdate(NDBT_Context* ctx, NDBT_Step* step){
   if (pOp->getValue(pTab->getColumn(1)->getName()) == NULL) {
     // It didn't work
     const NdbError err = pCon->getNdbError();
-    ERR(err);
+    NDB_ERR(err);
     if (err.code == 0){
       pNdb->closeTransaction(pCon);  
       delete pNdb;
@@ -912,7 +922,7 @@ int runGetValueInUpdate(NDBT_Context* ctx, NDBT_Step* step){
 
   int check = pCon->execute(Commit);
   if (check != 0){
-    ERR(pCon->getNdbError());
+    NDB_ERR(pCon->getNdbError());
   }
   
   pNdb->closeTransaction(pCon);  
@@ -933,7 +943,7 @@ int runUpdateWithoutValues(NDBT_Context* ctx, NDBT_Step* step){
     return NDBT_FAILED;  
   }
   if (pNdb->init()){
-    ERR(pNdb->getNdbError());
+    NDB_ERR(pNdb->getNdbError());
     delete pNdb;
     return NDBT_FAILED;
   }
@@ -947,7 +957,7 @@ int runUpdateWithoutValues(NDBT_Context* ctx, NDBT_Step* step){
     
   NdbOperation* pOp = pCon->getNdbOperation(pTab->getName());
   if (pOp == NULL){
-    ERR(pCon->getNdbError());
+    NDB_ERR(pCon->getNdbError());
     pNdb->closeTransaction(pCon);  
     delete pNdb;
     return NDBT_FAILED;
@@ -955,7 +965,7 @@ int runUpdateWithoutValues(NDBT_Context* ctx, NDBT_Step* step){
   
   if (pOp->updateTuple() != 0){
     pNdb->closeTransaction(pCon);
-    ERR(pOp->getNdbError());
+    NDB_ERR(pOp->getNdbError());
     delete pNdb;
     return NDBT_FAILED;
   }
@@ -963,7 +973,7 @@ int runUpdateWithoutValues(NDBT_Context* ctx, NDBT_Step* step){
   for(int a = 0; a<pTab->getNoOfColumns(); a++){
     if (pTab->getColumn(a)->getPrimaryKey() == true){
       if(hugoOps.equalForAttr(pOp, a, 1) != 0){
-	ERR(pCon->getNdbError());
+	NDB_ERR(pCon->getNdbError());
 	pNdb->closeTransaction(pCon);
 	delete pNdb;
 	return NDBT_FAILED;
@@ -978,7 +988,7 @@ int runUpdateWithoutValues(NDBT_Context* ctx, NDBT_Step* step){
   if (check == 0){
     ndbout << "execute worked" << endl;
   } else {
-    ERR(pCon->getNdbError());
+    NDB_ERR(pCon->getNdbError());
     result = NDBT_FAILED;
   }
   
@@ -999,7 +1009,7 @@ int runUpdateWithoutKeys(NDBT_Context* ctx, NDBT_Step* step){
     return NDBT_FAILED;  
   }
   if (pNdb->init()){
-    ERR(pNdb->getNdbError());
+    NDB_ERR(pNdb->getNdbError());
     delete pNdb;
     return NDBT_FAILED;
   }
@@ -1013,7 +1023,7 @@ int runUpdateWithoutKeys(NDBT_Context* ctx, NDBT_Step* step){
     
   NdbOperation* pOp = pCon->getNdbOperation(pTab->getName());
   if (pOp == NULL){
-    ERR(pCon->getNdbError());
+    NDB_ERR(pCon->getNdbError());
     pNdb->closeTransaction(pCon);  
     delete pNdb;
     return NDBT_FAILED;
@@ -1021,7 +1031,7 @@ int runUpdateWithoutKeys(NDBT_Context* ctx, NDBT_Step* step){
   
   if (pOp->updateTuple() != 0){
     pNdb->closeTransaction(pCon);
-    ERR(pOp->getNdbError());
+    NDB_ERR(pOp->getNdbError());
     delete pNdb;
     return NDBT_FAILED;
   }
@@ -1034,7 +1044,7 @@ int runUpdateWithoutKeys(NDBT_Context* ctx, NDBT_Step* step){
     ndbout << "execute worked" << endl;
     result = NDBT_FAILED;
   } else {
-    ERR(pCon->getNdbError());
+    NDB_ERR(pCon->getNdbError());
   }
   
   pNdb->closeTransaction(pCon);  
@@ -1065,21 +1075,21 @@ int runReadWithoutGetValue(NDBT_Context* ctx, NDBT_Step* step){
     
       NdbOperation* pOp = pCon->getNdbOperation(pTab->getName());
       if (pOp == NULL){
-	ERR(pCon->getNdbError());
+	NDB_ERR(pCon->getNdbError());
 	pNdb->closeTransaction(pCon);  
 	return NDBT_FAILED;
       }
   
       if (pOp->readTuple((NdbOperation::LockMode)lm) != 0){
 	pNdb->closeTransaction(pCon);
-	ERR(pOp->getNdbError());
+	NDB_ERR(pOp->getNdbError());
 	return NDBT_FAILED;
       }
     
       for(int a = 0; a<pTab->getNoOfColumns(); a++){
 	if (pTab->getColumn(a)->getPrimaryKey() == true){
 	  if(hugoOps.equalForAttr(pOp, a, 1) != 0){
-	    ERR(pCon->getNdbError());
+	    NDB_ERR(pCon->getNdbError());
 	    pNdb->closeTransaction(pCon);
 	    return NDBT_FAILED;
 	  }
@@ -1093,7 +1103,7 @@ int runReadWithoutGetValue(NDBT_Context* ctx, NDBT_Step* step){
       if (check == 0){
 	ndbout << "execute worked" << endl;
       } else {
-	ERR(pCon->getNdbError());
+	NDB_ERR(pCon->getNdbError());
 	result = NDBT_FAILED;
       }
     
@@ -1114,14 +1124,14 @@ int runReadWithoutGetValue(NDBT_Context* ctx, NDBT_Step* step){
     
     NdbScanOperation* pOp = pCon->getNdbScanOperation(pTab->getName());
     if (pOp == NULL){
-      ERR(pCon->getNdbError());
+      NDB_ERR(pCon->getNdbError());
       pNdb->closeTransaction(pCon);  
       return NDBT_FAILED;
     }
     
     if ((pOp->readTuples((NdbOperation::LockMode)lm)) != 0){
       pNdb->closeTransaction(pCon);
-      ERR(pOp->getNdbError());
+      NDB_ERR(pOp->getNdbError());
       return NDBT_FAILED;
     }
     
@@ -1133,7 +1143,7 @@ int runReadWithoutGetValue(NDBT_Context* ctx, NDBT_Step* step){
     if (check == 0){
       ndbout << "execute worked" << endl;
     } else {
-      ERR(pCon->getNdbError());
+      NDB_ERR(pCon->getNdbError());
       result = NDBT_FAILED;
     }
   
@@ -1159,7 +1169,7 @@ int runCheckGetNdbErrorOperation(NDBT_Context* ctx, NDBT_Step* step){
     return NDBT_FAILED;  
   }
   if (pNdb->init(2048)){
-    ERR(pNdb->getNdbError());
+    NDB_ERR(pNdb->getNdbError());
     delete pNdb;
     return NDBT_FAILED;
   }
@@ -1176,7 +1186,7 @@ int runCheckGetNdbErrorOperation(NDBT_Context* ctx, NDBT_Step* step){
   
   NdbOperation* pOp = pCon->getNdbOperation(pTab->getName());
   if (pOp == NULL){
-    ERR(pCon->getNdbError());
+    NDB_ERR(pCon->getNdbError());
     pNdb->closeTransaction(pCon);
     delete pNdb;
     return NDBT_FAILED;
@@ -1191,7 +1201,7 @@ int runCheckGetNdbErrorOperation(NDBT_Context* ctx, NDBT_Step* step){
 	// An error has occured, check that 
 	// it's possible to get the NdbErrorOperation
 	const NdbError err = pCon->getNdbError();
-	ERR(err);
+	NDB_ERR(err);
 	if (err.code == 0)
 	  result = NDBT_FAILED;
 
@@ -1200,7 +1210,7 @@ int runCheckGetNdbErrorOperation(NDBT_Context* ctx, NDBT_Step* step){
 	  result = NDBT_FAILED;
 	else {
 	  const NdbError err2 = pOp2->getNdbError();
-	  ERR(err2);
+	  NDB_ERR(err2);
 	  if (err.code == 0)
 	    result = NDBT_FAILED;
 	}
@@ -1344,7 +1354,7 @@ int runScan_4006(NDBT_Context* ctx, NDBT_Step* step){
     return NDBT_FAILED;  
   }
   if (pNdb->init(max)){
-    ERR(pNdb->getNdbError());
+    NDB_ERR(pNdb->getNdbError());
     delete pNdb;
     return NDBT_FAILED;
   }
@@ -1362,7 +1372,7 @@ int runScan_4006(NDBT_Context* ctx, NDBT_Step* step){
   {
     NdbScanOperation* pOp = pCon->getNdbScanOperation(pTab->getName());
     if (pOp == NULL){
-      ERR(pCon->getNdbError());
+      NDB_ERR(pCon->getNdbError());
       pNdb->closeTransaction(pCon);  
       delete pNdb;
       return NDBT_FAILED;
@@ -1370,7 +1380,7 @@ int runScan_4006(NDBT_Context* ctx, NDBT_Step* step){
     
     if (pOp->readTuples() != 0){
       pNdb->closeTransaction(pCon);
-      ERR(pOp->getNdbError());
+      NDB_ERR(pOp->getNdbError());
       delete pNdb;
       return NDBT_FAILED;
     }
@@ -1384,7 +1394,7 @@ int runScan_4006(NDBT_Context* ctx, NDBT_Step* step){
   if (check == 0){
     ndbout << "execute worked" << endl;
   } else {
-    ERR(pCon->getNdbError());
+    NDB_ERR(pCon->getNdbError());
   }
   
   for(i= 0; i<scans.size(); i++)
@@ -1393,7 +1403,7 @@ int runScan_4006(NDBT_Context* ctx, NDBT_Step* step){
     while((check= pOp->nextResult()) == 0);
     if(check != 1)
     {
-      ERR(pOp->getNdbError());
+      NDB_ERR(pOp->getNdbError());
       pNdb->closeTransaction(pCon);
       delete pNdb;
       return NDBT_FAILED;
@@ -1465,7 +1475,7 @@ int createPkIndex(NDBT_Context* ctx, NDBT_Step* step){
   if (pNdb->getDictionary()->createIndex(pIdx) != 0){
     ndbout << "FAILED!" << endl;
     const NdbError err = pNdb->getDictionary()->getNdbError();
-    ERR(err);
+    NDB_ERR(err);
     return NDBT_FAILED;
   }
 
@@ -1482,7 +1492,7 @@ int createPkIndex_Drop(NDBT_Context* ctx, NDBT_Step* step){
   if (pNdb->getDictionary()->dropIndex(pkIdxName, 
 				       pTab->getName()) != 0){
     ndbout << "FAILED!" << endl;
-    ERR(pNdb->getDictionary()->getNdbError());
+    NDB_ERR(pNdb->getDictionary()->getNdbError());
     return NDBT_FAILED;
   } else {
     ndbout << "OK!" << endl;
@@ -1756,6 +1766,141 @@ int runCheckNdbObjectList(NDBT_Context* ctx, NDBT_Step* step)
   
   return (cnt1 == do_cnt(con)) ? NDBT_OK : NDBT_FAILED;
 }
+
+
+static Ndb_cluster_connection* g_cluster_connection;
+
+int runNdbClusterConnectionDelete_connection_owner(NDBT_Context* ctx,
+                                                   NDBT_Step* step)
+{
+  // Get connectstring from main connection
+  char constr[256];
+  if (!ctx->m_cluster_connection.get_connectstring(constr,
+                                                   sizeof(constr)))
+  {
+    g_err << "Too short buffer for connectstring" << endl;
+    return NDBT_FAILED;
+  }
+
+  // Create a new cluster connection, connect it and assign
+  // to pointer so the other thread can access it.
+  Ndb_cluster_connection* con = new Ndb_cluster_connection(constr);
+
+  const int retries = 12;
+  const int retry_delay = 5;
+  const int verbose = 1;
+  if (con->connect(retries, retry_delay, verbose) != 0)
+  {
+    delete con;
+    g_err << "Ndb_cluster_connection.connect failed" << endl;
+    return NDBT_FAILED;
+  }
+
+  g_cluster_connection = con;
+
+  // Signal other thread that cluster connection has been creted
+  ctx->setProperty("CREATED", 1);
+
+  // Now wait for the other thread to use the connection
+  // until it signals this thread to continue and
+  // delete the cluster connection(since the
+  // other thread still have live Ndb objects created
+  // in the connection, this thread should hang in
+  // the delete until other thread has finished cleaning up)
+  ctx->getPropertyWait("CREATED", 2);
+
+  g_cluster_connection = NULL;
+  delete con;
+
+  return NDBT_OK;
+}
+
+int runNdbClusterConnectionDelete_connection_user(NDBT_Context* ctx, NDBT_Step* step)
+{
+  // Wait for the cluster connection to be created by other thread
+  ctx->getPropertyWait("CREATED", 1);
+
+  Ndb_cluster_connection* con = g_cluster_connection;
+
+  // Create some Ndb objects and start transactions
+  class ActiveTransactions
+  {
+    Vector<NdbTransaction*> m_transactions;
+
+  public:
+    void release()
+    {
+      while(m_transactions.size())
+      {
+        NdbTransaction* trans = m_transactions[0];
+        Ndb* ndb = trans->getNdb();
+        g_info << "Deleting Ndb object " << ndb <<
+                  "and transaction " << trans << endl;
+        ndb->closeTransaction(trans);
+        delete ndb;
+        m_transactions.erase(0);
+      }
+      // The list should be empty
+      assert(m_transactions.size() == 0);
+    }
+
+    ~ActiveTransactions()
+    {
+      release();
+    }
+
+    void push_back(NdbTransaction* trans)
+    {
+      m_transactions.push_back(trans);
+    }
+  } active_transactions;
+
+  g_info << "Creating Ndb objects and transactions.." << endl;
+  for (Uint32 i = 0; i<100; i++)
+  {
+    Ndb* ndb = new Ndb(con, "TEST_DB");
+    if (ndb == NULL){
+      g_err << "ndb == NULL" << endl;
+      return NDBT_FAILED;
+    }
+    if (ndb->init(256) != 0){
+      NDB_ERR(ndb->getNdbError());
+      delete ndb;
+      return NDBT_FAILED;
+    }
+
+    if (ndb->waitUntilReady() != 0){
+      NDB_ERR(ndb->getNdbError());
+      delete ndb;
+      return NDBT_FAILED;
+    }
+
+    NdbTransaction* trans = ndb->startTransaction();
+    if (trans == NULL){
+      g_err << "trans == NULL" << endl;
+      NDB_ERR(ndb->getNdbError());
+      delete ndb;
+      return NDBT_FAILED;
+    }
+
+    active_transactions.push_back(trans);
+  }
+  g_info << "  ok!" << endl;
+
+  // Signal to cluster connection owner that Ndb objects have been created
+  ctx->setProperty("CREATED", 2);
+
+  // Delay a little and then start closing transactions and
+  // deleting the Ndb objects
+  NdbSleep_SecSleep(1);
+
+  g_info << "Releasing transactions and related Ndb objects..." << endl;
+  active_transactions.release();
+  g_info << "  ok!" << endl;
+  return NDBT_OK;
+}
+
+
   
 static void
 testExecuteAsynchCallback(int res, NdbTransaction *con, void *data_ptr)
@@ -1776,35 +1921,35 @@ int runTestExecuteAsynch(NDBT_Context* ctx, NDBT_Step* step){
     return NDBT_FAILED;  
   }
   if (pNdb->init(2048)){
-    ERR(pNdb->getNdbError());
+    NDB_ERR(pNdb->getNdbError());
     delete pNdb;
     return NDBT_FAILED;
   }
 
   NdbConnection* pCon = pNdb->startTransaction();
   if (pCon == NULL){
-    ERR(pNdb->getNdbError());
+    NDB_ERR(pNdb->getNdbError());
     delete pNdb;
     return NDBT_FAILED;
   }
 
   NdbScanOperation* pOp = pCon->getNdbScanOperation(pTab->getName());
   if (pOp == NULL){
-    ERR(pOp->getNdbError());
+    NDB_ERR(pOp->getNdbError());
     pNdb->closeTransaction(pCon);
     delete pNdb;
     return NDBT_FAILED;
   }
 
   if (pOp->readTuples() != 0){
-    ERR(pOp->getNdbError());
+    NDB_ERR(pOp->getNdbError());
     pNdb->closeTransaction(pCon);
     delete pNdb;
     return NDBT_FAILED;
   }
 
   if (pOp->getValue(NdbDictionary::Column::FRAGMENT) == 0){
-    ERR(pOp->getNdbError());
+    NDB_ERR(pOp->getNdbError());
     pNdb->closeTransaction(pCon);
     delete pNdb;
     return NDBT_FAILED;
@@ -1814,7 +1959,7 @@ int runTestExecuteAsynch(NDBT_Context* ctx, NDBT_Step* step){
   while(pNdb->pollNdb(100000) == 0)
     ;
   if (res != 0){
-    ERR(pCon->getNdbError());
+    NDB_ERR(pCon->getNdbError());
     ndbout << "Error returned from execute: " << res << endl;
     result= NDBT_FAILED;
   }
@@ -2791,7 +2936,8 @@ runBug44065_org(NDBT_Context* ctx, NDBT_Step* step)
         ndbout << "Execute failed, error is " 
                << err.code << " " << endl;
         CHECK((err.classification == NdbError::TemporaryResourceError ||
-               err.classification == NdbError::OverloadError));
+               err.classification == NdbError::OverloadError ||
+               err.classification == NdbError::TimeoutExpired));
         NdbSleep_MilliSleep(50);
       }
       
@@ -3141,7 +3287,7 @@ int runReadColumnDuplicates(NDBT_Context* ctx, NDBT_Step* step){
     return NDBT_FAILED;  
   }
   if (pNdb->init()){
-    ERR(pNdb->getNdbError());
+    NDB_ERR(pNdb->getNdbError());
     delete pNdb;
     return NDBT_FAILED;
   }
@@ -3174,7 +3320,7 @@ int runReadColumnDuplicates(NDBT_Context* ctx, NDBT_Step* step){
     for(int a = 0; a < numCols; a++){
       if (pTab->getColumn(a)->getPrimaryKey() == true){
 	if(hugoOps.equalForAttr(pOp, a, record) != 0){
-	  ERR(pCon->getNdbError());
+	  NDB_ERR(pCon->getNdbError());
 	  pNdb->closeTransaction(pCon);
 	  delete pNdb;
 	  return NDBT_FAILED;
@@ -3195,7 +3341,7 @@ int runReadColumnDuplicates(NDBT_Context* ctx, NDBT_Step* step){
       NdbRecAttr* recAttr = pOp->getValue(dupColNum);
       if (recAttr == NULL) {
 	const NdbError err = pCon->getNdbError();
-	ERR(err);
+	NDB_ERR(err);
         result = NDBT_FAILED;
         pNdb->closeTransaction(pCon);	
 	break;
@@ -3208,7 +3354,7 @@ int runReadColumnDuplicates(NDBT_Context* ctx, NDBT_Step* step){
 
     if (pCon->execute(Commit) != 0){
       const NdbError err = pCon->getNdbError();
-      ERR(err);
+      NDB_ERR(err);
       result = NDBT_FAILED;
       pNdb->closeTransaction(pCon);
       break;
@@ -3295,7 +3441,7 @@ runBug51775(NDBT_Context* ctx, NDBT_Step* step)
   NdbTransaction * pTrans1 = pNdb->startTransaction();
   if (pTrans1 == NULL)
   {
-    ERR(pNdb->getNdbError());
+    NDB_ERR(pNdb->getNdbError());
     return NDBT_FAILED;
   }
   TransGuard g1(pTrans1);
@@ -3304,7 +3450,7 @@ runBug51775(NDBT_Context* ctx, NDBT_Step* step)
   if (pTrans2 == NULL)
   {
     pTrans1->close();
-    ERR(pNdb->getNdbError());
+    NDB_ERR(pNdb->getNdbError());
     return NDBT_FAILED;
   }
 
@@ -3314,13 +3460,13 @@ runBug51775(NDBT_Context* ctx, NDBT_Step* step)
     NdbOperation * pOp = pTrans1->getNdbOperation(ctx->getTab()->getName());
     if (pOp == NULL)
     {
-      ERR(pOp->getNdbError());
+      NDB_ERR(pOp->getNdbError());
       return NDBT_FAILED;
     }
     
     if (pOp->insertTuple() != 0)
     {
-      ERR(pOp->getNdbError());
+      NDB_ERR(pOp->getNdbError());
       return NDBT_FAILED;
     }
     
@@ -3332,13 +3478,13 @@ runBug51775(NDBT_Context* ctx, NDBT_Step* step)
     NdbOperation * pOp = pTrans2->getNdbOperation(ctx->getTab()->getName());
     if (pOp == NULL)
     {
-      ERR(pOp->getNdbError());
+      NDB_ERR(pOp->getNdbError());
       return NDBT_FAILED;
     }
     
     if (pOp->readTuple() != 0)
     {
-      ERR(pOp->getNdbError());
+      NDB_ERR(pOp->getNdbError());
       return NDBT_FAILED;
     }
     
@@ -3372,7 +3518,7 @@ int testFragmentedApiFailImpl(NDBT_Context* ctx, NDBT_Step* step)
    */
   if (otherConnection != NULL)
   {
-    ndbout << "FragApiFail : Connection not null" << endl;
+    g_err.println("FragApiFail : Connection not null");
     return NDBT_FAILED;
   }
   
@@ -3384,7 +3530,7 @@ int testFragmentedApiFailImpl(NDBT_Context* ctx, NDBT_Step* step)
   
   if (otherConnection == NULL)
   {
-    ndbout << "FragApiFail : Connection is null" << endl;
+    g_err.println("FragApiFail : Connection is null");
     return NDBT_FAILED;
   }
   
@@ -3392,7 +3538,7 @@ int testFragmentedApiFailImpl(NDBT_Context* ctx, NDBT_Step* step)
   
   if (rc!= 0)
   {
-    ndbout << "FragApiFail : Connect failed with rc " << rc << endl;
+    g_err.println("FragApiFail : Connect failed with rc %d", rc);
     return NDBT_FAILED;
   }
   
@@ -3401,7 +3547,7 @@ int testFragmentedApiFailImpl(NDBT_Context* ctx, NDBT_Step* step)
    */
   if (otherConnection->wait_until_ready(10,10) != 0)
   {
-    ndbout << "FragApiFail : Cluster connection was not ready" << endl;
+    g_err.println("FragApiFail : Cluster connection was not ready");
     return NDBT_FAILED;
   }
   
@@ -3417,7 +3563,7 @@ int testFragmentedApiFailImpl(NDBT_Context* ctx, NDBT_Step* step)
     
     if (rc != 0)
     {
-      ndbout << "FragApiFail : Ndb " << i << " was not ready" << endl;
+      g_err.println("FragApiFail : Ndb %d was not ready", i);
       return NDBT_FAILED;
     }
     
@@ -3452,8 +3598,7 @@ int testFragmentedApiFailImpl(NDBT_Context* ctx, NDBT_Step* step)
    */
   int otherNodeId = otherConnection->node_id();
   
-  ndbout << "FragApiFail : Forcing disconnect of node " 
-         << otherNodeId << endl;
+  g_info.println("FragApiFail : Forcing disconnect of node %u", otherNodeId);
   
   /* All dump 900 <nodeId> */
   int args[2]= {900, otherNodeId};
@@ -3545,7 +3690,7 @@ int runFragmentedScanOtherApi(NDBT_Context* ctx, NDBT_Step* step)
     if (ctx->isTestStopped() ||
         (ctx->getProperty(ApiFailTestComplete) != 0))
     {
-      ndbout << stepNo << ": Test stopped, exiting thread" << endl;
+      g_info.println("%u: Test stopped, exiting thread", stepNo);
       /* Asked to stop by main test thread */
       delete[] buff;
       return NDBT_OK;
@@ -3561,27 +3706,46 @@ int runFragmentedScanOtherApi(NDBT_Context* ctx, NDBT_Step* step)
       NdbTransaction* trans= otherNdb->startTransaction();
       if (!trans)
       {
-        ndbout << stepNo << ": Failed to start transaction from Ndb object" 
-               << " Error : " 
-               << otherNdb->getNdbError().code << " "
-               << otherNdb->getNdbError().message << endl;
+        const NdbError err = otherNdb->getNdbError();
         
         /* During this test, if we attempt to get a transaction
          * when the API is disconnected, we can get error 4009
          * (Cluster failure).  We treat this similarly to the
          * "Node failure caused abort of transaction" case
          */
-        if (otherNdb->getNdbError().code == 4009)
+        if (err.code == 4009)
         {
+          g_info.println("%u: Failed to start transaction from Ndb object Error : %u %s",
+                   stepNo, err.code, err.message);
           break;
         }
+        g_err.println("ERR: %u: %u: Failed to start transaction from Ndb object Error : %u %s",
+                      __LINE__, stepNo, err.code, err.message);
         delete[] buff;
         return NDBT_FAILED;
       }
       
       NdbScanOperation* scan= trans->getNdbScanOperation(ctx->getTab());
       
-      CHECK(scan != NULL);
+      if (scan == NULL)
+      {
+        /* getNdbScanOperation can fail in same way as startTransaction
+         * since it starts a buddy transaction for scan operations.
+         */
+        const NdbError err = trans->getNdbError();
+        if (err.code == 4009)
+        {
+          g_info.println("%u: Failed to get scan operation transaction Error : %u %s",
+                   stepNo, err.code, err.message);
+          trans->close();
+          break;
+        }
+        g_err.println("ERR: %u: %u: Failed to get scan operation transaction Error : %u %s",
+                 __LINE__, stepNo, err.code, err.message);
+        trans->close();
+        delete[] buff;
+        return NDBT_FAILED;
+      }
       
       CHECK(0 == scan->readTuples());
       
@@ -3597,19 +3761,37 @@ int runFragmentedScanOtherApi(NDBT_Context* ctx, NDBT_Step* step)
       
       CHECK(0 == scan->setInterpretedCode(&prog));
       
-      CHECK(0 == trans->execute(NdbTransaction::NoCommit));
-      
-      Uint32 execError= trans->getNdbError().code;
-      
+      int ret = trans->execute(NdbTransaction::NoCommit);
+
+      const NdbError execError= trans->getNdbError();
+
+      if (ret != 0)
+      {
+        /* Transaction was aborted.  Should be due to node disconnect. */
+        if(execError.classification != NdbError::NodeRecoveryError)
+        {
+          g_err.println("ERR: %u: %u: Execute aborted transaction with invalid error code: %u",
+                   __LINE__, stepNo, execError.code);
+          NDB_ERR_OUT(g_err, execError);
+          trans->close();
+          delete[] buff;
+          return NDBT_FAILED;
+        }
+        g_info.println("%u: Execute aborted transaction with NR error code: %u",
+                 stepNo, execError.code);
+        trans->close();
+        break;
+      }
+
       /* Can get success (0), or 874 for too much AttrInfo, depending
        * on timing
        */
-      if ((execError != 0) &&
-          (execError != 874) && 
-          (execError != 4002))
+      if ((execError.code != 0) &&
+          (execError.code != 874) &&
+          (execError.code != 4002))
       {
-        ndbout_c("%u incorrect error code: %u", __LINE__, execError);
-        ERR(trans->getNdbError());
+        g_err.println("ERR: %u: %u: incorrect error code: %u", __LINE__, stepNo, execError.code);
+        NDB_ERR_OUT(g_err, execError);
         trans->close();
         delete[] buff;
         return NDBT_FAILED;
@@ -3623,19 +3805,18 @@ int runFragmentedScanOtherApi(NDBT_Context* ctx, NDBT_Step* step)
       /* 'Success case' is 874 for too much AttrInfo */
       if (scanError.code != 874)
       {
-       /* When disconnected, we get 
-         * 4028 : 'Node failure caused abort of transaction' 
-         */
+       /* When disconnected, we get should get a node failure related error */
         if (scanError.classification == NdbError::NodeRecoveryError)
         {
-          ndbout << stepNo << ": Scan failed due to node failure/disconnect" << endl;
+          g_info.println("%u: Scan failed due to node failure/disconnect with error code %u",
+                         stepNo, scanError.code);
           trans->close();
           break;
         }
         else
         {
-          ndbout_c("%u incorrect error code: %u", __LINE__, execError);
-          ERR(scan->getNdbError());
+          g_err.println("ERR: %u: %u: incorrect error code: %u", __LINE__, stepNo, scanError.code);
+          NDB_ERR_OUT(g_err, scanError);
           trans->close();
           delete[] buff;
           return NDBT_FAILED;
@@ -3648,7 +3829,7 @@ int runFragmentedScanOtherApi(NDBT_Context* ctx, NDBT_Step* step)
     } // while (true)
     
     /* Node failure case - as expected */
-    ndbout << stepNo << ": Scan thread finished iteration" << endl;
+    g_info.println("%u: Scan thread finished iteration", stepNo);
 
     /* Signal that we've finished running this iteration */
     ctx->decProperty(ApiFailTestsRunning);
@@ -4529,6 +4710,1566 @@ int runTestUnlockScan(NDBT_Context* ctx, NDBT_Step* step)
   return NDBT_OK;
 }
 
+#include <NdbMgmd.hpp>
+
+class NodeIdReservations {
+  bool m_ids[MAX_NODES];
+  NdbMutex m_mutex;
+public:
+  void lock(unsigned id)
+  {
+    require(id < NDB_ARRAY_SIZE(m_ids));
+    NdbMutex_Lock(&m_mutex);
+    //ndbout  << "locking nodeid: " << id << endl;
+    if (m_ids[id])
+    {
+      //already locked!
+      g_err << "Nodeid " << id << " is already locked! Crashing!" << endl;
+      abort();
+    }
+    m_ids[id] = true;
+    NdbMutex_Unlock(&m_mutex);
+  }
+
+  void unlock(unsigned id)
+  {
+    require(id < NDB_ARRAY_SIZE(m_ids));
+    NdbMutex_Lock(&m_mutex);
+    //ndbout  << "unlocking nodeid: " << id << endl;
+    if (!m_ids[id])
+    {
+      //already unlocked!
+      abort();
+    }
+    m_ids[id] = false;
+    NdbMutex_Unlock(&m_mutex);
+  }
+
+  NodeIdReservations() {
+    bzero(m_ids, sizeof(m_ids));
+    NdbMutex_Init(&m_mutex);
+  }
+
+  class Reserve {
+    unsigned m_id;
+    NodeIdReservations& m_res;
+
+    Reserve(); // Not impl.
+    Reserve(const Reserve&); // Not impl.
+  public:
+    Reserve(NodeIdReservations& res, unsigned id) :
+        m_id(id), m_res(res) {
+      m_res.lock(m_id);
+    }
+
+    void unlock() {
+      m_res.unlock(m_id);
+      m_id = 0;
+    }
+
+    ~Reserve(){
+      if (m_id)
+      {
+        m_res.unlock(m_id);
+      }
+    }
+  };
+};
+
+NodeIdReservations g_reservations;
+
+
+int runNdbClusterConnectInit(NDBT_Context* ctx, NDBT_Step* step)
+{
+  // Find number of unconnected API nodes slot to use for test
+  Uint32 api_nodes = 0;
+  {
+    NdbMgmd mgmd;
+
+    if (!mgmd.connect())
+      return NDBT_FAILED;
+
+    ndb_mgm_node_type
+      node_types[2] = { NDB_MGM_NODE_TYPE_API,
+                        NDB_MGM_NODE_TYPE_UNKNOWN };
+
+    ndb_mgm_cluster_state *cs = ndb_mgm_get_status2(mgmd.handle(), node_types);
+    if (cs == NULL)
+    {
+      printf("ndb_mgm_get_status2 failed, error: %d - %s\n",
+             ndb_mgm_get_latest_error(mgmd.handle()),
+             ndb_mgm_get_latest_error_msg(mgmd.handle()));
+      return NDBT_FAILED;
+    }
+
+    for(int i = 0; i < cs->no_of_nodes; i++ )
+    {
+      ndb_mgm_node_state *ns = cs->node_states + i;
+      require(ns->node_type == NDB_MGM_NODE_TYPE_API);
+      if (ns->node_status == NDB_MGM_NODE_STATUS_CONNECTED)
+      {
+        // Node is already connected, don't use in test
+        continue;
+      }
+      api_nodes++;
+    }
+    free(cs);
+  }
+
+  if (api_nodes <= 1)
+  {
+    ndbout << "Too few API node slots available, failing test" << endl;
+    return NDBT_FAILED;
+  }
+  // Don't try to use nodeid allocated by main cluster connection
+  api_nodes--;
+
+  ndbout << "Found " << api_nodes << " unconnected API nodes" << endl;
+  ctx->setProperty("API_NODES", api_nodes);
+  return NDBT_OK;
+}
+
+
+int runNdbClusterConnect(NDBT_Context* ctx, NDBT_Step* step)
+{
+  const Uint32 api_nodes = ctx->getProperty("API_NODES");
+  const Uint32 step_no = step->getStepNo();
+  const Uint32 timeout_after_first_alive = ctx->getProperty("TimeoutAfterFirst",
+                                                            30);
+  if (step_no > api_nodes)
+  {
+    // Don't run with more threads than API node slots
+    return NDBT_OK;
+  }
+
+  // Get connectstring from main connection
+  char constr[256];
+  if (!ctx->m_cluster_connection.get_connectstring(constr,
+                                                   sizeof(constr)))
+  {
+    g_err << "Too short buffer for connectstring" << endl;
+    return NDBT_FAILED;
+  }
+
+  Uint32 l = 0;
+  const Uint32 loops = ctx->getNumLoops();
+  while (l < loops && !ctx->isTestStopped())
+  {
+    g_info << "loop: " << l << endl;
+    if (ctx->getProperty("WAIT") > 0)
+    {
+      ndbout_c("thread %u waiting", step_no);
+      ctx->incProperty("WAITING");
+      while (ctx->getProperty("WAIT") > 0 && !ctx->isTestStopped())
+        NdbSleep_MilliSleep(10);
+      ndbout_c("thread %u waiting complete", step_no);
+    }
+    Ndb_cluster_connection con(constr);
+
+    const int retries = 12;
+    const int retry_delay = 5;
+    const int verbose = 1;
+    if (con.connect(retries, retry_delay, verbose) != 0)
+    {
+      g_err << "Ndb_cluster_connection.connect failed" << endl;
+      return NDBT_FAILED;
+    }
+
+    // Check that the connection got a unique nodeid
+    NodeIdReservations::Reserve res(g_reservations, con.node_id());
+
+    const int timeout = 30;
+    int ret = con.wait_until_ready(timeout, timeout_after_first_alive);
+    if (! (ret == 0 || (timeout_after_first_alive == 0 && ret > 0)))
+    {
+      g_err << "Cluster connection was not ready, nodeid: "
+            << con.node_id() << endl;
+      abort();
+      return NDBT_FAILED;
+    }
+
+    // Create and init Ndb object
+    Ndb ndb(&con, "TEST_DB");
+    if (ndb.init() != 0)
+    {
+      NDB_ERR(ndb.getNdbError());
+      return NDBT_FAILED;
+    }
+
+    const int max_sleep = 25;
+    NdbSleep_MilliSleep(10 + rand() % max_sleep);
+
+    l++;
+    res.unlock(); // make sure it's called before ~Ndb_cluster_connection
+  }
+
+  ctx->incProperty("runNdbClusterConnect_FINISHED");
+
+  return NDBT_OK;
+}
+
+int
+runRestarts(NDBT_Context* ctx, NDBT_Step* step)
+{
+  int result = NDBT_OK;
+  Uint32 threads = ctx->getProperty("API_NODES", (unsigned)0);
+  Uint32 sr = ctx->getProperty("ClusterRestart", (unsigned)0);
+  Uint32 master = ctx->getProperty("Master", (unsigned)0);
+  Uint32 slow = ctx->getProperty("SlowNR", (unsigned)0);
+  NdbRestarter restarter;
+
+  if (restarter.waitClusterStarted() != 0)
+  {
+    g_err << "Cluster failed to start" << endl;
+    return NDBT_FAILED;
+  }
+
+  if (sr == 0 && restarter.getNumDbNodes() < 2)
+    return NDBT_OK;
+
+  while (ctx->getProperty("runNdbClusterConnect_FINISHED") < threads
+         && !ctx->isTestStopped())
+  {
+    ndbout_c("%u %u",
+             ctx->getProperty("runNdbClusterConnect_FINISHED"),
+             threads);
+    if (sr == 0)
+    {
+      int id = rand() % restarter.getNumDbNodes();
+      int nodeId = restarter.getDbNodeId(id);
+      if (master == 1)
+      {
+        nodeId = restarter.getMasterNodeId();
+      }
+      else if (master == 2)
+      {
+        nodeId = restarter.getRandomNotMasterNodeId(rand());
+      }
+      ndbout << "Restart node " << nodeId
+             << "(master: " << restarter.getMasterNodeId() << ")"
+             << endl;
+      if (restarter.restartOneDbNode(nodeId, false, true, true) != 0)
+      {
+        g_err << "Failed to restartNextDbNode" << endl;
+        result = NDBT_FAILED;
+        break;
+      }
+
+      if (restarter.waitNodesNoStart(&nodeId, 1))
+      {
+        g_err << "Failed to waitNodesNoStart" << endl;
+        result = NDBT_FAILED;
+        break;
+      }
+
+      if (slow)
+      {
+        /**
+         * Block starting node in sp4
+         */
+        int dump[] = { 71, 4 };
+        restarter.dumpStateOneNode(nodeId, dump, NDB_ARRAY_SIZE(dump));
+      }
+
+      if (restarter.startNodes(&nodeId, 1))
+      {
+        g_err << "Failed to start node" << endl;
+        result = NDBT_FAILED;
+        break;
+      }
+
+      if (slow)
+      {
+        Uint32 blockTime = 3 * 60 * 1000;
+        Uint64 end = NdbTick_CurrentMillisecond() + blockTime;
+        while (ctx->getProperty("runNdbClusterConnect_FINISHED") < threads
+               && !ctx->isTestStopped() &&
+               NdbTick_CurrentMillisecond() < end)
+        {
+          NdbSleep_MilliSleep(100);
+        }
+
+        // unblock
+        int dump[] = { 71 };
+        restarter.dumpStateOneNode(nodeId, dump, NDB_ARRAY_SIZE(dump));
+      }
+    }
+    else
+    {
+      ndbout << "Blocking threads" << endl;
+      ctx->setProperty("WAITING", Uint32(0));
+      ctx->setProperty("WAIT", 1);
+      while (ctx->getProperty("WAITING") <
+             (threads - ctx->getProperty("runNdbClusterConnect_FINISHED")) &&
+             !ctx->isTestStopped())
+      {
+        NdbSleep_MilliSleep(10);
+      }
+
+      ndbout << "Restart cluster" << endl;
+      if (restarter.restartAll2(Uint32(NdbRestarter::NRRF_NOSTART |
+                                       NdbRestarter::NRRF_ABORT)) != 0)
+      {
+        g_err << "Failed to restartAll" << endl;
+        result = NDBT_FAILED;
+        break;
+      }
+
+      ctx->setProperty("WAITING", Uint32(0));
+      ctx->setProperty("WAIT", Uint32(0));
+
+      ndbout << "Starting cluster" << endl;
+      restarter.startAll();
+    }
+
+    if (restarter.waitClusterStarted() != 0)
+    {
+      g_err << "Cluster failed to start" << endl;
+      result = NDBT_FAILED;
+      break;
+    }
+  }
+
+  return result;
+}
+
+int runCheckAllNodesStarted(NDBT_Context* ctx, NDBT_Step* step){
+  NdbRestarter restarter;
+
+  if (restarter.waitClusterStarted(1) != 0)
+  {
+    g_err << "All nodes was not started " << endl;
+    return NDBT_FAILED;
+  }
+
+  return NDBT_OK;
+}
+
+
+
+static bool
+check_connect_no_such_host()
+{
+  for (int i = 0; i < 3; i++)
+  {
+    const char* no_such_host = "no_such_host:1186";
+    Ndb_cluster_connection con(no_such_host);
+
+    const int verbose = 1;
+    int res = con.connect(i, i, verbose);
+    if (res != 1)
+    {
+      g_err << "Ndb_cluster_connection.connect(" << i << "," << i
+            << ", 1) to '" << no_such_host << "' returned " << res
+            << " instead of expected 1" << endl;
+      return false;
+    }
+    g_info << "Ndb_cluster_connection.connect(" << i << "," << i
+           << ", 1) to '" << no_such_host << "' returned " << res
+           << " and message '" << con.get_latest_error_msg() << "'"<< endl;
+  }
+  return true;
+}
+
+
+static bool
+check_connect_until_no_more_nodeid(const char* constr)
+{
+  bool result = true;
+  Vector<Ndb_cluster_connection*> connections;
+  while(true)
+  {
+    Ndb_cluster_connection* con = new Ndb_cluster_connection(constr);
+    if (!con)
+    {
+      g_err << "Failed to create another Ndb_cluster_connection" << endl;
+      result = false;
+      break;
+    }
+    connections.push_back(con);
+    g_info << "connections: " << connections.size() << endl;
+
+    const int verbose = 1;
+    int res = con->connect(0, 0, verbose);
+    if (res != 0)
+    {
+      g_info << "Ndb_cluster_connection.connect(0,0,1) returned " << res
+             << " and error message set to : '" << con->get_latest_error_msg()
+             << "'" << endl;
+
+      if (res != 1)
+      {
+        // The error returned should be 1
+        g_err << "Unexpected return code " << res << " returned" << endl;
+        result = false;
+      }
+      else if (strstr(con->get_latest_error_msg(),
+                      "No free node id found for mysqld(API)") == NULL)
+      {
+        // The error message should end with "No free node id
+        // found for mysqld(API)" since this host is configured in the config
+        g_err << "Unexpected error message " << con->get_latest_error_msg()
+              << " returned" << endl;
+        result = false;
+      }
+      else
+      {
+        ndbout << "check_connect_until_no_more_nodeid OK!" << endl;
+      }
+      break;
+    }
+  }
+
+  while(connections.size())
+  {
+    Ndb_cluster_connection* con = connections[0];
+    g_info << "releasing connection, size: " << connections.size() << endl;
+    delete con;
+    connections.erase(0);
+  }
+  require(connections.size() == 0);
+
+  return result;
+}
+
+
+int runNdbClusterConnectionConnect(NDBT_Context* ctx, NDBT_Step* step)
+{
+  // Get connectstring from main connection
+  char constr[256];
+  if(!ctx->m_cluster_connection.get_connectstring(constr,
+                                                  sizeof(constr)))
+  {
+    g_err << "Too short buffer for connectstring" << endl;
+    return NDBT_FAILED;
+  }
+
+  if (!check_connect_no_such_host() ||
+      !check_connect_until_no_more_nodeid(constr))
+  {
+    return NDBT_FAILED;
+  }
+
+  return NDBT_OK;
+}
+
+/* Testing fragmented signal send/receive */
+
+/*
+  SectionStore
+
+  Abstraction of long section storage api.
+  Used by FragmentAssembler to assemble received long sections
+*/
+class SectionStore
+{
+public:
+  virtual ~SectionStore() {};
+  virtual int appendToSection(Uint32 secId, LinearSectionPtr ptr) = 0;
+};
+
+/*
+  Basic Section Store
+
+  Naive implementation using malloc.  Real usage might use something better.
+*/
+class BasicSectionStore : public SectionStore
+{
+public:
+  BasicSectionStore()
+  {
+    init();
+  };
+
+  ~BasicSectionStore()
+  {
+    freeStorage();
+  };
+
+  void init()
+  {
+    ptrs[0].p = NULL;
+    ptrs[0].sz = 0;
+
+    ptrs[2] = ptrs[1] = ptrs[0];
+  }
+
+  void freeStorage()
+  {
+    free(ptrs[0].p);
+    free(ptrs[1].p);
+    free(ptrs[2].p);
+  }
+
+  virtual int appendToSection(Uint32 secId, LinearSectionPtr ptr)
+  {
+    /* Potentially expensive re-alloc + copy */
+    require(secId < 3);
+    
+    Uint32 existingSz = ptrs[secId].sz;
+    Uint32* existingBuff = ptrs[secId].p;
+
+    Uint32 newSize = existingSz + ptr.sz;
+    Uint32* newBuff = (Uint32*) realloc(existingBuff, newSize * 4);
+
+    if (!newBuff)
+      return -1;
+    
+    memcpy(newBuff + existingSz, ptr.p, ptr.sz * 4);
+    
+    ptrs[secId].p = newBuff;
+    ptrs[secId].sz = existingSz + ptr.sz;
+
+    return 0;
+  }
+    
+  LinearSectionPtr ptrs[3];
+};
+
+
+
+/*
+  FragmentAssembler
+
+  Used to assemble sections from multiple fragment signals, and 
+  produce a 'normal' signal.
+  
+  Requires a SectionStore implementation to accumulate the section
+  fragments
+
+  Might be useful generic utility, or not.
+
+  Usage : 
+    FragmentAssembler fa(ss);
+    while (!fa.isComplete())
+    {
+      sig = waitSignal();
+      ss.handleSignal(sig, sections);
+    }
+
+    fa.getSignalHeader();
+    fa.getSignalBody();
+    fa.getSectionStore(); ..
+
+*/
+class FragmentAssembler
+{
+public:
+  enum AssemblyError
+  {
+    NoError = 0,
+    FragmentSequence = 1,
+    FragmentSource = 2,
+    FragmentIdentity = 3,
+    SectionAppend = 4
+  };
+
+  FragmentAssembler(SectionStore* _secStore):
+    secsReceived(0),
+    secStore(_secStore),
+    complete(false),
+    fragId(0),
+    sourceNode(0),
+    error(NoError)
+  {}
+
+  int handleSignal(const SignalHeader* sigHead,
+                   const Uint32* sigBody,
+                   LinearSectionPtr* sections)
+  {
+    Uint32 sigLen = sigHead->theLength;
+    
+    if (fragId == 0)
+    {
+      switch (sigHead->m_fragmentInfo)
+      {
+      case 0:
+      {
+        /* Not fragmented, pass through */
+        sh = *sigHead;
+        memcpy(signalBody, sigBody, sigLen * 4);
+        Uint32 numSecs = sigHead->m_noOfSections;
+        for (Uint32 i=0; i<numSecs; i++)
+        {
+          if (secStore->appendToSection(i, sections[i]) != 0)
+          {
+            error = SectionAppend;
+            return -1;
+          }
+        }
+        complete = true;
+        break;
+      }
+      case 1:
+      {
+        /* Start of fragmented signal */
+        Uint32 incomingFragId;
+        Uint32 incomingSourceNode;
+        Uint32 numSecsInFragment;
+        
+        if (handleFragmentSections(sigHead, sigBody, sections,
+                                   &incomingFragId, &incomingSourceNode,
+                                   &numSecsInFragment) != 0)
+          return -1;
+        
+        require(incomingFragId != 0);
+        fragId = incomingFragId;
+        sourceNode = incomingSourceNode;
+        require(numSecsInFragment > 0);
+        
+        break;
+      }
+      default:
+      {
+        /* Error, out of sequence fragment */
+        error = FragmentSequence;
+        return -1;
+        break;
+      }
+      }
+    }
+    else
+    {
+      /* FragId != 0 */
+      switch (sigHead->m_fragmentInfo)
+      {
+      case 0:
+      case 1:
+      {
+        /* Error, out of sequence fragment */
+        error = FragmentSequence;
+        return -1;
+      }
+      case 2:
+        /* Fall through */
+      case 3:
+      {
+        /* Body fragment */
+        Uint32 incomingFragId;
+        Uint32 incomingSourceNode;
+        Uint32 numSecsInFragment;
+        
+        if (handleFragmentSections(sigHead, sigBody, sections,
+                                   &incomingFragId, &incomingSourceNode,
+                                   &numSecsInFragment) != 0)
+          return -1;
+
+        if (incomingSourceNode != sourceNode)
+        {
+          /* Error in source node */
+          error = FragmentSource;
+          return -1;
+        }
+        if (incomingFragId != fragId)
+        {
+          error = FragmentIdentity;
+          return -1;
+        }
+        
+        if (sigHead->m_fragmentInfo == 3)
+        {
+          /* Final fragment, contains actual signal body */
+          memcpy(signalBody,
+                 sigBody,
+                 sigLen * 4);
+          sh = *sigHead;
+          sh.theLength = sigLen - (numSecsInFragment + 1);
+          sh.m_noOfSections = 
+            ((secsReceived & 4)? 1 : 0) +
+            ((secsReceived & 2)? 1 : 0) +
+            ((secsReceived & 1)? 1 : 0);
+          sh.m_fragmentInfo = 0;
+          
+          complete=true;
+        }
+        break;
+      }
+      default:
+      {
+        /* Bad fragmentinfo field */
+        error = FragmentSequence;
+        return -1;
+      }
+      }
+    }
+
+    return 0;
+  }
+
+  int handleSignal(NdbApiSignal* signal,
+                   LinearSectionPtr* sections)
+  {
+    return handleSignal(signal, signal->getDataPtr(), sections);
+  }
+
+  bool isComplete()
+  {
+    return complete;
+  }
+
+  /* Valid if isComplete() */
+  SignalHeader getSignalHeader()
+  {
+    return sh;
+  }
+  
+  /* Valid if isComplete() */
+  Uint32* getSignalBody()
+  {
+    return signalBody;
+  }
+
+  /* Valid if isComplete() */
+  Uint32 getSourceNode()
+  {
+    return sourceNode;
+  }
+
+  SectionStore* getSectionStore()
+  {
+    return secStore;
+  }
+
+  AssemblyError getError() const
+  {
+    return error;
+  }
+  
+private:
+  int handleFragmentSections(const SignalHeader* sigHead,
+                             const Uint32* sigBody,
+                             LinearSectionPtr* sections,
+                             Uint32* incomingFragId,
+                             Uint32* incomingSourceNode,
+                             Uint32* numSecsInFragment)
+  {
+    Uint32 sigLen = sigHead->theLength;
+    
+    *numSecsInFragment = sigHead->m_noOfSections;
+    require(sigLen >= (1 + *numSecsInFragment));
+           
+    *incomingFragId = sigBody[sigLen - 1];
+    *incomingSourceNode = refToNode(sigHead->theSendersBlockRef);
+    const Uint32* secIds = &sigBody[sigLen - (*numSecsInFragment) - 1];
+    
+    for (Uint32 i=0; i < *numSecsInFragment; i++)
+    {
+      secsReceived |= (1 < secIds[i]);
+      
+      if (secStore->appendToSection(secIds[i], sections[i]) != 0)
+      {
+        error = SectionAppend;
+        return -1;
+      }
+    }
+    
+    return 0;
+  }
+
+  Uint32 secsReceived;
+  SectionStore* secStore;
+  bool complete;
+  Uint32 fragId;
+  Uint32 sourceNode;
+  SignalHeader sh;
+  Uint32 signalBody[NdbApiSignal::MaxSignalWords];
+  AssemblyError error;
+};                 
+
+static const Uint32 MAX_SEND_BYTES=32768; /* Align with TransporterDefinitions.hpp */
+static const Uint32 MAX_SEND_WORDS=MAX_SEND_BYTES/4;
+static const Uint32 SEGMENT_WORDS= 60; /* Align with SSPool etc */
+static const Uint32 SEGMENT_BYTES = SEGMENT_WORDS * 4;
+//static const Uint32 MAX_SEGS_PER_SEND=64; /* 6.3 */
+static const Uint32 MAX_SEGS_PER_SEND = (MAX_SEND_BYTES / SEGMENT_BYTES) - 2; /* Align with TransporterFacade.cpp */
+static const Uint32 MAX_WORDS_PER_SEND = MAX_SEGS_PER_SEND * SEGMENT_WORDS;
+static const Uint32 HALF_MAX_WORDS_PER_SEND = MAX_WORDS_PER_SEND / 2;
+static const Uint32 THIRD_MAX_WORDS_PER_SEND = MAX_WORDS_PER_SEND / 3;
+static const Uint32 MEDIUM_SIZE = 5000;
+
+/* Most problems occurred with sections lengths around the boundary
+ * of the max amount sent - MAX_WORDS_PER_SEND, so we define interesting
+ * sizes so that we test behavior around these boundaries
+ */
+static Uint32 interestingSizes[] = 
+{
+  0,
+  1, 
+  MEDIUM_SIZE,
+  THIRD_MAX_WORDS_PER_SEND -1,
+  THIRD_MAX_WORDS_PER_SEND,
+  THIRD_MAX_WORDS_PER_SEND +1,
+  HALF_MAX_WORDS_PER_SEND -1,
+  HALF_MAX_WORDS_PER_SEND,
+  HALF_MAX_WORDS_PER_SEND + 1,
+  MAX_WORDS_PER_SEND -1, 
+  MAX_WORDS_PER_SEND, 
+  MAX_WORDS_PER_SEND + 1,
+  (2* MAX_SEND_WORDS) + 1,
+  1234 /* Random */
+};
+
+
+/* 
+   FragSignalChecker
+
+   Class for testing fragmented signal send + receive
+*/
+class FragSignalChecker
+{
+public:
+
+  Uint32* buffer;
+
+  FragSignalChecker()
+  {
+    buffer= NULL;
+    init();
+  }
+
+  ~FragSignalChecker()
+  {
+    free(buffer);
+  }
+
+  void init()
+  {
+    buffer = (Uint32*) malloc(getBufferSize());
+
+    if (buffer)
+    {
+      /* Init to a known pattern */
+      for (Uint32 i = 0; i < (getBufferSize()/4); i++)
+      {
+        buffer[i] = i;
+      }
+    }
+  }
+
+  static Uint32 getNumInterestingSizes()
+  {
+    return sizeof(interestingSizes) / sizeof(Uint32);
+  }
+
+  static Uint32 getNumIterationsRequired()
+  {
+    /* To get combinatorial coverage, need each of 3
+     * sections with each of the interesting sizes
+     */
+    Uint32 numSizes = getNumInterestingSizes();
+    return numSizes * numSizes * numSizes;
+  }
+
+  static Uint32 getSecSz(Uint32 secNum, Uint32 iter)
+  {
+    require(secNum < 3);
+    Uint32 numSizes = getNumInterestingSizes();
+    Uint32 divisor = (secNum == 0 ? 1 : 
+                      secNum == 1 ? numSizes :
+                      numSizes * numSizes);
+    /* offset ensures only end sections are 0 length */
+    Uint32 index = (iter / divisor) % numSizes;
+    if ((index == 0) && (iter >= (divisor * numSizes)))
+      index = 1; /* Avoid lower numbered section being empty */
+    Uint32 value = interestingSizes[index];
+    if(value == 1234)
+    {
+      value = 1 + (rand() % (2* MAX_WORDS_PER_SEND));
+    }
+    return value;
+  }
+
+  static Uint32 getBufferSize()
+  {
+    const Uint32 MaxSectionWords = (2 * MAX_SEND_WORDS) + 1;
+    const Uint32 MaxTotalSectionsWords = MaxSectionWords * 3;
+    return MaxTotalSectionsWords * 4;
+  }
+
+  int sendRequest(SignalSender* ss, 
+                  Uint32* sizes)
+  {
+    /* 
+     * We want to try out various interactions between the
+     * 3 sections and the length of the data sent
+     * - All fit in one 'chunk'
+     * - None fit in one 'chunk'
+     * - Each ends on a chunk boundary
+     *
+     * Max send size is ~ 32kB
+     * Segment size is 60 words / 240 bytes
+     *  -> 136 segments / chunk
+     *  -> 134 segments / chunk 'normally' sent
+     *  -> 32160 bytes
+     */
+    g_err << "Sending "
+          << sizes[0]
+          << " " << sizes[1]
+          << " " << sizes[2]
+          << endl;
+    
+    const Uint32 numSections = 
+      (sizes[0] ? 1 : 0) + 
+      (sizes[1] ? 1 : 0) + 
+      (sizes[2] ? 1 : 0);
+    const Uint32 testType = 40;
+    const Uint32 fragmentLength = 1;
+    const Uint32 print = 0;
+    const Uint32 len = 5 + numSections;
+    SimpleSignal request(false);
+    
+    Uint32* signalBody = request.getDataPtrSend();
+    signalBody[0] = ss->getOwnRef();
+    signalBody[1] = testType;
+    signalBody[2] = fragmentLength;
+    signalBody[3] = print;
+    signalBody[4] = 0; /* Return count */
+    signalBody[5] = sizes[0];
+    signalBody[6] = sizes[1];
+    signalBody[7] = sizes[2];
+    
+    
+    request.ptr[0].sz = sizes[0];
+    request.ptr[0].p = &buffer[0];
+    request.ptr[1].sz = sizes[1];
+    request.ptr[1].p = &buffer[sizes[0]];
+    request.ptr[2].sz = sizes[2];
+    request.ptr[2].p = &buffer[sizes[0] + sizes[1]];
+    
+    request.header.m_noOfSections= numSections;
+    
+    int rc = 0;
+    ss->lock();
+    rc = ss->sendFragmentedSignal(ss->get_an_alive_node(),
+                                  request,
+                                  CMVMI,
+                                  GSN_TESTSIG,
+                                  len);
+    ss->unlock();
+    
+    if (rc != 0)
+    {
+      g_err << "Error sending signal" << endl;
+      return rc;
+    }
+    
+    return 0;
+  }
+
+  int waitResponse(SignalSender* ss,
+                   Uint32* expectedSz)
+  {
+    /* Here we need to wait for all of the signals which
+     * comprise a fragmented send, and check that
+     * the data is as expected
+     */
+    BasicSectionStore bss;
+    FragmentAssembler fa(&bss);
+    
+    while(true)
+    {
+      ss->lock();
+      SimpleSignal* response = ss->waitFor(10000);
+      ss->unlock();
+      
+      if (!response)
+      {
+        g_err << "Timed out waiting for response" << endl;
+        return -1;
+      }
+      
+      //response->print();
+      
+      if (response->header.theVerId_signalNumber == GSN_TESTSIG)
+      {
+        if (fa.handleSignal(&response->header,
+                            response->getDataPtr(),
+                            response->ptr) != 0)
+        {
+          g_err << "Error assembling fragmented signal."
+                << "  Error is "
+                << (Uint32) fa.getError()
+                << endl;
+          return -1;
+        }
+        
+        if (fa.isComplete())
+        {
+          Uint32 expectedWord = 0;
+          for (Uint32 i=0; i < 3; i++)
+          {
+            if (bss.ptrs[i].sz != expectedSz[i])
+            {
+              g_err << "Wrong size for section : "
+                    << i
+                    << " expected " << expectedSz[i]
+                    << " but received " << bss.ptrs[i].sz
+                    << endl;
+              return -1;
+            }
+            
+            for (Uint32 d=0; d < expectedSz[i]; d++)
+            {
+              if (bss.ptrs[i].p[d] != expectedWord)
+              {
+                g_err << "Bad data in section "
+                      << i
+                      << " at word number "
+                      << d
+                      << ".  Expected "
+                      << expectedWord
+                      << " but found "
+                      << bss.ptrs[i].p[d]
+                      << endl;
+                return -1;
+              }
+              expectedWord++;
+            }
+          }
+          
+          break;
+        }
+        
+      }
+    }
+    
+    return 0;
+  }
+  
+  int runTest(SignalSender* ss)
+  {
+    for (Uint32 iter=0; 
+         iter < getNumIterationsRequired(); 
+         iter++)
+    {
+      int rc;
+      Uint32 sizes[3];
+      sizes[0] = getSecSz(0, iter);
+      sizes[1] = getSecSz(1, iter);
+      sizes[2] = getSecSz(2, iter);
+      
+      /* Build request, including sections */
+      rc = sendRequest(ss, sizes);
+      if (rc != 0)
+      {
+        g_err << "Failed sending request on iteration " << iter 
+              << " with rc " << rc << endl;
+        return NDBT_FAILED;
+      }
+      
+      /* Wait for response */
+      rc = waitResponse(ss, sizes);
+      if (rc != 0)
+      {
+        g_err << "Failed waiting for response on iteration " << iter
+              << " with rc " << rc << endl;
+        return NDBT_FAILED;
+      }
+    }
+    
+    return NDBT_OK;
+  }
+};
+
+
+int testFragmentedSend(NDBT_Context* ctx, NDBT_Step* step){
+  Ndb* pNdb= GETNDB(step);
+  Ndb_cluster_connection* conn = &pNdb->get_ndb_cluster_connection();
+  SignalSender ss(conn);
+  FragSignalChecker fsc;
+  
+  return fsc.runTest(&ss);
+}
+
+static int
+runReceiveTRANSIDAIAfterRollback(NDBT_Context* ctx, NDBT_Step* step)
+{
+  Ndb* const ndb = GETNDB(step);
+  NdbRestarter restarter;
+
+  do { 
+    // fill table with 10 rows.
+    const NdbDictionary::Table * pTab = ctx->getTab();
+    HugoTransactions hugoTrans(*pTab);
+    if(hugoTrans.loadTable(ndb, 10) != 0) {
+      g_err << "Failed to load table" << endl;
+      break;
+    }
+    // do error injection in data nodes
+    if (restarter.insertErrorInAllNodes(8107) != 0){
+      g_err << "Failed to insert error 8107" << endl;
+      break;
+    }
+    if (restarter.insertErrorInAllNodes(4037) != 0){
+      g_err << "Failed to insert error 4037" << endl;
+      break;
+    }
+  
+    // do error injection in ndbapi
+    DBUG_SET_INITIAL("+d,ndb_delay_close_txn,ndb_delay_transid_ai");
+  
+    // start transaction
+    NdbTransaction* const trans = ndb->startTransaction();
+    if (trans == NULL)
+    {
+      g_err << "ndb->startTransaction() gave unexpected error : "
+            << ndb->getNdbError() << endl;
+      break;
+    }
+    NdbOperation* const op = trans->getNdbOperation(pTab);
+    if (op == NULL)
+    {
+      g_err << "trans->getNdbOperation() gave unexpected error : "
+            << trans->getNdbError() << endl;
+      break;
+    }
+  
+    // start primary key read with shared lock
+    HugoOperations hugoOps(*ctx->getTab());
+    if(hugoOps.startTransaction(ndb)) {
+      g_err << "hugoOps.startTransaction() gave unexpected error : " 
+            << hugoOps.getTransaction()->getNdbError() << endl;
+      break;
+    }
+    if(hugoOps.pkReadRecord(ndb, 1, 1, NdbOperation::LM_Read)) {
+      g_err << "hugoOps.pkReadRecord() gave unexpected error : " 
+            << hugoOps.getTransaction()->getNdbError() << endl;
+      break;
+    }
+    if(hugoOps.execute_Commit(ndb) != 0) {
+      g_err << "hugoOps.execute_Commit() gave unexpected error : " 
+            << hugoOps.getTransaction()->getNdbError() << endl;
+      break;
+    }
+  
+    // all ok, test passes 
+    ndb->closeTransaction(trans);
+  
+    // clean up 
+    DBUG_SET_INITIAL("-d,ndb_delay_close_txn,ndb_delay_transid_ai");
+    restarter.insertErrorInAllNodes(0);
+    return NDBT_OK;
+  } while(0);
+
+  // clean up for error path 
+  DBUG_SET_INITIAL("-d,ndb_delay_close_txn,ndb_delay_transid_ai");
+  restarter.insertErrorInAllNodes(0);
+  return NDBT_FAILED;
+}
+
+int
+testNdbRecordSpecificationCompatibility(NDBT_Context* ctx, NDBT_Step* step)
+{
+  /* Test for checking the compatibility of RecordSpecification
+   * when compiling old code with newer header.
+   * Create an instance of RecordSpecification_v1 and try to pass
+   * it to the NdbApi createRecord.
+   */
+
+  Ndb* pNdb = GETNDB(step);
+  const NdbDictionary::Table* pTab= ctx->getTab();
+  int numCols= pTab->getNoOfColumns();
+  const NdbRecord* defaultRecord= pTab->getDefaultRecord();
+
+  NdbDictionary::RecordSpecification_v1 rsArray[ NDB_MAX_ATTRIBUTES_IN_TABLE ];
+
+  for (int attrId=0; attrId< numCols; attrId++)
+  {
+    NdbDictionary::RecordSpecification_v1& rs= rsArray[attrId];
+
+    rs.column= pTab->getColumn(attrId);
+    rs.offset= 0;
+    rs.nullbit_byte_offset= 0;
+    rs.nullbit_bit_in_byte= 0;
+    CHECK(NdbDictionary::getOffset(defaultRecord,
+                                   attrId,
+                                   rs.offset));
+    CHECK(NdbDictionary::getNullBitOffset(defaultRecord,
+                                          attrId,
+                                          rs.nullbit_byte_offset,
+                                          rs.nullbit_bit_in_byte));
+  }
+  const NdbRecord* tabRec= pNdb->getDictionary()->createRecord(pTab,
+                              (NdbDictionary::RecordSpecification*)rsArray,
+                              numCols,
+                              sizeof(NdbDictionary::RecordSpecification_v1));
+  CHECK(tabRec != 0);
+
+  char keyRowBuf[ NDB_MAX_TUPLE_SIZE_IN_WORDS << 2 ];
+  char attrRowBuf[ NDB_MAX_TUPLE_SIZE_IN_WORDS << 2 ];
+  bzero(keyRowBuf, sizeof(keyRowBuf));
+  bzero(attrRowBuf, sizeof(attrRowBuf));
+
+  HugoCalculator calc(*pTab);
+
+  const int numRecords= 100;
+
+  for (int record=0; record < numRecords; record++)
+  {
+    int updates= 0;
+    /* calculate the Hugo values for this row */
+    for (int col=0; col<pTab->getNoOfColumns(); col++)
+    {
+      char* valPtr= NdbDictionary::getValuePtr(tabRec,
+                                               keyRowBuf,
+                                               col);
+      CHECK(valPtr != NULL);
+      int len= pTab->getColumn(col)->getSizeInBytes();
+      Uint32 real_len;
+      bool isNull= (calc.calcValue(record, col, updates, valPtr,
+                                   len, &real_len) == NULL);
+      if (pTab->getColumn(col)->getNullable())
+      {
+        NdbDictionary::setNull(tabRec,
+                               keyRowBuf,
+                               col,
+                               isNull);
+      }
+    }
+
+    /* insert the row */
+    NdbTransaction* trans=pNdb->startTransaction();
+    CHECK(trans != 0);
+    CHECK(trans->getNdbError().code == 0);
+
+    const NdbOperation* op= NULL;
+    op= trans->insertTuple(tabRec,
+                           keyRowBuf);
+    CHECK(op != 0);
+
+    CHECK(trans->execute(Commit) == 0);
+    trans->close();
+
+    /* Now read back */
+    Uint32 pkVal= 0;
+    memcpy(&pkVal, NdbDictionary::getValuePtr(tabRec,
+                                              keyRowBuf,
+                                              0),
+           sizeof(pkVal));
+
+    trans= pNdb->startTransaction();
+    op= trans->readTuple(tabRec,
+                         keyRowBuf,
+                         tabRec,
+                         attrRowBuf);
+    CHECK(op != 0);
+    CHECK(trans->execute(Commit) == 0);
+    CHECK(trans->getNdbError().code == 0);
+    trans->close();
+
+    /* Verify the values read back */
+    for (int col=0; col<pTab->getNoOfColumns(); col++)
+    {
+      const char* valPtr= NdbDictionary::getValuePtr(tabRec,
+                                                     attrRowBuf,
+                                                     col);
+      CHECK(valPtr != NULL);
+
+      char calcBuff[ NDB_MAX_TUPLE_SIZE_IN_WORDS << 2 ];
+      int len= pTab->getColumn(col)->getSizeInBytes();
+      Uint32 real_len;
+      bool isNull= (calc.calcValue(record, col, updates, calcBuff,
+                                   len, &real_len) == NULL);
+      bool colIsNullable= pTab->getColumn(col)->getNullable();
+      if (isNull)
+      {
+        CHECK(colIsNullable);
+        if (!NdbDictionary::isNull(tabRec,
+                                   attrRowBuf,
+                                   col))
+        {
+          ndbout << "Error, col " << col
+              << " (pk=" <<  pTab->getColumn(col)->getPrimaryKey()
+                  << ") should be Null, but is not" << endl;
+          return NDBT_FAILED;
+        }
+      }
+      else
+      {
+        if (colIsNullable)
+        {
+          if (NdbDictionary::isNull(tabRec,
+                                    attrRowBuf,
+                                    col))
+          {
+            ndbout << "Error, col " << col
+                << " (pk=" << pTab->getColumn(col)->getPrimaryKey()
+                << ") should be non-Null but is null" << endl;
+            return NDBT_FAILED;
+          };
+        }
+
+        /* Compare actual data read back */
+        if( memcmp(calcBuff, valPtr, real_len) != 0 )
+        {
+          ndbout << "Error, col " << col
+              << " (pk=" << pTab->getColumn(col)->getPrimaryKey()
+              << ") should be equal, but isn't for record "
+              << record << endl;
+          ndbout << "Expected :";
+          for (Uint32 i=0; i < real_len; i++)
+          {
+            ndbout_c("%x ", calcBuff[i]);
+          }
+          ndbout << endl << "Received :";
+          for (Uint32 i=0; i < real_len; i++)
+          {
+            ndbout_c("%x ", valPtr[i]);
+          }
+          ndbout << endl;
+
+          return NDBT_FAILED;
+        }
+      }
+    }
+
+    /* Now delete the tuple */
+    trans= pNdb->startTransaction();
+    op= trans->deleteTuple(tabRec,
+                           keyRowBuf,
+                           tabRec);
+    CHECK(op != 0);
+    CHECK(trans->execute(Commit) == 0);
+
+    trans->close();
+  }
+
+  return NDBT_OK;
+}
+
+int testSchemaObjectOwnerCheck(NDBT_Context* ctx, NDBT_Step* step)
+{
+  Ndb* const ndb = GETNDB(step);
+  Ndb *otherNdb = NULL;
+  NdbDictionary::Dictionary* const dict = ndb->getDictionary();
+  NdbTransaction *trans = ndb->startTransaction();
+  NdbRestarter restarter;
+  int result = NDBT_OK;
+
+  do
+  {
+    ndbout << "Creating table with index" << endl;
+    NdbDictionary::Table tab;
+    NdbDictionary::Index idx;
+    tab.setName("SchemaObjOwnerCheck_tab");
+    tab.setLogging(true);
+
+    // create column
+    NdbDictionary::Column col("col1");
+    col.setType(NdbDictionary::Column::Unsigned);
+    col.setPrimaryKey(true);
+    tab.addColumn(col);
+
+    // create index on column
+    idx.setTable("SchemaObjOwnerCheck_tab");
+    idx.setName("SchemaObjOwnerCheck_idx");
+    idx.setType(NdbDictionary::Index::UniqueHashIndex);
+    idx.setLogging(false);
+    idx.addColumnName("col1");
+
+    NdbError error;
+    if(tab.validate(error) == -1)
+    {
+      ndbout << "Failed to create table" << endl;
+      break;
+    }
+    
+    if (dict->createTable(tab) == -1) {
+      g_err << "Failed to create SchemaObjOwnerCheck_tab table." << endl;
+      result = NDBT_FAILED;
+      break;
+    }
+    if (dict->createIndex(idx) == -1) {
+      g_err << "Failed to create index, error: " << dict->getNdbError() << endl;
+      result = NDBT_FAILED;
+      break;
+    }
+
+    ndbout << "Setting up other connection to acquire schema objects." << endl;
+    char connectString[256];
+    ctx->m_cluster_connection.get_connectstring(connectString,
+                                                sizeof(connectString));
+    otherConnection= new Ndb_cluster_connection(connectString);
+    if (otherConnection == NULL)
+    {
+      ndbout << "otherConnection is null" << endl;
+      result = NDBT_FAILED;
+      break;
+    }
+    int rc= otherConnection->connect();
+    if (rc != 0)
+    {
+      ndbout << "Connect of otherConnection failed with rc " << rc << endl;
+      result = NDBT_FAILED;
+      break;
+    }
+    if (otherConnection->wait_until_ready(10,10) != 0)
+    {
+      ndbout << "Cluster connection otherConnection was not ready" << endl;
+      result = NDBT_FAILED;
+      break;
+    }
+    otherNdb = new Ndb(otherConnection, "TEST_DB");
+    if(!otherNdb)
+    {
+      ndbout << "Failed to acquire Ndb object from otherConnection" << endl;
+      result = NDBT_FAILED;
+      break;
+    }
+    otherNdb->init();
+    if(otherNdb->waitUntilReady(10) != 0)
+    {
+      ndbout << "Failed to init Ndb object from otherConnection" << endl;
+      result = NDBT_FAILED;
+      break;
+    }
+    const NdbDictionary::Table *otherTable = otherNdb->getDictionary()->getTable("SchemaObjOwnerCheck_tab");
+    if(!otherTable)
+    {
+      ndbout << "Failed to get Ndb table from otherConnection" << endl;
+      result = NDBT_FAILED;
+      break;
+    }
+    const NdbDictionary::Index *otherIndex = otherNdb->getDictionary()->getIndex("SchemaObjOwnerCheck_idx", "SchemaObjOwnerCheck_tab");
+    if(!otherIndex)
+    {
+      ndbout << "Failed to get Ndb index from otherConnection" << endl;
+      result = NDBT_FAILED;
+      break;
+    }
+  
+    ndbout << "Enabling schema object ownership check on ctx connection" << endl;
+    trans->setSchemaObjOwnerChecks(true);
+  
+    ndbout << "Attempting to acquire Ndb*Operations on schema objects ";
+    ndbout << "which belong to other connection" << endl;
+    NdbOperation *op = trans->getNdbOperation(otherTable);
+    const NdbError err1 = trans->getNdbError();
+    if(err1.code != 1231)
+    {
+      ndbout << "Failed to detect Table with wrong owner for NdbOperation" << endl;
+      result = NDBT_FAILED;
+      break;
+    } 
+    NdbScanOperation *scanop = trans->getNdbScanOperation(otherTable);
+    const NdbError err2 = trans->getNdbError();
+    if(err2.code != 1231)
+    {
+      ndbout << "Failed to detect Table with wrong owner for NdbScanOperation" << endl;
+      result = NDBT_FAILED;
+      break;
+    } 
+    NdbIndexScanOperation *idxscanop = trans->getNdbIndexScanOperation(otherIndex, otherTable);
+    const NdbError err3 = trans->getNdbError();
+    if(err3.code != 1231)
+    {
+      ndbout << "Failed to detect Table/Index with wrong owner for NdbIndexScanOperation" << endl;
+      result = NDBT_FAILED;
+      break;
+    } 
+    NdbIndexOperation *idxop = trans->getNdbIndexOperation(otherIndex);
+    const NdbError err4 = trans->getNdbError();
+    if(err4.code != 1231)
+    {
+      ndbout << "Failed to detect Index with wrong owner for NdbIndexOperation" << endl;
+      result = NDBT_FAILED;
+      break;
+    } 
+    ndbout << "Success: ownership check detected wrong owner" << endl;   
+ 
+    ndbout << "Disabling schema object ownership check on valid connection" << endl;
+    trans->setSchemaObjOwnerChecks(false);
+  
+    ndbout << "Attempting to acquire Ndb*Operations ";
+    ndbout << "on valid schema objects from other connection" << endl;
+    op = trans->getNdbOperation(otherTable);
+    scanop = trans->getNdbScanOperation(otherTable);
+    idxscanop = trans->getNdbIndexScanOperation(otherIndex, otherTable);
+    idxop = trans->getNdbIndexOperation(otherIndex);
+    
+    if(!op || !scanop || !idxscanop || !idxop)  // failure to acquire at least one op
+    {
+      ndbout << "Failed to acquire ";
+      if(!op)        ndbout << "NdbOperation, ";
+      if(!scanop)    ndbout << "NdbScanOperation, ";
+      if(!idxscanop) ndbout << "NdbIndexScanOperation, ";
+      if(!idxop)     ndbout << "NdbIndexOperation, ";
+      ndbout << "error: " << trans->getNdbError().message << endl;
+      result = NDBT_FAILED;
+      break;
+    }
+    ndbout << "Success: ownership check skipped, wrong owner not detected" << endl;   
+
+    ndbout << "Enabling schema object ownership check on valid connection" << endl;
+    trans->setSchemaObjOwnerChecks(true);
+ 
+    ndbout << "Acquiring schema objects from current connection" << endl;
+    const NdbDictionary::Table *table = ndb->getDictionary()->getTable("SchemaObjOwnerCheck_tab");
+    if(!table)
+    {
+      ndbout << "Failed to get Ndb table from connection" << endl;
+      result = NDBT_FAILED;
+      break;
+    }
+    const NdbDictionary::Index *index = ndb->getDictionary()->getIndex("SchemaObjOwnerCheck_idx", "SchemaObjOwnerCheck_tab");
+    if(!index)
+    {
+      ndbout << "Failed to get Ndb index from connection" << endl;
+      result = NDBT_FAILED;
+      break;
+    }
+ 
+    ndbout << "Attempting to acquire Ndb*Operations ";
+    ndbout << "on owned schema objects with different db" << endl;
+    ndb->setDatabaseName("notexist");
+    NdbOperation *op2 = trans->getNdbOperation(table);
+    NdbScanOperation *scanop2 = trans->getNdbScanOperation(table);
+    NdbIndexScanOperation *idxscanop2 = trans->getNdbIndexScanOperation(index, table);
+    NdbIndexOperation *idxop2 = trans->getNdbIndexOperation(index, table);
+
+    if(!op2 || !scanop2 || !idxscanop2 || !idxop2)  // failure to acquire at least one op
+    {
+      ndbout << "Failed to acquire ";
+      if(!op)        ndbout << "NdbOperation, ";
+      if(!scanop)    ndbout << "NdbScanOperation, ";
+      if(!idxscanop) ndbout << "NdbIndexScanOperation, ";
+      if(!idxop)     ndbout << "NdbIndexOperation, ";
+      ndbout << "error: " << trans->getNdbError().message << endl;
+      result = NDBT_FAILED;
+      break;
+    }
+    ndbout << "Success: acquired Ndb*Operations on owned schema objects" << endl;   
+  } while(false);
+
+  ndbout << "Cleanup" << endl; 
+  ndb->setDatabaseName("TEST_DB");
+  if (dict->dropIndex("SchemaObjOwnerCheck_idx", "SchemaObjOwnerCheck_tab") == -1) 
+  {
+    g_err << "Failed to drop SchemaObjOwnerCheck_idx index." << endl;
+    result = NDBT_FAILED;
+  }
+  if (dict->dropTable("SchemaObjOwnerCheck_tab") == -1) 
+  {
+    g_err << "Failed to drop SchemaObjOwnerCheck_tab table." << endl;
+    result = NDBT_FAILED;
+  }
+
+  trans->setSchemaObjOwnerChecks(false);
+  ndb->closeTransaction(trans);
+
+  if(otherNdb)
+  {
+    delete otherNdb;
+    otherNdb = NULL;
+  }
+  if(otherConnection)
+  {
+    delete otherConnection;
+    otherConnection = NULL;
+  }
+  return result;
+}
+
 NDBT_TESTSUITE(testNdbApi);
 TESTCASE("MaxNdb", 
 	 "Create Ndb objects until no more can be created\n"){ 
@@ -4632,6 +6373,12 @@ TESTCASE("IgnoreError", ""){
 TESTCASE("CheckNdbObjectList", 
 	 ""){ 
   INITIALIZER(runCheckNdbObjectList);
+}
+TESTCASE("DeleteClusterConnectionWhileUsed",
+         "Make sure that deleting of Ndb_cluster_connection will"
+         "not return until all it's Ndb objects has been deleted."){
+  STEP(runNdbClusterConnectionDelete_connection_owner)
+  STEP(runNdbClusterConnectionDelete_connection_user);
 }
 TESTCASE("ExecuteAsynch", 
 	 "Check that executeAsync() works (BUG#27495)\n"){ 
@@ -4746,6 +6493,82 @@ TESTCASE("UnlockScan",
   STEP(runTestUnlockScan);
   FINALIZER(runClearTable);
 }
+TESTCASE("NdbClusterConnect",
+         "Make sure that every Ndb_cluster_connection get a unique nodeid")
+{
+  INITIALIZER(runNdbClusterConnectInit);
+  STEPS(runNdbClusterConnect, MAX_NODES);
+}
+TESTCASE("NdbClusterConnectionConnect",
+         "Test Ndb_cluster_connection::connect()")
+{
+  INITIALIZER(runNdbClusterConnectionConnect);
+}
+TESTCASE("NdbClusterConnectNR",
+         "Make sure that every Ndb_cluster_connection get a unique nodeid")
+{
+  TC_PROPERTY("TimeoutAfterFirst", (Uint32)0);
+  INITIALIZER(runNdbClusterConnectInit);
+  STEPS(runNdbClusterConnect, MAX_NODES);
+  STEP(runRestarts); // Note after runNdbClusterConnect or else counting wrong
+}
+TESTCASE("NdbClusterConnectNR_master",
+         "Make sure that every Ndb_cluster_connection get a unique nodeid")
+{
+  TC_PROPERTY("Master", 1);
+  TC_PROPERTY("TimeoutAfterFirst", (Uint32)0);
+  INITIALIZER(runNdbClusterConnectInit);
+  STEPS(runNdbClusterConnect, MAX_NODES);
+  STEP(runRestarts); // Note after runNdbClusterConnect or else counting wrong
+}
+TESTCASE("NdbClusterConnectNR_non_master",
+         "Make sure that every Ndb_cluster_connection get a unique nodeid")
+{
+  TC_PROPERTY("Master", 2);
+  TC_PROPERTY("TimeoutAfterFirst", (Uint32)0);
+  INITIALIZER(runNdbClusterConnectInit);
+  STEPS(runNdbClusterConnect, MAX_NODES);
+  STEP(runRestarts); // Note after runNdbClusterConnect or else counting wrong
+}
+TESTCASE("NdbClusterConnectNR_slow",
+         "Make sure that every Ndb_cluster_connection get a unique nodeid")
+{
+  TC_PROPERTY("Master", 2);
+  TC_PROPERTY("TimeoutAfterFirst", (Uint32)0);
+  TC_PROPERTY("SlowNR", 1);
+  INITIALIZER(runNdbClusterConnectInit);
+  STEPS(runNdbClusterConnect, MAX_NODES);
+  STEP(runRestarts); // Note after runNdbClusterConnect or else counting wrong
+}
+TESTCASE("NdbClusterConnectSR",
+         "Make sure that every Ndb_cluster_connection get a unique nodeid")
+{
+  TC_PROPERTY("ClusterRestart", (Uint32)1);
+  INITIALIZER(runNdbClusterConnectInit);
+  STEPS(runNdbClusterConnect, MAX_NODES);
+  STEP(runRestarts); // Note after runNdbClusterConnect or else counting wrong
+}
+TESTCASE("TestFragmentedSend",
+         "Test fragmented send behaviour"){
+  INITIALIZER(testFragmentedSend);
+}
+TESTCASE("ReceiveTRANSIDAIAfterRollback",
+         "Delay the delivery of TRANSID_AI results from the data node." \
+         "Abort a transaction with a timeout so that the "\
+         "transaction closing and TRANSID_AI processing are interleaved." \
+         "Confirm that this interleaving does not result in a core."
+){
+  STEP(runReceiveTRANSIDAIAfterRollback);
+  FINALIZER(runClearTable);
+}
+TESTCASE("RecordSpecificationBackwardCompatibility",
+         "Test RecordSpecification struct's backward compatibility"){
+  STEP(testNdbRecordSpecificationCompatibility);
+}
+TESTCASE("SchemaObjectOwnerCheck",
+         "Test use of schema objects with non-owning connections"){
+  STEP(testSchemaObjectOwnerCheck);
+}
 NDBT_TESTSUITE_END(testNdbApi);
 
 int main(int argc, const char** argv){
@@ -4757,3 +6580,4 @@ int main(int argc, const char** argv){
 
 template class Vector<Ndb*>;
 template class Vector<NdbConnection*>;
+template class Vector<Ndb_cluster_connection*>;

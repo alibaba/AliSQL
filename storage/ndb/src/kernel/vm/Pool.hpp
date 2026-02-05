@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2006, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2006, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -20,6 +27,9 @@
 
 #include <ndb_global.h>
 #include <kernel_types.h>
+
+#define JAM_FILE_ID 315
+
 
 /**
  * Type bits
@@ -33,7 +43,7 @@
  */
 #define RG_BITS 5
 #define RG_MASK ((1 << RG_BITS) - 1)
-#define MAKE_TID(TID,RG) ((TID << RG_BITS) | RG)
+#define MAKE_TID(TID,RG) Uint32((TID << RG_BITS) | RG)
 
 /**
  * Page bits
@@ -72,7 +82,7 @@ struct Pool_context
   /**
    * Get mem root
    */
-  void* get_memroot();
+  void* get_memroot() const;
   
   /**
    * Alloc consekutive pages
@@ -118,16 +128,37 @@ struct Pool_context
   /**
    * Abort
    */
-  void handleAbort(int code, const char* msg) ATTRIBUTE_NORETURN;
+  void handleAbort(int code, const char* msg) const ATTRIBUTE_NORETURN;
 };
 
 template <typename T>
 struct Ptr 
 {
+  typedef Uint32 I;
   T * p;
   Uint32 i;
-  inline bool isNull() const { return i == RNIL; }
-  inline void setNull() { i = RNIL; }
+
+  static Ptr get(T* _p, Uint32 _i) { Ptr x; x.p = _p; x.i = _i; return x; }
+
+  /**
+    Initialize to ffff.... in debug mode. The purpose of this is to detect
+    use of uninitialized values by causing an error. To maximize performance,
+    this is done in debug mode only (when asserts are enabled).
+   */
+  Ptr(){assert(memset(this, 0xff, sizeof(*this)));};
+  Ptr(T* pVal, Uint32 iVal):p(pVal), i(iVal){};
+
+
+  bool isNull() const 
+  { 
+    assert(i <= RNIL);
+    return i == RNIL; 
+  }
+
+  inline void setNull()
+  {
+    i = RNIL;
+  }
 };
 
 template <typename T>
@@ -135,8 +166,27 @@ struct ConstPtr
 {
   const T * p;
   Uint32 i;
-  inline bool isNull() const { return i == RNIL; }
-  inline void setNull() { i = RNIL; }
+
+  static ConstPtr get(T const* _p, Uint32 _i) { ConstPtr x; x.p = _p; x.i = _i; return x; }
+
+  /**
+    Initialize to ffff.... in debug mode. The purpose of this is to detect
+    use of uninitialized values by causing an error. To maximize performance,
+    this is done in debug mode only (when asserts are enabled).
+   */
+  ConstPtr(){assert(memset(this, 0xff, sizeof(*this)));};
+  ConstPtr(T* pVal, Uint32 iVal):p(pVal), i(iVal){};
+
+  bool isNull() const 
+  { 
+    assert(i <= RNIL);
+    return i == RNIL; 
+  }
+
+  inline void setNull()
+  {
+    i = RNIL;
+  }
 };
 
 #ifdef XX_DOCUMENTATION_XX
@@ -382,5 +432,8 @@ RecordPool<T, P>::release(Ptr<T> ptr)
   tmp.p = ptr.p;
   m_pool.release(tmp);
 }
+
+
+#undef JAM_FILE_ID
 
 #endif

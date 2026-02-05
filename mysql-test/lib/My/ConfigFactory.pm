@@ -1,15 +1,21 @@
 # -*- cperl -*-
-# Copyright (c) 2007, 2011, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2007, 2023, Oracle and/or its affiliates.
 #
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU Library General Public
-# License as published by the Free Software Foundation; version 2
-# of the License.
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License, version 2.0,
+# as published by the Free Software Foundation.
+#
+# This program is also distributed with certain software (including
+# but not limited to OpenSSL) that is licensed under separate terms,
+# as designated in a particular file or component or in included license
+# documentation.  The authors of MySQL hereby grant you an additional
+# permission to link the program and your derivative works with the
+# separately licensed software that they have included with MySQL.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-# Library General Public License for more details.
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License, version 2.0, for more details.
 #
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
@@ -93,6 +99,11 @@ sub fix_port {
   return $self->{HOSTS}->{$hostname}++;
 }
 
+sub fix_x_port {
+  my ($self, $config, $group_name, $group)= @_;
+  return $self->{ARGS}->{mysqlxbaseport}++;
+}
+
 sub fix_host {
   my ($self)= @_;
   # Get next host from HOSTS array
@@ -134,11 +145,29 @@ sub fix_server_id {
   return $server_id;
 }
 
+sub fix_x_socket {
+  my $result = fix_socket(@_);
+  $result =~ s/mysqld\.([0-9]+)\.sock$/mysqlx\.$1\.sock/;
+
+  return $result;
+}
+
 sub fix_socket {
   my ($self, $config, $group_name, $group)= @_;
   # Put socket file in tmpdir
   my $dir= $self->{ARGS}->{tmpdir};
-  return "$dir/$group_name.sock";
+  my $socket = "$dir/$group_name.sock";
+ 
+  # Make sure the socket path does not become longer then the path
+  # which mtr uses to test if a new tmpdir should be created
+  if (length($socket) > length("$dir/mysql_testsocket.sock"))
+  {
+    # Too long socket path, generate shorter based on port
+    my $port = $group->value('port');
+    $socket = "$dir/mysqld-$port.sock"; 
+  }
+
+  return $socket;
 }
 
 sub fix_tmpdir {
@@ -187,16 +216,23 @@ sub ssl_supported {
   return $self->{ARGS}->{ssl};
 }
 
-sub fix_skip_ssl {
+sub fix_ssl_disabled {
   return if !ssl_supported(@_);
-  # Add skip-ssl if ssl is supported to avoid
+  return if $::opt_ssl;
+  # Add ssl-mode=DISABLED to avoid
   # that mysqltest connects with SSL by default
-  return 1;
+  return "DISABLED";
 }
 
 sub fix_ssl_ca {
   return if !ssl_supported(@_);
   my $std_data= fix_std_data(@_);
+  return "$std_data/cacert.pem"
+}
+
+sub fix_client_ssl_ca {
+  return if !$::opt_ssl;
+  my $std_data= fix_std_data(@_); 
   return "$std_data/cacert.pem"
 }
 
@@ -240,6 +276,8 @@ my @mysqld_rules=
  { '#host' => \&fix_host },
  { 'port' => \&fix_port },
  { 'socket' => \&fix_socket },
+ { 'loose-mysqlx-port' => \&fix_x_port },
+ { 'loose-mysqlx-socket' => \&fix_x_socket },
  { '#log-error' => \&fix_log_error },
  { 'general_log' => 1 },
  { 'general_log_file' => \&fix_log },
@@ -253,7 +291,9 @@ my @mysqld_rules=
  { 'ssl-ca' => \&fix_ssl_ca },
  { 'ssl-cert' => \&fix_ssl_server_cert },
  { 'ssl-key' => \&fix_ssl_server_key },
+ { 'loose-sha256_password_auto_generate_rsa_keys' => "0"},
   );
+
 
 if (IS_WINDOWS)
 {
@@ -346,10 +386,10 @@ my @client_rules=
 #
 my @mysqltest_rules=
 (
- { 'ssl-ca' => \&fix_ssl_ca },
+ { 'ssl-ca' => \&fix_client_ssl_ca },
  { 'ssl-cert' => \&fix_ssl_client_cert },
  { 'ssl-key' => \&fix_ssl_client_key },
- { 'skip-ssl' => \&fix_skip_ssl },
+ { 'ssl-mode' => \&fix_ssl_disabled },
 );
 
 
@@ -360,6 +400,7 @@ my @mysqltest_rules=
 my @mysqlbinlog_rules=
 (
  { 'character-sets-dir' => \&fix_charset_dir },
+ { 'local-load' => sub { return shift->{ARGS}->{tmpdir}; } },
 );
 
 
@@ -369,7 +410,6 @@ my @mysqlbinlog_rules=
 #
 my @mysql_upgrade_rules=
 (
- { 'tmpdir' => sub { return shift->{ARGS}->{tmpdir}; } },
 );
 
 
@@ -481,12 +521,21 @@ sub resolve_at_variable {
   my $group_name=  join('.', @parts);
 
   $group_name =~ s/^\@//; # Remove at
-
-  my $from_group= $config->group($group_name)
-    or croak "There is no group named '$group_name' that ",
-      "can be used to resolve '$option_name'";
-
-  my $from= $from_group->value($option_name);
+  my $from;
+  
+  if ($group_name =~ "env")
+  {
+    $from = $ENV{$option_name};
+  } 
+  else
+  {
+    my $from_group= $config->group($group_name)
+      or croak "There is no group named '$group_name' that ",
+        "can be used to resolve '$option_name'";
+  
+    $from= $from_group->value($option_name);
+   }
+   
   $config->insert($group->name(), $option->name(), $from)
 }
 

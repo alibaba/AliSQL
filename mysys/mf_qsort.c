@@ -1,13 +1,25 @@
-/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -21,9 +33,8 @@
 
 
 #include "mysys_priv.h"
-#ifndef SCO
+#include "my_sys.h"
 #include <m_string.h>
-#endif
 
 /* We need to use qsort with 2 different compare functions */
 #ifdef QSORT_EXTRA_CMP_ARGUMENT
@@ -36,13 +47,13 @@
 do {							\
    if (swap_ptrs)					\
    {							\
-     reg1 char **a = (char**) (A), **b = (char**) (B);  \
+     char **a = (char**) (A), **b = (char**) (B);  \
      char *tmp = *a; *a++ = *b; *b++ = tmp;		\
    }							\
    else							\
    {							\
-     reg1 char *a = (A), *b = (B);			\
-     reg3 char *end= a+size;				\
+     char *a = (A), *b = (B);			\
+     char *end= a+size;				\
      do							\
      {							\
        char tmp = *a; *a++ = *b; *b++ = tmp;		\
@@ -74,11 +85,6 @@ typedef struct st_stack
 /* The following stack size is enough for ulong ~0 elements */
 #define STACK_SIZE	(8 * sizeof(unsigned long int))
 #define THRESHOLD_FOR_INSERT_SORT 10
-#if defined(QSORT_TYPE_IS_VOID)
-#define SORT_RETURN return
-#else
-#define SORT_RETURN return 0
-#endif
 
 /****************************************************************************
 ** 'standard' quicksort with the following extensions:
@@ -91,10 +97,10 @@ typedef struct st_stack
 *****************************************************************************/
 
 #ifdef QSORT_EXTRA_CMP_ARGUMENT
-qsort_t my_qsort2(void *base_ptr, size_t count, size_t size, qsort2_cmp cmp,
-                  const void *cmp_argument)
+void my_qsort2(void *base_ptr, size_t count, size_t size, qsort2_cmp cmp,
+               const void *cmp_argument)
 #else
-qsort_t my_qsort(void *base_ptr, size_t count, size_t size, qsort_cmp cmp)
+void my_qsort(void *base_ptr, size_t count, size_t size, qsort_cmp cmp)
 #endif
 {
   char *low, *high, *pivot;
@@ -103,15 +109,11 @@ qsort_t my_qsort(void *base_ptr, size_t count, size_t size, qsort_cmp cmp)
   /* Handle the simple case first */
   /* This will also make the rest of the code simpler */
   if (count <= 1)
-    SORT_RETURN;
+    return;
 
   low  = (char*) base_ptr;
   high = low+ size * (count - 1);
   stack_ptr = stack + 1;
-#ifdef HAVE_purify
-  /* The first element in the stack will be accessed for the last POP */
-  stack[0].low=stack[0].high=0;
-#endif
   pivot = (char *) my_alloca((int) size);
   ptr_cmp= size == sizeof(char*) && !((low - (char*) 0)& (sizeof(char*)-1));
 
@@ -211,6 +213,5 @@ qsort_t my_qsort(void *base_ptr, size_t count, size_t size, qsort_cmp cmp)
       high = high_ptr;
     }
   } while (stack_ptr > stack);
-  my_afree(pivot);
-  SORT_RETURN;
+  return;
 }

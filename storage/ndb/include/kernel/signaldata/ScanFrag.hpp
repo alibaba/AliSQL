@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -20,6 +27,9 @@
 
 #include "SignalData.hpp"
 #include "ndb_limits.h"
+
+#define JAM_FILE_ID 134
+
 
 class ScanFragReq {
   /**
@@ -80,6 +90,16 @@ public:
   static Uint32 getNoDiskFlag(const Uint32 & requestInfo);
   static Uint32 getLcpScanFlag(const Uint32 & requestInfo);
   static Uint32 getStatScanFlag(const Uint32 & requestInfo);
+  static Uint32 getPrioAFlag(const Uint32 & requestInfo);
+  /**
+   * To ensure backwards compatibility we set the flag when NOT using
+   * interpreted mode, previously scans always used interpreted mode. Now
+   * it is possible to perform scans (especially LCP scans and Backup
+   * scans) without using the interpreted programs. This way the code will
+   * interact nicely with old code that always set this flag to 0 and want
+   * to use interpreted execution based on that.
+   */
+  static Uint32 getNotInterpretedFlag(const Uint32 & requestInfo);
 
   static void setLockMode(Uint32 & requestInfo, Uint32 lockMode);
   static void setHoldLockFlag(Uint32 & requestInfo, Uint32 holdLock);
@@ -89,10 +109,13 @@ public:
   static void setDescendingFlag(Uint32 & requestInfo, Uint32 descending);
   static void setTupScanFlag(Uint32 & requestInfo, Uint32 tupScan);
   static void setAttrLen(Uint32 & requestInfo, Uint32 attrLen);
+  static void clearAttrLen(Uint32 & requestInfo);
   static void setScanPrio(Uint32& requestInfo, Uint32 prio);
   static void setNoDiskFlag(Uint32& requestInfo, Uint32 val);
   static void setLcpScanFlag(Uint32 & requestInfo, Uint32 val);
   static void setStatScanFlag(Uint32 & requestInfo, Uint32 val);
+  static void setPrioAFlag(Uint32 & requestInfo, Uint32 val);
+  static void setNotInterpretedFlag(Uint32 & requestInfo, Uint32 val);
 
   static void setReorgFlag(Uint32 & requestInfo, Uint32 val);
   static Uint32 getReorgFlag(const Uint32 & requestInfo);
@@ -177,7 +200,7 @@ public:
   Uint32 fragmentCompleted;
   Uint32 transId1;
   Uint32 transId2;
-  Uint32 total_len;
+  Uint32 total_len;  // Total #Uint32 returned as TRANSID_AI
 };
 
 class ScanFragRef {
@@ -202,6 +225,8 @@ public:
     ZSCAN_NO_FRAGMENT_ERROR = 487,
     ZTOO_MANY_ACTIVE_SCAN_ERROR = 488,
     ZNO_FREE_SCANREC_ERROR = 489,
+    TABLE_NOT_DEFINED_ERROR = 723,
+    DROP_TABLE_IN_PROGRESS_ERROR = 1226, /* Reported on LCP scans */
     ZWRONG_BATCH_SIZE = 1230,
     ZSTANDBY_SCAN_ERROR = 1209,
     NO_TC_CONNECT_ERROR = 1217,
@@ -240,17 +265,18 @@ public:
 
 public:
   Uint32 senderData;
-  Uint32 requestInfo; // 1 == close
+  Uint32 requestInfo;
   Uint32 transId1;
   Uint32 transId2;
   Uint32 batch_size_rows;
   Uint32 batch_size_bytes;
   Uint32 variableData[1];
 
-  STATIC_CONST( ZCLOSE = 1 );
-
   static Uint32 getCloseFlag(const Uint32&);
   static void setCloseFlag(Uint32&, Uint32);
+
+  static Uint32 getPrioAFlag(const Uint32&);
+  static void setPrioAFlag(Uint32&, Uint32);
 
   static Uint32 getCorrFactorFlag(const Uint32&);
   static void setCorrFactorFlag(Uint32&);
@@ -273,11 +299,13 @@ public:
  * r = Reorg flag            - 2  Bits (1-2)
  * C = corr value flag       - 1  Bit  (16)
  * s = Stat scan             - 1  Bit 17
+ * a = Prio A scan           - 1  Bit 18
+ * i = Not interpreted flag  - 1  Bit 19
  *
  *           1111111111222222222233
  * 01234567890123456789012345678901
  *  rrcdlxhkrztppppaaaaaaaaaaaaaaaa   Short variant ( < 6.4.0)
- *  rrcdlxhkrztppppAs                 Long variant (6.4.0 +)
+ *  rrcdlxhkrztppppCs                 Long variant (6.4.0 +)
  */
 #define SF_LOCK_MODE_SHIFT   (5)
 #define SF_LOCK_MODE_MASK    (1)
@@ -303,6 +331,8 @@ public:
 #define SF_CORR_FACTOR_SHIFT  (16)
 
 #define SF_STAT_SCAN_SHIFT  (17)
+#define SF_PRIO_A_SHIFT     (18)
+#define SF_NOT_INTERPRETED_SHIFT (19)
 
 inline 
 Uint32
@@ -422,6 +452,13 @@ ScanFragReq::setAttrLen(UintR & requestInfo, UintR val){
 }
 
 inline
+void
+ScanFragReq::clearAttrLen(Uint32 & requestInfo)
+{
+  requestInfo &= ~((Uint32)SF_ATTR_LEN_MASK << SF_ATTR_LEN_SHIFT);
+}
+
+inline
 Uint32
 ScanFragReq::getNoDiskFlag(const Uint32 & requestInfo){
   return (requestInfo >> SF_NO_DISK_SHIFT) & 1;
@@ -506,6 +543,34 @@ ScanFragReq::setStatScanFlag(UintR & requestInfo, UintR val){
   requestInfo |= (val << SF_STAT_SCAN_SHIFT);
 }
 
+inline
+Uint32
+ScanFragReq::getPrioAFlag(const Uint32 & requestInfo){
+  return (requestInfo >> SF_PRIO_A_SHIFT) & 1;
+}
+
+inline
+void
+ScanFragReq::setPrioAFlag(UintR & requestInfo, UintR val){
+  ASSERT_BOOL(val, "ScanFragReq::setPrioAFlag");
+  requestInfo |= (val << SF_PRIO_A_SHIFT);
+}
+
+inline
+Uint32
+ScanFragReq::getNotInterpretedFlag(const Uint32 & requestInfo)
+{
+  return (requestInfo >> SF_NOT_INTERPRETED_SHIFT) & 1;
+}
+
+inline
+void
+ScanFragReq::setNotInterpretedFlag(UintR & requestInfo, UintR val)
+{
+  ASSERT_BOOL(val, "ScanFragReq::setStatScanFlag");
+  requestInfo |= (val << SF_NOT_INTERPRETED_SHIFT);
+}
+
 /**
  * Request Info (SCAN_NEXTREQ)
  *
@@ -518,6 +583,7 @@ ScanFragReq::setStatScanFlag(UintR & requestInfo, UintR val){
  */
 #define SFN_CLOSE_SHIFT 0
 #define SFN_CORR_SHIFT  1
+#define SFN_PRIO_A_SHIFT 2
 
 inline
 Uint32
@@ -532,5 +598,33 @@ ScanFragNextReq::setCorrFactorFlag(Uint32 & ri)
 {
   ri |= (1 << SFN_CORR_SHIFT);
 }
+
+inline
+Uint32
+ScanFragNextReq::getCloseFlag(const Uint32 & requestInfo){
+  return requestInfo & 1;
+}
+
+inline
+void
+ScanFragNextReq::setCloseFlag(UintR & requestInfo, UintR val){
+  ASSERT_BOOL(val, "ScanFragReq::setCloseFlag");
+  requestInfo |= val;
+}
+
+inline
+Uint32
+ScanFragNextReq::getPrioAFlag(const Uint32 & requestInfo){
+  return (requestInfo >> SFN_PRIO_A_SHIFT) & 1;
+}
+
+inline
+void
+ScanFragNextReq::setPrioAFlag(UintR & requestInfo, UintR val){
+  ASSERT_BOOL(val, "ScanFragReq::setPrioAFlag");
+  requestInfo |= (val << SFN_PRIO_A_SHIFT);
+}
+
+#undef JAM_FILE_ID
 
 #endif

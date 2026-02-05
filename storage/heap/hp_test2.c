@@ -1,14 +1,20 @@
-/* Copyright (c) 2000, 2016, Oracle and/or its affiliates. All rights reserved.
-   reserved
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -24,7 +30,7 @@
 
 static int get_options(int argc, char *argv[]);
 static int rnd(int max_value);
-static sig_handler endprog(int sig_number);
+static void endprog(int sig_number);
 
 static uint flag=0,verbose=0,testflag=0,recant=10000,silent=0;
 static uint keys=MAX_KEYS;
@@ -41,7 +47,7 @@ static void make_record(uchar *record, uint n1, uint n2, uint n3,
 
 int main(int argc, char *argv[])
 {
-  register uint i,j;
+  uint i,j;
   uint ant,n1,n2,n3;
   uint write_count,update,opt_delete,check2,dupp_keys,found_key;
   int error;
@@ -53,7 +59,7 @@ int main(int argc, char *argv[])
   HP_SHARE *tmp_share;
   HP_KEYDEF keyinfo[MAX_KEYS];
   HA_KEYSEG keyseg[MAX_KEYS*5];
-  HEAP_PTR UNINIT_VAR(position);
+  HEAP_PTR position= 0;
   HP_CREATE_INFO hp_create_info;
   CHARSET_INFO *cs= &my_charset_latin1;
   my_bool unused;
@@ -65,7 +71,7 @@ int main(int argc, char *argv[])
   get_options(argc,argv);
 
   memset(&hp_create_info, 0, sizeof(hp_create_info));
-  hp_create_info.max_table_size= 1024L*1024L;
+  hp_create_info.max_table_size= 1024L * 1024L * 2;
   hp_create_info.keys= keys;
   hp_create_info.keydef= keyinfo;
   hp_create_info.reclength= reclength;
@@ -128,7 +134,7 @@ int main(int argc, char *argv[])
   signal(SIGINT,endprog);
 
   printf("- Writing records:s\n");
-  strmov((char*) record,"          ..... key");
+  my_stpcpy((char*) record,"          ..... key");
 
   for (i=0 ; i < recant ; i++)
   {
@@ -139,9 +145,9 @@ int main(int argc, char *argv[])
 
     if (heap_write(file,record))
     {
-      if (my_errno != HA_ERR_FOUND_DUPP_KEY || key3[n3] == 0)
+      if (my_errno() != HA_ERR_FOUND_DUPP_KEY || key3[n3] == 0)
       {
-	printf("Error: %d in write at record: %d\n",my_errno,i);
+	printf("Error: %d in write at record: %d\n",my_errno(),i);
 	goto err;
       }
       if (verbose) printf("   Double key: %d\n",n3);
@@ -184,7 +190,7 @@ int main(int argc, char *argv[])
       }
       if (heap_delete(file,record))
       {
-	printf("error: %d; can't delete record: \"%s\"\n", my_errno,(char*) record);
+	printf("error: %d; can't delete record: \"%s\"\n", my_errno(),(char*) record);
 	goto err;
       }
       opt_delete++;
@@ -242,10 +248,10 @@ int main(int argc, char *argv[])
     }
     if (heap_update(file,record,record2))
     {
-      if (my_errno != HA_ERR_FOUND_DUPP_KEY || key3[n3] == 0)
+      if (my_errno() != HA_ERR_FOUND_DUPP_KEY || key3[n3] == 0)
       {
 	printf("error: %d; can't update:\nFrom: \"%s\"\nTo:   \"%s\"\n",
-	       my_errno,(char*) record, (char*) record2);
+	       my_errno(),(char*) record, (char*) record2);
 	goto err;
       }
       if (verbose)
@@ -392,13 +398,13 @@ int main(int argc, char *argv[])
       pos--;
     if (!error && (i-- == 0))
     {
-      bmove(record3,record,reclength);
+      memmove(record3, record, reclength);
       position=heap_position(file);
     }
   }
   if (error)
     goto err;
-  bmove(record2,record,reclength);
+  memmove(record2, record, reclength);
   if (heap_rsame(file,record,-1) || heap_rsame(file,record2,2))
     goto err;
   if (memcmp(record2,record,reclength))
@@ -431,39 +437,6 @@ int main(int argc, char *argv[])
     }
   }
 
-#ifdef OLD_HEAP_VERSION
-  {
-    uint check;
-    printf("- Read through all records with rnd\n");
-    if (heap_extra(file,HA_EXTRA_RESET) || heap_extra(file,HA_EXTRA_CACHE))
-    {
-      puts("got error from heap_extra");
-      goto end;
-    }
-    ant=check=0;
-    while ((error=heap_rrnd(file,record,(ulong) -1)) != HA_ERR_END_OF_FILE &&
-	   ant < write_count + 10)
-    {
-      if (!error)
-      {
-	ant++;
-	check+=calc_check(record,reclength);
-      }
-    }
-    if (ant != write_count-opt_delete)
-    {
-      printf("rrnd: I can only find: %d records of %d\n", ant,
-	     write_count-opt_delete);
-      goto end;
-    }
-    if (heap_extra(file,HA_EXTRA_NO_CACHE))
-    {
-      puts("got error from heap_extra(HA_EXTRA_NO_CACHE)");
-      goto end;
-    }
-  }
-#endif
-
   printf("- Read through all records with scan\n");
   if (heap_reset(file) || heap_extra(file,HA_EXTRA_CACHE))
   {
@@ -487,14 +460,6 @@ int main(int argc, char *argv[])
 	   write_count-opt_delete);
     goto end;
   }
-#ifdef OLD_HEAP_VERSION
-  if (check != check2)
-  {
-    puts("scan: Checksum didn't match reading with rrnd");
-    goto end;
-  }
-#endif
-
 
   if (heap_extra(file,HA_EXTRA_NO_CACHE))
   {
@@ -589,8 +554,8 @@ int main(int argc, char *argv[])
     goto err;
   }
 
-  if (my_errno != HA_ERR_END_OF_FILE)
-    printf("error: %d from heap_rrnd\n",my_errno);
+  if (my_errno() != HA_ERR_END_OF_FILE)
+    printf("error: %d from heap_rrnd\n",my_errno());
   if (key_check)
     printf("error: Some read got wrong: check is %ld\n",(long) key_check);
 
@@ -606,7 +571,7 @@ end:
   my_end(MY_GIVE_INFO);
   return(0);
 err:
-  printf("Got error: %d when using heap-database\n",my_errno);
+  printf("Got error: %d when using heap-database\n",my_errno());
   (void) heap_close(file);
   return(1);
 } /* main */
@@ -660,7 +625,7 @@ static int rnd(int max_value)
 } /* rnd */
 
 
-static sig_handler endprog(int sig_number MY_ATTRIBUTE((unused)))
+static void endprog(int sig_number MY_ATTRIBUTE((unused)))
 {
   {
     hp_panic(HA_PANIC_CLOSE);

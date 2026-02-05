@@ -1,15 +1,21 @@
 /*
-   Copyright (C) 2003-2007 MySQL AB, 2008 Sun Microsystems, Inc.
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -22,6 +28,9 @@
 #include <NdbOut.hpp>
 #include <mgmapi_config_parameters.h>
 #include <ndb_version.h>
+
+#define JAM_FILE_ID 0
+
 
 class NodeInfo {
 public:
@@ -37,15 +46,14 @@ public:
     INVALID = 255 ///< Invalid type
   };
   NodeType getType() const;
-  
+
   Uint32 m_version;       ///< Ndb version
   Uint32 m_mysql_version; ///< MySQL version
   Uint32 m_lqh_workers;   ///< LQH workers
   Uint32 m_type;          ///< Node type
   Uint32 m_connectCount;  ///< No of times connected
-  bool   m_connected;     ///< Node is connected
-  Uint32 m_heartbeat_cnt; ///< Missed heartbeats
-  
+  Uint32 m_connected;     ///< Node is connected
+
   friend NdbOut & operator<<(NdbOut&, const NodeInfo&); 
 };
 
@@ -57,7 +65,6 @@ NodeInfo::NodeInfo(){
   m_lqh_workers = 0;
   m_type = INVALID;
   m_connectCount = 0;
-  m_heartbeat_cnt= 0;
 }
 
 inline
@@ -125,5 +132,8 @@ struct NodeVersionInfo
     Uint32 m_max_version;
   } m_type [3]; // Indexed as NodeInfo::Type 
 };
+
+
+#undef JAM_FILE_ID
 
 #endif

@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -18,7 +25,7 @@
 #include <ndb_global.h>
 
 #include <EventLogger.hpp>
-#include <TransporterCallback.hpp>
+#include <TransporterDefinitions.hpp>
 
 #include <NdbConfig.h>
 #include <kernel/BlockNumbers.h>
@@ -474,15 +481,35 @@ void getTextNR_CopyDict(QQQQ) {
   //-----------------------------------------------------------------------
   // REPORT Node Restart completed copy of dictionary information.
   //-----------------------------------------------------------------------
-  BaseString::snprintf(m_text, m_text_len, 
-		       "Node restart completed copy of dictionary information");
+  if (len == 2)
+  {
+    BaseString::snprintf(m_text, m_text_len, 
+		         "Node restart completed copy of dictionary information"
+                         " to Node %u",
+                         theData[1]);
+  }
+  else
+  {
+    BaseString::snprintf(m_text, m_text_len, 
+		         "Node restart completed copy of dictionary information");
+  }
 }
 void getTextNR_CopyDistr(QQQQ) {
   //-----------------------------------------------------------------------
   // REPORT Node Restart completed copy of distribution information.
   //-----------------------------------------------------------------------
-  BaseString::snprintf(m_text, m_text_len, 
-		       "Node restart completed copy of distribution information");
+  if (len == 2)
+  {
+    BaseString::snprintf(m_text, m_text_len, 
+		   "Node restart completed copy of distribution information"
+                       " to Node %u",
+                       theData[1]);
+  }
+  else
+  {
+    BaseString::snprintf(m_text, m_text_len, 
+		   "Node restart completed copy of distribution information");
+  }
 }
 void getTextNR_CopyFragsStarted(QQQQ) {
   //-----------------------------------------------------------------------
@@ -527,23 +554,49 @@ void getTextTransReportCounters(QQQQ) {
   // -------------------------------------------------------------------  
   // Report information about transaction activity once per 10 seconds.
   // ------------------------------------------------------------------- 
-  BaseString::snprintf(m_text, m_text_len, 
-		       "Trans. Count = %u, Commit Count = %u, "
-		       "Read Count = %u, Simple Read Count = %u, "
-		       "Write Count = %u, AttrInfo Count = %u, "
-		       "Concurrent Operations = %u, Abort Count = %u"
-		       " Scans = %u Range scans = %u", 
-		       theData[1], 
-		       theData[2], 
-		       theData[3], 
-		       theData[4],
-		       theData[5], 
-		       theData[6], 
-		       theData[7], 
-		       theData[8],
-		       theData[9],
-		       theData[10]);
+  if (len <= 11)
+  {
+    BaseString::snprintf(m_text, m_text_len,
+                         "Trans. Count = %u, Commit Count = %u, "
+                         "Read Count = %u, Simple Read Count = %u, "
+                         "Write Count = %u, AttrInfo Count = %u, "
+                         "Concurrent Operations = %u, Abort Count = %u"
+                         " Scans = %u Range scans = %u",
+                         theData[1],
+                         theData[2],
+                         theData[3],
+                         theData[4],
+                         theData[5],
+                         theData[6],
+                         theData[7],
+                         theData[8],
+                         theData[9],
+                         theData[10]);
+  }
+  else
+  {
+    BaseString::snprintf(m_text, m_text_len,
+                         "Trans. Count = %u, Commit Count = %u, "
+                         "Read Count = %u, Simple Read Count = %u, "
+                         "Write Count = %u, AttrInfo Count = %u, "
+                         "Concurrent Operations = %u, Abort Count = %u"
+                         " Scans = %u Range scans = %u, Local Read Count = %u"
+                         " Local Write Count = %u",
+                         theData[1],
+                         theData[2],
+                         theData[3],
+                         theData[4],
+                         theData[5],
+                         theData[6],
+                         theData[7],
+                         theData[8],
+                         theData[9],
+                         theData[10],
+                         theData[11],
+                         theData[12]);
+  }
 }
+
 void getTextOperationReportCounters(QQQQ) {
   BaseString::snprintf(m_text, m_text_len,
 		       "Operations=%u",
@@ -633,7 +686,11 @@ void getTextTransporterError(QQQQ) {
     //TE_SHM_IPC_PERMANENT = 0x21
     {TE_SHM_IPC_PERMANENT,"Shm ipc Permanent error"},
     //TE_SCI_UNABLE_TO_CLOSE_CHANNEL = 0x22
-    {TE_SCI_UNABLE_TO_CLOSE_CHANNEL,"Unable to close the sci channel and the resources allocated"}
+    {TE_SCI_UNABLE_TO_CLOSE_CHANNEL, "Unable to close the sci channel and the resources allocated"},
+    //TE_UNSUPPORTED_BYTE_ORDER = 0x23 | TE_DO_DISCONNECT
+    {TE_UNSUPPORTED_BYTE_ORDER, "Error found in message (unsupported byte order)"},
+    //TE_COMPRESSED_UNSUPPORTED = 0x24 | TE_DO_DISCONNECT
+    {TE_COMPRESSED_UNSUPPORTED, "Error found in message (unsupported feature compressed)"},
   };
 
   lenth = sizeof(TransporterErrorString)/sizeof(struct myTransporterError);
@@ -1086,6 +1143,11 @@ void getTextSubscriptionStatus(QQQQ)
                          ", epoch %u/%u",
                          theData[4], theData[3]);
     break;
+  case(3): // SubscriptionStatus::NOTCONNECTED
+    BaseString::snprintf(m_text, m_text_len,
+                         "Forcing disconnect of node %u as it did not connect within %u seconds.",
+                         theData[2], theData[3]);
+    break;
   }
 }
 
@@ -1524,7 +1586,7 @@ EventLogger::getText(char * dst, size_t dst_len,
   if (nodeId != 0)
   {
     BaseString::snprintf(dst, dst_len, "Node %u: ", nodeId);
-    pos= strlen(dst);
+    pos= (int)strlen(dst);
   }
   if (dst_len-pos > 0)
     textF(dst+pos, dst_len-pos, theData, len);

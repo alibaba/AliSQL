@@ -1,4 +1,7 @@
 drop table if exists t1,t2,t3;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 create table t1 (a int not null);
 insert into t1 values (1);
 insert into t1 values (a+2);
@@ -42,7 +45,7 @@ a	t>0	c	i
 5	0	a	NULL
 6	1	hello	NULL
 drop table t1;
-create table t1 (sid char(20), id int(2) NOT NULL auto_increment, key(sid, id));
+create table t1 (sid char(20), id int(2) NOT NULL auto_increment, key(sid, id)) engine=myisam;
 insert into t1 values ('skr',NULL),('skr',NULL),('test',NULL);
 select * from t1;
 sid	id
@@ -74,14 +77,12 @@ drop table t1;
 create table t1 (email varchar(50));
 insert into t1 values ('sasha@mysql.com'),('monty@mysql.com'),('foo@hotmail.com'),('foo@aol.com'),('bar@aol.com');
 create table t2(id int not null auto_increment primary key, t2 varchar(50), unique(t2));
-insert delayed into t2 (t2) select distinct substring(email, locate('@', email)+1) from t1;
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
+insert into t2 (t2) select distinct substring(email, locate('@', email)+1) from t1;
 select * from t2;
 id	t2
-1	mysql.com
-2	hotmail.com
 3	aol.com
+2	hotmail.com
+1	mysql.com
 drop table t1,t2;
 drop database if exists mysqltest;
 create database mysqltest;
@@ -308,7 +309,6 @@ insert into t1 SET a=1, b=a+1;
 insert into t1 (a,b) select 1,2;
 INSERT INTO t1 ( a ) SELECT 0 ON DUPLICATE KEY UPDATE a = a + VALUES (a);
 prepare stmt1 from ' replace into t1 (a,a) select 100, ''hundred'' ';
-execute stmt1;
 ERROR 42000: Column 'a' specified twice
 insert into t1 (a,b,b) values (1,1,1);
 ERROR 42000: Column 'b' specified twice
@@ -329,9 +329,11 @@ select row_count();
 row_count()
 3
 insert ignore into t1 values (1, 1);
+Warnings:
+Warning	1062	Duplicate entry '1' for key 'PRIMARY'
 select row_count();
 row_count()
-0
+-1
 replace into t1 values (1, 11);
 select row_count();
 row_count()
@@ -370,10 +372,18 @@ f1	f2
 2	22
 drop view v1;
 drop table t1,t2;
-create table t1 (id int primary key auto_increment, data int, unique(data));
+create table t1 (id int primary key auto_increment, data int, unique(data)) engine=myisam;
 insert ignore into t1 values(NULL,100),(NULL,110),(NULL,120);
 insert ignore into t1 values(NULL,10),(NULL,20),(NULL,110),(NULL,120),(NULL,100),(NULL,90);
+Warnings:
+Warning	1062	Duplicate entry '110' for key 'data'
+Warning	1062	Duplicate entry '120' for key 'data'
+Warning	1062	Duplicate entry '100' for key 'data'
 insert ignore into t1 values(NULL,130),(NULL,140),(500,110),(550,120),(450,100),(NULL,150);
+Warnings:
+Warning	1062	Duplicate entry '110' for key 'data'
+Warning	1062	Duplicate entry '120' for key 'data'
+Warning	1062	Duplicate entry '100' for key 'data'
 select * from t1 order by id;
 id	data
 1	100
@@ -386,143 +396,6 @@ id	data
 8	140
 9	150
 drop table t1;
-DROP TABLE IF EXISTS t1;
-DROP FUNCTION IF EXISTS f1;
-DROP FUNCTION IF EXISTS f2;
-CREATE TABLE t1 (i INT);
-CREATE FUNCTION f1() RETURNS INT
-BEGIN
-INSERT INTO t1 VALUES (1);
-RETURN 1;
-END |
-CREATE FUNCTION f2() RETURNS INT
-BEGIN
-INSERT DELAYED INTO t1 VALUES (2);
-RETURN 1;
-END |
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
-SELECT f1();
-f1()
-1
-SELECT f2();
-f2()
-1
-INSERT INTO t1 VALUES (3);
-INSERT DELAYED INTO t1 VALUES (4);
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
-INSERT INTO t1 VALUES (f1());
-ERROR HY000: Can't update table 't1' in stored function/trigger because it is already used by statement which invoked this stored function/trigger.
-INSERT DELAYED INTO t1 VALUES (f1());
-ERROR HY000: Can't update table 't1' in stored function/trigger because it is already used by statement which invoked this stored function/trigger.
-INSERT INTO t1 VALUES (f2());
-ERROR HY000: Can't update table 't1' in stored function/trigger because it is already used by statement which invoked this stored function/trigger.
-INSERT DELAYED INTO t1 VALUES (f2());
-ERROR HY000: Can't update table 't1' in stored function/trigger because it is already used by statement which invoked this stored function/trigger.
-CREATE TRIGGER t1_bi BEFORE INSERT ON t1 FOR EACH ROW
-INSERT INTO t1 VALUES (NEW.i);
-INSERT INTO t1 VALUES (1);
-ERROR HY000: Can't update table 't1' in stored function/trigger because it is already used by statement which invoked this stored function/trigger.
-INSERT DELAYED INTO t1 VALUES (1);
-ERROR HY000: Can't update table 't1' in stored function/trigger because it is already used by statement which invoked this stored function/trigger.
-SELECT * FROM t1;
-i
-1
-2
-3
-4
-DROP FUNCTION f2;
-DROP FUNCTION f1;
-DROP TABLE t1;
-DROP TABLE IF EXISTS t1, t2;
-CREATE TABLE t1 (i INT);
-CREATE TABLE t2 (i INT);
-CREATE TRIGGER t1_bi BEFORE INSERT ON t1 FOR EACH ROW
-INSERT DELAYED INTO t2 VALUES (NEW.i);
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
-CREATE TRIGGER t1_bu BEFORE UPDATE ON t1 FOR EACH ROW
-INSERT DELAYED INTO t2 VALUES (NEW.i);
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
-CREATE TRIGGER t1_bd BEFORE DELETE ON t1 FOR EACH ROW
-INSERT DELAYED INTO t2 VALUES (OLD.i);
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
-INSERT INTO t1 VALUES (1);
-INSERT DELAYED INTO t1 VALUES (2);
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
-SELECT * FROM t1;
-i
-1
-2
-UPDATE t1 SET i = 3 WHERE i = 1;
-SELECT * FROM t1;
-i
-3
-2
-DELETE FROM t1 WHERE i = 3;
-SELECT * FROM t1;
-i
-2
-SELECT * FROM t2;
-i
-1
-2
-3
-3
-DROP TABLE t1, t2;
-DROP TABLE IF EXISTS t1, t2;
-CREATE TABLE t1 (i INT);
-CREATE TRIGGER t1_bi BEFORE INSERT ON t1 FOR EACH ROW
-SET @a= NEW.i;
-SET @a= 0;
-INSERT DELAYED INTO t1 VALUES (1);
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
-SELECT @a;
-@a
-1
-INSERT DELAYED INTO t1 VALUES (2);
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
-SELECT @a;
-@a
-2
-DROP TABLE t1;
-CREATE TABLE t1 (i INT);
-CREATE TABLE t2 (i INT);
-CREATE TRIGGER t1_ai AFTER INSERT ON t1 FOR EACH ROW
-INSERT INTO t2 VALUES (NEW.i);
-CREATE TRIGGER t1_au AFTER UPDATE ON t1 FOR EACH ROW
-INSERT DELAYED INTO t2 VALUES (NEW.i);
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
-CREATE TRIGGER t1_ad AFTER DELETE ON t1 FOR EACH ROW
-INSERT DELAYED INTO t2 VALUES (OLD.i);
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
-INSERT DELAYED INTO t1 VALUES (1);
-Warnings:
-Warning	1287	'INSERT DELAYED' is deprecated and will be removed in a future release. Please use INSERT instead
-SELECT * FROM t1;
-i
-1
-UPDATE t1 SET i = 2 WHERE i = 1;
-SELECT * FROM t1;
-i
-2
-DELETE FROM t1 WHERE i = 2;
-SELECT * FROM t1;
-i
-SELECT * FROM t2;
-i
-1
-2
-2
-DROP TABLE t1, t2;
 CREATE TABLE t1 (
 a char(20) NOT NULL,
 b char(7) DEFAULT NULL,
@@ -631,6 +504,7 @@ a	b	c
 5000	NULL	5000
 -5000	NULL	-5000
 DROP TABLE t1;
+SET sql_mode = default;
 CREATE TABLE t (a CHAR(10),b INT);
 INSERT INTO t VALUES (),(),();
 INSERT INTO t(a) SELECT rand() FROM t;
@@ -663,28 +537,25 @@ End of 5.0 tests.
 #
 drop table if exists t1;
 create table t1 (data varchar(4) not null);
-set sql_mode='error_for_division_by_zero';
-Warnings:
-Warning	1681	'ERROR_FOR_DIVISION_BY_ZERO' is deprecated and will be removed in a future release.
 #
 # Demonstrate that the number of warnings matches
 # the information in mysql_info().
 #
-insert t1 (data) values ('letter'), (1/0);
+insert ignore t1 (data) values ('letter'), (1/0);
 affected rows: 2
 info: Records: 2  Duplicates: 0  Warnings: 3
 Warnings:
 Warning	1265	Data truncated for column 'data' at row 1
 Warning	1365	Division by 0
 Warning	1048	Column 'data' cannot be null
-update t1 set data='envelope' where 1/0 or 1;
+update ignore t1 set data='envelope' where 1/0 or 1;
 affected rows: 2
 info: Rows matched: 2  Changed: 2  Warnings: 3
 Warnings:
 Warning	1365	Division by 0
 Warning	1265	Data truncated for column 'data' at row 1
 Warning	1265	Data truncated for column 'data' at row 2
-insert t1 (data) values (default), (1/0), ('dead beef');
+insert ignore t1 (data) values (default), (1/0), ('dead beef');
 affected rows: 3
 info: Records: 3  Duplicates: 0  Warnings: 4
 Warnings:
@@ -692,7 +563,6 @@ Warning	1364	Field 'data' doesn't have a default value
 Warning	1365	Division by 0
 Warning	1048	Column 'data' cannot be null
 Warning	1265	Data truncated for column 'data' at row 3
-set sql_mode=default;
 drop table t1;
 #
 # End of 5.4 tests
@@ -713,6 +583,227 @@ INSERT IGNORE t1 (a, a) SELECT 1,1 UNION SELECT 2,2;
 ERROR 42000: Column 'a' specified twice
 DROP TABLE t1;
 #
+# Worklog #6073: Remove INSERT DELAYED
+#
+CREATE TABLE t1( a INT );
+INSERT DELAYED INTO t1 VALUES ( 1 );
+Warnings:
+Warning	3005	INSERT DELAYED is no longer supported. The statement was converted to INSERT.
+REPLACE DELAYED INTO t1 VALUES ( 1 );
+Warnings:
+Warning	3005	REPLACE DELAYED is no longer supported. The statement was converted to REPLACE.
+DROP TABLE t1;
+SET GLOBAL delayed_insert_limit = DEFAULT;
+Warnings:
+Warning	1287	'@@delayed_insert_limit' is deprecated and will be removed in a future release.
+SET GLOBAL delayed_insert_timeout = DEFAULT;
+Warnings:
+Warning	1287	'@@delayed_insert_timeout' is deprecated and will be removed in a future release.
+SET GLOBAL delayed_queue_size = DEFAULT;
+Warnings:
+Warning	1287	'@@delayed_queue_size' is deprecated and will be removed in a future release.
+SET GLOBAL max_insert_delayed_threads = DEFAULT;
+Warnings:
+Warning	1287	'@@max_insert_delayed_threads' is deprecated and will be removed in a future release.
+SET GLOBAL max_delayed_threads = DEFAULT;
+Warnings:
+Warning	1287	'@@max_delayed_threads' is deprecated and will be removed in a future release.
+#
+# Bug#18064775 Assertion failed: fields.elements == values.elements
+#
+CREATE TABLE t1(a INTEGER);
+INSERT INTO t1(a) values();
+ERROR 21S01: Column count doesn't match value count at row 1
+DROP TABLE t1;
+#
+# Bug#11745889 Traditional: INSERT accepts invalid date from default val
+#
+SET sql_mode='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+CREATE TABLE default_date(a DATE NOT NULL DEFAULT '0000-00-00');
+INSERT INTO default_date VALUES();
+SET sql_mode=default;
+INSERT INTO default_date VALUES();
+ERROR 22007: Incorrect date value: '0000-00-00' for column 'a' at row 1
+INSERT INTO default_date VALUES('0000-00-00');
+ERROR 22007: Incorrect date value: '0000-00-00' for column 'a' at row 1
+SELECT * FROM default_date;
+a
+0000-00-00
+DROP TABLE default_date;
+
+# Bug#11744960 : INSERT IGNORE SHOULD RETURN WARNINGS
+#
+CREATE TABLE t (a INT PRIMARY KEY);
+affected rows: 0
+INSERT IGNORE INTO t VALUES (1);
+affected rows: 1
+INSERT IGNORE INTO t VALUES (1),(1);
+affected rows: 0
+info: Records: 2  Duplicates: 2  Warnings: 2
+Warnings:
+Warning	1062	Duplicate entry '1' for key 'PRIMARY'
+Warning	1062	Duplicate entry '1' for key 'PRIMARY'
+DROP TABLE t;
+affected rows: 0
+#
+# WL#5275 Process subqueries in FROM clause in the same way as view
+#
+CREATE TABLE t1(pk INTEGER PRIMARY KEY, a INTEGER);
+CREATE TABLE t2(pk INTEGER PRIMARY KEY, a INTEGER);
+CREATE TABLE t3(a INTEGER);
+CREATE TABLE t4(b INTEGER);
+INSERT INTO t2 VALUES(1, 10), (2, 20), (3, 30), (4, 40);
+INSERT INTO t3 VALUES(1), (3);
+INSERT INTO t4 VALUES(1);
+CREATE VIEW v1 AS
+SELECT * FROM t1 WHERE pk IN (SELECT a FROM t3);
+CREATE VIEW v2 AS
+SELECT * FROM t2 WHERE pk IN (SELECT a FROM t3);
+CREATE VIEW v3 AS
+SELECT t1.pk,t1.a FROM t1 JOIN t4 ON pk IN (SELECT a FROM t3);
+EXPLAIN INSERT INTO v1
+SELECT * FROM v2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	INSERT	t1	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+1	PRIMARY	<subquery5>	NULL	ALL	NULL	NULL	NULL	NULL	NULL	100.00	Using where
+1	PRIMARY	t2	NULL	eq_ref	PRIMARY	PRIMARY	4	<subquery5>.a	1	100.00	NULL
+5	MATERIALIZED	t3	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	NULL
+3	DEPENDENT SUBQUERY	t3	NULL	ALL	NULL	NULL	NULL	NULL	2	50.00	Using where
+INSERT INTO v1
+SELECT * FROM v2;
+DELETE FROM t1;
+EXPLAIN INSERT INTO v3(pk,a)
+SELECT * FROM v2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	INSERT	t1	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+1	PRIMARY	<subquery5>	NULL	ALL	NULL	NULL	NULL	NULL	NULL	100.00	Using where
+1	PRIMARY	t2	NULL	eq_ref	PRIMARY	PRIMARY	4	<subquery5>.a	1	100.00	NULL
+5	MATERIALIZED	t3	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	NULL
+3	DEPENDENT SUBQUERY	t3	NULL	ALL	NULL	NULL	NULL	NULL	2	50.00	Using where
+INSERT INTO v3(pk,a)
+SELECT * FROM v2;
+DELETE FROM t1;
+EXPLAIN INSERT INTO v1
+SELECT dt.pk, v2.a
+FROM (SELECT * FROM v2) AS dt JOIN v2 ON dt.pk=v2.pk;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	INSERT	t1	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+1	PRIMARY	t3	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	Using where; Start temporary
+1	PRIMARY	t3	NULL	ALL	NULL	NULL	NULL	NULL	2	50.00	Using where; Using join buffer (Block Nested Loop)
+1	PRIMARY	t2	NULL	eq_ref	PRIMARY	PRIMARY	4	test.t3.a	1	100.00	Using index
+1	PRIMARY	t2	NULL	eq_ref	PRIMARY	PRIMARY	4	test.t3.a	1	100.00	End temporary
+4	DEPENDENT SUBQUERY	t3	NULL	ALL	NULL	NULL	NULL	NULL	2	50.00	Using where
+INSERT INTO v1
+SELECT dt.pk, v2.a
+FROM (SELECT * FROM v2) AS dt JOIN v2 ON dt.pk=v2.pk;
+DROP VIEW v1, v2, v3;
+DROP TABLE t1, t2, t3, t4;
+# Bug#20310257 Explain for insert into a view show wrong table for ins.
+CREATE TABLE t1(a INTEGER);
+CREATE TABLE t2(b INTEGER);
+CREATE VIEW v AS SELECT * FROM t1 JOIN t2 ON TRUE;
+explain INSERT INTO v(a) VALUES(1);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	INSERT	t1	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+INSERT INTO v(a) VALUES(1);
+explain INSERT INTO v(b) VALUES(1);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	INSERT	t2	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+INSERT INTO v(b) VALUES(1);
+explain INSERT INTO v(a) SELECT 2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	INSERT	t1	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+INSERT INTO v(a) SELECT 2;
+explain INSERT INTO v(b) SELECT 2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	INSERT	t2	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+INSERT INTO v(b) SELECT 2;
+SELECT * FROM t1;
+a
+1
+2
+SELECT * FROM t2;
+b
+1
+2
+DROP VIEW v;
+DROP TABLE t1, t2;
+CREATE TABLE t1(a1 INTEGER PRIMARY KEY, b1 INTEGER);
+CREATE TABLE t2(a2 INTEGER PRIMARY KEY, b2 INTEGER);
+CREATE VIEW v AS SELECT * FROM t1 JOIN t2 ON TRUE;
+INSERT INTO v(a1,b1) VALUES (11, 0) ON DUPLICATE KEY UPDATE b1=b1+1;
+INSERT INTO v(a1,b1) VALUES (11, 0) ON DUPLICATE KEY UPDATE b1=b1+1;
+INSERT INTO v(a2,b2) VALUES (21, 0) ON DUPLICATE KEY UPDATE b2=b2+1;
+INSERT INTO v(a2,b2) VALUES (21, 0) ON DUPLICATE KEY UPDATE b2=b2+1;
+SELECT * FROM v;
+a1	b1	a2	b2
+11	1	21	1
+DELETE FROM t1;
+DELETE FROM t2;
+INSERT INTO v(a1,b1) SELECT 11, 0 ON DUPLICATE KEY UPDATE b1=b1+1;
+INSERT INTO v(a1,b1) SELECT 11, 0 ON DUPLICATE KEY UPDATE b1=b1+1;
+INSERT INTO v(a2,b2) SELECT 21, 0 ON DUPLICATE KEY UPDATE b2=b2+1;
+INSERT INTO v(a2,b2) SELECT 21, 0 ON DUPLICATE KEY UPDATE b2=b2+1;
+SELECT * FROM v;
+a1	b1	a2	b2
+11	1	21	1
+DROP VIEW v;
+DROP TABLE t1, t2;
+# Bug#20753569: handle_fatal_signal (sig=11) in
+#               st_select_lex::merge_derived
+CREATE TABLE t1(a INTEGER);
+CREATE VIEW v1 AS SELECT a FROM t1 ORDER BY a;
+INSERT INTO v1 SELECT 3;
+REPLACE INTO v1 SELECT 3;
+INSERT INTO v1 VALUES(3);
+REPLACE INTO v1 VALUES(3);
+DROP VIEW v1;
+DROP TABLE t1;
+#
+# Bug#21696206: ASSERTION `TRANSL->ITEM->FIXED' FAILED IN
+#               SELECT_LEX::DELETE_UNUSED_MERGED_COLUMN
+#
+CREATE TABLE t1 ( pk INT, PRIMARY KEY (pk));
+CREATE TABLE t2 LIKE t1;
+INSERT INTO t1 VALUES (2);
+INSERT INTO t2 VALUES (2);
+CREATE VIEW v1 AS SELECT * FROM t2 AS a
+WHERE a.pk IN ( SELECT pk FROM t1 AS b WHERE b.pk = a.pk );
+CREATE VIEW v2 AS SELECT * FROM t1 AS a
+WHERE a.pk IN ( SELECT pk FROM v1 AS b WHERE b.pk = a.pk );
+PREPARE st1 FROM 'INSERT INTO v2 (pk) VALUES ( 1 )';
+EXECUTE st1;
+SELECT * FROM t1;
+pk
+1
+2
+SELECT * FROM t2;
+pk
+2
+DROP TABLE t1, t2;
+DROP VIEW v1, v2;
+#
+# Bug#21696641: ASSERTION !(WANT_PRIVILEGE & ~(GRANT->WANT_PRIVILEGE |
+#               GRANT->PRIVILEGE))'
+#
+CREATE TABLE t1 (pk INT, PRIMARY KEY (pk));
+INSERT INTO t1 VALUES (1);
+CREATE ALGORITHM = TEMPTABLE VIEW v2 AS
+SELECT * FROM t1 AS a NATURAL JOIN t1 b WHERE pk BETWEEN 1 AND 2;
+CREATE ALGORITHM = UNDEFINED VIEW v1 AS
+SELECT * FROM t1 AS a
+WHERE a.pk IN ( SELECT pk FROM v2 AS b WHERE b.pk = a.pk );
+PREPARE st1 FROM "INSERT INTO v1 (pk) VALUES (2)";
+EXECUTE st1;
+SELECT * FROM t1;
+pk
+1
+2
+DROP VIEW v1, v2;
+DROP TABLE t1;
+#
 # BUG#22037930: INSERT IGNORE FAILS TO IGNORE
 #               FOREIGN KEY CONSTRAINT
 # Setup.
@@ -724,20 +815,20 @@ INSERT INTO t2 VALUES(0);
 # Without fix, an error is reported.
 INSERT IGNORE INTO t2 VALUES(1);
 Warnings:
-Warning	1452	`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`fld2`) REFERENCES `t1` (`fld1`)
+Warning	1452	Cannot add or update a child row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`fld2`) REFERENCES `t1` (`fld1`))
 UPDATE IGNORE t2 SET fld2=20 WHERE fld2=0;
 Warnings:
-Warning	1452	`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`fld2`) REFERENCES `t1` (`fld1`)
+Warning	1452	Cannot add or update a child row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`fld2`) REFERENCES `t1` (`fld1`))
 UPDATE IGNORE t1 SET fld1=20 WHERE fld1=0;
 Warnings:
-Warning	1451	`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`fld2`) REFERENCES `t1` (`fld1`)
+Warning	1451	Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`fld2`) REFERENCES `t1` (`fld1`))
 # Test for multi update.
 UPDATE IGNORE t1, t2 SET t2.fld2= t2.fld2 + 3;
 Warnings:
-Warning	1452	`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`fld2`) REFERENCES `t1` (`fld1`)
+Warning	1452	Cannot add or update a child row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`fld2`) REFERENCES `t1` (`fld1`))
 UPDATE IGNORE t1, t2 SET t1.fld1= t1.fld1 + 3;
 Warnings:
-Warning	1451	`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`fld2`) REFERENCES `t1` (`fld1`)
+Warning	1451	Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`fld2`) REFERENCES `t1` (`fld1`))
 # Reports an error since IGNORE is not used.
 INSERT INTO t2 VALUES(1);
 ERROR 23000: Cannot add or update a child row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`fld2`) REFERENCES `t1` (`fld1`))
@@ -763,5 +854,5 @@ REPLACE INTO t2 VALUES('abc', 2);
 ERROR 23000: Cannot add or update a child row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `fk` FOREIGN KEY (`fld2`) REFERENCES `t1` (`fld1`))
 INSERT IGNORE INTO t2 VALUES('abc', 2) ON DUPLICATE KEY UPDATE fld1= 'def';
 Warnings:
-Warning	1452	`test`.`t2`, CONSTRAINT `fk` FOREIGN KEY (`fld2`) REFERENCES `t1` (`fld1`)
+Warning	1452	Cannot add or update a child row: a foreign key constraint fails (`test`.`t2`, CONSTRAINT `fk` FOREIGN KEY (`fld2`) REFERENCES `t1` (`fld1`))
 DROP TABLE t2, t1;

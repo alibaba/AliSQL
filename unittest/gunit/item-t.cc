@@ -1,13 +1,20 @@
-/* Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved. 
+/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -21,9 +28,14 @@
 #include "test_utils.h"
 
 #include "item.h"
+#include "item_cmpfunc.h"
+#include "item_create.h"
+#include "item_strfunc.h"
+#include "item_timefunc.h"
 #include "sql_class.h"
 #include "tztime.h"
 
+#include "fake_table.h"
 #include "mock_field_timestamp.h"
 
 namespace item_unittest {
@@ -70,6 +82,93 @@ public:
     Note: Sun Studio needs a little help in resolving longlong.
    */
   MOCK_METHOD2(store, type_conversion_status(::longlong nr, bool unsigned_val));
+};
+
+
+/**
+  Mock class for CHAR field.
+*/
+
+class Mock_field_string : public Field_string
+{
+private:
+  Fake_TABLE *m_fake_tbl;
+
+public:
+  Mock_field_string(uint32 length, const CHARSET_INFO *cs= &my_charset_latin1)
+    : Field_string(0,                  // ptr_arg
+                   length,             // len_arg
+                   NULL,               // null_ptr_arg
+                   0,                  // null_bit_arg
+                   Field::NONE,        // unireg_check_arg
+                   NULL,               // field_name_arg
+                   cs)                 // char set
+  {
+    m_fake_tbl= new Fake_TABLE(this);
+
+    // Allocate place for storing the field value
+    ptr= new uchar[length];
+
+    // Make it possible to write into this field
+    bitmap_set_bit(m_fake_tbl->write_set, 0);
+
+    /*
+      count_cuted_fields must be set in order for producing
+      warning/error for Item_string::save_in_field().
+    */
+    m_fake_tbl->in_use->count_cuted_fields= CHECK_FIELD_WARN;
+  }
+
+  ~Mock_field_string()
+  {
+    delete [] ptr;
+    ptr= NULL;
+    delete m_fake_tbl;
+    m_fake_tbl= NULL;
+  }
+};
+
+
+/**
+  Mock class for VARCHAR field.
+*/
+
+class Mock_field_varstring : public Field_varstring
+{
+private:
+  Fake_TABLE *m_fake_tbl;
+
+public:
+  Mock_field_varstring(uint32 length, TABLE_SHARE *share,
+                       const CHARSET_INFO *cs= &my_charset_latin1)
+    : Field_varstring(length,             // len_arg
+                      false,              // maybe_null_arg
+                      NULL,               // field_name_arg
+                      share,              // share
+                      cs)                 // char set
+  {
+    m_fake_tbl= new Fake_TABLE(this);
+
+    // Allocate place for storing the field value
+    ptr= new uchar[length + 1];
+
+    // Make it possible to write into this field
+    bitmap_set_bit(m_fake_tbl->write_set, 0);
+
+    /*
+      count_cuted_fields must be set in order for producing
+      warning/error for Item_string::save_in_field().
+    */
+    m_fake_tbl->in_use->count_cuted_fields= CHECK_FIELD_WARN;
+  }
+
+  ~Mock_field_varstring()
+  {
+    delete [] ptr;
+    ptr= NULL;
+    delete m_fake_tbl;
+    m_fake_tbl= NULL;
+  }
 };
 
 
@@ -130,10 +229,129 @@ TEST_F(ItemTest, ItemInt)
 }
 
 
+TEST_F(ItemTest, ItemString)
+{
+  const char short_str[]= "abc";
+  const char long_str[]= "abcd";
+  const char space_str[]= "abc ";
+  const char bad_char[]= "𝌆abc";
+  const char bad_char_end[]= "abc𝌆";
+
+  Item_string *item_short_string=
+    new Item_string(STRING_WITH_LEN(short_str), &my_charset_latin1);
+  Item_string *item_long_string=
+    new Item_string(STRING_WITH_LEN(long_str), &my_charset_latin1);
+  Item_string *item_space_string=
+    new Item_string(STRING_WITH_LEN(space_str), &my_charset_latin1);
+  Item_string *item_bad_char=
+    new Item_string(STRING_WITH_LEN(bad_char), &my_charset_bin);
+  Item_string *item_bad_char_end=
+    new Item_string(STRING_WITH_LEN(bad_char_end), &my_charset_bin);
+
+  /* 
+    Bug 16407965 ITEM::SAVE_IN_FIELD_NO_WARNING() DOES NOT RETURN CORRECT 
+                 CONVERSION STATUS
+  */
+
+  // Create a CHAR field that can store short_str but not long_str
+  Mock_field_string field_string(3);
+  EXPECT_EQ(MYSQL_TYPE_STRING, field_string.type());
+
+  // CHAR field for testing strings with illegal values
+  Mock_field_string field_string_utf8(20, &my_charset_utf8_general_ci);
+  EXPECT_EQ(MYSQL_TYPE_STRING, field_string_utf8.type());
+
+  /*
+    Tests of Item_string::save_in_field() when storing into a CHAR field.
+  */
+  EXPECT_EQ(TYPE_OK, item_short_string->save_in_field(&field_string, true));
+  EXPECT_EQ(TYPE_WARN_TRUNCATED,
+            item_long_string->save_in_field(&field_string, true));
+  // Field_string does not consider trailing spaces when truncating a string
+  EXPECT_EQ(TYPE_OK,
+            item_space_string->save_in_field(&field_string, true));
+  // When the first character invalid, the whole string is truncated.
+  EXPECT_EQ(TYPE_WARN_INVALID_STRING,
+            item_bad_char->save_in_field(&field_string_utf8, true));
+  // If the string contains an invalid character, the entire string is invalid
+  EXPECT_EQ(TYPE_WARN_INVALID_STRING,
+            item_bad_char_end->save_in_field(&field_string_utf8, true));
+
+  /*
+    Tests of Item_string::save_in_field_no_warnings() when storing into
+    a CHAR field.
+  */
+  EXPECT_EQ(TYPE_OK,
+            item_short_string->save_in_field_no_warnings(&field_string, true));
+  EXPECT_EQ(TYPE_WARN_TRUNCATED,
+            item_long_string->save_in_field_no_warnings(&field_string, true));
+  // Field_string does not consider trailing spaces when truncating a string
+  EXPECT_EQ(TYPE_OK,
+            item_space_string->save_in_field_no_warnings(&field_string, true));
+  EXPECT_EQ(TYPE_WARN_INVALID_STRING,
+            item_bad_char->save_in_field_no_warnings(&field_string_utf8, true));
+  // If the string contains an invalid character, the entire string is invalid
+  EXPECT_EQ(TYPE_WARN_INVALID_STRING,
+            item_bad_char_end->save_in_field_no_warnings(&field_string_utf8,
+                                                         true));
+
+  /*
+    Create a VARCHAR field that can store short_str but not long_str.
+    Need a table share object since the constructor for Field_varstring
+    updates its table share.
+  */
+  TABLE_SHARE table_share;
+  Mock_field_varstring field_varstring(3, &table_share);
+  EXPECT_EQ(MYSQL_TYPE_VARCHAR, field_varstring.type());
+
+  // VARCHAR field for testing strings with illegal values
+  Mock_field_varstring field_varstring_utf8(20, &table_share,
+                                            &my_charset_utf8_general_ci);
+  EXPECT_EQ(MYSQL_TYPE_VARCHAR, field_varstring_utf8.type());
+
+  /*
+    Tests of Item_string::save_in_field() when storing into a VARCHAR field.
+  */
+  EXPECT_EQ(TYPE_OK, item_short_string->save_in_field(&field_varstring, true));
+  EXPECT_EQ(TYPE_WARN_TRUNCATED,
+            item_long_string->save_in_field(&field_varstring, true));
+  // Field_varstring produces a note when truncating a string with 
+  // trailing spaces
+  EXPECT_EQ(TYPE_NOTE_TRUNCATED,
+            item_space_string->save_in_field(&field_varstring, true));
+  // When the first character invalid, the whole string is truncated.
+  EXPECT_EQ(TYPE_WARN_INVALID_STRING,
+            item_bad_char->save_in_field(&field_varstring_utf8, true));
+  // If the string contains an invalid character, the entire string is invalid
+  EXPECT_EQ(TYPE_WARN_INVALID_STRING,
+            item_bad_char_end->save_in_field(&field_varstring_utf8, true));
+
+  /*
+    Tests of Item_string::save_in_field_no_warnings() when storing into
+    a VARCHAR field.
+  */
+  EXPECT_EQ(TYPE_OK,
+         item_short_string->save_in_field_no_warnings(&field_varstring, true));
+  EXPECT_EQ(TYPE_WARN_TRUNCATED,
+         item_long_string->save_in_field_no_warnings(&field_varstring, true));
+  // Field_varstring produces a note when truncating a string with 
+  // trailing spaces
+  EXPECT_EQ(TYPE_NOTE_TRUNCATED,
+         item_space_string->save_in_field_no_warnings(&field_varstring, true));
+  EXPECT_EQ(TYPE_WARN_INVALID_STRING,
+         item_bad_char->save_in_field_no_warnings(&field_varstring_utf8, true));
+  // If the string contains an invalid character, the entire string is invalid
+  EXPECT_EQ(TYPE_WARN_INVALID_STRING,
+         item_bad_char_end->save_in_field_no_warnings(&field_varstring_utf8, true));
+}
+
+
 TEST_F(ItemTest, ItemEqual)
 {
   // Bug#13720201 VALGRIND: VARIOUS BLOCKS OF BYTES DEFINITELY LOST
   Mock_field_timestamp mft;
+  mft.table->const_table= true;
+  mft.make_readable();
   // foo is longer than STRING_BUFFER_USUAL_SIZE used by cmp_item_sort_string.
   const char foo[]=
     "0123456789012345678901234567890123456789"
@@ -142,8 +360,9 @@ TEST_F(ItemTest, ItemEqual)
   Item_equal *item_equal=
     new Item_equal(new Item_string(STRING_WITH_LEN(foo), &my_charset_bin),
                    new Item_field(&mft));
+  
   EXPECT_FALSE(item_equal->fix_fields(thd(), NULL));
-  EXPECT_EQ(0, item_equal->val_int());
+  EXPECT_EQ(1, item_equal->val_int());
 }
 
 
@@ -153,8 +372,10 @@ TEST_F(ItemTest, ItemFuncDesDecrypt)
   const uint length= 1U;
   Item_int *item_one= new Item_int(1, length);
   Item_int *item_two= new Item_int(2, length);
-  Item_func_des_decrypt *item_decrypt=
-    new Item_func_des_decrypt(item_two, item_one);
+  Item *item_decrypt=
+    new Item_func_des_decrypt(POS(), item_two, item_one);
+  Parse_context pc(thd(), thd()->lex->current_select());
+  EXPECT_FALSE(item_decrypt->itemize(&pc, &item_decrypt));
   
   EXPECT_FALSE(item_decrypt->fix_fields(thd(), NULL));
   EXPECT_EQ(length, item_one->max_length);
@@ -171,24 +392,30 @@ TEST_F(ItemTest, ItemFuncExportSet)
   Item *sep_string= new Item_string(STRING_WITH_LEN(","), &my_charset_bin);
   {
     // Testing basic functionality.
-    Item_func_export_set *export_set=
-      new Item_func_export_set(new Item_int(2),
+    Item *export_set=
+      new Item_func_export_set(POS(),
+                               new Item_int(2),
                                on_string,
                                off_string,
                                sep_string,
                                new Item_int(4));
+    Parse_context pc(thd(), thd()->lex->current_select());
+    EXPECT_FALSE(export_set->itemize(&pc, &export_set));
     EXPECT_FALSE(export_set->fix_fields(thd(), NULL));
     EXPECT_EQ(&str, export_set->val_str(&str));
     EXPECT_STREQ("off,on,off,off", str.c_ptr_safe());
   }
   {
     // Testing corner case: number_of_bits == zero.
-    Item_func_export_set *export_set=
-      new Item_func_export_set(new Item_int(2),
+    Item *export_set=
+      new Item_func_export_set(POS(),
+                               new Item_int(2),
                                on_string,
                                off_string,
                                sep_string,
                                new Item_int(0));
+    Parse_context pc(thd(), thd()->lex->current_select());
+    EXPECT_FALSE(export_set->itemize(&pc, &export_set));
     EXPECT_FALSE(export_set->fix_fields(thd(), NULL));
     EXPECT_EQ(&str, export_set->val_str(&str));
     EXPECT_STREQ("", str.c_ptr_safe());
@@ -207,11 +434,16 @@ TEST_F(ItemTest, ItemFuncExportSet)
   {
     // Testing overflow caused by 'on-string'.
     Mock_error_handler error_handler(thd(), ER_WARN_ALLOWED_PACKET_OVERFLOWED);
-    Item_func_export_set *export_set=
-      new Item_func_export_set(new Item_int(0xff),
-                               new Item_func_repeat(string_x, item_int_repeat),
+    Item *export_set=
+      new Item_func_export_set(POS(),
+                               new Item_int(0xff),
+                               new Item_func_repeat(POS(),
+                                                    string_x, item_int_repeat),
                                string_x,
                                sep_string);
+    Parse_context pc(thd(), thd()->lex->current_select());
+    SCOPED_TRACE("");
+    EXPECT_FALSE(export_set->itemize(&pc, &export_set));
     EXPECT_FALSE(export_set->fix_fields(thd(), NULL));
     EXPECT_EQ(null_string, export_set->val_str(&str));
     EXPECT_STREQ("", str.c_ptr_safe());
@@ -220,11 +452,16 @@ TEST_F(ItemTest, ItemFuncExportSet)
   {
     // Testing overflow caused by 'off-string'.
     Mock_error_handler error_handler(thd(), ER_WARN_ALLOWED_PACKET_OVERFLOWED);
-    Item_func_export_set *export_set=
-      new Item_func_export_set(new Item_int(0xff),
+    Item *export_set=
+      new Item_func_export_set(POS(),
+                               new Item_int(0xff),
                                string_x,
-                               new Item_func_repeat(string_x, item_int_repeat),
+                               new Item_func_repeat(POS(),
+                                                    string_x, item_int_repeat),
                                sep_string);
+    Parse_context pc(thd(), thd()->lex->current_select());
+    SCOPED_TRACE("");
+    EXPECT_FALSE(export_set->itemize(&pc, &export_set));
     EXPECT_FALSE(export_set->fix_fields(thd(), NULL));
     EXPECT_EQ(null_string, export_set->val_str(&str));
     EXPECT_STREQ("", str.c_ptr_safe());
@@ -233,11 +470,44 @@ TEST_F(ItemTest, ItemFuncExportSet)
   {
     // Testing overflow caused by 'separator-string'.
     Mock_error_handler error_handler(thd(), ER_WARN_ALLOWED_PACKET_OVERFLOWED);
-    Item_func_export_set *export_set=
-      new Item_func_export_set(new Item_int(0xff),
+    Item *export_set=
+      new Item_func_export_set(POS(),
+                               new Item_int(0xff),
                                string_x,
                                string_x,
-                               new Item_func_repeat(string_x, item_int_repeat));
+                               new Item_func_repeat(POS(),
+                                                    string_x, item_int_repeat));
+    Parse_context pc(thd(), thd()->lex->current_select());
+    SCOPED_TRACE("");
+    EXPECT_FALSE(export_set->itemize(&pc, &export_set));
+    EXPECT_FALSE(export_set->fix_fields(thd(), NULL));
+    EXPECT_EQ(null_string, export_set->val_str(&str));
+    EXPECT_STREQ("", str.c_ptr_safe());
+    EXPECT_EQ(1, error_handler.handle_called());
+  }
+  {
+    // Testing overflow caused by 'on-string'.
+    longlong max_size= 1024LL;
+    thd()->variables.max_allowed_packet= static_cast<ulong>(max_size);
+    Mock_error_handler error_handler(thd(), ER_WARN_ALLOWED_PACKET_OVERFLOWED);
+    Item *lpad=
+      new Item_func_lpad(POS(),
+                         new Item_string(STRING_WITH_LEN("a"),
+                                         &my_charset_bin),
+                         new Item_int(max_size),
+                         new Item_string(STRING_WITH_LEN("pppppppppppppppp"
+                                                         "pppppppppppppppp"),
+                                         &my_charset_bin)
+                         );
+    Item *export_set=
+      new Item_func_export_set(POS(),
+                               new Item_string(STRING_WITH_LEN("1111111"),
+                                               &my_charset_bin),
+                               lpad,
+                               new Item_int(1));
+    Parse_context pc(thd(), thd()->lex->current_select());
+    SCOPED_TRACE("");
+    EXPECT_FALSE(export_set->itemize(&pc, &export_set));
     EXPECT_FALSE(export_set->fix_fields(thd(), NULL));
     EXPECT_EQ(null_string, export_set->val_str(&str));
     EXPECT_STREQ("", str.c_ptr_safe());
@@ -281,7 +551,7 @@ TEST_F(ItemTest, ItemFuncIntDivUnderflow)
 TEST_F(ItemTest, ItemFuncNegLongLongMin)
 {
   // Bug#14314156 MAIN.FUNC_MATH TEST FAILS ON MYSQL-TRUNK ON PB2
-  const longlong longlong_min= LONGLONG_MIN;
+  const longlong longlong_min= LLONG_MIN;
   Item_func_neg *item_neg= new Item_func_neg(new Item_int(longlong_min));
 
   EXPECT_FALSE(item_neg->fix_fields(thd(), NULL));
@@ -326,7 +596,7 @@ TEST_F(ItemTest, OutOfMemory)
   EXPECT_NE(null_item, item);
   delete null_item;
 
-#if !defined(DBUG_OFF)
+#if !defined(NDEBUG)
   // Setting debug flags triggers enter/exit trace, so redirect to /dev/null.
   DBUG_SET("o," IF_WIN("NUL", "/dev/null"));
 
@@ -557,14 +827,79 @@ TEST_F(ItemTest, ItemFuncConvIntMin)
 {
   Mock_charset charset(*system_charset_info);
   SCOPED_TRACE("");
-  Item_func_conv *item_conv=
-    new Item_func_conv(new Item_string("5", 1, &charset),
+  Item *item_conv=
+    new Item_func_conv(POS(),
+                       new Item_string("5", 1, &charset),
                        new Item_int(INT_MIN),   // from_base
                        new Item_int(INT_MIN));  // to_base
+  Parse_context pc(thd(), thd()->lex->current_select());
+  EXPECT_FALSE(item_conv->itemize(&pc, &item_conv));
   EXPECT_FALSE(item_conv->fix_fields(thd(), NULL));
   const String *null_string= NULL;
   String str;
   EXPECT_EQ(null_string, item_conv->val_str(&str));
+}
+
+TEST_F(ItemTest, ItemDecimalTypecast)
+{
+  const char msg[]= "";
+  POS pos;
+  pos.cpp.start= pos.cpp.end= pos.raw.start= pos.raw.end= msg;
+  // Sun Studio needs this null_item,
+  // it fails to compile EXPECT_EQ(NULL, create_func_cast());
+  const Item *null_item= NULL;
+
+  Cast_type type;
+  type.target= ITEM_CAST_DECIMAL;
+
+  type.length= "123456789012345678901234567890";
+  type.dec= NULL;
+
+  {
+    initializer.set_expected_error(ER_TOO_BIG_PRECISION);
+    EXPECT_EQ(null_item, create_func_cast(thd(), pos, NULL, &type));
+  }
+
+  {
+    char buff[20];
+    my_snprintf(buff, sizeof(buff) - 1, "%d", DECIMAL_MAX_PRECISION + 1);
+    type.length= buff;
+    type.dec= NULL;
+    initializer.set_expected_error(ER_TOO_BIG_PRECISION);
+    EXPECT_EQ(null_item, create_func_cast(thd(), pos, NULL, &type));
+  }
+
+  {
+    type.length= NULL;
+    type.dec= "123456789012345678901234567890";
+    initializer.set_expected_error(ER_TOO_BIG_SCALE);
+    EXPECT_EQ(null_item, create_func_cast(thd(), pos, NULL, &type));
+  }
+
+  {
+    char buff[20];
+    my_snprintf(buff, sizeof(buff) - 1, "%d", DECIMAL_MAX_SCALE + 1);
+    type.length= buff;
+    type.dec= buff;
+    initializer.set_expected_error(ER_TOO_BIG_SCALE);
+    EXPECT_EQ(null_item, create_func_cast(thd(), pos, NULL, &type));
+  }
+
+}
+
+TEST_F(ItemTest, NormalizedPrint)
+{
+  Item_null *item_null= new Item_null;
+  {
+    String s;
+    item_null->print(&s, QT_ORDINARY);
+    EXPECT_STREQ("NULL", s.c_ptr());
+  }
+  {
+    String s;
+    item_null->print(&s, QT_NORMALIZED_FORMAT);
+    EXPECT_STREQ("?", s.c_ptr());
+  }
 }
 
 }

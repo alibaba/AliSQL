@@ -1,3 +1,8 @@
+# The include statement below is a temp one for tests that are yet to
+#be ported to run with InnoDB,
+#but needs to be kept for tests that would need MyISAM in future.
+--source include/force_myisam_default.inc
+
 --source include/have_udf.inc
 --source include/not_embedded.inc
 #
@@ -229,6 +234,12 @@ CREATE FUNCTION test.metaphon(a int) RETURNS int
 return 0;
 
 # End of Bug#18239
+
+# Test that Item_sum::eq() works when using an aggregate UDF
+
+create table t1(sum int, price float(24));
+select distinct avgcost(sum,price) from t1 order by avgcost(sum,price);
+drop table t1;
 
 #
 # Drop the example functions from udf_example

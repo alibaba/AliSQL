@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -17,6 +24,7 @@
 
 #include <signaldata/DictTabInfo.hpp>
 #include <ndb_limits.h>
+#include <NdbOut.hpp>
 
 //static 
 const
@@ -48,8 +56,8 @@ DictTabInfo::TableMapping[] = {
   DTIMAP2(Table, FrmLen, FrmLen, 0, MAX_FRM_DATA_SIZE),
   DTIMAPB(Table, FrmData, FrmData, 0, MAX_FRM_DATA_SIZE, FrmLen),
   DTIMAP2(Table, FragmentCount, FragmentCount, 0, MAX_NDB_PARTITIONS),
-  DTIMAP2(Table, ReplicaDataLen, ReplicaDataLen, 0, 2*MAX_FRAGMENT_DATA_BYTES),
-  DTIMAPB(Table, ReplicaData, ReplicaData, 0, 2*MAX_FRAGMENT_DATA_BYTES, ReplicaDataLen),
+  DTIMAP2(Table, ReplicaDataLen, ReplicaDataLen, 0, MAX_FRAGMENT_DATA_BYTES),
+  DTIMAPB(Table, ReplicaData, ReplicaData, 0, MAX_FRAGMENT_DATA_BYTES, ReplicaDataLen),
   DTIMAP2(Table, FragmentDataLen, FragmentDataLen, 0, 6*MAX_NDB_PARTITIONS),
   DTIMAPB(Table, FragmentData, FragmentData, 0, 6*MAX_NDB_PARTITIONS, FragmentDataLen),
   DTIMAP2(Table, TablespaceDataLen, TablespaceDataLen, 0, 8*MAX_NDB_PARTITIONS),
@@ -337,14 +345,15 @@ const
 SimpleProperties::SP2StructMapping
 DictHashMapInfo::Mapping[] = {
   DHMIMAPS(HashMap, HashMapName, HashMapName, 0, MAX_TAB_NAME_SIZE),
-  DHMIMAP2(HashMap, HashMapBuckets, HashMapBuckets, 0, 256),
+  DHMIMAP2(HashMap, HashMapBuckets, HashMapBuckets, 0, NDB_MAX_HASHMAP_BUCKETS),
   DTIMAP(HashMap, HashMapObjectId, HashMapObjectId),
   DTIMAP(HashMap, HashMapVersion, HashMapVersion),
 
   /**
    * This *should* change to Uint16 or similar once endian is pushed
    */
-  DHMIMAPB(HashMap, HashMapValues, HashMapValues, 0, 256*2, HashMapBuckets)
+  DHMIMAPB(HashMap, HashMapValues, HashMapValues, 0,
+           NDB_MAX_HASHMAP_BUCKETS * sizeof(Uint16), HashMapBuckets)
 };
 
 //static
@@ -356,4 +365,99 @@ void
 DictHashMapInfo::HashMap::init()
 {
   bzero(this, sizeof(* this));
+}
+
+/**
+ * ForeignKey
+ */
+const
+SimpleProperties::SP2StructMapping
+DictForeignKeyInfo::Mapping[] = {
+  DFKIMAPS(ForeignKey, ForeignKeyName, Name, 0, MAX_TAB_NAME_SIZE),
+  DFKIMAPS(ForeignKey, ForeignKeyParentTableName, ParentTableName,
+           0, MAX_TAB_NAME_SIZE),
+  DFKIMAPS(ForeignKey, ForeignKeyParentIndexName, ParentIndexName,
+           0, MAX_TAB_NAME_SIZE),
+  DFKIMAPS(ForeignKey, ForeignKeyChildTableName, ChildTableName,
+           0, MAX_TAB_NAME_SIZE),
+  DFKIMAPS(ForeignKey, ForeignKeyChildIndexName, ChildIndexName,
+           0, MAX_TAB_NAME_SIZE),
+  DFKIMAP(ForeignKey, ForeignKeyId, ForeignKeyId),
+  DFKIMAP(ForeignKey, ForeignKeyVersion, ForeignKeyVersion),
+  DFKIMAP(ForeignKey, ForeignKeyParentTableId, ParentTableId),
+  DFKIMAP(ForeignKey, ForeignKeyParentTableVersion, ParentTableVersion),
+  DFKIMAP(ForeignKey, ForeignKeyChildTableId, ChildTableId),
+  DFKIMAP(ForeignKey, ForeignKeyChildTableVersion, ChildTableVersion),
+  DFKIMAP(ForeignKey, ForeignKeyParentIndexId, ParentIndexId),
+  DFKIMAP(ForeignKey, ForeignKeyParentIndexVersion, ParentIndexVersion),
+  DFKIMAP(ForeignKey, ForeignKeyChildIndexId, ChildIndexId),
+  DFKIMAP(ForeignKey, ForeignKeyChildIndexVersion, ChildIndexVersion),
+  DFKIMAP(ForeignKey, ForeignKeyOnUpdateAction, OnUpdateAction),
+  DFKIMAP(ForeignKey, ForeignKeyOnDeleteAction, OnDeleteAction),
+
+  DFKIMAP2(ForeignKey, ForeignKeyParentColumnsLength, ParentColumnsLength, 0,
+           MAX_ATTRIBUTES_IN_INDEX),
+  DFKIMAPB(ForeignKey, ForeignKeyParentColumns, ParentColumns, 0,
+           4*MAX_ATTRIBUTES_IN_INDEX,
+           ParentColumnsLength),
+
+  DFKIMAP2(ForeignKey, ForeignKeyChildColumnsLength, ChildColumnsLength, 0,
+           MAX_ATTRIBUTES_IN_INDEX),
+  DFKIMAPB(ForeignKey, ForeignKeyChildColumns, ChildColumns, 0,
+           4*MAX_ATTRIBUTES_IN_INDEX,
+           ChildColumnsLength)
+};
+
+//static
+const Uint32 DictForeignKeyInfo::MappingSize =
+  sizeof(DictForeignKeyInfo::Mapping) / sizeof(SimpleProperties::SP2StructMapping);
+
+
+void
+DictForeignKeyInfo::ForeignKey::init()
+{
+  bzero(Name, sizeof(Name));
+  bzero(ParentTableName, sizeof(ParentTableName));
+  bzero(ParentIndexName, sizeof(ParentIndexName));
+  bzero(ChildTableName, sizeof(ChildTableName));
+  bzero(ChildIndexName, sizeof(ChildIndexName));
+  ForeignKeyId = RNIL;
+  ForeignKeyVersion = RNIL;
+  ParentTableId = RNIL;
+  ParentTableVersion = RNIL;
+  ChildTableId = RNIL;
+  ChildTableVersion = RNIL;
+  ParentIndexId = RNIL;
+  ParentIndexVersion = RNIL;
+  ChildIndexId = RNIL;
+  ChildIndexVersion = RNIL;
+  OnUpdateAction = NDB_FK_NO_ACTION;
+  OnDeleteAction = NDB_FK_NO_ACTION;
+  ParentColumnsLength = 0;
+  ChildColumnsLength = 0;
+}
+
+void
+ndbout_print(const DictForeignKeyInfo::ForeignKey& fk, char* buf, size_t sz)
+{
+  BaseString::snprintf(buf, sz,
+    "fk: name:%s id:%u"
+    " parent table: name:%s id:%u"
+    " parent index: name:%s id:%u"
+    " child table: name:%s id:%u"
+    " child index: name:%s id:%u",
+    fk.Name, fk.ForeignKeyId,
+    fk.ParentTableName, fk.ParentTableId,
+    fk.ParentIndexName, fk.ParentIndexId,
+    fk.ChildTableName, fk.ChildTableId,
+    fk.ChildIndexName, fk.ChildIndexId);
+}
+
+NdbOut&
+operator<<(NdbOut& out, const DictForeignKeyInfo::ForeignKey& fk)
+{
+  char buf[2048];
+  ndbout_print(fk, buf, sizeof(buf));
+  out << buf;
+  return out;
 }

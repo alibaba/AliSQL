@@ -1,15 +1,21 @@
 /*
-   Copyright (C) 2003-2007 MySQL AB, 2009 Sun Microsystems, Inc.
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -18,6 +24,9 @@
 
 #ifndef ATTRIBUTE_DESCRIPTOR_HPP
 #define ATTRIBUTE_DESCRIPTOR_HPP
+
+#define JAM_FILE_ID 5
+
 
 class AttributeDescriptor {
   friend class Dbdict;
@@ -59,7 +68,7 @@ public:
 /**
  *
  * a = Array type            - 2  Bits -> Max 3  (Bit 0-1)
- * t = Attribute type        - 5  Bits -> Max 31  (Bit 2-6)
+ * t = Attribute type        - 6  Bits -> Max 63  (Bit 2-7)
  * s = Attribute size        - 3  Bits -> Max 7  (Bit 8-10)
  *                                0 is for bit types, stored in bitmap
  *                                1-2 unused
@@ -76,7 +85,7 @@ public:
  *
  *           1111111111222222222233
  * 01234567890123456789012345678901
- * aattttt sssdnkpyzzzzzzzzzzzzzzzz
+ * aattttttsssdnkpyzzzzzzzzzzzzzzzz
  * aattsss n d k pyzzzzzzzzzzzzzzzz  [ old format ]
  *               
  */
@@ -85,7 +94,7 @@ public:
 #define AD_ARRAY_TYPE_MASK  (3)
 
 #define AD_TYPE_SHIFT       (2)
-#define AD_TYPE_MASK        (31)
+#define AD_TYPE_MASK        (63)
 
 #define AD_SIZE_SHIFT       (8)
 #define AD_SIZE_MASK        (7)
@@ -249,5 +258,8 @@ AttributeDescriptor::getDiskBased(const Uint32 & desc)
 
 class NdbOut&
 operator<<(class NdbOut&, const AttributeDescriptor&);
+
+
+#undef JAM_FILE_ID
 
 #endif

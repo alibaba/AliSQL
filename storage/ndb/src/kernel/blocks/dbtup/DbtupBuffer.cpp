@@ -1,15 +1,21 @@
 /*
-   Copyright (C) 2003-2008 MySQL AB, 2008, 2009 Sun Microsystems, Inc.
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -24,11 +30,15 @@
 #include <pc.hpp>
 #include <signaldata/TransIdAI.hpp>
 
+#define JAM_FILE_ID 410
+
+
 void Dbtup::execSEND_PACKED(Signal* signal)
 {
   Uint16 hostId;
   Uint32 i;
   Uint32 TpackedListIndex= cpackedListIndex;
+  bool present = false;
   jamEntry();
   for (i= 0; i < TpackedListIndex; i++) {
     jam();
@@ -37,6 +47,26 @@ void Dbtup::execSEND_PACKED(Signal* signal)
     Uint32 TpacketTA= hostBuffer[hostId].noOfPacketsTA;
     if (TpacketTA != 0) {
       jam();
+
+      if (ERROR_INSERTED(4037))
+      {
+        /* Delay a SEND_PACKED signal for 10 calls to execSEND_PACKED */
+        jam();
+        if (!present)
+        {
+          /* First valid packed data in this pass */
+          jam();
+          present = true;
+          cerrorPackedDelay++;
+          
+          if ((cerrorPackedDelay % 10) != 0)
+          {
+            /* Skip it */
+            jam();
+            return;
+          }
+        }
+      }
       BlockReference TBref= numberToRef(API_PACKED, hostId);
       Uint32 TpacketLen= hostBuffer[hostId].packetLenTA;
       MEMCOPY_NO_WORDS(&signal->theData[0],
@@ -131,14 +161,12 @@ void Dbtup::updatePackedList(Signal* signal, Uint16 hostId)
 /* ---------------------------------------------------------------- */
 void Dbtup::sendReadAttrinfo(Signal* signal,
                              KeyReqStruct *req_struct,
-                             Uint32 ToutBufIndex,
-                             const Operationrec *regOperPtr)
+                             Uint32 ToutBufIndex)
 {
   if(ToutBufIndex == 0)
     return;
   
   const BlockReference recBlockref= req_struct->rec_blockref;
-  const Uint32 block= refToBlock(recBlockref);
   const Uint32 nodeId= refToNode(recBlockref);
 
   bool connectedToNode= getNodeInfo(nodeId).m_connected;
@@ -163,6 +191,28 @@ void Dbtup::sendReadAttrinfo(Signal* signal,
   transIdAI->transId[0]= sig1;
   transIdAI->transId[1]= sig2;
   
+  const Uint32 routeBlockref= req_struct->TC_ref;
+  /**
+   * If we are not connected to the destination block, we may reach it 
+   * indirectly by sending a TRANSID_AI_R signal to routeBlockref. Only
+   * TC can handle TRANSID_AI_R signals. The 'ndbrequire' below should
+   * check that there is no chance of sending TRANSID_AI_R to a block
+   * that cannot handle it.
+   */
+  ndbrequire(refToMain(routeBlockref) == DBTC || 
+             /**
+              * routeBlockref will point to SPJ for operations initiated by
+              * that block. TRANSID_AI_R should not be sent to SPJ, as
+              * SPJ will do its own internal error handling to compensate
+              * for the lost TRANSID_AI signal.
+              */
+             refToMain(routeBlockref) == DBSPJ ||
+             /** 
+              * A node should always be connected to itself. So we should
+              * never need to send TRANSID_AI_R in this case.
+              */
+             (nodeId == getOwnNodeId() && connectedToNode));
+
   if (connectedToNode){
     /**
      * Own node -> execute direct
@@ -201,6 +251,7 @@ void Dbtup::sendReadAttrinfo(Signal* signal,
       /**
        * Send long signal to DBUTIL.
        */
+      const Uint32 block= refToMain(recBlockref);
       if ((block == DBUTIL || block == DBSPJ) && !old_dest) {
 	jam();
 	LinearSectionPtr ptr[3];
@@ -244,7 +295,7 @@ void Dbtup::sendReadAttrinfo(Signal* signal,
     }
 
     /**
-     * BACKUP/SUMA/LQH run in our thread, so we can EXECUTE_DIRECT().
+     * BACKUP/LQH run in our thread, so we can EXECUTE_DIRECT().
      *
      * The UTIL/TC blocks are in another thread (in multi-threaded ndbd), so
      * must use sendSignal().
@@ -252,21 +303,14 @@ void Dbtup::sendReadAttrinfo(Signal* signal,
      * In MT LQH only LQH and BACKUP are in same thread, and BACKUP only
      * in LCP case since user-backup uses single worker.
      */
-    BlockNumber blockMain = blockToMain(block);
-    const bool sameInstance = blockToInstance(block) == instance();
-    if (blockMain == DBLQH)
+    const bool sameInstance = refToInstance(recBlockref) == instance();
+    const Uint32 blockNumber= refToMain(recBlockref);
+    if (sameInstance &&
+        (blockNumber == BACKUP ||
+         blockNumber == DBLQH ||
+         blockNumber == SUMA))
     {
-      EXECUTE_DIRECT(blockMain, GSN_TRANSID_AI, signal, 3 + ToutBufIndex);
-      jamEntry();
-    }
-    else if (blockMain == SUMA && sameInstance)
-    {
-      EXECUTE_DIRECT(blockMain, GSN_TRANSID_AI, signal, 3 + ToutBufIndex);
-      jamEntry();
-    }
-    else if (blockMain == BACKUP && sameInstance)
-    {
-      EXECUTE_DIRECT(blockMain, GSN_TRANSID_AI, signal, 3 + ToutBufIndex);
+      EXECUTE_DIRECT(blockNumber, GSN_TRANSID_AI, signal, 3 + ToutBufIndex);
       jamEntry();
     }
     else
@@ -275,48 +319,61 @@ void Dbtup::sendReadAttrinfo(Signal* signal,
       LinearSectionPtr ptr[3];
       ptr[0].p= &signal->theData[3];
       ptr[0].sz= ToutBufIndex;
-      sendSignal(recBlockref, GSN_TRANSID_AI, signal, 3, JBB, ptr, 1);
+      if (ERROR_INSERTED(4038))
+      {
+        /* Copy data to Seg-section for delayed send */
+        Uint32 sectionIVal = RNIL;
+        ndbrequire(appendToSection(sectionIVal, ptr[0].p, ptr[0].sz));
+        SectionHandle sh(this, sectionIVal);
+        
+        sendSignalWithDelay(recBlockref, GSN_TRANSID_AI, signal, 10, 3, &sh);
+      }
+      else
+      {
+        /**
+         * We are sending to the same node, it is important that we maintain
+         * signal order with SCAN_FRAGCONF and other signals. So we make sure
+         * that TRANSID_AI is sent at the same priority level as the
+         * SCAN_FRAGCONF will be sent at.
+         *
+         * One case for this is Backups, the receiver is the first LDM thread
+         * which could have raised priority of scan executions to Priority A.
+         * To ensure that TRANSID_AI arrives there before SCAN_FRAGCONF we
+         * send also TRANSID_AI on priority A if the signal is sent on prio A.
+         */
+        JobBufferLevel prioLevel = req_struct->m_prio_a_flag ? JBA : JBB;
+        sendSignal(recBlockref,
+                   GSN_TRANSID_AI,
+                   signal,
+                   3,
+                   prioLevel,
+                   ptr,
+                   1);
+      }
     }
     return;
   }
 
   /** 
    * If this node does not have a direct connection 
-   * to the receiving node we want to send the signals 
+   * to the receiving node, we want to send the signals 
    * routed via the node that controls this read
    */
-  Uint32 routeBlockref= req_struct->TC_ref;
-  
-  if (true){ // TODO is_api && !old_dest){
+  // TODO is_api && !old_dest){
+  if (refToNode(recBlockref) == refToNode(routeBlockref))
+  {
     jam();
-    transIdAI->attrData[0]= recBlockref;
-    LinearSectionPtr ptr[3];
-    ptr[0].p= &signal->theData[25];
-    ptr[0].sz= ToutBufIndex;
-    sendSignal(routeBlockref, GSN_TRANSID_AI_R, signal, 4, JBB, ptr, 1);
+    /**
+     * Signal's only alternative route is direct - cannot be delivered, 
+     * drop it. (Expected behavior if recBlockRef is an SPJ block.)
+     */
     return;
   }
-  
-  /**
-   * Fill in a TRANSID_AI signal, use last word to store
-   * final destination and send it to route node
-   * as signal TRANSID_AI_R (R as in Routed)
-   */ 
-  Uint32 tot= ToutBufIndex;
-  Uint32 sent= 0;
-  Uint32 maxLen= TransIdAI::DataLength - 1;
-  while (sent < tot) {
-    jam();      
-    Uint32 dataLen= (tot - sent > maxLen) ? maxLen : tot - sent;
-    Uint32 sigLen= dataLen + TransIdAI::HeaderLength + 1; 
-    MEMCOPY_NO_WORDS(&transIdAI->attrData,
-		     &signal->theData[25+sent],
-		     dataLen);
-    // Set final destination in last word
-    transIdAI->attrData[dataLen]= recBlockref;
-    
-    sendSignal(routeBlockref, GSN_TRANSID_AI_R, 
-	       signal, sigLen, JBB);
-    sent += dataLen;
-  }
+  // Only TC can handle TRANSID_AI_R signals.
+  ndbrequire(refToMain(routeBlockref) == DBTC);
+  transIdAI->attrData[0]= recBlockref;
+  LinearSectionPtr ptr[3];
+  ptr[0].p= &signal->theData[25];
+  ptr[0].sz= ToutBufIndex;
+  sendSignal(routeBlockref, GSN_TRANSID_AI_R, signal, 4, JBB, ptr, 1);
 }

@@ -1,7 +1,10 @@
 SET @@session.sql_mode = 'NO_ENGINE_SUBSTITUTION';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 
 --source suite/funcs_1/storedproc/load_sp_tb.inc
 --------------------------------------------------------------------------------
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 
 --source suite/funcs_1/storedproc/cleanup_sp_tb.inc
 --------------------------------------------------------------------------------
@@ -62,10 +65,14 @@ load data infile '<MYSQLTEST_VARDIR>/std_data/funcs_1/t4.txt' into table t10;
 create table t11(f1 char(20),f2 char(25),f3 date,f4 int,f5 char(25),f6 int)
 engine = <engine_to_be_tested>;
 load data infile '<MYSQLTEST_VARDIR>/std_data/funcs_1/t4.txt' into table t11;
+SET sql_mode = default;
 
 Section 3.1.2 - Syntax checks for the stored procedure-specific
 programming statements BEGIN/END, DECLARE, SET, SELECT/INTO, OPEN, FETCH, CLOSE:
 --------------------------------------------------------------------------------
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 
 Testcase 3.1.2.8:
 -----------------
@@ -123,9 +130,6 @@ CALL sp1();
 2	a	b
 1.2	@v1	@v2
 1.2	1	2
-Warnings:
-Warning	1265	Data truncated for column 'x' at row 1
-Warning	1265	Data truncated for column 'y' at row 1
 DROP PROCEDURE IF EXISTS sp1;
 
 Testcase 3.1.2.26:
@@ -755,9 +759,6 @@ set @x=1;
 END//
 INSERT INTO temp VALUES('0', NULL);
 CALL sp0();
-Warnings:
-Warning	1265	Data truncated for column 'f1' at row 1
-Warning	1265	Data truncated for column 'f2' at row 1
 SELECT @done, @x;
 @done	@x
 0	1
@@ -1389,6 +1390,7 @@ DROP PROCEDURE sp_outer;
 DROP PROCEDURE sp_inner;
 DROP TABLE temp1;
 DROP TABLE temp2;
+SET sql_mode = default;
 
 --source suite/funcs_1/storedproc/cleanup_sp_tb.inc
 --------------------------------------------------------------------------------

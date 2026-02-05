@@ -1,15 +1,21 @@
 /*
-   Copyright (C) 2006-2008 MySQL AB
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2006, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -19,6 +25,9 @@
 #include "WOPool.hpp"
 #include <ndbd_exit_codes.h>
 #include <NdbOut.hpp>
+
+#define JAM_FILE_ID 294
+
 
 WOPool::WOPool() 
 {
@@ -34,7 +43,9 @@ WOPool::init(const Record_info& ri, const Pool_context& pc)
   m_record_info.m_size = ((ri.m_size + 3) >> 2); // Align to word boundary
   m_record_info.m_offset_magic = ((ri.m_offset_magic + 3) >> 2);
   m_memroot = (WOPage*)m_ctx.get_memroot();
+#ifdef VM_TRACE
   ndbout_c("WOPool::init(%x, %d)",ri.m_type_id, m_record_info.m_size);
+#endif
 }
 
 bool
@@ -54,8 +65,7 @@ WOPool::seize_new_page(Ptr<void>& ptr)
     m_current_page_no = page_no;
     m_current_page = page;
     page->m_type_id = m_record_info.m_type_id;
-    bool ret = seize(ptr);
-    assert(ret);
+    seize_in_page(ptr);
     return true;
   }
   return false;

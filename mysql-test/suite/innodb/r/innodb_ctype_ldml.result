@@ -146,7 +146,7 @@ DROP TABLE t1;
 # Bug#43827 Server closes connections and restarts
 #
 CREATE TABLE t1 (c1 VARCHAR(10) CHARACTER SET utf8 COLLATE utf8_test_ci);
-INSERT INTO t1 SELECT REPEAT('a',11);
+INSERT IGNORE INTO t1 SELECT REPEAT('a',11);
 Warnings:
 Warning	1265	Data truncated for column 'c1' at row 1
 DROP TABLE t1;
@@ -498,7 +498,7 @@ hex(weight_string(convert(_utf32 0x10002 using utf8mb4) collate utf8mb4_test_400
 FFFD
 SELECT hex(@a:=convert(_utf32 0x10400 using utf8mb4) collate utf8mb4_test_400_ci), hex(lower(@a));
 hex(@a:=convert(_utf32 0x10400 using utf8mb4) collate utf8mb4_test_400_ci)	hex(lower(@a))
-F0909080	F0909080
+F0909080	F09090A8
 SELECT hex(@a:=convert(_utf32 0x10428 using utf8mb4) collate utf8mb4_test_400_ci), hex(upper(@a));
 hex(@a:=convert(_utf32 0x10428 using utf8mb4) collate utf8mb4_test_400_ci)	hex(upper(@a))
 F09090A8	F09090A8

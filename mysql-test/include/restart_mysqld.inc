@@ -7,18 +7,37 @@ if ($rpl_inited)
   }
 }
 
+if (!$restart_parameters)
+{
+  let $restart_parameters = restart;
+}
+
+# We use --exec echo instead of simple "--echo" because
+# replace_result works on --exec
+--exec echo "# $restart_parameters"
+
 # Write file to make mysql-test-run.pl expect the "crash", but don't start
 # it until it's told to
 --let $_server_id= `SELECT @@server_id`
 --let $_expect_file_name= $MYSQLTEST_VARDIR/tmp/mysqld.$_server_id.expect
+
+# Allow restarting different server than the one currently
+# connected to, actually one where suffix is not .serverid but
+# .serverid.clusterid
+if ($mysqld_name)
+{
+  let $_expect_file_name= $MYSQLTEST_VARDIR/tmp/$mysqld_name.expect;
+  # echo expect_file_name: $_expect_file_name;
+}
 --exec echo "wait" > $_expect_file_name
 
-# Send shutdown to the connected server and give
-# it 10 seconds to die before zapping it
-shutdown_server 10;
+# Send shutdown to the connected server.
+shutdown_server;
+
+--source include/wait_until_disconnected.inc
 
 # Write file to make mysql-test-run.pl start up the server again
---exec echo "restart" > $_expect_file_name
+--exec echo "$restart_parameters" > $_expect_file_name
 
 # Turn on reconnect
 --enable_reconnect

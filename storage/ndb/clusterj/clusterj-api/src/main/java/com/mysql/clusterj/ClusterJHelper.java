@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2010, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -34,6 +41,14 @@ import java.util.Map;
  * the implementation.
  */
 public class ClusterJHelper {
+
+    /** Return a new Dbug instance.
+     * 
+     * @return a new Dbug instance
+     */
+    public static Dbug newDbug() {
+        return getServiceInstance(Dbug.class);
+    }
 
     /** Locate a SessionFactory implementation by services lookup. The class loader
      * used is the thread's context class loader.
@@ -188,6 +203,34 @@ public class ClusterJHelper {
                 throw new ClusterJFatalUserException(implementationClassName, e);
             }
         }
+    }
+
+    /** Get the named boolean property from either the environment or system properties.
+     * If the property is not 'true' then return false.
+     * @param propertyName the name of the property
+     * @param def the default if the property is not set 
+     * @return the system property if it is set via -D or the system environment
+     */
+    public static boolean getBooleanProperty(String propertyName, String def) {
+        String propertyFromEnvironment = System.getenv(propertyName);
+        // system property overrides environment variable
+        String propertyFromSystem = System.getProperty(propertyName,
+                propertyFromEnvironment==null?def:propertyFromEnvironment);
+        boolean result = propertyFromSystem.equals("true")?true:false;
+        return result;
+    }
+
+    /** Get the named String property from either the environment or system properties.
+     * @param propertyName the name of the property
+     * @param def the default if the property is not set 
+     * @return the system property if it is set via -D or the system environment
+     */
+    public static String getStringProperty(String propertyName, String def) {
+        String propertyFromEnvironment = System.getenv(propertyName);
+        // system property overrides environment variable
+        String result = System.getProperty(propertyName,
+                propertyFromEnvironment==null?def:propertyFromEnvironment);
+        return result;
     }
 
 }

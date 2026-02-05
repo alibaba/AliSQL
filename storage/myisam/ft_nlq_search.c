@@ -1,13 +1,20 @@
-/* Copyright (c) 2001, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2001, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -17,6 +24,7 @@
 
 #define FT_CORE
 #include "ftdefs.h"
+#include "my_base.h" /* HA_KEYTYPE_FLOAT */
 
 /* search with natural language queries */
 
@@ -63,7 +71,7 @@ static int FT_SUPERDOC_cmp(void* cmp_arg MY_ATTRIBUTE((unused)),
 
 static int walk_and_match(FT_WORD *word, uint32 count, ALL_IN_ONE *aio)
 {
-  int	       UNINIT_VAR(subkeys), r;
+  int	       subkeys= 0, r;
   uint	       keylen, doc_cnt;
   FT_SUPERDOC  sdoc, *sptr;
   TREE_ELEMENT *selem;
@@ -294,7 +302,8 @@ FT_INFO *ft_init_nlq_search(MI_INFO *info, uint keynr, uchar *query,
     If ndocs == 0, this will not allocate RAM for FT_INFO.doc[],
     so if ndocs == 0, FT_INFO.doc[] must not be accessed.
    */
-  dlist=(FT_INFO *)my_malloc(sizeof(FT_INFO)+
+  dlist=(FT_INFO *)my_malloc(mi_key_memory_FT_INFO,
+                             sizeof(FT_INFO)+
 			     sizeof(FT_DOC)*
 			     (int)(aio.dtree.elements_in_tree-1),
 			     MYF(0));
@@ -340,7 +349,7 @@ int ft_nlq_read_next(FT_INFO *handler, char *record)
     info->update|= HA_STATE_AKTIV;		/* Record is read */
     return 0;
   }
-  return my_errno;
+  return my_errno();
 }
 
 

@@ -1,13 +1,20 @@
-/* Copyright (c) 2008, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -27,9 +34,12 @@
 #include <debugger/DebuggerNames.hpp>
 #endif
 
+#define JAM_FILE_ID 455
+
+
 Uint32 dbinfo_blocks[] = { DBACC, DBTUP, BACKUP, DBTC, SUMA, DBUTIL,
                            TRIX, DBTUX, DBDICT, CMVMI, DBLQH, LGMAN,
-                           PGMAN, DBSPJ, 0};
+                           PGMAN, DBSPJ, THRMAN, TRPMAN, QMGR, DBDIH, 0};
 
 Dbinfo::Dbinfo(Block_context& ctx) :
   SimulatedBlock(DBINFO, ctx)
@@ -84,9 +94,8 @@ void Dbinfo::sendSTTORRY(Signal* signal)
 {
   signal->theData[0] = 0;
   signal->theData[3] = 1;
-  signal->theData[4] = 3;
-  signal->theData[5] = 255; // No more start phases from missra
-  sendSignal(NDBCNTR_REF, GSN_STTORRY, signal, 6, JBB);
+  signal->theData[4] = 255; // No more start phases from missra
+  sendSignal(NDBCNTR_REF, GSN_STTORRY, signal, 5, JBB);
 }
 
 void Dbinfo::execDUMP_STATE_ORD(Signal* signal)
@@ -379,8 +388,7 @@ void Dbinfo::execDBINFO_SCANCONF(Signal *signal)
   ndbrequire(conf.cursor_sz == Ndbinfo::ScanCursor::Length);
 
   // Validate tableId
-  const Uint32 tableId= conf.tableId;
-  ndbassert(tableId < (Uint32)Ndbinfo::getNumTables());
+  ndbassert(conf.tableId < (Uint32)Ndbinfo::getNumTables());
 
   const Uint32 resultRef = conf.resultRef;
 

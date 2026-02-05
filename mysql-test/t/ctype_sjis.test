@@ -1,4 +1,5 @@
 -- source include/have_sjis.inc
+-- source include/big_test.inc
 
 #
 # Tests with the sjis character set
@@ -58,7 +59,7 @@ drop table t1;
 SET NAMES sjis;
 CREATE TABLE t1 (
  c char(16) default NULL
-) ENGINE=MyISAM DEFAULT CHARSET=sjis;
+) DEFAULT CHARSET=sjis;
 insert into t1 values(0xb1),(0xb2),(0xb3);
 select hex(c) from t1;
 drop table t1;
@@ -142,7 +143,7 @@ ORDER BY head, tail;
 INSERT t1 (code) SELECT head FROM head WHERE (head BETWEEN 'A1' AND 'DF');
 DROP TEMPORARY TABLE head, tail;
 SHOW CREATE TABLE t1;
-UPDATE t1 SET a=unhex(code) ORDER BY code;
+UPDATE IGNORE t1 SET a=unhex(code) ORDER BY code;
 SELECT COUNT(*) FROM t1;
 SELECT COUNT(*) FROM t1 WHERE a<>'' AND OCTET_LENGTH(a)=1;
 SELECT COUNT(*) FROM t1 WHERE a<>'' AND OCTET_LENGTH(a)=2;

@@ -1,3 +1,8 @@
+# The include statement below is a temp one for tests that are yet to
+#be ported to run with InnoDB,
+#but needs to be kept for tests that would need MyISAM in future.
+--source include/force_myisam_default.inc
+
 # Windows-specific tests
 --source include/windows.inc
 
@@ -95,9 +100,10 @@ deallocate prepare abc;
 --echo #
 --echo # Bug#45498: Socket variable not available on Windows
 --echo #
-
+--disable_warnings
 SELECT VARIABLE_NAME FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES
   WHERE VARIABLE_NAME = 'socket';
+--enable_warnings
 
 --echo #
 --echo # Bug#16581605: REPLACE.EXE UTILITY IS BROKEN IN 5.5

@@ -1,3 +1,8 @@
+# The include statement below is a temp one for tests that are yet to
+#be ported to run with InnoDB,
+#but needs to be kept for tests that would need MyISAM in future.
+--source include/force_myisam_default.inc
+
 #
 # Check for problems with delete
 #
@@ -131,6 +136,24 @@ delete ignore from t11 where t11.b <> (select b from t2 where t11.a < t2.a);
 select * from t11;
 drop table t11, t12, t2;
 
+--echo # sql_safe_updates mode with multi-table DELETE
+
+CREATE TABLE t1(a INTEGER PRIMARY KEY);
+INSERT INTO t1 VALUES(10),(20);
+
+CREATE TABLE t2(b INTEGER);
+INSERT INTO t2 VALUES(10),(20);
+
+SET SESSION sql_safe_updates=1;
+
+EXPLAIN DELETE t2 FROM t1 JOIN t2 WHERE t1.a = 10;
+-- error ER_UPDATE_WITHOUT_KEY_IN_SAFE_MODE
+DELETE t2 FROM t1 JOIN t2 WHERE t1.a = 10;
+
+SET SESSION sql_safe_updates=default;
+
+DROP TABLE t1, t2;
+
 #
 # Bug #4198: deletion and KEYREAD
 #
@@ -210,7 +233,7 @@ drop table t1,t2,t3;
 #
 
 create table t1(a date not null);
-insert into t1 values (0);
+insert ignore into t1 values (0);
 select * from t1 where a is null;
 delete from t1 where a is null;
 select count(*) from t1;
@@ -311,7 +334,7 @@ DROP TABLE t1;
 #
 # Bug#27525: table not found when using multi-table-deletes with aliases over
 #            several databas
-# Bug#21148: MULTI-DELETE fails to resolve a table by alias if it's from a
+# Bug#21148: MULTI-DELETE fails to resolve a table by alias if it is from a
 #            different database
 #
 
@@ -610,3 +633,201 @@ DEALLOCATE PREPARE stm;
 
 DROP TABLE t2, t1;
 DROP PROCEDURE p1;
+
+--echo #
+--echo # Bug#18345346 Assertion failed: table_ref->view && table_ref->table == 0
+--echo #
+
+CREATE TABLE b(a INTEGER);
+CREATE VIEW y AS SELECT 1 FROM b, b AS e;
+CREATE VIEW x AS SELECT 1 FROM y;
+CREATE VIEW z AS SELECT 1 FROM x LIMIT 1;
+
+--error ER_NON_UPDATABLE_TABLE
+DELETE z FROM (SELECT 1) AS x, z;
+
+DROP VIEW z, x, y;
+DROP TABLE b;
+
+--echo # Bug#11752648 : MULTI-DELETE IGNORE DOES NOT REPORT WARNINGS
+--echo #
+CREATE TABLE t1 (a INT PRIMARY KEY) ENGINE=InnoDB;
+INSERT INTO t1 (a) VALUES (1);
+CREATE TABLE t2 (a INT PRIMARY KEY) ENGINE=InnoDB;
+INSERT INTO t2 (a) VALUES (1);
+CREATE TABLE t3 (a INT, b INT, CONSTRAINT c_a FOREIGN KEY (a)
+REFERENCES t1 (a), CONSTRAINT c_b FOREIGN KEY (b) REFERENCES t2 (a)) ENGINE=InnoDB;
+INSERT INTO t3 (a, b) VALUES (1, 1);
+DELETE IGNORE FROM t1;
+DELETE IGNORE t1,t2 FROM t1,t2;
+SELECT * FROM t1;
+SELECT * FROM t2;
+DROP TABLE t3,t2,t1;
+
+--echo #
+--echo # Bug#17550423 : DELETE IGNORE GIVES INCORRECT RESULT WITH FOREIGN KEY
+--echo #                   FOR PARENT TABLE
+--echo #
+CREATE TABLE t1 (a INT PRIMARY KEY) ENGINE=InnoDB;
+CREATE TABLE t2 (b INT) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (1), (2), (5);
+INSERT INTO t2 VALUES (1), (5);
+--replace_regex /#sql-[[0-9a-f]*_[0-9a-f]*]*/#sql-temporary/
+ALTER TABLE t2 ADD CONSTRAINT FOREIGN KEY(b) REFERENCES t1(a);
+SELECT * FROM t2;
+DELETE IGNORE FROM t1;
+SELECT * FROM t1;
+DROP TABLE t2,t1;
+
+--echo #
+--echo # Bug#17787664 : ASSERT `! IS_SET()` IN DIAGNOSTICS_AREA::SET_OK_STATUS
+--echo #                ON ER_SUBQUERY_NO_1_ROW
+--echo #
+
+CREATE TABLE t1 (a INT) ENGINE=MyISAM;
+INSERT INTO t1 VALUES (1);
+
+CREATE TABLE t2 (b INT) ENGINE=MyISAM;
+INSERT INTO t2 VALUES (8);
+INSERT INTO t2 VALUES (24);
+
+CREATE TABLE t3 (c INT) ENGINE=MyISAM;
+INSERT INTO t3 VALUES (43);
+INSERT INTO t3 VALUES (1);
+
+#This statement triggers an assert in DEBUG build without the patch.
+--error ER_SUBQUERY_NO_1_ROW
+DELETE  FROM OUTR1.* USING t1 AS OUTR1
+    LEFT OUTER JOIN t2 AS OUTR2  ON ( OUTR1.a = OUTR2.b )
+WHERE OUTR1.a < ( SELECT t3.c  from t3 where 1 XOR OUTR2.b IS NOT NULL);
+
+DROP TABLE t1,t2,t3;
+
+--echo #
+--echo # Bug#20460208: !table || (!table->read_set || bitmap_is_set)
+--echo #
+
+CREATE TABLE t1(a INTEGER) engine=innodb;
+CREATE TABLE t2(a BLOB) engine=innodb;
+--error ER_BAD_FIELD_ERROR
+INSERT INTO t1 SET z=1;
+INSERT INTO t2 VALUES('a');
+DELETE FROM t2 WHERE 1 = a;
+DROP TABLE t1, t2;
+
+--echo #
+--echo # Bug#20086791 ASSERT `! IS_SET()` IN DIAGNOSTICS_AREA::SET_OK_STATUS
+--echo #              ON DELETE (ER_SUBQUERY..)
+--echo #
+
+SET sql_mode='';
+
+CREATE TABLE t1 (
+  col_int_key int,
+  pk integer auto_increment,
+  col_datetime_key datetime,
+  /*Indices*/
+  key (col_int_key ),
+  primary key (pk),
+  key (col_datetime_key )
+) ENGINE=memory;
+
+CREATE TABLE t2 (
+  col_varchar_key varchar (1),
+  col_date_key date,
+  pk integer auto_increment,
+  /*Indices*/
+  key (col_varchar_key ),
+  key (col_date_key ),
+  primary key (pk)
+) ENGINE=memory;
+
+INSERT INTO t2 VALUES
+('v',  '2002-05-01', NULL) ,
+('d',  '2001-01-01', NULL) 
+;
+
+
+CREATE TABLE t3 (
+  pk integer auto_increment,
+  col_int_key int,
+  col_varchar_key varchar (1),
+  /*Indices*/
+  primary key (pk),
+  key (col_int_key ),
+  key (col_varchar_key )) 
+ENGINE=memory;
+
+INSERT INTO t3 VALUES
+(NULL, 3, 'n') ,
+(NULL, 1, 'r') 
+;
+
+CREATE TABLE t4 (
+  pk integer auto_increment,
+  col_varchar_key varchar (1),
+  col_int_key int,
+  /*Indices*/
+  primary key (pk),
+  key (col_varchar_key ),
+  key (col_int_key )
+) ENGINE=memory;
+
+CREATE TABLE t5 (
+  col_datetime_key datetime,
+  pk integer auto_increment,
+  col_int_key int,
+  /*Indices*/
+  key (col_datetime_key ),
+  primary key (pk),
+  key (col_int_key )) 
+ENGINE=memory;
+
+INSERT INTO t5 VALUES
+('2007-10-01', NULL, 8) ,
+('2002-10-01', NULL, 3) 
+;
+
+DELETE OUTR1.* FROM t2 AS OUTR1 
+JOIN t3 AS OUTR2 
+ON ( OUTR1 . col_varchar_key = OUTR2 . col_varchar_key ) 
+WHERE OUTR1 . col_varchar_key NOT IN
+ ( SELECT  INNR1 . col_varchar_key AS y FROM t5 AS INNR2
+   RIGHT JOIN t4 AS INNR1 ON ( INNR2 . pk < INNR1 . col_int_key )
+   WHERE INNR1 . col_int_key <= INNR1 . col_int_key
+     AND OUTR2 . col_int_key >= 3  );
+
+DELETE QUICK  
+FROM OUTR1.* USING t2 AS OUTR1 
+LEFT OUTER JOIN t1 AS OUTR2 
+ON ( OUTR1 . col_date_key = OUTR2 . col_datetime_key ) 
+WHERE OUTR1 . pk NOT IN ( SELECT 2 UNION  SELECT 7 );
+
+--error ER_SUBQUERY_NO_1_ROW
+DELETE    OUTR1.* 
+FROM t2 AS OUTR1
+  LEFT JOIN t1 AS OUTR2 
+  ON ( OUTR1 . pk = OUTR2 . col_int_key )
+WHERE OUTR1 . pk <> (
+  SELECT DISTINCT INNR1 . col_int_key AS y
+  FROM t5 AS INNR1 WHERE OUTR1 . pk <= 5
+  ORDER BY INNR1 . col_datetime_key
+);
+
+DROP TABLE t1, t2, t3, t4, t5;
+
+SET sql_mode=default;
+
+--echo # Bug#20450013 assertion 'select_lex::having_cond() == __null ...
+
+CREATE TABLE t1(a TEXT, FULLTEXT (a));
+CREATE VIEW v1 AS SELECT a FROM t1 ORDER BY a;
+
+let $query=
+DELETE FROM t1 USING v1,t1;
+
+eval explain $query;
+eval $query;
+
+DROP VIEW v1;
+DROP TABLE t1;

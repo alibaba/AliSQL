@@ -1,13 +1,20 @@
-/* Copyright (c) 2003, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -211,7 +218,6 @@ doquery()
       {
         NdbIndexStat::Bound& b = (i == 0 ? b_lo : b_hi);
 
-        bool strict = false;
         if (ndb_rand() % 3 != 0)
         {
           if (ndb_rand() % 3 != 0)
@@ -350,21 +356,21 @@ checkobjs()
       NdbDictionary::Dictionary::List list;
       CHK2(g_dic->listIndexes(list, g_tabname) == 0, g_dic->getNdbError());
       const int count = list.count;
-      g_indnames = (const char**)my_malloc(sizeof(char*) * count, MYF(0));
+      g_indnames = (const char**)malloc(sizeof(char*) * count);
       CHK2(g_indnames != 0, "out of memory");
       for (int i = 0; i < count; i++)
       {
         const NdbDictionary::Dictionary::List::Element& e = list.elements[i];
         if (e.type == NdbDictionary::Object::OrderedIndex)
         {
+          g_indnames[g_indcount] = strdup(e.name);
+          CHK2(g_indnames[g_indcount] != 0, "out of memory");
           g_indcount++;
-          g_indnames[i] = my_strdup(e.name, MYF(0));
-          CHK2(g_indnames[i] != 0, "out of memory");
         }
       }
       CHK1(ret == 0);
     }
-    g_indlist = (const NdbDictionary::Index**)my_malloc(sizeof(NdbDictionary::Index*) * g_indcount, MYF(0));
+    g_indlist = (const NdbDictionary::Index**)malloc(sizeof(NdbDictionary::Index*) * g_indcount);
     CHK2(g_indlist != 0, "out of memory");
     for (int i = 0; i < g_indcount; i++)
     {
@@ -563,7 +569,6 @@ doall()
   return ret;
 }
 
-static int oi = 1000;
 static struct my_option
 my_long_options[] =
 {
@@ -573,17 +578,17 @@ my_long_options[] =
     "Name of database table is in",
     (uchar**) &_dbname, (uchar**) &_dbname, 0,
     GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
-  { "delete", ++oi,
+  { "delete", NDB_OPT_NOSHORT,
     "Delete index stats of given table"
      " and stop any configured auto update",
     (uchar **)&_delete, (uchar **)&_delete, 0,
     GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
-  { "update", ++oi,
+  { "update", NDB_OPT_NOSHORT,
     "Update index stats of given table"
      " and restart any configured auto update",
     (uchar **)&_update, (uchar **)&_update, 0,
     GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
-  { "dump", ++oi,
+  { "dump", NDB_OPT_NOSHORT,
     "Dump query cache",
     (uchar **)&_dump, (uchar **)&_dump, 0,
     GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
@@ -592,31 +597,31 @@ my_long_options[] =
     (uchar **)&_query, (uchar **)&_query, 0,
     GET_INT, REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
   // sys options
-  { "sys-drop", ++oi,
+  { "sys-drop", NDB_OPT_NOSHORT,
     "Drop any stats tables and events in NDB kernel (all stats is lost)",
     (uchar **)&_sys_drop, (uchar **)&_sys_drop, 0,
     GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
-  { "sys-create", ++oi,
+  { "sys-create", NDB_OPT_NOSHORT,
     "Create stats tables and events in NDB kernel (must not exist)",
     (uchar **)&_sys_create, (uchar **)&_sys_create, 0,
     GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
-  { "sys-create-if-not-exist", ++oi,
+  { "sys-create-if-not-exist", NDB_OPT_NOSHORT,
     "Like --sys-create but do nothing if correct objects exist",
     (uchar **)&_sys_create_if_not_exist, (uchar **)&_sys_create_if_not_exist, 0,
     GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
-  { "sys-create-if-not-valid", ++oi,
+  { "sys-create-if-not-valid", NDB_OPT_NOSHORT,
     "Like --sys-create-if-not-exist but first drop any invalid objects",
     (uchar **)&_sys_create_if_not_valid, (uchar **)&_sys_create_if_not_valid, 0,
     GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
-  { "sys-check", ++oi,
+  { "sys-check", NDB_OPT_NOSHORT,
     "Check that correct stats tables and events exist in NDB kernel",
     (uchar **)&_sys_check, (uchar **)&_sys_check, 0,
     GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
-  { "sys-skip-tables", ++oi,
+  { "sys-skip-tables", NDB_OPT_NOSHORT,
     "Do not apply sys options to tables",
     (uchar **)&_sys_skip_tables, (uchar **)&_sys_skip_tables, 0,
     GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
-  { "sys-skip-events", ++oi,
+  { "sys-skip-events", NDB_OPT_NOSHORT,
     "Do not apply sys options to events",
     (uchar **)&_sys_skip_events, (uchar **)&_sys_skip_events, 0,
     GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
@@ -676,16 +681,16 @@ checkopts(int argc, char** argv)
       if (_dbname == 0)
         _dbname = "TEST_DB";
       CHK2(argc >= 1, "stats options require table");
-      g_tabname = my_strdup(argv[0], MYF(0));
+      g_tabname = strdup(argv[0]);
       CHK2(g_tabname != 0, "out of memory");
       g_indcount = argc - 1;
       if (g_indcount != 0)
       {
-        g_indnames = (const char**)my_malloc(sizeof(char*) * g_indcount, MYF(0));
+        g_indnames = (const char**)malloc(sizeof(char*) * g_indcount);
         CHK2(g_indnames != 0, "out of memory");
         for (int i = 0; i < g_indcount; i++)
         {
-          g_indnames[i] = my_strdup(argv[1 + i], MYF(0));
+          g_indnames[i] = strdup(argv[1 + i]);
           CHK2(g_indnames[i] != 0, "out of memory");
         }
         CHK1(ret == 0);

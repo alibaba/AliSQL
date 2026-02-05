@@ -1,13 +1,20 @@
-/* Copyright (c) 2010, 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation; version 2 of the License.
+  it under the terms of the GNU General Public License, version 2.0,
+  as published by the Free Software Foundation.
+
+  This program is also distributed with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an additional
+  permission to link the program and your derivative works with the
+  separately licensed software that they have included with MySQL.
 
   This program is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
+  GNU General Public License, version 2.0, for more details.
 
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software
@@ -33,6 +40,7 @@ struct PFS_thread;
   @{
 */
 
+/** Hash key for a user. */
 struct PFS_user_key
 {
   /**
@@ -44,6 +52,7 @@ struct PFS_user_key
   uint m_key_length;
 };
 
+/** Per user statistics. */
 struct PFS_ALIGNED PFS_user : public PFS_connection_slice
 {
 public:
@@ -67,12 +76,17 @@ public:
     PFS_atomic::add_32(& m_refcount, -1);
   }
 
-  void aggregate(void);
+  void aggregate(bool alive);
   void aggregate_waits(void);
   void aggregate_stages(void);
   void aggregate_statements(void);
+  void aggregate_transactions(void);
+  void aggregate_memory(bool alive);
+  void aggregate_status(void);
   void aggregate_stats(void);
   void release(void);
+
+  void carry_memory_stat_delta(PFS_memory_stat_delta *delta, uint index);
 
   /** Internal lock. */
   pfs_lock m_lock;
@@ -88,7 +102,7 @@ private:
 
 int init_user(const PFS_global_param *param);
 void cleanup_user(void);
-int init_user_hash(void);
+int init_user_hash(const PFS_global_param *param);
 void cleanup_user_hash(void);
 
 PFS_user *
@@ -99,14 +113,7 @@ PFS_user *sanitize_user(PFS_user *unsafe);
 void purge_all_user(void);
 
 
-/* For iterators and show status. */
-
-extern ulong user_max;
-extern ulong user_lost;
-
-/* Exposing the data directly, for iterators. */
-
-extern PFS_user *user_array;
+/* For show status. */
 
 extern LF_HASH user_hash;
 

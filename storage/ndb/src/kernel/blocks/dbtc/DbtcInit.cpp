@@ -1,15 +1,21 @@
 /*
-   Copyright (C) 2003-2008 MySQL AB, 2008-2010 Sun Microsystems, Inc.
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -22,6 +28,9 @@
 #include <ndb_limits.h>
 #include <Properties.hpp>
 #include <Configuration.hpp>
+
+#define JAM_FILE_ID 349
+
 
 #define DEBUG(x) { ndbout << "TC::" << x << endl; }
 
@@ -41,6 +50,8 @@ void Dbtc::initData()
   clqhblockref = DBLQH_REF;
   cerrorBlockref = NDBCNTR_REF;
 
+  c_lqhkeyconf_direct_sent = 0;
+ 
   // Records with constant sizes
   tcFailRecord = (TcFailRecord*)allocRecord("TcFailRecord",
 					    sizeof(TcFailRecord), 1);
@@ -77,11 +88,16 @@ void Dbtc::initRecords()
   // Init all fired triggers
   DLFifoList<TcFiredTriggerData> triggers(c_theFiredTriggerPool);
   FiredTriggerPtr tptr;
-  while(triggers.seize(tptr) == true) {
+  while (triggers.seizeLast(tptr) == true) {
     p= tptr.p;
     new (p) TcFiredTriggerData();
   }
-  triggers.release();
+  while (triggers.releaseFirst());
+  /*
+    The code above temporarily allocates all TcFiredTriggerData records.
+    Therefore we need to reset freeMin now, to get meaningful values.
+  */
+  c_theFiredTriggerPool.resetFreeMin();
 
   /*
   // Init all index records
@@ -96,11 +112,11 @@ void Dbtc::initRecords()
   // Init all index operation records
   SLList<TcIndexOperation> indexOps(c_theIndexOperationPool);
   TcIndexOperationPtr ioptr;
-  while(indexOps.seize(ioptr) == true) {
+  while (indexOps.seizeFirst(ioptr) == true) {
     p= ioptr.p;
     new (p) TcIndexOperation(); // TODO : Modify alloc size of c_theAttributeBufferPool
   }
-  indexOps.release();
+  while (indexOps.releaseFirst());
 
   c_apiConTimer = (UintR*)allocRecord("ApiConTimer",
 				      sizeof(UintR),
@@ -116,6 +132,7 @@ void Dbtc::initRecords()
   
   m_commitAckMarkerPool.setSize(2 * capiConnectFilesize);
   m_commitAckMarkerHash.setSize(1024);
+  c_theCommitAckMarkerBufferPool.setSize(4 * capiConnectFilesize);
 
   hostRecord = (HostRecord*)allocRecord("HostRecord",
 					sizeof(HostRecord),
@@ -134,13 +151,13 @@ void Dbtc::initRecords()
   {
     ScanFragRecPtr ptr;
     SLList<ScanFragRec> tmp(c_scan_frag_pool);
-    while(tmp.seize(ptr)) {
+    while (tmp.seizeFirst(ptr)) {
       new (ptr.p) ScanFragRec();
     }
-    tmp.release();
+    while (tmp.releaseFirst());
   }
 
-  indexOps.release();
+  while (indexOps.releaseFirst());
   
   gcpRecord = (GcpRecord*)allocRecord("GcpRecord",
 				      sizeof(GcpRecord), 
@@ -182,6 +199,7 @@ Dbtc::Dbtc(Block_context& ctx, Uint32 instanceNo):
   c_theIndexes(c_theIndexPool),
   c_maxNumberOfIndexes(0),
   c_maxNumberOfIndexOperations(0),
+  c_fk_hash(c_fk_pool),
   m_commitAckMarkerHash(m_commitAckMarkerPool)
 {
   BLOCK_CONSTRUCTOR(Dbtc);
@@ -301,6 +319,13 @@ Dbtc::Dbtc(Block_context& ctx, Uint32 instanceNo):
   addRecSignal(GSN_FIRE_TRIG_REF, &Dbtc::execFIRE_TRIG_REF);
   addRecSignal(GSN_FIRE_TRIG_CONF, &Dbtc::execFIRE_TRIG_CONF);
 
+  addRecSignal(GSN_CREATE_FK_IMPL_REQ, &Dbtc::execCREATE_FK_IMPL_REQ);
+  addRecSignal(GSN_DROP_FK_IMPL_REQ, &Dbtc::execDROP_FK_IMPL_REQ);
+
+  addRecSignal(GSN_SCAN_TABREF, &Dbtc::execSCAN_TABREF);
+  addRecSignal(GSN_SCAN_TABCONF, &Dbtc::execSCAN_TABCONF);
+  addRecSignal(GSN_KEYINFO20, &Dbtc::execKEYINFO20);
+
   cacheRecord = 0;
   apiConnectRecord = 0;
   tcConnectRecord = 0;
@@ -336,7 +361,6 @@ Dbtc::Dbtc(Block_context& ctx, Uint32 instanceNo):
   tcFailRecord = 0;
   c_apiConTimer = 0;
   c_apiConTimer_line = 0;
-  csystemStart = SSS_FALSE;
   m_deferred_enabled = ~Uint32(0);
   m_max_writes_per_trans = ~Uint32(0);
 }//Dbtc::Dbtc()

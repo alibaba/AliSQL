@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -32,7 +39,11 @@
 #include <signaldata/DropTrigImpl.hpp>
 #include <signaldata/TuxMaint.hpp>
 #include <signaldata/AlterIndxImpl.hpp>
+#include <signaldata/ScanFrag.hpp>
 #include "../dblqh/Dblqh.hpp"
+
+#define JAM_FILE_ID 423
+
 
 /* **************************************************************** */
 /* ---------------------------------------------------------------- */
@@ -109,6 +120,34 @@ Dbtup::findTriggerList(Tablerec* table,
       jam();
       if (ttime == TriggerActionTime::TA_AFTER)
         tlist = &table->constraintUpdateTriggers;
+      break;
+    default:
+      break;
+    }
+    break;
+  case TriggerType::FK_PARENT:
+  case TriggerType::FK_CHILD:
+    switch (tevent) {
+    case TriggerEvent::TE_INSERT:
+      jam();
+      if (ttime == TriggerActionTime::TA_DEFERRED)
+        tlist = &table->deferredInsertTriggers;
+      else if (ttime == TriggerActionTime::TA_AFTER)
+        tlist = &table->afterInsertTriggers;
+      break;
+    case TriggerEvent::TE_UPDATE:
+      jam();
+      if (ttime == TriggerActionTime::TA_DEFERRED)
+        tlist = &table->deferredUpdateTriggers;
+      else if (ttime == TriggerActionTime::TA_AFTER)
+        tlist = &table->afterUpdateTriggers;
+      break;
+    case TriggerEvent::TE_DELETE:
+      jam();
+      if (ttime == TriggerActionTime::TA_DEFERRED)
+        tlist = &table->deferredDeleteTriggers;
+      else if (ttime == TriggerActionTime::TA_AFTER)
+        tlist = &table->afterDeleteTriggers;
       break;
     default:
       break;
@@ -326,6 +365,20 @@ Dbtup::createTrigger(Tablerec* table,
     tmp[1].event = TriggerEvent::TE_UPDATE;
     tmp[2].event = TriggerEvent::TE_DELETE;
   }
+  else if (ttype == TriggerType::FK_PARENT)
+  {
+    jam();
+    cnt = 2;
+    tmp[0].event = TriggerEvent::TE_UPDATE;
+    tmp[1].event = TriggerEvent::TE_DELETE;
+  }
+  else if (ttype == TriggerType::FK_CHILD)
+  {
+    jam();
+    cnt = 2;
+    tmp[0].event = TriggerEvent::TE_INSERT;
+    tmp[1].event = TriggerEvent::TE_UPDATE;
+  }
   else
   {
     jam();
@@ -340,7 +393,7 @@ Dbtup::createTrigger(Tablerec* table,
     ndbrequire(tmp[i].list != NULL);
 
     TriggerPtr tptr;
-    if (!tmp[i].list->seize(tptr))
+    if (!tmp[i].list->seizeFirst(tptr))
     {
       jam();
       goto err;
@@ -471,6 +524,20 @@ Dbtup::dropTrigger(Tablerec* table, const DropTrigImplReq* req, BlockNumber rece
     tmp[1].event = TriggerEvent::TE_UPDATE;
     tmp[2].event = TriggerEvent::TE_DELETE;
   }
+  else if (ttype == TriggerType::FK_PARENT)
+  {
+    jam();
+    cnt = 2;
+    tmp[0].event = TriggerEvent::TE_UPDATE;
+    tmp[1].event = TriggerEvent::TE_DELETE;
+  }
+  else if (ttype == TriggerType::FK_CHILD)
+  {
+    jam();
+    cnt = 2;
+    tmp[0].event = TriggerEvent::TE_INSERT;
+    tmp[1].event = TriggerEvent::TE_UPDATE;
+  }
   else
   {
     jam();
@@ -534,7 +601,9 @@ Dbtup::execFIRE_TRIG_REQ(Signal* signal)
   FragrecordPtr regFragPtr;
   OperationrecPtr regOperPtr;
   TablerecPtr regTabPtr;
-  KeyReqStruct req_struct(this, (When)(KRS_PRE_COMMIT0 + pass));
+  KeyReqStruct req_struct(this,
+                          (When)(KRS_PRE_COMMIT_BASE +
+                                 (pass & TriggerPreCommitPass::TPCP_PASS_MAX)));
 
   regOperPtr.i = opPtrI;
 
@@ -558,6 +627,7 @@ Dbtup::execFIRE_TRIG_REQ(Signal* signal)
   req_struct.TC_index = signal->theData[2];
   req_struct.trans_id1 = signal->theData[3];
   req_struct.trans_id2 = signal->theData[4];
+  req_struct.m_reorg = regOperPtr.p->op_struct.bit_field.m_reorg;
 
   PagePtr page;
   Tuple_header* tuple_ptr = (Tuple_header*)
@@ -567,6 +637,8 @@ Dbtup::execFIRE_TRIG_REQ(Signal* signal)
   OperationrecPtr lastOperPtr;
   lastOperPtr.i = tuple_ptr->m_operation_ptr_i;
   c_operation_pool.getPtr(lastOperPtr);
+  ndbassert(regOperPtr.p->op_struct.bit_field.m_reorg ==
+            lastOperPtr.p->op_struct.bit_field.m_reorg);
 
   /**
    * Deferred triggers should fire only once per primary key (per pass)
@@ -593,7 +665,7 @@ Dbtup::execFIRE_TRIG_REQ(Signal* signal)
    *   still having a transaction context...
    *   i.e can abort transactions, modify transaction
    */
-  req_struct.no_fired_triggers = 0;
+  req_struct.num_fired_triggers = 0;
 
   /**
    * See DbtupCommit re "Setting the op-list has this effect"
@@ -608,7 +680,7 @@ Dbtup::execFIRE_TRIG_REQ(Signal* signal)
   lastOperPtr.p->prevActiveOp = save[1];
 
   signal->theData[0] = 0;
-  signal->theData[1] = req_struct.no_fired_triggers;
+  signal->theData[1] = req_struct.num_fired_triggers;
 }
 
 /* ---------------------------------------------------------------- */
@@ -630,7 +702,7 @@ Dbtup::checkImmediateTriggersAfterInsert(KeyReqStruct *req_struct,
     return;
   }
 
-  if (regOperPtr->op_struct.primary_replica)
+  if (regOperPtr->op_struct.bit_field.primary_replica)
   {
     if (! regTablePtr->afterInsertTriggers.isEmpty())
     {
@@ -661,7 +733,7 @@ Dbtup::checkImmediateTriggersAfterUpdate(KeyReqStruct *req_struct,
     return;
   }
 
-  if (regOperPtr->op_struct.primary_replica)
+  if (regOperPtr->op_struct.bit_field.primary_replica)
   {
     if (! regTablePtr->afterUpdateTriggers.isEmpty())
     {
@@ -702,7 +774,7 @@ Dbtup::checkImmediateTriggersAfterDelete(KeyReqStruct *req_struct,
     return;
   }
 
-  if (regOperPtr->op_struct.primary_replica)
+  if (regOperPtr->op_struct.bit_field.primary_replica)
   {
     if (! regTablePtr->afterDeleteTriggers.isEmpty())
     {
@@ -738,9 +810,21 @@ Dbtup::checkDeferredTriggersDuringPrepare(KeyReqStruct *req_struct,
         trigPtr.p->attributeMask.overlaps(req_struct->changeMask))
     {
       jam();
-      NoOfFiredTriggers::setDeferredBit(req_struct->no_fired_triggers);
-      return;
+      switch(trigPtr.p->triggerType){
+      case TriggerType::SECONDARY_INDEX:
+        NoOfFiredTriggers::setDeferredUKBit(req_struct->num_fired_triggers);
+        break;
+      case TriggerType::FK_PARENT:
+      case TriggerType::FK_CHILD:
+        NoOfFiredTriggers::setDeferredFKBit(req_struct->num_fired_triggers);
+        break;
+      default:
+        ndbassert(false);
+      }
+      if (NoOfFiredTriggers::getDeferredAllSet(req_struct->num_fired_triggers))
+        return;
     }
+    triggerList.next(trigPtr);
   }
 }
 
@@ -759,7 +843,7 @@ void Dbtup::checkDeferredTriggers(KeyReqStruct *req_struct,
                                   bool disk)
 {
   jam();
-  Uint32 save_type = regOperPtr->op_struct.op_type;
+  Uint32 save_type = regOperPtr->op_type;
   Tuple_header *save_ptr = req_struct->m_tuple_ptr;
   DLList<TupTriggerData> * deferred_list = 0;
   DLList<TupTriggerData> * constraint_list = 0;
@@ -782,17 +866,17 @@ void Dbtup::checkDeferredTriggers(KeyReqStruct *req_struct,
       return;
       goto end;
     }
-    regOperPtr->op_struct.op_type = ZINSERT;
+    regOperPtr->op_type = ZINSERT;
   }
   else if (save_type == ZINSERT) {
     /**
      * Tuple was not created but last op is INSERT.
      * This is possible only on DELETE + INSERT
      */
-    regOperPtr->op_struct.op_type = ZUPDATE;
+    regOperPtr->op_type = ZUPDATE;
   }
 
-  switch(regOperPtr->op_struct.op_type) {
+  switch(regOperPtr->op_type) {
   case(ZINSERT):
     jam();
     deferred_list = &regTablePtr->deferredInsertTriggers;
@@ -839,7 +923,7 @@ void Dbtup::checkDeferredTriggers(KeyReqStruct *req_struct,
   }
 
 end:
-  regOperPtr->op_struct.op_type = save_type;
+  regOperPtr->op_type = save_type;
   req_struct->m_tuple_ptr = save_ptr;
 }//Dbtup::checkDeferredTriggers()
 
@@ -855,9 +939,10 @@ end:
 void Dbtup::checkDetachedTriggers(KeyReqStruct *req_struct,
                                   Operationrec* regOperPtr,
                                   Tablerec* regTablePtr,
-                                  bool disk)
+                                  bool disk,
+                                  Uint32 diskPagePtrI)
 {
-  Uint32 save_type = regOperPtr->op_struct.op_type;
+  Uint32 save_type = regOperPtr->op_type;
   Tuple_header *save_ptr = req_struct->m_tuple_ptr;  
 
   switch (save_type) {
@@ -881,7 +966,7 @@ void Dbtup::checkDetachedTriggers(KeyReqStruct *req_struct,
     }
     else if (save_type != ZREFRESH)
     {
-      regOperPtr->op_struct.op_type = ZINSERT;
+      regOperPtr->op_type = ZINSERT;
     }
   }
   else if (save_type == ZINSERT) {
@@ -889,10 +974,10 @@ void Dbtup::checkDetachedTriggers(KeyReqStruct *req_struct,
      * Tuple was not created but last op is INSERT.
      * This is possible only on DELETE + INSERT
      */
-    regOperPtr->op_struct.op_type = ZUPDATE;
+    regOperPtr->op_type = ZUPDATE;
   }
   
-  switch(regOperPtr->op_struct.op_type) {
+  switch(regOperPtr->op_type) {
   case(ZINSERT):
     jam();
     if (regTablePtr->subscriptionInsertTriggers.isEmpty()) {
@@ -904,7 +989,9 @@ void Dbtup::checkDetachedTriggers(KeyReqStruct *req_struct,
     // If any fired immediate insert trigger then fetch after tuple
     fireDetachedTriggers(req_struct,
                          regTablePtr->subscriptionInsertTriggers, 
-                         regOperPtr, disk);
+                         regOperPtr,
+                         disk,
+                         diskPagePtrI);
     break;
   case(ZDELETE):
     jam();
@@ -918,7 +1005,9 @@ void Dbtup::checkDetachedTriggers(KeyReqStruct *req_struct,
     // FIRETRIGORD with the before tuple
     fireDetachedTriggers(req_struct,
 			 regTablePtr->subscriptionDeleteTriggers, 
-			 regOperPtr, disk);
+			 regOperPtr,
+                         disk,
+                         diskPagePtrI);
     break;
   case(ZUPDATE):
     jam();
@@ -932,7 +1021,9 @@ void Dbtup::checkDetachedTriggers(KeyReqStruct *req_struct,
     // and send two FIRETRIGORD one with before tuple and one with after tuple
     fireDetachedTriggers(req_struct,
                          regTablePtr->subscriptionUpdateTriggers, 
-                         regOperPtr, disk);
+                         regOperPtr,
+                         disk,
+                         diskPagePtrI);
     break;
   case ZREFRESH:
     jam();
@@ -945,13 +1036,17 @@ void Dbtup::checkDetachedTriggers(KeyReqStruct *req_struct,
     case Operationrec::RF_MULTI_NOT_EXIST:
       fireDetachedTriggers(req_struct,
                            regTablePtr->subscriptionDeleteTriggers,
-                           regOperPtr, disk);
+                           regOperPtr,
+                           disk,
+                           diskPagePtrI);
       break;
     case Operationrec::RF_SINGLE_EXIST:
     case Operationrec::RF_MULTI_EXIST:
       fireDetachedTriggers(req_struct,
                            regTablePtr->subscriptionInsertTriggers,
-                           regOperPtr, disk);
+                           regOperPtr,
+                           disk,
+                           diskPagePtrI);
       break;
     default:
       ndbrequire(false);
@@ -963,7 +1058,7 @@ void Dbtup::checkDetachedTriggers(KeyReqStruct *req_struct,
   }
 
 end:
-  regOperPtr->op_struct.op_type = save_type;
+  regOperPtr->op_type = save_type;
   req_struct->m_tuple_ptr = save_ptr;
 }
 
@@ -971,7 +1066,10 @@ static
 bool
 is_constraint(const Dbtup::TupTriggerData * trigPtr)
 {
-  return trigPtr->triggerType == TriggerType::SECONDARY_INDEX;
+  return
+    (trigPtr->triggerType == TriggerType::SECONDARY_INDEX) ||
+    (trigPtr->triggerType == TriggerType::FK_PARENT) ||
+    (trigPtr->triggerType == TriggerType::FK_CHILD);
 }
 
 void 
@@ -992,7 +1090,17 @@ Dbtup::fireImmediateTriggers(KeyReqStruct *req_struct,
           req_struct->m_deferred_constraints &&
           is_constraint(trigPtr.p))
       {
-        NoOfFiredTriggers::setDeferredBit(req_struct->no_fired_triggers);
+        switch(trigPtr.p->triggerType){
+        case TriggerType::SECONDARY_INDEX:
+          NoOfFiredTriggers::setDeferredUKBit(req_struct->num_fired_triggers);
+          break;
+        case TriggerType::FK_PARENT:
+        case TriggerType::FK_CHILD:
+          NoOfFiredTriggers::setDeferredFKBit(req_struct->num_fired_triggers);
+          break;
+        default:
+          ndbassert(false);
+        }
       }
       else
       {
@@ -1054,7 +1162,8 @@ void
 Dbtup::fireDetachedTriggers(KeyReqStruct *req_struct,
                             DLList<TupTriggerData>& triggerList, 
                             Operationrec* const regOperPtr,
-                            bool disk)
+                            bool disk,
+                            Uint32 diskPagePtrI)
 {
   
   TriggerPtr trigPtr;  
@@ -1062,14 +1171,14 @@ Dbtup::fireDetachedTriggers(KeyReqStruct *req_struct,
   /**
    * Set disk page
    */
-  req_struct->m_disk_page_ptr.i = m_pgman_ptr.i;
+  req_struct->m_disk_page_ptr.i = diskPagePtrI;
   
   ndbrequire(regOperPtr->is_first_operation());
   triggerList.first(trigPtr);
   while (trigPtr.i != RNIL) {
     jam();
     if ((trigPtr.p->monitorReplicas ||
-         regOperPtr->op_struct.primary_replica) &&
+         regOperPtr->op_struct.bit_field.primary_replica) &&
         (trigPtr.p->monitorAllAttributes ||
          trigPtr.p->attributeMask.overlaps(req_struct->changeMask))) {
       jam();
@@ -1079,24 +1188,6 @@ Dbtup::fireDetachedTriggers(KeyReqStruct *req_struct,
                      disk);
     }
     triggerList.next(trigPtr);
-  }
-}
-
-void Dbtup::executeTriggers(KeyReqStruct *req_struct,
-                            DLList<TupTriggerData>& triggerList, 
-                            Operationrec* regOperPtr,
-                            bool disk)
-{
-  TriggerPtr trigPtr;
-  triggerList.first(trigPtr);
-  while (trigPtr.i != RNIL) {
-    jam();
-    executeTrigger(req_struct,
-                   trigPtr.p,
-                   regOperPtr,
-                   disk);
-    triggerList.next(trigPtr);
-
   }
 }
 
@@ -1121,7 +1212,7 @@ Dbtup::check_fire_trigger(const Fragrecord * fragPtrP,
     return false;
   case Fragrecord::FS_REORG_COMMIT:
   case Fragrecord::FS_REORG_COMPLETE:
-    return req_struct->m_reorg == 0;
+    return req_struct->m_reorg == ScanFragReq::REORG_ALL;
   default:
     return true;
   }
@@ -1137,7 +1228,7 @@ Dbtup::check_fire_reorg(const KeyReqStruct *req_struct,
   case Fragrecord::FS_REORG_COMMIT_NEW:
   case Fragrecord::FS_REORG_COMPLETE_NEW:
     jam();
-    if (flag == 2)
+    if (flag == ScanFragReq::REORG_MOVED)
     {
       jam();
       return true;
@@ -1161,7 +1252,7 @@ Dbtup::check_fire_suma(const KeyReqStruct *req_struct,
   tablePtr.i = regFragPtrP->fragTableId;
   Fragrecord::FragState state = regFragPtrP->fragStatus;
   Uint32 gci_hi = req_struct->gci_hi;
-  Uint32 flag = opPtrP->op_struct.m_reorg;
+  Uint32 flag = opPtrP->op_struct.bit_field.m_reorg;
 
   switch(state){
   case Fragrecord::FS_FREE:
@@ -1184,7 +1275,7 @@ Dbtup::check_fire_suma(const KeyReqStruct *req_struct,
     return true;
   case Fragrecord::FS_REORG_COMPLETE:
     jam();
-    if (flag != 1)
+    if (flag != ScanFragReq::REORG_NOT_MOVED)
     {
       jam();
       return true;
@@ -1218,6 +1309,8 @@ Dbtup::getOldTriggerId(const TupTriggerData* trigPtrP,
   return RNIL;
 }
 
+#define ZOUT_OF_LONG_SIGNAL_MEMORY_IN_TRIGGER 312
+
 void Dbtup::executeTrigger(KeyReqStruct *req_struct,
                            TupTriggerData* const trigPtr,
                            Operationrec* const regOperPtr,
@@ -1229,6 +1322,14 @@ void Dbtup::executeTrigger(KeyReqStruct *req_struct,
   Uint32* const afterBuffer = &coutBuffer[0];
   Uint32* const beforeBuffer = &clogMemBuffer[0];
   Uint32 triggerType = trigPtr->triggerType;
+
+  if ((triggerType == TriggerType::FK_PARENT ||
+       triggerType == TriggerType::FK_CHILD) &&
+      regOperPtr->op_struct.bit_field.m_disable_fk_checks)
+  {
+    jam();
+    return;
+  }
 
   Uint32 noPrimKey, noAfterWords, noBeforeWords;
   FragrecordPtr regFragPtr;
@@ -1298,6 +1399,7 @@ out:
 //--------------------------------------------------------------------
   bool executeDirect;
   bool longsignal = false;
+  bool detached = false;
   Uint32 triggerId = trigPtr->triggerId;
   TrigAttrInfo* const trigAttrInfo = (TrigAttrInfo *)signal->getDataPtrSend();
   trigAttrInfo->setConnectionPtr(req_struct->TC_index);
@@ -1314,15 +1416,18 @@ out:
     if (unlikely(node && getNodeInfo(node).m_version < MAKE_VERSION(6,4,0)))
     {
       jam();
-      triggerId = getOldTriggerId(trigPtr, regOperPtr->op_struct.op_type);
+      triggerId = getOldTriggerId(trigPtr, regOperPtr->op_type);
       trigAttrInfo->setTriggerId(triggerId);
     }
     // fall-through
   }
   case (TriggerType::REORG_TRIGGER):
+  case (TriggerType::FK_PARENT):
+  case (TriggerType::FK_CHILD):
     jam();
     ref = req_struct->TC_ref;
     executeDirect = false;
+    longsignal = ndbd_long_fire_trig_ord(getNodeInfo(refToNode(ref)).m_version);
     break;
   case (TriggerType::SUBSCRIPTION):
   case (TriggerType::SUBSCRIPTION_BEFORE):
@@ -1335,6 +1440,7 @@ out:
     // If we can do execute direct, lets do that, else do long signal (only local node)
     longsignal = !executeDirect;
     ndbassert(refToNode(ref) == 0 || refToNode(ref) == getOwnNodeId());
+    detached = true;
     break;
   case (TriggerType::READ_ONLY_CONSTRAINT):
     terrorCode = ZREAD_ONLY_CONSTRAINT_VIOLATION;
@@ -1357,15 +1463,15 @@ out:
       req_struct->m_when != KRS_PREPARE)
   {
     ndbrequire(req_struct->m_deferred_constraints);
-    if (req_struct->m_when == KRS_PRE_COMMIT0)
+    if (req_struct->m_when == KRS_UK_PRE_COMMIT0)
     {
-      switch(regOperPtr->op_struct.op_type){
+      switch(regOperPtr->op_type){
       case ZINSERT:
-        NoOfFiredTriggers::setDeferredBit(req_struct->no_fired_triggers);
+        NoOfFiredTriggers::setDeferredUKBit(req_struct->num_fired_triggers);
         return;
         break;
       case ZUPDATE:
-        NoOfFiredTriggers::setDeferredBit(req_struct->no_fired_triggers);
+        NoOfFiredTriggers::setDeferredUKBit(req_struct->num_fired_triggers);
         noAfterWords = 0;
         break;
       case ZDELETE:
@@ -1374,10 +1480,9 @@ out:
         ndbrequire(false);
       }
     }
-    else
+    else if (req_struct->m_when == KRS_UK_PRE_COMMIT1)
     {
-      ndbrequire(req_struct->m_when == KRS_PRE_COMMIT1);
-      switch(regOperPtr->op_struct.op_type){
+      switch(regOperPtr->op_type){
       case ZINSERT:
         break;
       case ZUPDATE:
@@ -1389,9 +1494,24 @@ out:
         ndbrequire(false);
       }
     }
+    else
+    {
+      ndbassert(req_struct->m_when == KRS_FK_PRE_COMMIT);
+      return;
+    }
   }
 
-  req_struct->no_fired_triggers++;
+  if ((triggerType == TriggerType::FK_PARENT ||
+       triggerType == TriggerType::FK_CHILD) &&
+      req_struct->m_when != KRS_PREPARE)
+  {
+    if (req_struct->m_when != KRS_FK_PRE_COMMIT)
+    {
+      return;
+    }
+  }
+
+  req_struct->num_fired_triggers++;
 
   if (longsignal == false)
   {
@@ -1400,7 +1520,7 @@ out:
     trigAttrInfo->setAttrInfoType(TrigAttrInfo::PRIMARY_KEY);
     sendTrigAttrInfo(signal, keyBuffer, noPrimKey, executeDirect, ref);
 
-    switch(regOperPtr->op_struct.op_type) {
+    switch(regOperPtr->op_type) {
     case(ZINSERT):
     is_insert:
       jam();
@@ -1457,7 +1577,7 @@ out:
   fireTrigOrd->setTriggerId(triggerId);
   fireTrigOrd->fragId= regFragPtr.p->fragmentId;
 
-  switch(regOperPtr->op_struct.op_type) {
+  switch(regOperPtr->op_type) {
   case(ZINSERT):
     jam();
     fireTrigOrd->m_triggerEvent = TriggerEvent::TE_INSERT;
@@ -1498,15 +1618,43 @@ out:
   fireTrigOrd->setNoOfBeforeValueWords(noBeforeWords);
   fireTrigOrd->setNoOfAfterValueWords(noAfterWords);
 
+  LinearSectionPtr ptr[3];
+  ptr[0].p = keyBuffer;
+  ptr[0].sz = noPrimKey;
+  ptr[1].p = beforeBuffer;
+  ptr[1].sz = noBeforeWords;
+  ptr[2].p = afterBuffer;
+  ptr[2].sz = noAfterWords;
+
+  SectionHandle handle(this);
+  if (longsignal && !detached && !import(&handle, ptr, 3))
+  {
+    jam();
+    terrorCode = ZOUT_OF_LONG_SIGNAL_MEMORY_IN_TRIGGER;
+    return;
+  }
+
   switch(trigPtr->triggerType) {
   case (TriggerType::SECONDARY_INDEX):
   case (TriggerType::REORG_TRIGGER):
+  case (TriggerType::FK_PARENT):
+  case (TriggerType::FK_CHILD):
     jam();
     fireTrigOrd->m_triggerType = trigPtr->triggerType;
     fireTrigOrd->m_transId1 = req_struct->trans_id1;
     fireTrigOrd->m_transId2 = req_struct->trans_id2;
-    sendSignal(req_struct->TC_ref, GSN_FIRE_TRIG_ORD,
-               signal, FireTrigOrd::SignalLength, JBB);
+    if (longsignal)
+    {
+      jam();
+      sendSignal(req_struct->TC_ref, GSN_FIRE_TRIG_ORD,
+                 signal, FireTrigOrd::SignalLength, JBB, &handle);
+    }
+    else
+    {
+      jam();
+      sendSignal(req_struct->TC_ref, GSN_FIRE_TRIG_ORD,
+                 signal, FireTrigOrd::SignalLength, JBB);
+    }
     break;
   case (TriggerType::SUBSCRIPTION_BEFORE): // Only Suma
     jam();
@@ -1586,17 +1734,20 @@ out:
 }
 
 Uint32 Dbtup::setAttrIds(Bitmask<MAXNROFATTRIBUTESINWORDS>& attributeMask, 
-                         Uint32 m_no_of_attributesibutes, 
+                         Uint32 no_of_attributes, 
                          Uint32* inBuffer)
 {
   Uint32 bufIndx = 0;
-  for (Uint32 i = 0; i < m_no_of_attributesibutes; i++) {
-    jam();
-    if (attributeMask.get(i)) {
-      jam();
+  jam();
+  for (Uint32 i = 0; i < no_of_attributes; i++)
+  {
+    if (attributeMask.get(i))
+    {
+      jamLine(i);
       AttributeHeader::init(&inBuffer[bufIndx++], i, 0);
     }
   }
+  jam();
   return bufIndx;
 }
 
@@ -1636,11 +1787,32 @@ bool Dbtup::readTriggerInfo(TupTriggerData* const trigPtr,
   req_struct->check_offset[DD]= regTabPtr->get_check_offset(DD);
   req_struct->attr_descr= &tableDescriptor[descr_start];
 
+  if ((regOperPtr->op_struct.bit_field.m_physical_only_op == 1) &&
+      (refToMain(trigPtr->m_receiverRef) == SUMA ||
+       refToMain(trigPtr->m_receiverRef) == BACKUP))
+  {
+    /* Operations that have no logical effect need not be backed up
+     * or sent as an event. Eg. OPTIMIZE TABLE is performed as a
+     * ZUPDATE operation on table records, moving the varpart 
+     * column-values between pages, to be storage-effective.
+     */
+    Uint32 changed_attribs = 0;
+    for (Uint32 i = 0; i < regTabPtr->m_no_of_attributes; i++) {
+      jam();
+      if (req_struct->changeMask.get(i)) {
+        jam();
+        changed_attribs++;
+      }
+    }
+    ndbrequire(changed_attribs == 0);
+    return false;
+  }
+
 //--------------------------------------------------------------------
 // Read Primary Key Values
 //--------------------------------------------------------------------
   Tuple_header *save0= req_struct->m_tuple_ptr;
-  if (regOperPtr->op_struct.op_type == ZDELETE && 
+  if (regOperPtr->op_type == ZDELETE && 
       !regOperPtr->is_first_operation())
   {
     jam();
@@ -1663,7 +1835,7 @@ bool Dbtup::readTriggerInfo(TupTriggerData* const trigPtr,
   req_struct->m_tuple_ptr = save0;
   
   Uint32 numAttrsToRead;
-  if ((regOperPtr->op_struct.op_type == ZUPDATE) &&
+  if ((regOperPtr->op_type == ZUPDATE) &&
       (trigPtr->sendOnlyChangedAttributes)) {
     jam();
 //--------------------------------------------------------------------
@@ -1675,14 +1847,14 @@ bool Dbtup::readTriggerInfo(TupTriggerData* const trigPtr,
     numAttrsToRead = setAttrIds(attributeMask, regTabPtr->m_no_of_attributes, 
 				&readBuffer[0]);
     
-  } else if ((regOperPtr->op_struct.op_type == ZDELETE) &&
+  } else if ((regOperPtr->op_type == ZDELETE) &&
              (!trigPtr->sendBeforeValues)) {
     jam();
 //--------------------------------------------------------------------
 // Delete without sending before values only read Primary Key
 //--------------------------------------------------------------------
     return true;
-  } else if (regOperPtr->op_struct.op_type != ZREFRESH){
+  } else if (regOperPtr->op_type != ZREFRESH){
     jam();
 //--------------------------------------------------------------------
 // All others send all attributes that are monitored, except:
@@ -1691,7 +1863,7 @@ bool Dbtup::readTriggerInfo(TupTriggerData* const trigPtr,
 //--------------------------------------------------------------------
     Bitmask<MAXNROFATTRIBUTESINWORDS> attributeMask;
     attributeMask = trigPtr->attributeMask;
-    if (regOperPtr->op_struct.op_type == ZUPDATE) {
+    if (regOperPtr->op_type == ZUPDATE) {
       Bitmask<MAXNROFATTRIBUTESINWORDS> tmpMask = regTabPtr->blobAttributeMask;
       tmpMask.bitANDC(req_struct->changeMask);
       attributeMask.bitANDC(tmpMask);
@@ -1702,7 +1874,7 @@ bool Dbtup::readTriggerInfo(TupTriggerData* const trigPtr,
   else
   {
     jam();
-    ndbassert(regOperPtr->op_struct.op_type == ZREFRESH);
+    ndbassert(regOperPtr->op_type == ZREFRESH);
     /* Refresh specific before/after value hacks */
     switch(regOperPtr->m_copy_tuple_location.m_file_no){
     case Operationrec::RF_SINGLE_NOT_EXIST:
@@ -1724,7 +1896,7 @@ bool Dbtup::readTriggerInfo(TupTriggerData* const trigPtr,
 //--------------------------------------------------------------------
 // Read Main tuple values
 //--------------------------------------------------------------------
-  if (regOperPtr->op_struct.op_type != ZDELETE)
+  if (regOperPtr->op_type != ZDELETE)
   {
     jam();
     int ret = readAttributes(req_struct,
@@ -1745,8 +1917,8 @@ bool Dbtup::readTriggerInfo(TupTriggerData* const trigPtr,
 //--------------------------------------------------------------------
 // Initialise pagep and tuple offset for read of copy tuple
 //--------------------------------------------------------------------
-  if ((regOperPtr->op_struct.op_type == ZUPDATE || 
-       regOperPtr->op_struct.op_type == ZDELETE) &&
+  if ((regOperPtr->op_type == ZUPDATE || 
+       regOperPtr->op_type == ZDELETE) &&
       (trigPtr->sendBeforeValues)) {
     jam();
     
@@ -1851,7 +2023,7 @@ Dbtup::executeTuxInsertTriggers(Signal* signal,
   req->fragId = regFragPtr->fragmentId;
   req->pageId = regOperPtr->m_tuple_location.m_page_no;
   req->pageIndex = regOperPtr->m_tuple_location.m_page_idx;
-  req->tupVersion = regOperPtr->tupVersion;
+  req->tupVersion = regOperPtr->op_struct.bit_field.tupVersion;
   req->opInfo = TuxMaintReq::OpAdd;
   return addTuxEntries(signal, regOperPtr, regTabPtr);
 }
@@ -1868,7 +2040,7 @@ Dbtup::executeTuxUpdateTriggers(Signal* signal,
   req->fragId = regFragPtr->fragmentId;
   req->pageId = regOperPtr->m_tuple_location.m_page_no;
   req->pageIndex = regOperPtr->m_tuple_location.m_page_idx;
-  req->tupVersion = regOperPtr->tupVersion;
+  req->tupVersion = regOperPtr->op_struct.bit_field.tupVersion;
   req->opInfo = TuxMaintReq::OpAdd;
   return addTuxEntries(signal, regOperPtr, regTabPtr);
 }
@@ -1950,20 +2122,20 @@ Dbtup::executeTuxCommitTriggers(Signal* signal,
 {
   TuxMaintReq* const req = (TuxMaintReq*)signal->getDataPtrSend();
   Uint32 tupVersion;
-  if (regOperPtr->op_struct.op_type == ZINSERT) {
-    if (! regOperPtr->op_struct.delete_insert_flag)
+  if (regOperPtr->op_type == ZINSERT) {
+    if (! regOperPtr->op_struct.bit_field.delete_insert_flag)
       return;
     jam();
-    tupVersion= decr_tup_version(regOperPtr->tupVersion);
-  } else if (regOperPtr->op_struct.op_type == ZUPDATE) {
+    tupVersion= decr_tup_version(regOperPtr->op_struct.bit_field.tupVersion);
+  } else if (regOperPtr->op_type == ZUPDATE) {
     jam();
-    tupVersion= decr_tup_version(regOperPtr->tupVersion);
-  } else if (regOperPtr->op_struct.op_type == ZDELETE) {
-    if (regOperPtr->op_struct.delete_insert_flag)
+    tupVersion= decr_tup_version(regOperPtr->op_struct.bit_field.tupVersion);
+  } else if (regOperPtr->op_type == ZDELETE) {
+    if (regOperPtr->op_struct.bit_field.delete_insert_flag)
       return;
     jam();
-    tupVersion= regOperPtr->tupVersion;
-  } else if (regOperPtr->op_struct.op_type == ZREFRESH) {
+    tupVersion= regOperPtr->op_struct.bit_field.tupVersion;
+  } else if (regOperPtr->op_type == ZREFRESH) {
     /* Refresh should not affect TUX */
     return;
   } else {
@@ -1989,16 +2161,16 @@ Dbtup::executeTuxAbortTriggers(Signal* signal,
   TuxMaintReq* const req = (TuxMaintReq*)signal->getDataPtrSend();
   // get version
   Uint32 tupVersion;
-  if (regOperPtr->op_struct.op_type == ZINSERT) {
+  if (regOperPtr->op_type == ZINSERT) {
     jam();
-    tupVersion = regOperPtr->tupVersion;
-  } else if (regOperPtr->op_struct.op_type == ZUPDATE) {
+    tupVersion = regOperPtr->op_struct.bit_field.tupVersion;
+  } else if (regOperPtr->op_type == ZUPDATE) {
     jam();
-    tupVersion = regOperPtr->tupVersion;
-  } else if (regOperPtr->op_struct.op_type == ZDELETE) {
+    tupVersion = regOperPtr->op_struct.bit_field.tupVersion;
+  } else if (regOperPtr->op_type == ZDELETE) {
     jam();
     return;
-  } else if (regOperPtr->op_struct.op_type == ZREFRESH) {
+  } else if (regOperPtr->op_type == ZREFRESH) {
     jam();
     /* Refresh should not affect TUX */
     return;

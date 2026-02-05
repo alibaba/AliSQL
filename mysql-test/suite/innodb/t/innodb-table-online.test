@@ -2,12 +2,9 @@
 --source include/have_debug_sync.inc
 
 let $innodb_metrics_select=
-SELECT name, count FROM INFORMATION_SCHEMA.INNODB_METRICS WHERE subsystem = 'ddl';
-
-call mtr.add_suppression("InnoDB: Warning: Small buffer pool size");
-# these will be triggered by DISCARD TABLESPACE
-call mtr.add_suppression("InnoDB: Error: table 'test/t1'");
-call mtr.add_suppression("MySQL is trying to open a table handle but the .ibd file for");
+SELECT name, count FROM INFORMATION_SCHEMA.INNODB_METRICS WHERE
+subsystem = 'ddl' and name not in
+('ddl_sort_file_alter_table','ddl_log_file_alter_table') and count > 0;
 
 # DISCARD TABLESPACE needs file-per-table
 SET @global_innodb_file_per_table_orig = @@global.innodb_file_per_table;
@@ -281,22 +278,18 @@ UPDATE t1 SET c3 = NULL WHERE c3 = '';
 SET lock_wait_timeout = 1;
 --error ER_MULTIPLE_PRI_KEY
 ALTER TABLE t1 DROP COLUMN c22f, ADD PRIMARY KEY c3p5(c3(5));
-SET @old_sql_mode = @@sql_mode;
 # NULL -> NOT NULL only allowed INPLACE if strict sql_mode is on.
 # And adding a PRIMARY KEY will also add NOT NULL implicitly!
-SET @@sql_mode = 'STRICT_TRANS_TABLES';
 --error ER_INVALID_USE_OF_NULL
 ALTER TABLE t1 DROP COLUMN c22f, DROP PRIMARY KEY, ADD PRIMARY KEY c3p5(c3(5)),
 ALGORITHM = INPLACE;
 
 --error ER_INVALID_USE_OF_NULL
 ALTER TABLE t1 MODIFY c3 TEXT NOT NULL;
-SET @@sql_mode = @old_sql_mode;
 UPDATE t1 SET c3=CONCAT(c1,REPEAT('foo',c1)) WHERE c3 IS NULL;
 
 SET DEBUG_SYNC = 'row_log_table_apply1_before SIGNAL c3p5_created0 WAIT_FOR ins_done0';
 # NULL -> NOT NULL only allowed INPLACE if strict sql_mode is on.
-SET @@sql_mode = 'STRICT_TRANS_TABLES';
 --send
 ALTER TABLE t1 MODIFY c3 TEXT NOT NULL, DROP COLUMN c22f,
 ADD COLUMN c5 CHAR(5) DEFAULT 'tired' FIRST;
@@ -314,7 +307,6 @@ SET DEBUG_SYNC = 'now SIGNAL ins_done0';
 connection con1;
 --error ER_INVALID_USE_OF_NULL
 reap;
-SET @@sql_mode = @old_sql_mode;
 
 --echo # session default
 connection default;
@@ -356,16 +348,44 @@ SELECT * FROM t1 LIMIT 10;
 --echo # session con1
 connection con1;
 ALTER TABLE t1 DISCARD TABLESPACE;
---echo # Disconnect session con1
-disconnect con1;
 
 --echo # session default
 connection default;
 SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#18894337 ONLINE ALTER TABLE LOG APPLY FAILS TO SKIP LOCKING
+--echo #
+
+--echo # session con1
+connection con1;
+CREATE TABLE t1 (a SERIAL, c64 VARCHAR(64) UNIQUE) ENGINE=InnoDB;
+INSERT INTO t1 VALUES(0, NULL);
+SET DEBUG='+d,innodb_trx_duplicates';
+SET DEBUG_SYNC='row_log_table_apply1_before SIGNAL t1_ddl WAIT_FOR t1_dml';
+--send
+ALTER TABLE t1 ENGINE=InnoDB;
+
+--echo # session default
+connection default;
+
+SET DEBUG_SYNC='now WAIT_FOR t1_ddl';
+INSERT INTO t1 VALUES(0, NULL), (0, NULL);
+SET DEBUG_SYNC='now SIGNAL t1_dml';
+
+--echo # session con1
+connection con1;
+reap;
+--echo # Disconnect session con1
+disconnect con1;
+--echo # session default
+connection default;
+DROP TABLE t1;
+
 SET DEBUG_SYNC = 'RESET';
 SET DEBUG = '';
 SET GLOBAL innodb_monitor_disable = module_ddl;
-DROP TABLE t1;
 
 # Check that all connections opened by test cases in this file are really
 # gone so execution of other tests won't be affected by their presence.

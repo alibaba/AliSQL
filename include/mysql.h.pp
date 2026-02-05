@@ -2,16 +2,67 @@ typedef char my_bool;
 typedef int my_socket;
 #include "mysql_version.h"
 #include "mysql_com.h"
+#include "binary_log_types.h"
+typedef enum enum_field_types {
+  MYSQL_TYPE_DECIMAL, MYSQL_TYPE_TINY,
+  MYSQL_TYPE_SHORT, MYSQL_TYPE_LONG,
+  MYSQL_TYPE_FLOAT, MYSQL_TYPE_DOUBLE,
+  MYSQL_TYPE_NULL, MYSQL_TYPE_TIMESTAMP,
+  MYSQL_TYPE_LONGLONG,MYSQL_TYPE_INT24,
+  MYSQL_TYPE_DATE, MYSQL_TYPE_TIME,
+  MYSQL_TYPE_DATETIME, MYSQL_TYPE_YEAR,
+  MYSQL_TYPE_NEWDATE, MYSQL_TYPE_VARCHAR,
+  MYSQL_TYPE_BIT,
+  MYSQL_TYPE_TIMESTAMP2,
+  MYSQL_TYPE_DATETIME2,
+  MYSQL_TYPE_TIME2,
+  MYSQL_TYPE_JSON=245,
+  MYSQL_TYPE_NEWDECIMAL=246,
+  MYSQL_TYPE_ENUM=247,
+  MYSQL_TYPE_SET=248,
+  MYSQL_TYPE_TINY_BLOB=249,
+  MYSQL_TYPE_MEDIUM_BLOB=250,
+  MYSQL_TYPE_LONG_BLOB=251,
+  MYSQL_TYPE_BLOB=252,
+  MYSQL_TYPE_VAR_STRING=253,
+  MYSQL_TYPE_STRING=254,
+  MYSQL_TYPE_GEOMETRY=255
+} enum_field_types;
+#include "my_command.h"
 enum enum_server_command
 {
-  COM_SLEEP, COM_QUIT, COM_INIT_DB, COM_QUERY, COM_FIELD_LIST,
-  COM_CREATE_DB, COM_DROP_DB, COM_REFRESH, COM_SHUTDOWN, COM_STATISTICS,
-  COM_PROCESS_INFO, COM_CONNECT, COM_PROCESS_KILL, COM_DEBUG, COM_PING,
-  COM_TIME, COM_DELAYED_INSERT, COM_CHANGE_USER, COM_BINLOG_DUMP,
-  COM_TABLE_DUMP, COM_CONNECT_OUT, COM_REGISTER_SLAVE,
-  COM_STMT_PREPARE, COM_STMT_EXECUTE, COM_STMT_SEND_LONG_DATA, COM_STMT_CLOSE,
-  COM_STMT_RESET, COM_SET_OPTION, COM_STMT_FETCH, COM_DAEMON,
+  COM_SLEEP,
+  COM_QUIT,
+  COM_INIT_DB,
+  COM_QUERY,
+  COM_FIELD_LIST,
+  COM_CREATE_DB,
+  COM_DROP_DB,
+  COM_REFRESH,
+  COM_SHUTDOWN,
+  COM_STATISTICS,
+  COM_PROCESS_INFO,
+  COM_CONNECT,
+  COM_PROCESS_KILL,
+  COM_DEBUG,
+  COM_PING,
+  COM_TIME,
+  COM_DELAYED_INSERT,
+  COM_CHANGE_USER,
+  COM_BINLOG_DUMP,
+  COM_TABLE_DUMP,
+  COM_CONNECT_OUT,
+  COM_REGISTER_SLAVE,
+  COM_STMT_PREPARE,
+  COM_STMT_EXECUTE,
+  COM_STMT_SEND_LONG_DATA,
+  COM_STMT_CLOSE,
+  COM_STMT_RESET,
+  COM_SET_OPTION,
+  COM_STMT_FETCH,
+  COM_DAEMON,
   COM_BINLOG_DUMP_GTID,
+  COM_RESET_CONNECTION,
   COM_END
 };
 struct st_vio;
@@ -41,29 +92,6 @@ typedef struct st_net {
   char sqlstate[5 +1];
   void *extension;
 } NET;
-enum enum_field_types { MYSQL_TYPE_DECIMAL, MYSQL_TYPE_TINY,
-   MYSQL_TYPE_SHORT, MYSQL_TYPE_LONG,
-   MYSQL_TYPE_FLOAT, MYSQL_TYPE_DOUBLE,
-   MYSQL_TYPE_NULL, MYSQL_TYPE_TIMESTAMP,
-   MYSQL_TYPE_LONGLONG,MYSQL_TYPE_INT24,
-   MYSQL_TYPE_DATE, MYSQL_TYPE_TIME,
-   MYSQL_TYPE_DATETIME, MYSQL_TYPE_YEAR,
-   MYSQL_TYPE_NEWDATE, MYSQL_TYPE_VARCHAR,
-   MYSQL_TYPE_BIT,
-   MYSQL_TYPE_TIMESTAMP2,
-   MYSQL_TYPE_DATETIME2,
-   MYSQL_TYPE_TIME2,
-                        MYSQL_TYPE_NEWDECIMAL=246,
-   MYSQL_TYPE_ENUM=247,
-   MYSQL_TYPE_SET=248,
-   MYSQL_TYPE_TINY_BLOB=249,
-   MYSQL_TYPE_MEDIUM_BLOB=250,
-   MYSQL_TYPE_LONG_BLOB=251,
-   MYSQL_TYPE_BLOB=252,
-   MYSQL_TYPE_VAR_STRING=253,
-   MYSQL_TYPE_STRING=254,
-   MYSQL_TYPE_GEOMETRY=255
-};
 enum mysql_enum_shutdown_level {
   SHUTDOWN_DEFAULT = 0,
   SHUTDOWN_WAIT_CONNECTIONS= (unsigned char)(1 << 0),
@@ -86,10 +114,20 @@ enum enum_mysql_set_option
   MYSQL_OPTION_MULTI_STATEMENTS_ON,
   MYSQL_OPTION_MULTI_STATEMENTS_OFF
 };
+enum enum_session_state_type
+{
+  SESSION_TRACK_SYSTEM_VARIABLES,
+  SESSION_TRACK_SCHEMA,
+  SESSION_TRACK_STATE_CHANGE,
+  SESSION_TRACK_GTIDS,
+  SESSION_TRACK_TRANSACTION_CHARACTERISTICS,
+  SESSION_TRACK_TRANSACTION_STATE
+};
 my_bool my_net_init(NET *net, Vio* vio);
 void my_net_local_init(NET *net);
 void net_end(NET *net);
 void net_clear(NET *net, my_bool check_buffer);
+void net_claim_memory_ownership(NET *net);
 my_bool net_realloc(NET *net, size_t length);
 my_bool net_flush(NET *net);
 my_bool my_net_write(NET *net,const unsigned char *packet, size_t len);
@@ -142,6 +180,9 @@ my_bool check_scramble(const unsigned char *reply, const char *message,
 void get_salt_from_password(unsigned char *res, const char *password);
 void make_password_from_salt(char *to, const unsigned char *hash_stage2);
 char *octet2hex(char *to, const char *str, unsigned int len);
+my_bool generate_sha256_scramble(unsigned char *dst, size_t dst_size,
+                                 const char *src, size_t src_size, const char *rnd,
+                                 size_t rnd_size);
 char *get_tty_password(const char *opt_message);
 const char *mysql_errno_to_sqlstate(unsigned int mysql_errno);
 my_bool my_thread_init(void);
@@ -172,6 +213,46 @@ extern LIST *list_reverse(LIST *root);
 extern void list_free(LIST *root,unsigned int free_data);
 extern unsigned int list_length(LIST *);
 extern int list_walk(LIST *,list_walk_action action,unsigned char * argument);
+#include "mysql/client_plugin.h"
+struct st_mysql_client_plugin
+{
+  int type; unsigned int interface_version; const char *name; const char *author; const char *desc; unsigned int version[3]; const char *license; void *mysql_api; int (*init)(char *, size_t, int, va_list); int (*deinit)(void); int (*options)(const char *option, const void *);
+};
+struct st_mysql;
+#include "plugin_auth_common.h"
+typedef struct st_plugin_vio_info
+{
+  enum { MYSQL_VIO_INVALID, MYSQL_VIO_TCP, MYSQL_VIO_SOCKET,
+         MYSQL_VIO_PIPE, MYSQL_VIO_MEMORY } protocol;
+  int socket;
+} MYSQL_PLUGIN_VIO_INFO;
+typedef struct st_plugin_vio
+{
+  int (*read_packet)(struct st_plugin_vio *vio,
+                     unsigned char **buf);
+  int (*write_packet)(struct st_plugin_vio *vio,
+                      const unsigned char *packet,
+                      int packet_len);
+  void (*info)(struct st_plugin_vio *vio, struct st_plugin_vio_info *info);
+} MYSQL_PLUGIN_VIO;
+struct st_mysql_client_plugin_AUTHENTICATION
+{
+  int type; unsigned int interface_version; const char *name; const char *author; const char *desc; unsigned int version[3]; const char *license; void *mysql_api; int (*init)(char *, size_t, int, va_list); int (*deinit)(void); int (*options)(const char *option, const void *);
+  int (*authenticate_user)(MYSQL_PLUGIN_VIO *vio, struct st_mysql *mysql);
+};
+struct st_mysql_client_plugin *
+mysql_load_plugin(struct st_mysql *mysql, const char *name, int type,
+                  int argc, ...);
+struct st_mysql_client_plugin *
+mysql_load_plugin_v(struct st_mysql *mysql, const char *name, int type,
+                    int argc, va_list args);
+struct st_mysql_client_plugin *
+mysql_client_find_plugin(struct st_mysql *mysql, const char *name, int type);
+struct st_mysql_client_plugin *
+mysql_client_register_plugin(struct st_mysql *mysql,
+                             struct st_mysql_client_plugin *plugin);
+int mysql_plugin_options(struct st_mysql_client_plugin *plugin,
+                         const char *option, const void *value);
 extern unsigned int mysql_port;
 extern char *mysql_unix_port;
 typedef struct st_mysql_field {
@@ -202,6 +283,10 @@ typedef unsigned int MYSQL_FIELD_OFFSET;
 typedef unsigned long long my_ulonglong;
 #include "typelib.h"
 #include "my_alloc.h"
+#include "mysql/psi/psi_memory.h"
+#include "psi_base.h"
+struct PSI_thread;
+typedef unsigned int PSI_memory_key;
 typedef struct st_used_mem
 {
   struct st_used_mem *next;
@@ -217,7 +302,11 @@ typedef struct st_mem_root
   size_t block_size;
   unsigned int block_num;
   unsigned int first_block_usage;
+  size_t max_capacity;
+  size_t allocated_size;
+  my_bool error_for_capacity_exceeded;
   void (*error_handler)(void);
+  PSI_memory_key m_psi_key;
 } MEM_ROOT;
 typedef struct st_typelib {
   unsigned int count;
@@ -272,7 +361,12 @@ enum mysql_option
   MYSQL_OPT_CONNECT_ATTR_DELETE,
   MYSQL_SERVER_PUBLIC_KEY,
   MYSQL_ENABLE_CLEARTEXT_PLUGIN,
-  MYSQL_OPT_CAN_HANDLE_EXPIRED_PASSWORDS
+  MYSQL_OPT_CAN_HANDLE_EXPIRED_PASSWORDS,
+  MYSQL_OPT_SSL_ENFORCE,
+  MYSQL_OPT_MAX_ALLOWED_PACKET, MYSQL_OPT_NET_BUFFER_LENGTH,
+  MYSQL_OPT_TLS_VERSION,
+  MYSQL_OPT_SSL_MODE,
+  MYSQL_OPT_GET_SERVER_PUBLIC_KEY
 };
 struct st_mysql_options_extention;
 struct st_mysql_options {
@@ -300,7 +394,7 @@ struct st_mysql_options {
     char *client_ip;
     char *bind_address;
   } ci;
-  my_bool secure_auth;
+  my_bool unused5;
   my_bool report_data_truncation;
   int (*local_infile_init)(void **, const char *, void *);
   int (*local_infile_read)(void *, char *, unsigned int);
@@ -318,6 +412,11 @@ enum mysql_protocol_type
 {
   MYSQL_PROTOCOL_DEFAULT, MYSQL_PROTOCOL_TCP, MYSQL_PROTOCOL_SOCKET,
   MYSQL_PROTOCOL_PIPE, MYSQL_PROTOCOL_MEMORY
+};
+enum mysql_ssl_mode 
+{ 
+  SSL_MODE_DISABLED= 1, SSL_MODE_PREFERRED, SSL_MODE_REQUIRED,
+  SSL_MODE_VERIFY_CA, SSL_MODE_VERIFY_IDENTITY
 };
 typedef struct character_set
 {
@@ -383,15 +482,8 @@ typedef struct st_mysql_res {
   my_bool unbuffered_fetch_cancelled;
   void *extension;
 } MYSQL_RES;
-typedef struct st_mysql_parameters
-{
-  unsigned long *p_max_allowed_packet;
-  unsigned long *p_net_buffer_length;
-  void *extension;
-} MYSQL_PARAMETERS;
 int mysql_server_init(int argc, char **argv, char **groups);
 void mysql_server_end(void);
-MYSQL_PARAMETERS * mysql_get_parameters(void);
 my_bool mysql_thread_init(void);
 void mysql_thread_end(void);
 my_ulonglong mysql_num_rows(MYSQL_RES *res);
@@ -437,6 +529,14 @@ MYSQL_RES * mysql_store_result(MYSQL *mysql);
 MYSQL_RES * mysql_use_result(MYSQL *mysql);
 void mysql_get_character_set_info(MYSQL *mysql,
                            MY_CHARSET_INFO *charset);
+int mysql_session_track_get_first(MYSQL *mysql,
+                                          enum enum_session_state_type type,
+                                          const char **data,
+                                          size_t *length);
+int mysql_session_track_get_next(MYSQL *mysql,
+                                         enum enum_session_state_type type,
+                                         const char **data,
+                                         size_t *length);
 void
 mysql_set_local_infile_handler(MYSQL *mysql,
                                int (*local_infile_init)(void **, const char *,
@@ -474,6 +574,8 @@ int mysql_options(MYSQL *mysql,enum mysql_option option,
           const void *arg);
 int mysql_options4(MYSQL *mysql,enum mysql_option option,
                                        const void *arg1, const void *arg2);
+int mysql_get_option(MYSQL *mysql, enum mysql_option option,
+                                         const void *arg);
 void mysql_free_result(MYSQL_RES *result);
 void mysql_data_seek(MYSQL_RES *result,
      my_ulonglong offset);
@@ -493,11 +595,15 @@ unsigned long mysql_hex_string(char *to,const char *from,
 unsigned long mysql_real_escape_string(MYSQL *mysql,
             char *to,const char *from,
             unsigned long length);
+unsigned long mysql_real_escape_string_quote(MYSQL *mysql,
+                 char *to, const char *from,
+                 unsigned long length, char quote);
 void mysql_debug(const char *debug);
 void myodbc_remove_escape(MYSQL *mysql,char *name);
 unsigned int mysql_thread_safe(void);
 my_bool mysql_embedded(void);
 my_bool mysql_read_query_result(MYSQL *mysql);
+int mysql_reset_connection(MYSQL *mysql);
 enum enum_mysql_stmt_state
 {
   MYSQL_STMT_INIT_DONE= 1, MYSQL_STMT_PREPARE_DONE, MYSQL_STMT_EXECUTE_DONE,

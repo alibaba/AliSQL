@@ -1,18 +1,24 @@
-/* Copyright (c) 2008 MySQL AB, 2009 Sun Microsystems, Inc.
-   Use is subject to license terms.
+/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
 
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; version 2 of the License.
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License, version 2.0, for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /*
   Convert Windows API error (GetLastError() to Posix equivalent (errno)
@@ -22,6 +28,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include <my_global.h>
 #include <my_sys.h>
+#include "my_thread_local.h"
 
 
 struct errentry 
@@ -61,6 +68,7 @@ static struct errentry errtable[]= {
   {  ERROR_BROKEN_PIPE,            EPIPE     },  /* 109 */
   {  ERROR_DISK_FULL,              ENOSPC    },  /* 112 */
   {  ERROR_INVALID_TARGET_HANDLE,  EBADF     },  /* 114 */
+  {  ERROR_INVALID_NAME,           ENOENT    },  /* 123 */
   {  ERROR_INVALID_HANDLE,         EINVAL    },  /* 124 */
   {  ERROR_WAIT_NO_CHILDREN,       ECHILD    },  /* 128 */
   {  ERROR_CHILD_NOT_COMPLETE,     ECHILD    },  /* 129 */
@@ -118,7 +126,12 @@ static int get_errno_from_oserr(unsigned long oserrno)
 }
 
 /* Set errno corresponsing to GetLastError() value */
-void my_osmaperr ( unsigned long oserrno)
+void my_osmaperr( unsigned long oserrno)
 {
-    errno= get_errno_from_oserr(oserrno);
+  /*
+    set thr_winerr so that we could return the Windows Error Code
+    when it is EINVAL.
+  */
+  set_thr_winerr(oserrno);
+  errno= get_errno_from_oserr(oserrno);
 }

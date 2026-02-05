@@ -4,10 +4,11 @@ create table t1(a int);
 insert into t1 values(1);
 set names latin1;
 explain extended select '¡¬√ƒ≈', _latin1'¡¬√ƒ≈' from t1 limit 1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	SIMPLE	t1	system	NULL	NULL	NULL	NULL	1	100.00	NULL
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	1	100.00	NULL
 Warnings:
-Note	1003	/* select#1 */ select '¡¬√ƒ≈' AS `¡¬√ƒ≈`,_latin1'\xC1\xC2\xC3\xC4\xC5' AS `¡¬√ƒ≈` from dual limit 1
+Warning	1681	'EXTENDED' is deprecated and will be removed in a future release.
+Note	1003	/* select#1 */ select '¡¬√ƒ≈' AS `¡¬√ƒ≈`,_latin1'\xC1\xC2\xC3\xC4\xC5' AS `¡¬√ƒ≈` from `test`.`t1` limit 1
 select (@query:=QUERY)+NULL, (@trace:=TRACE)+NULL from information_schema.OPTIMIZER_TRACE;
 (@query:=QUERY)+NULL	(@trace:=TRACE)+NULL
 NULL	NULL
@@ -44,12 +45,36 @@ explain extended select '¡¬√ƒ≈', _latin1'¡¬√ƒ≈' from t1 limit 1	{
             "rows_estimation": [
               {
                 "table": "`t1`",
-                "rows": 1,
-                "cost": 1,
-                "table_type": "system",
-                "empty": false
+                "table_scan": {
+                  "rows": 1,
+                  "cost": 1
+                } /* table_scan */
               }
             ] /* rows_estimation */
+          },
+          {
+            "considered_execution_plans": [
+              {
+                "plan_prefix": [
+                ] /* plan_prefix */,
+                "table": "`t1`",
+                "best_access_path": {
+                  "considered_access_paths": [
+                    {
+                      "rows_to_scan": 1,
+                      "access_type": "scan",
+                      "resulting_rows": 1,
+                      "cost": 1.2,
+                      "chosen": true
+                    }
+                  ] /* considered_access_paths */
+                } /* best_access_path */,
+                "condition_filtering_pct": 100,
+                "rows_for_plan": 1,
+                "cost_for_plan": 1.2,
+                "chosen": true
+              }
+            ] /* considered_execution_plans */
           },
           {
             "attaching_conditions_to_tables": {
@@ -57,11 +82,18 @@ explain extended select '¡¬√ƒ≈', _latin1'¡¬√ƒ≈' from t1 limit 1	{
               "attached_conditions_computation": [
               ] /* attached_conditions_computation */,
               "attached_conditions_summary": [
+                {
+                  "table": "`t1`",
+                  "attached": null
+                }
               ] /* attached_conditions_summary */
             } /* attaching_conditions_to_tables */
           },
           {
             "refine_plan": [
+              {
+                "table": "`t1`"
+              }
             ] /* refine_plan */
           }
         ] /* steps */
@@ -110,12 +142,36 @@ explain extended select '√Å√Ç√É√Ñ√Ö', _latin1'√Å√Ç√É√Ñ√Ö' from t1 limit 1	{
             "rows_estimation": [
               {
                 "table": "`t1`",
-                "rows": 1,
-                "cost": 1,
-                "table_type": "system",
-                "empty": false
+                "table_scan": {
+                  "rows": 1,
+                  "cost": 1
+                } /* table_scan */
               }
             ] /* rows_estimation */
+          },
+          {
+            "considered_execution_plans": [
+              {
+                "plan_prefix": [
+                ] /* plan_prefix */,
+                "table": "`t1`",
+                "best_access_path": {
+                  "considered_access_paths": [
+                    {
+                      "rows_to_scan": 1,
+                      "access_type": "scan",
+                      "resulting_rows": 1,
+                      "cost": 1.2,
+                      "chosen": true
+                    }
+                  ] /* considered_access_paths */
+                } /* best_access_path */,
+                "condition_filtering_pct": 100,
+                "rows_for_plan": 1,
+                "cost_for_plan": 1.2,
+                "chosen": true
+              }
+            ] /* considered_execution_plans */
           },
           {
             "attaching_conditions_to_tables": {
@@ -123,11 +179,18 @@ explain extended select '√Å√Ç√É√Ñ√Ö', _latin1'√Å√Ç√É√Ñ√Ö' from t1 limit 1	{
               "attached_conditions_computation": [
               ] /* attached_conditions_computation */,
               "attached_conditions_summary": [
+                {
+                  "table": "`t1`",
+                  "attached": null
+                }
               ] /* attached_conditions_summary */
             } /* attaching_conditions_to_tables */
           },
           {
             "refine_plan": [
+              {
+                "table": "`t1`"
+              }
             ] /* refine_plan */
           }
         ] /* steps */
@@ -156,28 +219,26 @@ select @query, @trace;
 select * from v1 where v1.col = '√Å√Ç√É√Ñ√Ö'	{
   "steps": [
     {
-      "view": {
-        "database": "test",
-        "view": "v1",
-        "in_select#": 1,
-        "select#": 2,
-        "materialized": true
-      } /* view */
-    },
-    {
-      "join_preparation": {
-        "select#": 2,
-        "steps": [
-          {
-            "expanded_query": "/* select#2 */ select '√Å√Ç√É√Ñ√Ö' AS `col` from `t1` limit 1"
-          }
-        ] /* steps */
-      } /* join_preparation */
-    },
-    {
       "join_preparation": {
         "select#": 1,
         "steps": [
+          {
+            "join_preparation": {
+              "select#": 2,
+              "steps": [
+                {
+                  "expanded_query": "/* select#2 */ select '√Å√Ç√É√Ñ√Ö' AS `col` from `t1` limit 1"
+                }
+              ] /* steps */
+            } /* join_preparation */
+          },
+          {
+            "view": {
+              "table": "`v1`",
+              "select#": 2,
+              "materialized": true
+            } /* view */
+          },
           {
             "expanded_query": "/* select#1 */ select `v1`.`col` AS `col` from `v1` where (`v1`.`col` = '√Å√Ç√É√Ñ√Ö')"
           }
@@ -207,12 +268,36 @@ select * from v1 where v1.col = '√Å√Ç√É√Ñ√Ö'	{
                   "rows_estimation": [
                     {
                       "table": "`t1`",
-                      "rows": 1,
-                      "cost": 1,
-                      "table_type": "system",
-                      "empty": false
+                      "table_scan": {
+                        "rows": 1,
+                        "cost": 1
+                      } /* table_scan */
                     }
                   ] /* rows_estimation */
+                },
+                {
+                  "considered_execution_plans": [
+                    {
+                      "plan_prefix": [
+                      ] /* plan_prefix */,
+                      "table": "`t1`",
+                      "best_access_path": {
+                        "considered_access_paths": [
+                          {
+                            "rows_to_scan": 1,
+                            "access_type": "scan",
+                            "resulting_rows": 1,
+                            "cost": 1.2,
+                            "chosen": true
+                          }
+                        ] /* considered_access_paths */
+                      } /* best_access_path */,
+                      "condition_filtering_pct": 100,
+                      "rows_for_plan": 1,
+                      "cost_for_plan": 1.2,
+                      "chosen": true
+                    }
+                  ] /* considered_execution_plans */
                 },
                 {
                   "attaching_conditions_to_tables": {
@@ -220,11 +305,18 @@ select * from v1 where v1.col = '√Å√Ç√É√Ñ√Ö'	{
                     "attached_conditions_computation": [
                     ] /* attached_conditions_computation */,
                     "attached_conditions_summary": [
+                      {
+                        "table": "`t1`",
+                        "attached": null
+                      }
                     ] /* attached_conditions_summary */
                   } /* attaching_conditions_to_tables */
                 },
                 {
                   "refine_plan": [
+                    {
+                      "table": "`t1`"
+                    }
                   ] /* refine_plan */
                 }
               ] /* steps */
@@ -268,6 +360,10 @@ select * from v1 where v1.col = '√Å√Ç√É√Ñ√Ö'	{
                 }
               ] /* steps */
             } /* condition_processing */
+          },
+          {
+            "substitute_generated_columns": {
+            } /* substitute_generated_columns */
           },
           {
             "table_dependencies": [
@@ -376,6 +472,10 @@ select * from t1 where c < '√Å√Ç√É√Ñ√Ö'	{
             } /* condition_processing */
           },
           {
+            "substitute_generated_columns": {
+            } /* substitute_generated_columns */
+          },
+          {
             "table_dependencies": [
               {
                 "table": "`t1`",
@@ -397,9 +497,9 @@ select * from t1 where c < '√Å√Ç√É√Ñ√Ö'	{
                 "range_analysis": {
                   "table_scan": {
                     "rows": 2,
-                    "cost": 4.5034
+                    "cost": 3.5
                   } /* table_scan */,
-                  "potential_range_indices": [
+                  "potential_range_indexes": [
                     {
                       "index": "PRIMARY",
                       "usable": true,
@@ -407,10 +507,10 @@ select * from t1 where c < '√Å√Ç√É√Ñ√Ö'	{
                         "c"
                       ] /* key_parts */
                     }
-                  ] /* potential_range_indices */,
+                  ] /* potential_range_indexes */,
                   "best_covering_index_scan": {
                     "index": "PRIMARY",
-                    "cost": 1.4213,
+                    "cost": 1.401,
                     "chosen": true
                   } /* best_covering_index_scan */,
                   "setup_range_conditions": [
@@ -427,11 +527,11 @@ select * from t1 where c < '√Å√Ç√É√Ñ√Ö'	{
                           "c <= √Å√Ç√É√Ñ"
                         ] /* ranges */,
                         "index_dives_for_eq_ranges": true,
-                        "rowid_ordered": false,
+                        "rowid_ordered": true,
                         "using_mrr": false,
                         "index_only": true,
                         "rows": 2,
-                        "cost": 3.41,
+                        "cost": 2.41,
                         "chosen": false,
                         "cause": "cost"
                       }
@@ -454,15 +554,17 @@ select * from t1 where c < '√Å√Ç√É√Ñ√Ö'	{
                 "best_access_path": {
                   "considered_access_paths": [
                     {
+                      "rows_to_scan": 2,
                       "access_type": "scan",
-                      "rows": 2,
-                      "cost": 2.4034,
+                      "resulting_rows": 2,
+                      "cost": 1.4,
                       "chosen": true
                     }
                   ] /* considered_access_paths */
                 } /* best_access_path */,
-                "cost_for_plan": 2.4034,
+                "condition_filtering_pct": 100,
                 "rows_for_plan": 2,
+                "cost_for_plan": 1.4,
                 "chosen": true
               }
             ] /* considered_execution_plans */
@@ -483,8 +585,7 @@ select * from t1 where c < '√Å√Ç√É√Ñ√Ö'	{
           {
             "refine_plan": [
               {
-                "table": "`t1`",
-                "access_type": "index_scan"
+                "table": "`t1`"
               }
             ] /* refine_plan */
           }
@@ -527,20 +628,36 @@ select `col
 1	a` < 6	{
   "steps": [
     {
-      "view": {
-        "database": "test",
-        "view": "v\n1\ta",
-        "in_select#": 1,
-        "select#": 2,
-        "merged": true
-      } /* view */
-    },
-    {
       "join_preparation": {
         "select#": 1,
         "steps": [
           {
+            "join_preparation": {
+              "select#": 2,
+              "steps": [
+                {
+                  "expanded_query": "/* select#2 */ select `t\n1\ta`.`col\n1\ta` AS `col\n1\ta` from `t\n1\ta`"
+                }
+              ] /* steps */
+            } /* join_preparation */
+          },
+          {
+            "view": {
+              "table": "`v\n1\ta`",
+              "select#": 2,
+              "merged": true
+            } /* view */
+          },
+          {
             "expanded_query": "/* select#1 */ select `t\n1\ta`.`col\n1\ta` AS `col\n1\ta` from (`t\n1\ta`) where (`t\n1\ta`.`col\n1\ta` < 6)"
+          },
+          {
+            "transformations_to_nested_joins": {
+              "transformations": [
+                "parenthesis_removal"
+              ] /* transformations */,
+              "expanded_query": "/* select#1 */ select `t\n1\ta`.`col\n1\ta` AS `col\n1\ta` from `t\n1\ta` where (`t\n1\ta`.`col\n1\ta` < 6)"
+            } /* transformations_to_nested_joins */
           }
         ] /* steps */
       } /* join_preparation */
@@ -549,14 +666,6 @@ select `col
       "join_optimization": {
         "select#": 1,
         "steps": [
-          {
-            "transformations_to_nested_joins": {
-              "transformations": [
-                "parenthesis_removal"
-              ] /* transformations */,
-              "expanded_query": "/* select#1 */ select `t\n1\ta`.`col\n1\ta` AS `col\n1\ta` from `t\n1\ta` where (`t\n1\ta`.`col\n1\ta` < 6)"
-            } /* transformations_to_nested_joins */
-          },
           {
             "condition_processing": {
               "condition": "WHERE",
@@ -576,6 +685,10 @@ select `col
                 }
               ] /* steps */
             } /* condition_processing */
+          },
+          {
+            "substitute_generated_columns": {
+            } /* substitute_generated_columns */
           },
           {
             "table_dependencies": [
@@ -599,9 +712,9 @@ select `col
                 "range_analysis": {
                   "table_scan": {
                     "rows": 2,
-                    "cost": 4.5034
+                    "cost": 3.5
                   } /* table_scan */,
-                  "potential_range_indices": [
+                  "potential_range_indexes": [
                     {
                       "index": "index\n1\ta",
                       "usable": true,
@@ -609,10 +722,10 @@ select `col
                         "col\n1\ta"
                       ] /* key_parts */
                     }
-                  ] /* potential_range_indices */,
+                  ] /* potential_range_indexes */,
                   "best_covering_index_scan": {
                     "index": "index\n1\ta",
-                    "cost": 1.4233,
+                    "cost": 1.4013,
                     "chosen": true
                   } /* best_covering_index_scan */,
                   "setup_range_conditions": [
@@ -632,8 +745,8 @@ select `col
                         "rowid_ordered": false,
                         "using_mrr": false,
                         "index_only": true,
-                        "rows": 1,
-                        "cost": 2.21,
+                        "rows": 2,
+                        "cost": 1.4113,
                         "chosen": false,
                         "cause": "cost"
                       }
@@ -656,15 +769,17 @@ select `col
                 "best_access_path": {
                   "considered_access_paths": [
                     {
+                      "rows_to_scan": 2,
                       "access_type": "scan",
-                      "rows": 1,
-                      "cost": 2.4034,
+                      "resulting_rows": 2,
+                      "cost": 1.4,
                       "chosen": true
                     }
                   ] /* considered_access_paths */
                 } /* best_access_path */,
-                "cost_for_plan": 2.4034,
-                "rows_for_plan": 1,
+                "condition_filtering_pct": 100,
+                "rows_for_plan": 2,
+                "cost_for_plan": 1.4,
                 "chosen": true
               }
             ] /* considered_execution_plans */
@@ -685,8 +800,7 @@ select `col
           {
             "refine_plan": [
               {
-                "table": "`t\n1\ta`",
-                "access_type": "index_scan"
+                "table": "`t\n1\ta`"
               }
             ] /* refine_plan */
           }

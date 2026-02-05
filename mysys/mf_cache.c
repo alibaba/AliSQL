@@ -1,13 +1,25 @@
-/* Copyright (c) 2000, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -15,36 +27,25 @@
 
 /* Open a temporary file and cache it with io_cache. Delete it on close */
 
+#include "my_global.h"
 #include "mysys_priv.h"
+#include "mysql/psi/mysql_file.h"
+#include "my_sys.h"
 #include <m_string.h>
 #include "my_static.h"
 #include "mysys_err.h"
 
 	/*
 	  Remove an open tempfile so that it doesn't survive
-	  if we crash;	If the operating system doesn't support
-	  this, just remember the file name for later removal
+	  if we crash.
 	*/
 
 static my_bool cache_remove_open_tmp(IO_CACHE *cache MY_ATTRIBUTE((unused)),
 				     const char *name)
 {
 #if O_TEMPORARY == 0
-#if !defined(CANT_DELETE_OPEN_FILES)
   /* The following should always succeed */
-  (void) my_delete(name,MYF(MY_WME | ME_NOINPUT));
-#else
-  int length;
-  if (!(cache->file_name=
-	(char*) my_malloc((length=strlen(name)+1),MYF(MY_WME))))
-  {
-    my_close(cache->file,MYF(0));
-    cache->file = -1;
-    errno=my_errno=ENOMEM;
-    return 1;
-  }
-  memcpy(cache->file_name,name,length);
-#endif
+  (void) my_delete(name,MYF(MY_WME));
 #endif /* O_TEMPORARY == 0 */
   return 0;
 }
@@ -61,8 +62,10 @@ my_bool open_cached_file(IO_CACHE *cache, const char* dir, const char *prefix,
                          size_t cache_size, myf cache_myflags)
 {
   DBUG_ENTER("open_cached_file");
-  cache->dir=	 dir ? my_strdup(dir,MYF(cache_myflags & MY_WME)) : (char*) 0;
-  cache->prefix= (prefix ? my_strdup(prefix,MYF(cache_myflags & MY_WME)) :
+  cache->dir=	 dir ? my_strdup(key_memory_IO_CACHE,
+                                 dir,MYF(cache_myflags & MY_WME)) : (char*) 0;
+  cache->prefix= (prefix ? my_strdup(key_memory_IO_CACHE,
+                                     prefix,MYF(cache_myflags & MY_WME)) :
 		 (char*) 0);
   cache->file_name=0;
   cache->buffer=0;				/* Mark that not open */
@@ -76,17 +79,17 @@ my_bool open_cached_file(IO_CACHE *cache, const char* dir, const char *prefix,
   DBUG_RETURN(1);
 }
 
-	/* Create the temporary file */
+/* Create the temporary file */
 
 my_bool real_open_cached_file(IO_CACHE *cache)
 {
   char name_buff[FN_REFLEN];
   int error=1;
   DBUG_ENTER("real_open_cached_file");
-  if ((cache->file=create_temp_file(name_buff, cache->dir, cache->prefix,
-				    (O_RDWR | O_BINARY | O_TRUNC |
-				     O_TEMPORARY | O_SHORT_LIVED),
-				    MYF(MY_WME))) >= 0)
+  if ((cache->file= mysql_file_create_temp(cache->file_key, name_buff,
+                      cache->dir, cache->prefix,
+                      (O_RDWR | O_BINARY | O_TRUNC | O_TEMPORARY | O_SHORT_LIVED),
+                      MYF(MY_WME))) >= 0)
   {
     error=0;
     cache_remove_open_tmp(cache, name_buff);
@@ -101,18 +104,11 @@ void close_cached_file(IO_CACHE *cache)
   if (my_b_inited(cache))
   {
     File file=cache->file;
-    cache->file= -1;				/* Don't flush data */
+    cache->file= -1;    /* Don't flush data */
     (void) end_io_cache(cache);
     if (file >= 0)
     {
-      (void) my_close(file,MYF(0));
-#ifdef CANT_DELETE_OPEN_FILES
-      if (cache->file_name)
-      {
-	(void) my_delete(cache->file_name,MYF(MY_WME | ME_NOINPUT));
-	my_free(cache->file_name);
-      }
-#endif
+      (void) mysql_file_close(file, MYF(0));
     }
     my_free(cache->dir);
     my_free(cache->prefix);

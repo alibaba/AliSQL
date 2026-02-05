@@ -1,0 +1,119 @@
+[/
+ / Copyright (c) 2013 Boost.Test team
+ /
+ / Distributed under the Boost Software License, Version 1.0. (See accompanying
+ / file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+ /]
+
+[section Change log]
+
+[h4 Boost.Test v3 / boost 1.59]
+
+[h5 New major features]
+
+* __BOOST_TEST__ generic assertion
+* [link boost_test.tests_organization.test_cases.test_case_generation data driven test cases]: supersedes the parametric test case (unary test cases)
+* test units [link boost_test.tests_organization.decorators attributes], that allow finer control over test units property and behavior
+* logical grouping of the test units using [link boost_test.tests_organization.tests_grouping labels]
+* support for declaring [link boost_test.tests_organization.tests_dependencies dependencies] over test cases
+* attributes for [link boost_test.tests_organization.enabling enabling or disabling] test execution based on static, compile-time or runtime rules
+* extended [link boost_test.runtime_config.test_unit_filtering unit test filtering] from the command line (negation, labels, ...)
+* color output with __param_color_output__
+* test bed listing with __param_list_content__
+* rewritten documentation using quickbook
+
+[/* now having a more accurate timing (see [ticket 7397]) for the tests. Old format is still available through the command line option __param_deprecated_timer_format__
+  in case you experience problems with the new output. ]
+
+[h5 Bugfixes and feature requests]
+[/ pending
+# [ticket 1136] Let BOOST_CHECK_EQUAL support std::wstring -> resolution using BOOST_TEST
+# [ticket 4222] feenablexcept does not exist on mac
+# [ticket 7397] Boost.Test, since boost 1.48 is using the deprecated Boost.Timer class - it should be updated to use the new class
+]
+# [ticket 2018] Error in the documentation chapter "Runtime parameters reference"
+# [ticket 2450] equations in Floating-point comparison algorithms html are not rendered properly
+# [ticket 2600] Unit Test Framework - missed documentation
+# [ticket 2717] `BOOST_<level>_EQUAL_COLLECTION` docs typo
+# [ticket 2759] Typos in test new-year-resolution.html
+# [ticket 3182] _CrtSetReportFile can be used to redirect memory leaks report
+# [ticket 3316] Access violation when trying to log from init_tests_func
+# [ticket 3392] Boost::Test: Wrong contents for documentation of the `BOOST_TEST_PASSPOINT` macro
+# [ticket 3402] Invalid define name in docummentation (duplicates #2717)
+# [ticket 3445] incorreect link in the docs
+# [ticket 3463] GT is GREAT!
+# [ticket 3542] Bug in documentation of detect_memory_leak parameter (duplicates #2018)
+# [ticket 3481] Boost Testing doesn't work under Sun Solaris Containers (duplicates #3592)
+# [ticket 3495] Boost::Test enters endless loop when running in vserver environment (duplicates #3592)
+# [ticket 3592] under_debugger() goes into infinite loop
+# [ticket 3595] Typo (duplicates #2759)
+# [ticket 3623] Boost Test Typo (duplicates #2759)
+# [ticket 3664] SIGCHLD always considered fatal error
+# [ticket 3784] Documentation errors in Execution Monitor Compilation
+# [ticket 3785] Documentation errors in Program Execution Monitor implementation
+# [ticket 3811] global namespace polution
+# [ticket 3834] doc: probably incorrect HTML rendering (duplicates #2450)
+# [ticket 3896] erroneous documentation in boost test commandline parameter description
+# [ticket 3932] Error in `BOOST_<level>_GT` description (duplicates #3463)
+# [ticket 3938] doc: incorrect macro name (duplicates #2759)
+# [ticket 3964] Documentation for `BOOST_<level>_CLOSE_FRACTION` is incorrect
+# [ticket 3978] Failed to completely redirect TestLog to file, bugfix appended
+# [ticket 3979] <boost/test/exception_safety.hpp> requires additional includes
+# [ticket 4161] spelling mistakes...
+# [ticket 4275] Documentation error Boost.Test (duplicates #2717)
+# [ticket 4389] Enable boost_test to run specific tests with any required dependent tests.
+# [ticket 4434] `BOOST_AUTO_EST_CASE` typos in docs
+# [ticket 4587] Broken link in website
+# [ticket 4806] Invalid link (examples not showing up in documentation)
+# [ticket 4911] ENH: boost.test output the exception real type name.
+# [ticket 4923] Missing semicolon in documentation example
+# [ticket 4924] Minor typo in Boost::Test docs
+# [ticket 4982] Boost.Test has misspelled Gennadiy Rozental e-mail address
+# [ticket 5008] Boost.Test does not do checkpointing of entry/exit of test cases
+# [ticket 5036] Boost.Test VC memory leak report should direct to stderr
+# [ticket 5262] Run tests by name utility doesn't support negation
+# [ticket 5374] Errors from Boost.Test are no more shown in the Error list in VS2010
+# [ticket 5412] XML formatter in test library processes strings with subsequences `]]>` incorrectly
+# [ticket 5563] using a test macro in a global fixture crashes Boost.Test
+# [ticket 5582] There is a memory leak in the `BOOST_AUTO_TEST_CASE_TEMPLATE`
+# [ticket 5599] boost::test documentation gives poor instruction
+# [ticket 5718] broken link to unit testing framework examples
+# [ticket 5729] Missing static_cast in fpt_limits
+# [ticket 5870] The warning stack is not maintained
+# [ticket 5972] Support program option to only dump the test-tree in text to output stream
+# [ticket 6002] Failed to completely redirect TestLog to file (duplicates)
+# [ticket 6071] Boost Test (Boost 1.46.0) GCC 4.6.1 error: ambiguous overload for ‘operator[]’
+# [ticket 6074] warnings-as-errors not usable with Boost.test in release mode
+# [ticket 6161] SunOS: bad putenv declaration (duplicates #6766)
+# [ticket 6766] incorrect declaration for putenv in config.hpp
+# [ticket 6712] Eliminate warnings with GCC
+# [ticket 6748] Link in the documentation points to wrong page
+# [ticket 7046] Output full error message, not just 512 chars
+# [ticket 7136] Correct documentation for BOOST_<level>_CLOSE_FRACTION is not reflected into released documents
+# [ticket 7410] Test Units (Cases and Suites) in Boost.Test do not capture `__FILE__` and `__LINE__` at declaration point making it impossible to provide source file linking using external test management tools
+# [ticket 7894] Boost.Test documentation contains no linking instructions
+# [ticket 8201] Broken link in document
+# [ticket 8272] BOOST_REQUIRE_CLOSE fails to compile with boost::multiprecision::cpp_dec_float_100 (duplicates #11054)
+# [ticket 8467] Incorrect link in document (duplicates #6748)
+# [ticket 8679] Boost.Test pollutes boost namespace with it's own enable_if/disable_if templates
+# [ticket 8862] Boost.Test typo in documentation
+# [ticket 8895] English error in test collection comparison
+# [ticket 9179] Documentation: broken link (unable to find =const_string.hpp/const_string_test.cpp=)
+# [ticket 9272] boost::test `BOOST_<level>_GT` documentation bug (duplicates #3463)
+# [ticket 9390] Incomplete `BOOST_TEST_DONT_PRINT_LOG_VALUE`
+# [ticket 9409] Some source code examples are missing
+# [ticket 9537] const_string_test example fails
+# [ticket 9539] Floating-point comparison algorithms aren't formatted correctly
+# [ticket 9581] Squassabia reference link gives 404 not found
+# [ticket 9960] Warnings on Clang
+# [ticket 10256] [boost test] - issue: sigaltstack
+# [ticket 10318] Minor documentation fix
+# [ticket 10394] Broken links in Boost Test documentation
+# [ticket 10888] Assertion failures don't show up in the errors pane in VS 2010, VS 2012 or VS 2013 (duplicates)
+# [ticket 11054] Floating-point comparison of multiprecision values fails if expression template is on
+# [ticket 11347] `DS` identifier causes test failures in `doc/examples/dataset_example*.cpp`
+# [ticket 11358] Boost.Test v3 warning could helpfully be suppressed.
+# [ticket 11359] `BOOST_CHECK_EQUAL_COLLECTIONS`: can't control output operator (duplicates #9390)
+# [ticket 11425] use-of-uninitialized-value (obsolete)
+
+[endsect]

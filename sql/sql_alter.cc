@@ -1,37 +1,48 @@
-/* Copyright (c) 2010, 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include "sql_parse.h"                       // check_access
+#include "sql_alter.h"
+
+#include "auth_common.h"                     // check_access
 #include "sql_table.h"                       // mysql_alter_table,
                                              // mysql_exchange_partition
 #include "sql_base.h"                        // open_temporary_tables
-#include "sql_alter.h"
+#include "log.h"
 
+bool has_external_data_or_index_dir(partition_info &pi);
 
 Alter_info::Alter_info(const Alter_info &rhs, MEM_ROOT *mem_root)
   :drop_list(rhs.drop_list, mem_root),
   alter_list(rhs.alter_list, mem_root),
   key_list(rhs.key_list, mem_root),
+  alter_rename_key_list(rhs.alter_rename_key_list, mem_root),
   create_list(rhs.create_list, mem_root),
-  alter_index_visibility_list(rhs.alter_index_visibility_list, mem_root),
   flags(rhs.flags),
   keys_onoff(rhs.keys_onoff),
   partition_names(rhs.partition_names, mem_root),
   num_parts(rhs.num_parts),
   requested_algorithm(rhs.requested_algorithm),
-  requested_lock(rhs.requested_lock)
+  requested_lock(rhs.requested_lock),
+  with_validation(rhs.with_validation)
 {
   /*
     Make deep copies of used objects.
@@ -45,8 +56,8 @@ Alter_info::Alter_info(const Alter_info &rhs, MEM_ROOT *mem_root)
   list_copy_and_replace_each_value(drop_list, mem_root);
   list_copy_and_replace_each_value(alter_list, mem_root);
   list_copy_and_replace_each_value(key_list, mem_root);
+  list_copy_and_replace_each_value(alter_rename_key_list, mem_root);
   list_copy_and_replace_each_value(create_list, mem_root);
-  list_copy_and_replace_each_value(alter_index_visibility_list, mem_root);
   /* partition_names are not deeply copied currently */
 }
 
@@ -87,10 +98,8 @@ Alter_table_ctx::Alter_table_ctx()
   : datetime_field(NULL), error_if_not_empty(false),
     tables_opened(0),
     db(NULL), table_name(NULL), alias(NULL),
-    new_db(NULL), new_name(NULL), new_alias(NULL),
-    fk_error_if_delete_row(false), fk_error_id(NULL),
-    fk_error_table(NULL)
-#ifndef DBUG_OFF
+    new_db(NULL), new_name(NULL), new_alias(NULL)
+#ifndef NDEBUG
     , tmp_table(false)
 #endif
 {
@@ -99,13 +108,12 @@ Alter_table_ctx::Alter_table_ctx()
 
 Alter_table_ctx::Alter_table_ctx(THD *thd, TABLE_LIST *table_list,
                                  uint tables_opened_arg,
-                                 char *new_db_arg, char *new_name_arg)
+                                 const char *new_db_arg,
+                                 const char *new_name_arg)
   : datetime_field(NULL), error_if_not_empty(false),
     tables_opened(tables_opened_arg),
-    new_db(new_db_arg), new_name(new_name_arg),
-    fk_error_if_delete_row(false), fk_error_id(NULL),
-    fk_error_table(NULL)
-#ifndef DBUG_OFF
+    new_db(new_db_arg), new_name(new_name_arg)
+#ifndef NDEBUG
     , tmp_table(false)
 #endif
 {
@@ -127,13 +135,14 @@ Alter_table_ctx::Alter_table_ctx(THD *thd, TABLE_LIST *table_list,
 
     if (lower_case_table_names == 1) // Convert new_name/new_alias to lower case
     {
-      my_casedn_str(files_charset_info, new_name);
+      my_casedn_str(files_charset_info, const_cast<char*>(new_name));
       new_alias= new_name;
     }
     else if (lower_case_table_names == 2) // Convert new_name to lower case
     {
-      strmov(new_alias= new_alias_buff, new_name);
-      my_casedn_str(files_charset_info, new_name);
+      my_stpcpy(new_alias_buff, new_name);
+      new_alias= (const char*)new_alias_buff;
+      my_casedn_str(files_charset_info, const_cast<char*>(new_name));
     }
     else
       new_alias= new_name; // LCTN=0 => case sensitive + case preserving
@@ -155,8 +164,8 @@ Alter_table_ctx::Alter_table_ctx(THD *thd, TABLE_LIST *table_list,
     new_name= table_name;
   }
 
-  my_snprintf(tmp_name, sizeof(tmp_name), "%s-%lx_%lx", tmp_file_prefix,
-              current_pid, thd->thread_id);
+  my_snprintf(tmp_name, sizeof(tmp_name), "%s-%lx_%x", tmp_file_prefix,
+              current_pid, thd->thread_id());
   /* Safety fix for InnoDB */
   if (lower_case_table_names)
     my_casedn_str(files_charset_info, tmp_name);
@@ -181,7 +190,7 @@ Alter_table_ctx::Alter_table_ctx(THD *thd, TABLE_LIST *table_list,
       this case. This fact is enforced with assert.
     */
     build_tmptable_filename(thd, tmp_path, sizeof(tmp_path));
-#ifndef DBUG_OFF
+#ifndef NDEBUG
     tmp_table= true;
 #endif
   }
@@ -192,9 +201,9 @@ bool Sql_cmd_alter_table::execute(THD *thd)
 {
   LEX *lex= thd->lex;
   /* first SELECT_LEX (have special meaning for many of non-SELECTcommands) */
-  SELECT_LEX *select_lex= &lex->select_lex;
+  SELECT_LEX *select_lex= lex->select_lex;
   /* first table of first SELECT_LEX */
-  TABLE_LIST *first_table= (TABLE_LIST*) select_lex->table_list.first;
+  TABLE_LIST *first_table= select_lex->get_table_list();
   /*
     Code in mysql_alter_table() may modify its HA_CREATE_INFO argument,
     so we have to use a copy of this structure to make execution
@@ -212,6 +221,14 @@ bool Sql_cmd_alter_table::execute(THD *thd)
 
   if (thd->is_fatal_error) /* out of memory creating a copy of alter_info */
     DBUG_RETURN(TRUE);
+
+  {
+    partition_info *part_info= thd->lex->part_info;
+    if (part_info != NULL && has_external_data_or_index_dir(*part_info) &&
+        check_access(thd, FILE_ACL, any_db, NULL, NULL, FALSE, FALSE))
+
+      DBUG_RETURN(TRUE);
+  }
   /*
     We also require DROP priv for ALTER TABLE ... DROP PARTITION, as well
     as for RENAME TO, as being done by SQLCOM_RENAME_TABLE
@@ -220,14 +237,10 @@ bool Sql_cmd_alter_table::execute(THD *thd)
                           Alter_info::ALTER_RENAME))
     priv_needed|= DROP_ACL;
 
-  /* Need SUPER_ACL to execute ALTER ..DROP PARTITION FORCE..*/
-  if (thd->lex && thd->lex->force_drop_table)
-    priv_needed|= SUPER_ACL;
-
   /* Must be set in the parser */
-  DBUG_ASSERT(select_lex->db);
-  DBUG_ASSERT(!(alter_info.flags & Alter_info::ALTER_EXCHANGE_PARTITION));
-  DBUG_ASSERT(!(alter_info.flags & Alter_info::ALTER_ADMIN_PARTITION));
+  assert(select_lex->db);
+  assert(!(alter_info.flags & Alter_info::ALTER_EXCHANGE_PARTITION));
+  assert(!(alter_info.flags & Alter_info::ALTER_ADMIN_PARTITION));
   if (check_access(thd, priv_needed, first_table->db,
                    &first_table->grant.privilege,
                    &first_table->grant.m_internal,
@@ -281,14 +294,14 @@ bool Sql_cmd_alter_table::execute(THD *thd)
       DBUG_RETURN(TRUE);
   }
 
-  if (check_grant(thd, priv_needed, first_table, FALSE, UINT_MAX, FALSE))
+  if (!opt_noacl && check_grant(thd, priv_needed, first_table, FALSE, UINT_MAX, FALSE))
     DBUG_RETURN(TRUE);                  /* purecov: inspected */
 
-  if (lex->name.str && !test_all_bits(priv, INSERT_ACL | CREATE_ACL))
+  if (!opt_noacl && lex->name.str && !test_all_bits(priv, INSERT_ACL | CREATE_ACL))
   {
     // Rename of table
     TABLE_LIST tmp_table;
-    memset(&tmp_table, 0, sizeof(tmp_table));
+
     tmp_table.table_name= lex->name.str;
     tmp_table.db= select_lex->db;
     tmp_table.grant.privilege= priv;
@@ -299,25 +312,30 @@ bool Sql_cmd_alter_table::execute(THD *thd)
 
   /* Don't yet allow changing of symlinks with ALTER TABLE */
   if (create_info.data_file_name)
-    push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN,
+    push_warning_printf(thd, Sql_condition::SL_WARNING,
                         WARN_OPTION_IGNORED, ER(WARN_OPTION_IGNORED),
                         "DATA DIRECTORY");
   if (create_info.index_file_name)
-    push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN,
+    push_warning_printf(thd, Sql_condition::SL_WARNING,
                         WARN_OPTION_IGNORED, ER(WARN_OPTION_IGNORED),
                         "INDEX DIRECTORY");
   create_info.data_file_name= create_info.index_file_name= NULL;
 
   thd->enable_slow_log= opt_log_slow_admin_statements;
 
-  result= mysql_alter_table(thd, select_lex->db, lex->name.str,
-                            &create_info,
-                            first_table,
-                            &alter_info,
-                            select_lex->order_list.elements,
-                            select_lex->order_list.first,
-                            lex->ignore);
+  /* Push Strict_error_handler for alter table*/
+  Strict_error_handler strict_handler;
+  if (!thd->lex->is_ignore() && thd->is_strict_mode())
+    thd->push_internal_handler(&strict_handler);
 
+  Partition_in_shared_ts_error_handler partition_in_shared_ts_handler;
+  thd->push_internal_handler(&partition_in_shared_ts_handler);
+  result= mysql_alter_table(thd, select_lex->db, lex->name.str,
+                            &create_info, first_table, &alter_info);
+  thd->pop_internal_handler();
+
+  if (!thd->lex->is_ignore() && thd->is_strict_mode())
+    thd->pop_internal_handler();
   DBUG_RETURN(result);
 }
 
@@ -325,9 +343,9 @@ bool Sql_cmd_alter_table::execute(THD *thd)
 bool Sql_cmd_discard_import_tablespace::execute(THD *thd)
 {
   /* first SELECT_LEX (have special meaning for many of non-SELECTcommands) */
-  SELECT_LEX *select_lex= &thd->lex->select_lex;
+  SELECT_LEX *select_lex= thd->lex->select_lex;
   /* first table of first SELECT_LEX */
-  TABLE_LIST *table_list= (TABLE_LIST*) select_lex->table_list.first;
+  TABLE_LIST *table_list= select_lex->get_table_list();
 
   if (check_access(thd, ALTER_ACL, table_list->db,
                    &table_list->grant.privilege,
@@ -346,14 +364,13 @@ bool Sql_cmd_discard_import_tablespace::execute(THD *thd)
     it is the case.
     TODO: this design is obsolete and will be removed.
   */
-  int table_kind= check_if_log_table(table_list->db_length, table_list->db,
-                                     table_list->table_name_length,
-                                     table_list->table_name, false);
+  enum_log_table_type table_kind=
+    query_logger.check_if_log_table(table_list, false);
 
-  if (table_kind)
+  if (table_kind != QUERY_LOG_NONE)
   {
-    /* Disable alter of enabled log tables */
-    if (logger.is_log_table_enabled(table_kind))
+    /* Disable alter of enabled query log tables */
+    if (query_logger.is_log_table_enabled(table_kind))
     {
       my_error(ER_BAD_LOG_STATEMENT, MYF(0), "ALTER");
       return true;

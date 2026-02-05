@@ -146,6 +146,9 @@ DROP TABLE t6;
 **** Extra Colums Start ****
 *** Create t7 on slave  ***
 STOP SLAVE;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t7 (a INT KEY, b BLOB, c CHAR(5),
 d TIMESTAMP NULL DEFAULT '0000-00-00 00:00:00',
 e CHAR(20) DEFAULT 'Extra Column Testing')
@@ -177,6 +180,7 @@ STOP SLAVE;
 CREATE TABLE t8 (a INT KEY, b BLOB, c CHAR(5),
 d TIMESTAMP NULL DEFAULT '0000-00-00 00:00:00',
 e INT)ENGINE='InnoDB';
+SET sql_mode = default;
 *** Create t8 on Master ***
 CREATE TABLE t8 (a INT PRIMARY KEY, b BLOB, c CHAR(5)
 ) ENGINE='InnoDB';
@@ -208,9 +212,10 @@ set @b1 = concat(@b1,@b1);
 INSERT INTO t9 () VALUES(1,@b1,'Kyle'),(2,@b1,'JOE'),(3,@b1,'QA');
 select * from t9;
 a	b	c	d	e	f	g	h	i
-1	b1b1b1b1b1b1b1b1	Kyle	0000-00-00 00:00:00	0		NULL		NULL
-2	b1b1b1b1b1b1b1b1	JOE	0000-00-00 00:00:00	0		NULL		NULL
-3	b1b1b1b1b1b1b1b1	QA	0000-00-00 00:00:00	0		NULL		NULL
+1	b1b1b1b1b1b1b1b1	Kyle	CURRENT_TIMESTAMP	0		NULL		NULL
+2	b1b1b1b1b1b1b1b1	JOE	CURRENT_TIMESTAMP	0		NULL		NULL
+3	b1b1b1b1b1b1b1b1	QA	CURRENT_TIMESTAMP	0		NULL		NULL
+include/assert.inc [The values of column 'd' should have non-zero timetsamp.]
 DROP TABLE t9;
 *** Create t10 on slave  ***
 STOP SLAVE;

@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2005, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -21,13 +28,16 @@
 #include <SimulatedBlock.hpp>
 
 #include <DLCHashTable.hpp>
-#include <DLCFifoList.hpp>
+#include <IntrusiveList.hpp>
 #include <NodeBitmask.hpp>
 #include <signaldata/LCP.hpp>
 #include "lgman.hpp"
 
 #include <NdbOut.hpp>
 #include <OutputStream.hpp>
+
+#define JAM_FILE_ID 462
+
 
 /*
  * PGMAN
@@ -268,7 +278,7 @@ private:
     SimulatedBlock::Callback m_callback;
 
 #ifdef ERROR_INSERT
-    Uint64 m_delay_until_time;
+    NDB_TICKS m_delay_until_time;
 #endif
     Uint32 nextList;
     Uint32 m_magic;
@@ -435,7 +445,8 @@ private:
       m_log_waits(0),
       m_page_requests_direct_return(0),
       m_page_requests_wait_q(0),
-      m_page_requests_wait_io(0)
+      m_page_requests_wait_io(0),
+      m_entries_high(0)
     {}
     Uint32 m_num_pages;         // current number of cache pages
     Uint32 m_num_hot_pages;
@@ -449,6 +460,7 @@ private:
     Uint64 m_page_requests_direct_return;
     Uint64 m_page_requests_wait_q;
     Uint64 m_page_requests_wait_io;
+    Uint32 m_entries_high;
   } m_stats;
 
   enum CallbackIndex {
@@ -466,7 +478,7 @@ protected:
   void execCONTINUEB(Signal* signal);
 
   void execLCP_FRAG_ORD(Signal*);
-  void execEND_LCP_REQ(Signal*);
+  void execEND_LCPREQ(Signal*);
   void execRELEASE_PAGES_REQ(Signal*);
   
   void execFSREADCONF(Signal*);
@@ -482,14 +494,16 @@ protected:
 
 private:
   static Uint32 get_sublist_no(Page_state state);
-  void set_page_state(Ptr<Page_entry> ptr, Page_state new_state);
+  void set_page_state(EmulatedJamBuffer* jamBuf, Ptr<Page_entry> ptr,
+                      Page_state new_state);
 
   bool seize_cache_page(Ptr<GlobalPage>& gptr);
   void release_cache_page(Uint32 i);
 
   bool find_page_entry(Ptr<Page_entry>&, Uint32 file_no, Uint32 page_no);
   Uint32 seize_page_entry(Ptr<Page_entry>&, Uint32 file_no, Uint32 page_no);
-  bool get_page_entry(Ptr<Page_entry>&, Uint32 file_no, Uint32 page_no);
+  bool get_page_entry(EmulatedJamBuffer* jamBuf, Ptr<Page_entry>&, 
+                      Uint32 file_no, Uint32 page_no);
   void release_page_entry(Ptr<Page_entry>&);
 
   void lirs_stack_prune();
@@ -497,7 +511,7 @@ private:
   void lirs_reference(Ptr<Page_entry> ptr);
 
   void do_stats_loop(Signal*);
-  void do_busy_loop(Signal*, bool direct = false);
+  void do_busy_loop(Signal*, bool direct, EmulatedJamBuffer *jamBuf);
   void do_cleanup_loop(Signal*);
   void do_lcp_loop(Signal*);
 
@@ -523,9 +537,12 @@ private:
   void fswritereq(Signal*, Ptr<Page_entry>);
   void fswriteconf(Signal*, Ptr<Page_entry>);
 
-  int get_page_no_lirs(Signal*, Ptr<Page_entry>, Page_request page_req);
-  int get_page(Signal*, Ptr<Page_entry>, Page_request page_req);
-  void update_lsn(Ptr<Page_entry>, Uint32 block, Uint64 lsn);
+  int get_page_no_lirs(EmulatedJamBuffer* jamBuf, Signal*, Ptr<Page_entry>, 
+                       Page_request page_req);
+  int get_page(EmulatedJamBuffer* jamBuf, Signal*, Ptr<Page_entry>, 
+               Page_request page_req);
+  void update_lsn(EmulatedJamBuffer* jamBuf, Ptr<Page_entry>, Uint32 block, 
+                  Uint64 lsn);
   Uint32 create_data_file();
   Uint32 alloc_data_file(Uint32 file_no);
   void map_file_no(Uint32 file_no, Uint32 fd);
@@ -554,6 +571,7 @@ class Page_cache_client
   Uint32 m_block; // includes instance
   class PgmanProxy* m_pgman_proxy; // set if we go via proxy
   Pgman* m_pgman;
+  EmulatedJamBuffer* const m_jamBuf;
   DEBUG_OUT_DEFINES(PGMAN);
 
 public:
@@ -564,7 +582,7 @@ public:
     SimulatedBlock::Callback m_callback;
     
 #ifdef ERROR_INSERT
-    Uint64 m_delay_until_time;
+    NDB_TICKS m_delay_until_time;
 #endif
   };
 
@@ -624,5 +642,8 @@ public:
    */
   void free_data_file(Signal*, Uint32 file_no, Uint32 fd = RNIL);
 };
+
+
+#undef JAM_FILE_ID
 
 #endif

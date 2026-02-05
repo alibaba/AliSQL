@@ -1,0 +1,46 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+call mtr.add_suppression("You need to use --log-bin to make --log-slave-updates work.");
+###########################################################################
+# 0. Fix Multi statements Trx DDL Implicit commit.
+###########################################################################
+[connection master]
+CREATE TABLE `t1` (
+`id` int(11) NOT NULL DEFAULT '0',
+`a` int(11) NOT NULL DEFAULT '0',
+`b` char(120) NOT NULL DEFAULT '',
+PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL DEFAULT '0',
+  `a` int(11) NOT NULL DEFAULT '0',
+  `b` char(120) NOT NULL DEFAULT '',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8
+BEGIN;
+INSERT INTO t1 values(1, 11, "83868641912-28773972837-60736120486-75162659906-27563526494-20381887404-41576422241-93426793964-56405065102-33518432330");
+INSERT INTO t1 values(2, 21, "83868641912-28773972837-60736120486-75162659906-27563526494-20381887404-41576422241-93426793964-56405065102-33518432330");
+INSERT INTO t1 values(3, 31, "83868641912-28773972837-60736120486-75162659906-27563526494-20381887404-41576422241-93426793964-56405065102-33518432330");
+CREATE INDEX key_a ON t1(a);
+include/rpl_sync.inc
+[connection slave]
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL DEFAULT '0',
+  `a` int(11) NOT NULL DEFAULT '0',
+  `b` char(120) NOT NULL DEFAULT '',
+  PRIMARY KEY (`id`)
+) ENGINE=DUCKDB DEFAULT CHARSET=utf8
+#
+# CLEANUP
+#
+[connection master]
+DROP TABLE t1;
+include/rpl_sync.inc
+include/rpl_end.inc

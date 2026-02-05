@@ -479,6 +479,9 @@ t2	CREATE TABLE `t2` (
 /*!50100 PARTITION BY KEY (a)
 PARTITIONS 27 */
 0 inserts;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 insert into t2 values (char(ascii('A')+26));
 Warnings:
 Warning	1265	Data truncated for column 'a' at row 1
@@ -507,6 +510,7 @@ insert into t2 values (char(ascii('A')+4));
 insert into t2 values (char(ascii('A')+3));
 insert into t2 values (char(ascii('A')+2));
 insert into t2 values (char(ascii('A')+1));
+SET sql_mode = default;
 insert into t2 values ('1'),('2'),('3'),('4'),('5'),('6'),('7'),('8'),('9'),('0');
 select count(*) from t2;
 count(*)
@@ -729,7 +733,7 @@ ERROR HY000: A BLOB field is not allowed in partition function
 create table t2 (a blob not null, primary key(a(767))) engine='InnoDB' 
 partition by key (a) partitions 30;
 ERROR HY000: A BLOB field is not allowed in partition function
-create table t2 (a tinyblob not null, primary key(a(767))) engine='InnoDB' 
+create table t2 (a tinyblob not null, primary key(a(255))) engine='InnoDB' 
 partition by key (a) partitions 30;
 ERROR HY000: A BLOB field is not allowed in partition function
 create table t2 (a mediumblob not null, primary key(a(767))) engine='InnoDB' 
@@ -746,7 +750,7 @@ partition pa2 max_rows=30 min_rows=3,
 partition pa3 max_rows=30 min_rows=4,
 partition pa4 max_rows=40 min_rows=2);
 ERROR HY000: A BLOB field is not allowed in partition function
-create table t2 (a tinytext not null, primary key(a(767))) engine='InnoDB' 
+create table t2 (a tinytext not null, primary key(a(255))) engine='InnoDB' 
 partition by key (a) partitions 30;
 ERROR HY000: A BLOB field is not allowed in partition function
 create table t2 (a mediumtext not null, primary key(a(767))) engine='InnoDB' 

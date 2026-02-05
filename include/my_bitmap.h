@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2001, 2012, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2001, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -20,6 +27,7 @@
 #define MY_BIT_NONE (~(uint) 0)
 
 #include <m_string.h>
+#include "mysql/psi/mysql_thread.h"   /* mysql_mutex_t */
 
 typedef uint32 my_bitmap_map;
 
@@ -76,28 +84,28 @@ extern void bitmap_lock_clear_bit(MY_BITMAP *map, uint bitmap_bit);
 
 static inline void bitmap_set_bit(MY_BITMAP *map, uint bit)
 {
-  DBUG_ASSERT(bit < map->n_bits);
+  assert(bit < map->n_bits);
   ((uchar*)map->bitmap)[bit / 8] |= (1 << (bit & 7));
 }
 
 
 static inline void bitmap_flip_bit(MY_BITMAP *map, uint bit)
 {
-  DBUG_ASSERT(bit < map->n_bits);
+  assert(bit < map->n_bits);
   ((uchar*)map->bitmap)[bit / 8] ^= (1 << (bit & 7));
 }
 
 
 static inline void bitmap_clear_bit(MY_BITMAP *map, uint bit)
 {
-  DBUG_ASSERT(bit < map->n_bits);
+  assert(bit < map->n_bits);
   ((uchar*)map->bitmap)[bit / 8] &= ~(1 << (bit & 7));
 }
 
 
 static inline my_bool bitmap_is_set(const MY_BITMAP *map, uint bit)
 {
-  DBUG_ASSERT(bit < map->n_bits);
+  assert(bit < map->n_bits);
   return ((uchar*)map->bitmap)[bit / 8] & (1 << (bit & 7));
 }
 
@@ -111,16 +119,30 @@ static inline my_bool bitmap_is_set(const MY_BITMAP *map, uint bit)
  */
 static inline my_bool bitmap_cmp(const MY_BITMAP *map1, const MY_BITMAP *map2)
 {
+  assert(map1->n_bits > 0);
+  assert(map2->n_bits > 0);
+
   if (memcmp(map1->bitmap, map2->bitmap, 4*(no_words_in_map(map1)-1)) != 0)
     return FALSE;
   return ((*map1->last_word_ptr | map1->last_word_mask) ==
           (*map2->last_word_ptr | map2->last_word_mask));
 }
 
-#define bitmap_clear_all(MAP) \
-  { memset((MAP)->bitmap, 0, 4*no_words_in_map((MAP))); }
-#define bitmap_set_all(MAP) \
-  (memset((MAP)->bitmap, 0xFF, 4*no_words_in_map((MAP))))
+/*
+  Clears all bits. This is allowed even for a zero-size bitmap.
+ */
+static inline void bitmap_clear_all(MY_BITMAP *map)
+{
+  memset(map->bitmap, 0, 4 * no_words_in_map(map));
+}
+
+/*
+  Sets all bits. This is allowed even for a zero-size bitmap.
+ */
+static inline void bitmap_set_all(MY_BITMAP *map)
+{
+  memset(map->bitmap, 0xFF, 4 * no_words_in_map(map));
+}
 
 #ifdef	__cplusplus
 }

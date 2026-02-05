@@ -1,3 +1,11 @@
+# This tests the functionality of the fulltext search of Myisam engine
+# The implementation of the fulltext search is different in InnoDB engine
+# All tests are required to run with Myisam.
+# Hence MTR starts mysqld with MyISAM as default
+
+--source include/force_myisam_default.inc
+--source include/have_myisam.inc
+
 #
 # Test of fulltext index
 #
@@ -290,7 +298,9 @@ SELECT t, collation(t) FROM t1 WHERE MATCH t AGAINST ('Osnabrück');
 SELECT t, collation(t) FROM t1 WHERE MATCH t AGAINST ('Osnabrueck');
 SELECT t, collation(t),FORMAT(MATCH t AGAINST ('Osnabruck'),6) FROM t1 WHERE MATCH t AGAINST ('Osnabruck');
 #alter table t1 modify t text character set latin1 collate latin1_german2_ci not null;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 alter table t1 modify t varchar(200) collate latin1_german2_ci not null;
+SET sql_mode = default;
 SELECT t, collation(t) FROM t1 WHERE MATCH t AGAINST ('Osnabrück');
 SELECT t, collation(t) FROM t1 WHERE MATCH t AGAINST ('Osnabrueck');
 DROP TABLE t1;
@@ -351,9 +361,7 @@ DROP TABLE t1;
 
 CREATE TABLE t1 (a VARCHAR(30), FULLTEXT(a));
 INSERT INTO t1 VALUES('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb');
-SET myisam_repair_threads=2;
 REPAIR TABLE t1;
-SET myisam_repair_threads=@@global.myisam_repair_threads;
 
 #
 # BUG#5686 - #1034 - Incorrect key file for table - only utf8
@@ -632,3 +640,58 @@ DEALLOCATE PREPARE stmt;
 DROP TABLE t1;
 
 --echo End of 5.1 tests
+
+--echo # Bug#21140111: Explain ... match against: Assertion failed: ret ...
+
+CREATE TABLE z(a INTEGER) engine=innodb;
+CREATE TABLE q(b TEXT CHARSET latin1, fulltext(b)) engine=innodb;
+
+let $query=
+SELECT 1 FROM q
+WHERE (SELECT MATCH(b) AGAINST ('*') FROM z);
+
+--error ER_WRONG_ARGUMENTS
+eval explain format=json $query;
+
+DROP TABLE z, q;
+
+
+--echo #
+--echo # BUG#21625016: INNODB FULL TEXT CASE SENSITIVE NOT WORKING
+--echo #
+
+CREATE TABLE t1(fld1 VARCHAR(10) COLLATE 'latin1_bin', FULLTEXT INDEX (fld1))
+ENGINE=InnoDB;
+
+INSERT INTO t1 VALUES ('abCD'),('ABCD');
+
+--echo # With the patch, case sensitive comparison is performed since
+--echo # binary collation is used.
+SELECT * FROM t1 WHERE MATCH(fld1) AGAINST ('abCD' IN BOOLEAN MODE);
+SELECT * FROM t1 WHERE MATCH(fld1) AGAINST ('ABCD' IN BOOLEAN MODE);
+SELECT * FROM t1 WHERE MATCH(fld1) AGAINST ('abCD' IN NATURAL LANGUAGE MODE);
+SELECT * FROM t1 WHERE MATCH(fld1) AGAINST ('ABCD' IN NATURAL LANGUAGE MODE);
+
+--echo # Since binary collation is not used, case insensitive comparison is
+--echo # performed.
+ALTER TABLE t1 MODIFY fld1 VARCHAR(10) COLLATE 'latin1_general_cs';
+SELECT * FROM t1 WHERE MATCH(fld1) AGAINST ('abCD' IN BOOLEAN MODE);
+SELECT * FROM t1 WHERE MATCH(fld1) AGAINST ('ABCD' IN BOOLEAN MODE);
+SELECT * FROM t1 WHERE MATCH(fld1) AGAINST ('abCD' IN NATURAL LANGUAGE MODE);
+SELECT * FROM t1 WHERE MATCH(fld1) AGAINST ('ABCD' IN NATURAL LANGUAGE MODE);
+
+--echo # With the patch, case sensitive comparison is performed.
+ALTER TABLE t1 MODIFY fld1 VARCHAR(10) COLLATE 'utf8mb4_bin';
+SELECT * FROM t1 WHERE MATCH(fld1) AGAINST ('abCD' IN BOOLEAN MODE);
+SELECT * FROM t1 WHERE MATCH(fld1) AGAINST ('ABCD' IN BOOLEAN MODE);
+SELECT * FROM t1 WHERE MATCH(fld1) AGAINST ('abCD' IN NATURAL LANGUAGE MODE);
+SELECT * FROM t1 WHERE MATCH(fld1) AGAINST ('ABCD' IN NATURAL LANGUAGE MODE);
+
+--echo # Test(using case insensitive collation) added for coverage
+ALTER TABLE t1 MODIFY fld1 VARCHAR(10) COLLATE 'utf8mb4_general_ci';
+SELECT * FROM t1 WHERE MATCH(fld1) AGAINST ('abCD' IN BOOLEAN MODE);
+SELECT * FROM t1 WHERE MATCH(fld1) AGAINST ('ABCD' IN BOOLEAN MODE);
+SELECT * FROM t1 WHERE MATCH(fld1) AGAINST ('abCD' IN NATURAL LANGUAGE MODE);
+SELECT * FROM t1 WHERE MATCH(fld1) AGAINST ('ABCD' IN NATURAL LANGUAGE MODE);
+
+DROP TABLE t1;

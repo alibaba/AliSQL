@@ -1,22 +1,36 @@
-/* Copyright (c) 2000, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA */
 
 #include "mysys_priv.h"
+#include "my_sys.h"
 #include <m_string.h>
+#include "my_thread_local.h"
 
-#ifdef __WIN__
+#ifdef _WIN32
 
 /*
   Check a file or path for accessability.
@@ -45,13 +59,14 @@ int my_access(const char *path, int amode)
   if (! result ||
       (fileinfo.dwFileAttributes & FILE_ATTRIBUTE_READONLY) && (amode & W_OK))
   {
-    my_errno= errno= EACCES;
+    errno= EACCES;
+    set_my_errno(EACCES);
     return -1;
   }
   return 0;
 }
 
-#endif /* __WIN__ */
+#endif /* _WIN32 */
 
 
 /*
@@ -156,7 +171,7 @@ int check_if_legal_tablename(const char *name)
 }
 
 
-#ifdef __WIN__
+#ifdef _WIN32
 /**
   Checks if the drive letter supplied is valid or not. Valid drive
   letters are A to Z, both lower case and upper case.
@@ -214,9 +229,9 @@ my_bool is_filename_allowed(const char *name MY_ATTRIBUTE((unused)),
   }
   return TRUE;
 } /* is_filename_allowed */
-#endif  /* __WIN__ */
+#endif  /* _WIN32 */
 
-#if defined(__WIN__) || defined(__EMX__)
+#if defined(_WIN32)
 
 
 /*
@@ -262,4 +277,4 @@ int check_if_legal_filename(const char *path)
   DBUG_RETURN(0);
 }
 
-#endif /* defined(__WIN__) || defined(__EMX__) */
+#endif /* defined(_WIN32) */

@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -58,8 +65,8 @@ Ndb_cluster_connection* theConnection = 0;
 NdbMutex* g_pNdbMutexPrintf = 0;
 NdbMutex* g_pNdbMutexIncrement = 0;
 long g_nNumCallsProcessed = 0;
-NDB_TICKS g_tStartTime = 0;
-NDB_TICKS g_tEndTime = 0;
+Uint64 g_tStartTime = 0;
+Uint64 g_tEndTime = 0;
 
 long g_nNumberOfInitialInsert = 0;
 long g_nNumberOfInitialVerify = 0;
@@ -177,10 +184,10 @@ void ReportNdbError(const char* szMsg, const NdbError& err)
 
 void
 ReportCallsPerSecond(long nNumCallsProcessed, 
-                     NDB_TICKS tStartTime, 
-                     NDB_TICKS tEndTime)
+                     Uint64 tStartTime, 
+                     Uint64 tEndTime)
 {
-    NDB_TICKS tElapsed = tEndTime - tStartTime;
+    Uint64 tElapsed = tEndTime - tStartTime;
     long lCallsPerSec;
     if(tElapsed>0)
         lCallsPerSec = (long)((1000*nNumCallsProcessed)/tElapsed);
@@ -582,11 +589,11 @@ int InsertInitialRecords(Ndb* pNdb, long nInsert, long nSeed)
         int nRetry = 0;
         NdbError err;
         memset(&err, 0, sizeof(err));
-        NDB_TICKS tStartTrans = NdbTick_CurrentMillisecond();
+        Uint64 tStartTrans = NdbTick_CurrentMillisecond();
         iRes = RetryInsertTransaction(pNdb, iContextID, nSeed, iContextID,
             (long)(tStartTrans/1000), (long)((tStartTrans%1000)*1000), 
             STATUS_DATA, err, nRetry);
-        NDB_TICKS tEndTrans = NdbTick_CurrentMillisecond();
+        Uint64 tEndTrans = NdbTick_CurrentMillisecond();
         long lMillisecForThisTrans = (long)(tEndTrans-tStartTrans);
         if(nRetry>0)
         {
@@ -623,10 +630,10 @@ int VerifyInitialRecords(Ndb* pNdb, long nVerify, long nSeed)
         int nRetry = 0;
         NdbError err;
         memset(&err, 0, sizeof(err));
-        NDB_TICKS tStartTrans = NdbTick_CurrentMillisecond();
+        Uint64 tStartTrans = NdbTick_CurrentMillisecond();
         iRes = RetryQueryTransaction(pNdb, iContextID, &iVersion, &iLockFlag, 
                     &iLockTime, &iLockTimeUSec, pchContextData, err, nRetry);
-        NDB_TICKS tEndTrans = NdbTick_CurrentMillisecond();
+        Uint64 tEndTrans = NdbTick_CurrentMillisecond();
         long lMillisecForThisTrans = (long)(tEndTrans-tStartTrans);
         if(nRetry>0)
         {
@@ -743,13 +750,13 @@ void* RuntimeCallContext(void* lpParam)
 
         bool bTimeLatency = (nContextID==100);
         
-        NDB_TICKS tStartCall = NdbTick_CurrentMillisecond();
+        Uint64 tStartCall = NdbTick_CurrentMillisecond();
         for (int i=0; i < 20; i++)
         {
             int nRetry = 0;
             NdbError err;
             memset(&err, 0, sizeof(err));
-            NDB_TICKS tStartTrans = NdbTick_CurrentMillisecond();
+            Uint64 tStartTrans = NdbTick_CurrentMillisecond();
             switch(i)
             {
             case 3:
@@ -779,12 +786,12 @@ void* RuntimeCallContext(void* lpParam)
                 iRes = RetryUpdateTransaction(pNdb, nContextID, err, nRetry);
                 break;
             }
-            NDB_TICKS tEndTrans = NdbTick_CurrentMillisecond();
+            Uint64 tEndTrans = NdbTick_CurrentMillisecond();
             long lMillisecForThisTrans = (long)(tEndTrans-tStartTrans);
 
             if(g_bReport)
             {
-              assert(lMillisecForThisTrans>=0 && lMillisecForThisTrans<c_nMaxMillisecForAllTrans);
+              require(lMillisecForThisTrans>=0 && lMillisecForThisTrans<c_nMaxMillisecForAllTrans);
               InterlockedIncrement(g_plCountMillisecForTrans+lMillisecForThisTrans);
             }
 
@@ -811,12 +818,12 @@ void* RuntimeCallContext(void* lpParam)
                 return 0;
             }
         }
-        NDB_TICKS tEndCall = NdbTick_CurrentMillisecond();
+        Uint64 tEndCall = NdbTick_CurrentMillisecond();
         long lMillisecForThisCall = (long)(tEndCall-tStartCall);
 
         if(g_bReport)
         {
-          assert(lMillisecForThisCall>=0 && lMillisecForThisCall<c_nMaxMillisecForAllCall);
+          require(lMillisecForThisCall>=0 && lMillisecForThisCall<c_nMaxMillisecForAllCall);
           InterlockedIncrement(g_plCountMillisecForCall+lMillisecForThisCall);
         }
 
@@ -1165,7 +1172,7 @@ int main(int argc, char* argv[])
         g_nNumberOfInitialInsert = 0;
         g_nNumberOfInitialVerify = 0;
 
-        NDB_TICKS tStartTime = NdbTick_CurrentMillisecond();
+        Uint64 tStartTime = NdbTick_CurrentMillisecond();
         NdbThread* pThreads[256];
         int pnStartingRecordNum[256];
         int ij;
@@ -1187,7 +1194,7 @@ int main(int argc, char* argv[])
             void* status;
             NdbThread_WaitFor(pThreads[ij], &status);
         }
-        NDB_TICKS tEndTime = NdbTick_CurrentMillisecond();
+        Uint64 tEndTime = NdbTick_CurrentMillisecond();
         
         //Print time taken
         printf("Time Taken for %ld Calls is %ld msec (= %ld calls/sec)\n",

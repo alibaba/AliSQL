@@ -1,3 +1,8 @@
+# The include statement below is a temp one for tests that are yet to
+#be ported to run with InnoDB,
+#but needs to be kept for tests that would need MyISAM in future.
+--source include/force_myisam_default.inc
+
 -- source include/have_ndb.inc
 
 --disable_warnings
@@ -78,7 +83,7 @@ DROP PROCEDURE bulkinsert;
 DROP TABLE t2;
 
 --echo Now check bulk insert using create .. as select.
-SHOW VARIABLES LIKE 'storage_engine';
+SHOW VARIABLES LIKE 'default_storage_engine';
 SET default_storage_engine="ndb";
 
 CREATE TABLE t2 AS SELECT * FROM t1;

@@ -1,14 +1,21 @@
 # -*- cperl -*-
-# Copyright (c) 2005, 2014, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2005, 2023, Oracle and/or its affiliates.
 # 
 # This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; version 2 of the License.
+# it under the terms of the GNU General Public License, version 2.0,
+# as published by the Free Software Foundation.
+#
+# This program is also distributed with certain software (including
+# but not limited to OpenSSL) that is licensed under separate terms,
+# as designated in a particular file or component or in included license
+# documentation.  The authors of MySQL hereby grant you an additional
+# permission to link the program and your derivative works with the
+# separately licensed software that they have included with MySQL.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# GNU General Public License, version 2.0, for more details.
 #
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
@@ -45,7 +52,7 @@ our $quick_collect;
 # default storage engine settings, and use MyISAM
 # as default.  (temporary option used in connection
 # with the change of default storage engine to InnoDB)
-our $default_myisam= 1;
+our $default_myisam= 0;
  
 
 sub collect_option {
@@ -143,7 +150,13 @@ sub collect_test_cases ($$$$) {
 
   if ( @$opt_cases )
   {
-    # A list of tests was specified on the command line
+    # A list of tests was specified on the command line.
+    # Among those, the tests which are not already collected will be
+    # collected and stored temporarily in an array of hashes pointed
+    # by the below reference. This array is eventually appeneded to
+    # the one having all collected test cases.
+    my $cmdline_cases;
+
     # Check that the tests specified was found
     # in at least one suite
     foreach my $test_name_spec ( @$opt_cases )
@@ -162,20 +175,56 @@ sub collect_test_cases ($$$$) {
       }
       if ( not $found )
       {
-	$sname= "main" if !$opt_reorder and !$sname;
-	mtr_error("Could not find '$tname' in '$suites' suite(s)") unless $sname;
-	# If suite was part of name, find it there, may come with combinations
-	my @this_case = collect_one_suite($sname, [ $tname ]);
-	if (@this_case)
+        if ( $sname )
         {
-	  push (@$cases, @this_case);
-	}
-	else
-	{
-	  mtr_error("Could not find '$tname' in '$sname' suite");
+	  # If suite was part of name, find it there, may come with combinations
+	  my @this_case = collect_one_suite($sname, [ $tname ]);
+
+          # If a test is specified multiple times on the command line, all
+          # instances of the test need to be picked. Hence, such tests are
+          # stored in the temporary array instead of adding them to $cases
+          # directly so that repeated tests are not run only once
+	  if (@this_case)
+          {
+	    push (@$cmdline_cases, @this_case);
+	  }
+	  else
+	  {
+	    mtr_error("Could not find '$tname' in '$sname' suite");
+          }
+        }
+        else
+        {
+          if ( !$opt_reorder )
+          {
+            # If --no-reorder is passed and if suite was not part of name,
+            # search in all the suites
+            foreach my $suite (split(",", $suites))
+            {
+              my @this_case = collect_one_suite($suite, [ $tname ]);
+              if ( @this_case )
+              {
+                push (@$cmdline_cases, @this_case);
+                $found= 1;
+              }
+              @this_case= collect_one_suite("i_".$suite, [ $tname ]);
+              if ( @this_case )
+              {
+                push (@$cmdline_cases, @this_case);
+                $found= 1;
+              }
+            }
+          }
+          if ( !$found )
+          {
+            mtr_error("Could not find '$tname' in '$suites' suite(s)");
+          }
         }
       }
     }
+    # Add test cases collected in the temporary array to the one
+    # containing all previously collected test cases
+    push (@$cases, @$cmdline_cases) if $cmdline_cases;
   }
 
   if ( $opt_reorder && !$quick_collect)
@@ -289,6 +338,7 @@ sub collect_one_suite($)
       $suitedir= my_find_dir($::basedir,
 			     ["share/mysql-test/suite",
 			      "mysql-test/suite",
+                              "lib/mysql-test/suite",
 			      "internal/mysql-test/suite",
 			      "mysql-test",
 			      # Look in storage engine specific suite dirs
@@ -296,6 +346,8 @@ sub collect_one_suite($)
 			      # Look in plugin specific suite dir
 			      "plugin/$suite/tests",
 			      "internal/plugin/$suite/tests",
+			      "rapid/plugin/$suite/tests",
+			      "rapid/mysql-test/suite",
 			     ],
 			     [$suite, "mtr"], ($suite =~ /^i_/));
       return unless $suitedir;
@@ -338,6 +390,17 @@ sub collect_one_suite($)
   my %disabled;
   my @disabled_collection= @{$opt_skip_test_list} if $opt_skip_test_list;
   unshift (@disabled_collection, "$testdir/disabled.def");
+
+  # Check for the tests to be skipped in a sanitizer which are listed
+  # in "mysql-test/collections/disabled-<sanitizer>.list" file.
+  if ($::opt_sanitize) {
+    # Check for disabled-asan.list
+    if ($::mysql_version_extra =~ /asan/i &&
+        !grep (/disabled-asan\.list$/, @{$opt_skip_test_list})) {
+      push(@disabled_collection, "collections/disabled-asan.list");
+    }
+  }
+
   for my $skip (@disabled_collection)
     {
       if ( open(DISABLED, $skip ) )
@@ -380,6 +443,12 @@ sub collect_one_suite($)
 
   # Read suite.opt file
   my $suite_opt_file=  "$testdir/suite.opt";
+
+  if ( $::opt_suite_opt )
+  {
+    $suite_opt_file= "$testdir/$::opt_suite_opt";
+  }
+
   my $suite_opts= [];
   if ( -f $suite_opt_file )
   {
@@ -598,7 +667,7 @@ sub optimize_cases {
 	# The test supports different binlog formats
 	# check if the selected one is ok
 	my $supported=
-	  grep { $_ eq $binlog_format } @{$tinfo->{'binlog_formats'}};
+	  grep { $_ eq lc $binlog_format } @{$tinfo->{'binlog_formats'}};
 	if ( !$supported )
 	{
 	  $tinfo->{'skip'}= 1;
@@ -616,15 +685,17 @@ sub optimize_cases {
       # Get binlog-format used by this test from master_opt
       my $test_binlog_format;
       foreach my $opt ( @{$tinfo->{master_opt}} ) {
+       (my $dash_opt = $opt) =~ s/_/-/g;
 	$test_binlog_format=
-	  mtr_match_prefix($opt, "--binlog-format=") || $test_binlog_format;
+	  mtr_match_prefix($dash_opt, "--binlog-format=") || $test_binlog_format;
       }
 
       if (defined $test_binlog_format and
 	  defined $tinfo->{binlog_formats} )
       {
 	my $supported=
-	  grep { $_ eq $test_binlog_format } @{$tinfo->{'binlog_formats'}};
+	  grep { My::Options::option_equals($_, lc $test_binlog_format) }
+            @{$tinfo->{'binlog_formats'}};
 	if ( !$supported )
 	{
 	  $tinfo->{'skip'}= 1;
@@ -642,10 +713,11 @@ sub optimize_cases {
     my %builtin_engines = ('myisam' => 1, 'memory' => 1, 'csv' => 1);
 
     foreach my $opt ( @{$tinfo->{master_opt}} ) {
+     (my $dash_opt = $opt) =~ s/_/-/g;
       my $default_engine=
-	mtr_match_prefix($opt, "--default-storage-engine=");
+	mtr_match_prefix($dash_opt, "--default-storage-engine=");
       my $default_tmp_engine=
-	mtr_match_prefix($opt, "--default-tmp-storage-engine=");
+	mtr_match_prefix($dash_opt, "--default-tmp-storage-engine=");
 
       # Allow use of uppercase, convert to all lower case
       $default_engine =~ tr/A-Z/a-z/;
@@ -669,8 +741,8 @@ sub optimize_cases {
 
 	$tinfo->{'ndb_test'}= 1
 	  if ( $default_engine =~ /^ndb/i );
-	$tinfo->{'innodb_test'}= 1
-	  if ( $default_engine =~ /^innodb/i );
+	$tinfo->{'myisam_test'}= 1
+	  if ( $default_engine =~ /^myisam/i );
       }
       if (defined $default_tmp_engine){
 
@@ -690,8 +762,8 @@ sub optimize_cases {
 
 	$tinfo->{'ndb_test'}= 1
 	  if ( $default_tmp_engine =~ /^ndb/i );
-	$tinfo->{'innodb_test'}= 1
-	  if ( $default_tmp_engine =~ /^innodb/i );
+	$tinfo->{'myisam_test'}= 1
+	  if ( $default_tmp_engine =~ /^myisam/i );
       }
     }
 
@@ -854,6 +926,12 @@ sub collect_one_test_case {
   }
 
   # ----------------------------------------------------------------------
+  # Check for replicaton tests
+  # ----------------------------------------------------------------------
+  $tinfo->{'rpl_test'}= 1 if ($suitename =~ 'rpl');
+  $tinfo->{'grp_rpl_test'}= 1 if ($suitename =~ 'group_replication');
+
+  # ----------------------------------------------------------------------
   # Check for disabled tests
   # ----------------------------------------------------------------------
   my $marked_as_disabled= 0;
@@ -965,8 +1043,8 @@ sub collect_one_test_case {
     $tinfo->{'ndb_test'}= 1
       if ( $default_storage_engine =~ /^ndb/i );
 
-    $tinfo->{'innodb_test'}= 1
-      if ( $default_storage_engine =~ /^innodb/i );
+    $tinfo->{'mysiam_test'}= 1
+      if ( $default_storage_engine =~ /^mysiam/i );
 
   }
 
@@ -1013,23 +1091,7 @@ sub collect_one_test_case {
     push(@{$tinfo->{'master_opt'}}, "--loose-federated");
     push(@{$tinfo->{'slave_opt'}}, "--loose-federated");
   }
-
-  if ( $tinfo->{'innodb_test'} )
-  {
-    # This is a test that needs innodb
-    if ( $::mysqld_variables{'innodb'} eq "OFF" ||
-         ! exists $::mysqld_variables{'innodb'} )
-    {
-      # innodb is not supported, skip it
-      $tinfo->{'skip'}= 1;
-      # This comment is checked for running with innodb plugin (see above),
-      # please keep that in mind if changing the text.
-      $tinfo->{'comment'}= "No innodb support";
-      # But continue processing if we may run it with innodb plugin
-      return $tinfo unless $do_innodb_plugin;
-    }
-  }
-  elsif ($default_myisam)
+  if ( $tinfo->{'myisam_test'})
   {
     # This is a temporary fix to allow non-innodb tests to run even if
     # the default storage engine is innodb.
@@ -1038,10 +1100,9 @@ sub collect_one_test_case {
     push(@{$tinfo->{'master_opt'}}, "--default-tmp-storage-engine=MyISAM");
     push(@{$tinfo->{'slave_opt'}}, "--default-tmp-storage-engine=MyISAM");
   }
-
   if ( $tinfo->{'need_binlog'} )
   {
-    if (grep(/^--skip-log-bin/,  @::opt_extra_mysqld_opt) )
+    if (grep(/^--skip[-_]log[-_]bin/,  @::opt_extra_mysqld_opt) )
     {
       $tinfo->{'skip'}= 1;
       $tinfo->{'comment'}= "Test needs binlog";
@@ -1056,7 +1117,7 @@ sub collect_one_test_case {
     push(@{$tinfo->{'slave_opt'}}, "--loose-skip-log-bin");
   }
 
-  if ( $tinfo->{'rpl_test'} )
+  if ( $tinfo->{'rpl_test'} or $tinfo->{'grp_rpl_test'} )
   {
     if ( $skip_rpl )
     {
@@ -1074,6 +1135,14 @@ sub collect_one_test_case {
       $tinfo->{'comment'}= "Not run for embedded server";
       return $tinfo;
     }
+#Setting the default storage engine to InnoDB for embedded tests as the default
+#storage engine for mysqld in embedded mode is still MyISAM.
+#To be removed after completion of WL #6911.
+    if ( !$tinfo->{'myisam_test'} && !defined $default_storage_engine)
+    {
+      push(@{$tinfo->{'master_opt'}}, "--default-storage-engine=InnoDB");
+      push(@{$tinfo->{'master_opt'}}, "--default-tmp-storage-engine=InnoDB");
+    }
   }
 
   if ( $tinfo->{'need_ssl'} )
@@ -1085,6 +1154,18 @@ sub collect_one_test_case {
       $tinfo->{'comment'}= "No SSL support";
       return $tinfo;
     }
+  }
+
+  # Check for group replication tests
+  if ( $tinfo->{'grp_rpl_test'} )
+  {
+    $::group_replication= 1;
+  }
+
+  # Check for xplugin tests
+  if ( $tinfo->{'xplugin_test'} )
+  {
+    $::xplugin= 1;
   }
 
   if ( $tinfo->{'not_windows'} && IS_WINDOWS )
@@ -1154,17 +1235,17 @@ my @tags=
 (
  ["include/have_binlog_format_row.inc", "binlog_formats", ["row"]],
  ["include/have_binlog_format_statement.inc", "binlog_formats", ["statement"]],
- ["include/have_binlog_format_mixed.inc", "binlog_formats", ["mixed"]],
+ ["include/have_binlog_format_mixed.inc", "binlog_formats", ["mixed", "mix"]],
  ["include/have_binlog_format_mixed_or_row.inc",
-  "binlog_formats", ["mixed", "row"]],
+  "binlog_formats", ["mixed", "mix", "row"]],
  ["include/have_binlog_format_mixed_or_statement.inc",
-  "binlog_formats", ["mixed", "statement"]],
+  "binlog_formats", ["mixed", "mix", "statement"]],
  ["include/have_binlog_format_row_or_statement.inc",
   "binlog_formats", ["row", "statement"]],
 
  ["include/have_log_bin.inc", "need_binlog", 1],
-
- ["include/have_innodb.inc", "innodb_test", 1],
+# an empty file to use test that needs myisam engine.
+ ["include/force_myisam_default.inc", "myisam_test", 1],
  ["include/big_test.inc", "big_test", 1],
  ["include/have_debug.inc", "need_debug", 1],
  ["include/have_ndb.inc", "ndb_test", 1],
@@ -1177,6 +1258,12 @@ my @tags=
  ["include/have_ssl.inc", "need_ssl", 1],
  ["include/have_ssl_communication.inc", "need_ssl", 1],
  ["include/not_windows.inc", "not_windows", 1],
+
+ # Tests with below .inc file are considered to be group replication tests
+ ["have_group_replication_plugin_base.inc", "grp_rpl_test", 1],
+
+ # Tests with below .inc file are considered to be xplugin tests
+ ["include/have_mysqlx_plugin.inc", "xplugin_test", 1],
 );
 
 

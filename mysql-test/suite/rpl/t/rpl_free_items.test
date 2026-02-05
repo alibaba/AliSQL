@@ -1,3 +1,4 @@
+--source include/not_group_replication_plugin.inc
 source include/master-slave.inc;
 create table t1 (a int);
 create table t2 (a int);
@@ -10,6 +11,7 @@ while ($1)
   dec $1;
 }
 let $1=`select @query`;
+--error 0,ER_STACK_OVERRUN_NEED_MORE
 eval $1;
 enable_query_log;
 # I have seen the slave crash either now or at shutdown

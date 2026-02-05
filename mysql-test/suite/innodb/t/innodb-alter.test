@@ -155,10 +155,6 @@ ALTER TABLE t1c DROP INDEX C2, DROP INDEX C3;
 --error ER_DROP_INDEX_FK
 ALTER TABLE t1c DROP INDEX C3;
 
-SET foreign_key_checks=0;
-ALTER TABLE t1c DROP INDEX C3;
-SET foreign_key_checks=1;
-
 SHOW CREATE TABLE t1c;
 -- source suite/innodb/include/innodb_dict.inc
 
@@ -378,7 +374,6 @@ DROP TABLE tt, t1o, sys_tables, sys_indexes, sys_foreign;
 
 CREATE TABLE t (t TEXT, FULLTEXT(t)) ENGINE=InnoDB;
 DROP INDEX t ON t;
-
 LET $regexp=/FTS_([0-9a-f_]+)([A-Z_]+)/FTS_AUX_\2/;
 --replace_regex $regexp
 SELECT SUBSTRING(name, LOCATE('_', name) - 3, 5) AS prefix, name
@@ -427,30 +422,6 @@ SHOW CREATE TABLE t2;
 DROP TABLE t2, t1;
 
 --echo #
---echo # BUG 20029625 - HANDLE_FATAL_SIGNAL (SIG=11) IN
---echo #                DICT_MEM_TABLE_COL_RENAME_LOW
---echo #
-CREATE TABLE parent(a INT, b INT, KEY(a, b)) ENGINE = InnoDB;
-CREATE TABLE t1(a1 INT, a2 INT) ENGINE = InnoDB;
-
-set foreign_key_checks=0;
-ALTER TABLE t1 ADD CONSTRAINT fk_a FOREIGN KEY(a1, a2) REFERENCES parent(a, b) ON DELETE SET NULL ON UPDATE CASCADE;
-
-ALTER TABLE t1 CHANGE a2 a3 INT,ADD CONSTRAINT fk_1 FOREIGN KEY(a1, a3) REFERENCES parent(a, b) ON DELETE SET NULL ON UPDATE CASCADE;
-SHOW CREATE TABLE t1;
-CHECK TABLE t1;
-
-ALTER TABLE t1 CHANGE a3 a4 INT;
-SHOW CREATE TABLE t1;
-CHECK TABLE t1;
-
-ALTER TABLE parent CHANGE b c INT;
-SHOW CREATE TABLE t1;
-CHECK TABLE t1;
-
-DROP TABLE t1, parent;
-
---echo #
 --echo #BUG#21514135 SCHEMA MISMATCH ERROR WHEN IMPORTING TABLESPACE AFTER
 --echo #DROPPING AN INDEX
 --echo #
@@ -480,5 +451,36 @@ eval DROP TABLE $source_db.t1;
 eval DROP DATABASE $source_db;
 eval DROP DATABASE $dest_db;
 
+--echo #
+--echo # Bug#22005726 ASSERT COL->ORD_PART IN ROW_BUILD_INDEX_ENTRY_LOW AT
+--echo # ROW0ROW.CC:299
+--echo #
+USE test;
+CREATE TABLE t1 (col1 INT, col2 TEXT) ENGINE = InnoDB;
+INSERT INTO t1 (col1, col2) VALUES (2 , 'A');
+ALTER TABLE t1 ADD KEY idx (col2(10));
+INSERT INTO t1 (col1, col2) VALUES (2 , 'A');
+--error ER_DUP_ENTRY
+ALTER TABLE t1 DROP KEY idx, ADD UNIQUE KEY uidx (col1);
+DELETE FROM t1 WHERE col1 = 2;
+DROP TABLE t1;
 
+--echo #
+--echo # BUG #26334149 MYSQL CRASHES WHEN FULL TEXT INDEXES IBD FILES ARE
+--echo # ORPHANED DUE TO RENAME TABLE
+--echo #
+CREATE DATABASE db1; USE db1;
+CREATE TABLE notes (
+   id int(11) NOT NULL AUTO_INCREMENT,
+   body text COLLATE utf8_unicode_ci,
+   PRIMARY KEY (id)
+   ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8
+COLLATE=utf8_unicode_ci;
 
+ALTER TABLE notes ADD FULLTEXT INDEX index_ft_body (body(255));
+DROP INDEX index_ft_body ON notes;
+
+CREATE DATABASE db2;
+RENAME TABLE db1.notes TO db2.notes;
+DROP DATABASE db1;
+DROP DATABASE db2;

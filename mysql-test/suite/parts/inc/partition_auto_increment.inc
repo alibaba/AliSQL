@@ -61,7 +61,7 @@ if (!$skip_update)
   UPDATE t1 SET c1 = -1 WHERE c1 = 40;
   SELECT AUTO_INCREMENT FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA='test'
   AND TABLE_NAME='t1';
-  UPDATE t1 SET c1 = NULL WHERE c1 = 4;
+  UPDATE IGNORE t1 SET c1 = NULL WHERE c1 = 4;
   INSERT INTO t1 VALUES (NULL);
   INSERT INTO t1 VALUES (NULL);
 }
@@ -243,7 +243,7 @@ if (!$skip_update)
   UPDATE t1 SET c1 = 140 WHERE c1 = 150;
   SELECT AUTO_INCREMENT FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA='test'
   AND TABLE_NAME='t1';
-  UPDATE t1 SET c1 = NULL WHERE c1 = 4;
+  UPDATE IGNORE t1 SET c1 = NULL WHERE c1 = 4;
   INSERT INTO t1 VALUES (NULL);
   INSERT INTO t1 VALUES (NULL);
 }
@@ -804,7 +804,7 @@ INSERT INTO t(c2) VALUES (10);
 INSERT INTO t(c2) VALUES (20);
 INSERT INTO t VALUES (126,30);
 INSERT INTO t VALUES (127,40);
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 --error 0, ER_DUP_ENTRY, ER_DUP_KEY
 INSERT INTO t VALUES (128,50);
 if (!$mysql_errno)
@@ -899,7 +899,7 @@ UPDATE t SET c1 = -6 WHERE c1 = 2;
 SELECT * FROM t ORDER BY c1 ASC;
 
 DROP TABLE t;
-
+SET sql_mode = default;
 --echo # Updating the partition table with a value that crosses the upper limits
 --echo # on both the positive and the negative side.
 
@@ -915,14 +915,14 @@ SELECT * FROM t ORDER BY c1 ASC;
 
 if (!$skip_update)
 { 
-UPDATE t SET c1 = 130 where c1 = 127;
+UPDATE IGNORE t SET c1 = 130 where c1 = 127;
 }
 
 SELECT * FROM t ORDER BY c1 ASC;
 
 if (!$skip_update)
 { 
-UPDATE t SET c1 = -140 where c1 = 126;
+UPDATE IGNORE t SET c1 = -140 where c1 = 126;
 }
 
 SELECT * FROM t ORDER BY c1 ASC;
@@ -937,7 +937,6 @@ eval CREATE TABLE t1
 ENGINE=$engine
 PARTITION BY KEY(a) PARTITIONS 2;
 SET LAST_INSERT_ID = 999;
-SET INSERT_ID = 0;
 INSERT INTO t1 SET a = 1 ON DUPLICATE KEY UPDATE a = NULL;
 SELECT LAST_INSERT_ID();
 SELECT * FROM t1;
@@ -956,3 +955,256 @@ DROP TABLE t1;
 
 --echo ##############################################################################
 }
+
+--echo #
+--echo # Test overflow
+--echo #
+
+--echo # Single row insert signed int
+eval CREATE TABLE t1
+(a int not null auto_increment primary key, b varchar(64))
+ENGINE = $engine
+PARTITION BY HASH (a) PARTITIONS 3;
+INSERT INTO t1 VALUES (0x7FFFFFFD, "2");
+INSERT INTO t1 VALUES (NULL, "1");
+INSERT INTO t1 VALUES (NULL, "0");
+--error 0,ER_WARN_DATA_OUT_OF_RANGE
+INSERT INTO t1 VALUES (NULL, "Overflow");
+SHOW WARNINGS;
+--error 0, ER_DUP_KEY
+INSERT INTO t1 VALUES (5, "non-generated number");
+if ($mysql_errno)
+{
+  echo # ERROR (only OK if Archive), mysql_errno: $mysql_errno;
+}
+FLUSH TABLES;
+SHOW CREATE TABLE t1;
+--sorted_result
+SELECT * FROM t1;
+DROP TABLE t1;
+eval CREATE TABLE `t1` (
+  `a` int(11) NOT NULL AUTO_INCREMENT,
+  `b` varchar(64) DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=$engine
+AUTO_INCREMENT=2147483648 DEFAULT CHARSET=latin1
+PARTITION BY HASH (a) PARTITIONS 3;
+--error 0,ER_AUTOINC_READ_FAILED,ER_WARN_DATA_OUT_OF_RANGE,ER_DUP_ENTRY
+INSERT INTO t1 VALUES (NULL, "Overflow");
+--echo # mysql_errno: $mysql_errno
+--error 0,ER_AUTOINC_READ_FAILED,ER_WARN_DATA_OUT_OF_RANGE,ER_DUP_ENTRY
+INSERT INTO t1 VALUES (NULL, "Overflow");
+--echo # mysql_errno: $mysql_errno
+DROP TABLE t1;
+
+--echo # Multi row insert signed int
+eval CREATE TABLE t1
+(a int not null auto_increment primary key, b varchar(64))
+ENGINE = $engine
+PARTITION BY HASH (a) PARTITIONS 3;
+INSERT INTO t1 VALUES (0x7FFFFFFD, "2");
+--error ER_AUTOINC_READ_FAILED
+INSERT INTO t1 VALUES (NULL, "1"), (NULL, "0"), (NULL, "Overflow");
+--error 0,ER_WARN_DATA_OUT_OF_RANGE
+INSERT INTO t1 VALUES (NULL, "1");
+--echo # mysql_errno: $mysql_errno
+--error 0,ER_WARN_DATA_OUT_OF_RANGE
+INSERT INTO t1 VALUES (NULL, "0");
+--echo # mysql_errno: $mysql_errno
+--error ER_WARN_DATA_OUT_OF_RANGE
+INSERT INTO t1 VALUES (NULL, "Overflow");
+--error 0, ER_DUP_KEY
+INSERT INTO t1 VALUES (5, "non-generated number");
+if ($mysql_errno)
+{
+  echo # ERROR (only OK if Archive), mysql_errno: $mysql_errno;
+}
+FLUSH TABLES;
+SHOW CREATE TABLE t1;
+--sorted_result
+SELECT * FROM t1;
+DROP TABLE t1;
+
+--echo # Single row insert unsigned int
+eval CREATE TABLE t1
+(a int unsigned not null auto_increment primary key, b varchar(64))
+ENGINE = $engine
+PARTITION BY HASH (a) PARTITIONS 3;
+INSERT INTO t1 VALUES (0xFFFFFFFD, "2");
+INSERT INTO t1 VALUES (NULL, "1");
+INSERT INTO t1 VALUES (NULL, "0");
+--error ER_WARN_DATA_OUT_OF_RANGE
+INSERT INTO t1 VALUES (NULL, "Overflow");
+--error 0, ER_DUP_KEY
+INSERT INTO t1 VALUES (5, "non-generated number");
+if ($mysql_errno)
+{
+  echo # ERROR (only OK if Archive), mysql_errno: $mysql_errno;
+}
+FLUSH TABLES;
+SHOW CREATE TABLE t1;
+--sorted_result
+SELECT * FROM t1;
+DROP TABLE t1;
+eval CREATE TABLE `t1` (
+  `a` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `b` varchar(64) DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=$engine AUTO_INCREMENT=4294967296 DEFAULT CHARSET=latin1
+PARTITION BY HASH (a) PARTITIONS 3;
+--error 0,ER_AUTOINC_READ_FAILED,ER_WARN_DATA_OUT_OF_RANGE
+INSERT INTO t1 VALUES (NULL, "Overflow");
+--echo # mysql_errno: $mysql_errno
+DROP TABLE t1;
+
+--echo # Multi row insert unsigned int
+eval CREATE TABLE t1
+(a int unsigned not null auto_increment primary key, b varchar(64))
+ENGINE = $engine
+PARTITION BY HASH (a) PARTITIONS 3;
+INSERT INTO t1 VALUES (0xFFFFFFFD, "2");
+--error ER_AUTOINC_READ_FAILED
+INSERT INTO t1 VALUES (NULL, "1"), (NULL, "0"), (NULL, "Overflow");
+--error 0,ER_WARN_DATA_OUT_OF_RANGE
+INSERT INTO t1 VALUES (NULL, "1");
+--echo # mysql_errno: $mysql_errno
+--error 0,ER_WARN_DATA_OUT_OF_RANGE
+INSERT INTO t1 VALUES (NULL, "0");
+--echo # mysql_errno: $mysql_errno
+--error ER_WARN_DATA_OUT_OF_RANGE
+INSERT INTO t1 VALUES (NULL, "Overflow");
+--error 0, ER_DUP_KEY
+INSERT INTO t1 VALUES (5, "non-generated number");
+if ($mysql_errno)
+{
+  echo # ERROR (only OK if Archive), mysql_errno: $mysql_errno;
+}
+FLUSH TABLES;
+SHOW CREATE TABLE t1;
+--sorted_result
+SELECT * FROM t1;
+DROP TABLE t1;
+
+--echo # Single row insert signed bigint
+eval CREATE TABLE t1
+(a bigint not null auto_increment primary key, b varchar(64))
+ENGINE = $engine
+PARTITION BY HASH (a) PARTITIONS 3;
+INSERT INTO t1 VALUES (0x7FFFFFFFFFFFFFFD, "2");
+INSERT INTO t1 VALUES (NULL, "1");
+INSERT INTO t1 VALUES (NULL, "0");
+--error ER_WARN_DATA_OUT_OF_RANGE
+INSERT INTO t1 VALUES (NULL, "Overflow");
+--error 0, ER_DUP_KEY
+INSERT INTO t1 VALUES (5, "non-generated number");
+if ($mysql_errno)
+{
+  echo # ERROR (only OK if Archive), mysql_errno: $mysql_errno;
+}
+FLUSH TABLES;
+SHOW CREATE TABLE t1;
+--sorted_result
+SELECT * FROM t1;
+DROP TABLE t1;
+eval CREATE TABLE `t1` (
+  `a` bigint(20) NOT NULL AUTO_INCREMENT,
+  `b` varchar(64) DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=$engine AUTO_INCREMENT=9223372036854775808 DEFAULT CHARSET=latin1
+PARTITION BY HASH (a)
+PARTITIONS 3;
+--error 0,ER_AUTOINC_READ_FAILED,ER_WARN_DATA_OUT_OF_RANGE
+INSERT INTO t1 VALUES (NULL, "Overflow");
+--echo # mysql_errno: $mysql_errno
+DROP TABLE t1;
+
+--echo # Multi row insert signed bigint
+eval CREATE TABLE t1
+(a bigint not null auto_increment primary key, b varchar(64))
+ENGINE = $engine
+PARTITION BY HASH (a) PARTITIONS 3;
+INSERT INTO t1 VALUES (0x7FFFFFFFFFFFFFFD, "2");
+--error ER_AUTOINC_READ_FAILED
+INSERT INTO t1 VALUES (NULL, "1"), (NULL, "0"), (NULL, "Overflow");
+--error 0,ER_WARN_DATA_OUT_OF_RANGE
+INSERT INTO t1 VALUES (NULL, "1");
+--echo # mysql_errno: $mysql_errno
+--error 0,ER_WARN_DATA_OUT_OF_RANGE
+INSERT INTO t1 VALUES (NULL, "0");
+--echo # mysql_errno: $mysql_errno
+--error ER_WARN_DATA_OUT_OF_RANGE
+INSERT INTO t1 VALUES (NULL, "Overflow");
+--error 0, ER_DUP_KEY
+INSERT INTO t1 VALUES (5, "non-generated number");
+if ($mysql_errno)
+{
+  echo # ERROR (only OK if Archive), mysql_errno: $mysql_errno;
+}
+FLUSH TABLES;
+SHOW CREATE TABLE t1;
+--sorted_result
+SELECT * FROM t1;
+DROP TABLE t1;
+
+--echo # Single row insert unsigned bigint
+eval CREATE TABLE t1
+(a bigint unsigned not null auto_increment primary key, b varchar(64))
+ENGINE = $engine
+PARTITION BY HASH (a) PARTITIONS 3;
+INSERT INTO t1 VALUES (0xFFFFFFFFFFFFFFFD, "2");
+INSERT INTO t1 VALUES (NULL, "1");
+--error ER_AUTOINC_READ_FAILED
+INSERT INTO t1 VALUES (NULL, "0");
+--error ER_AUTOINC_READ_FAILED
+INSERT INTO t1 VALUES (NULL, "Overflow");
+--error 0, ER_DUP_KEY
+INSERT INTO t1 VALUES (5, "non-generated number");
+if ($mysql_errno)
+{
+  echo # ERROR (only OK if Archive), mysql_errno: $mysql_errno;
+}
+FLUSH TABLES;
+SHOW CREATE TABLE t1;
+--sorted_result
+SELECT * FROM t1;
+DROP TABLE t1;
+eval CREATE TABLE `t1` (
+  `a` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `b` varchar(64) DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=$engine AUTO_INCREMENT=18446744073709551615 DEFAULT CHARSET=latin1
+PARTITION BY HASH (a)
+PARTITIONS 3;
+--error 0,ER_AUTOINC_READ_FAILED,ER_WARN_DATA_OUT_OF_RANGE
+INSERT INTO t1 VALUES (NULL, "Overflow");
+--echo # mysql_errno: $mysql_errno
+DROP TABLE t1;
+
+--echo # Multi row insert unsigned bigint
+eval CREATE TABLE t1
+(a bigint unsigned not null auto_increment primary key, b varchar(64))
+ENGINE = $engine
+PARTITION BY HASH (a) PARTITIONS 3;
+INSERT INTO t1 VALUES (0xFFFFFFFFFFFFFFFD, "2");
+--error ER_AUTOINC_READ_FAILED
+INSERT INTO t1 VALUES (NULL, "1"), (NULL, "0"), (NULL, "Overflow");
+--error 0,ER_WARN_DATA_OUT_OF_RANGE,ER_AUTOINC_READ_FAILED
+INSERT INTO t1 VALUES (NULL, "1");
+--echo # mysql_errno: $mysql_errno
+--error 0,ER_WARN_DATA_OUT_OF_RANGE,ER_AUTOINC_READ_FAILED
+INSERT INTO t1 VALUES (NULL, "0");
+--echo # mysql_errno: $mysql_errno
+--error ER_WARN_DATA_OUT_OF_RANGE,ER_AUTOINC_READ_FAILED
+INSERT INTO t1 VALUES (NULL, "Overflow");
+--echo # mysql_errno: $mysql_errno
+--error 0, ER_DUP_KEY
+INSERT INTO t1 VALUES (5, "non-generated number");
+if ($mysql_errno)
+{
+  echo # ERROR (only OK if Archive), mysql_errno: $mysql_errno;
+}
+FLUSH TABLES;
+SHOW CREATE TABLE t1;
+--sorted_result
+SELECT * FROM t1;
+DROP TABLE t1;

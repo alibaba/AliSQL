@@ -1,15 +1,22 @@
 /*
-   Copyright (C) 2004-2006 MySQL AB, 2008-2010 Sun Microsystems, Inc.
+   Copyright (c) 2004, 2021, Oracle and/or its affiliates.
     All rights reserved. Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -124,7 +131,7 @@ Thr::Thr(int no)
   m_ret = 0;
   m_mutex = NdbMutex_Create();
   m_cond = NdbCondition_Create();
-  assert(m_mutex != 0 && m_cond != 0);
+  require(m_mutex != 0 && m_cond != 0);
   const unsigned stacksize = 256 * 1024;
   const NDB_THREAD_PRIO prio = NDB_THREAD_PRIO_LOW;
   m_thread = NdbThread_Create(runthread, (void**)this, stacksize, "me", prio);
@@ -230,7 +237,7 @@ static int
 runstep_starttx(Thr& thr)
 {
   Ndb* ndb = thr.m_ndb;
-  assert(ndb != 0);
+  require(ndb != 0);
   CHN(ndb, (thr.m_con = ndb->startTransaction()) != 0);
   DBG("thr " << thr.m_no << " tx started");
   return 0;
@@ -274,7 +281,7 @@ static int
 wl1822_createtable(Thr& thr)
 {
   Ndb* ndb = thr.m_ndb;
-  assert(ndb != 0);
+  require(ndb != 0);
   NdbDictionary::Dictionary* dic = ndb->getDictionary();
   // drop T
   if (dic->getTable(g_opt.m_tname) != 0)
@@ -309,7 +316,7 @@ wl1822_insertrows(Thr& thr)
 {
   // insert X, Y, Z
   Ndb* ndb = thr.m_ndb;
-  assert(ndb != 0);
+  require(ndb != 0);
   NdbConnection* con;
   NdbOperation* op;
   for (unsigned k = 0; k < 3; k++) {
@@ -344,7 +351,7 @@ wl1822_tx1_readZ(Thr& thr)
 {
   // tx1 read Z with exclusive lock
   NdbConnection* con = thr.m_con;
-  assert(con != 0);
+  require(con != 0);
   NdbOperation* op;
   CHN(con, (op = con->getNdbOperation(g_opt.m_tname)) != 0);
   CHN(op, op->readTupleExclusive() == 0);
@@ -362,7 +369,7 @@ wl1822_tx2_scanXY(Thr& thr)
 {
   // tx2 scan X, Y with exclusive lock
   NdbConnection* con = thr.m_con;
-  assert(con != 0);
+  require(con != 0);
   NdbScanOperation* scanop;
   NdbIndexScanOperation* indexscanop;
 
@@ -397,7 +404,7 @@ wl1822_tx1_readX_commit(Thr& thr)
 {
   // tx1 read X with exclusive lock and commit
   NdbConnection* con = thr.m_con;
-  assert(con != 0);
+  require(con != 0);
   NdbOperation* op;
   CHN(con, (op = con->getNdbOperation(g_opt.m_tname)) != 0);
   CHN(op, op->readTupleExclusive() == 0);
@@ -419,7 +426,7 @@ wl1822_tx2_scanZ_close(Thr& thr)
   Ndb* ndb = thr.m_ndb;
   NdbConnection* con = thr.m_con;
   NdbScanOperation* scanop = thr.m_scanop;
-  assert(ndb != 0 && con != 0 && scanop != 0);
+  require(ndb != 0 && con != 0 && scanop != 0);
   unsigned row = 2;
   while (true) {
     DBG("before row " << row);

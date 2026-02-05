@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -19,42 +26,46 @@
 #include "fulltext.h"
 #include "rt_index.h"
 
-int mi_update(register MI_INFO *info, const uchar *oldrec, uchar *newrec)
+int mi_update(MI_INFO *info, const uchar *oldrec, uchar *newrec)
 {
   int flag,key_changed,save_errno;
-  reg3 my_off_t pos;
+  my_off_t pos;
   uint i;
   uchar old_key[MI_MAX_KEY_BUFF],*new_key;
   my_bool auto_key_changed=0;
   ulonglong changed;
   MYISAM_SHARE *share=info->s;
-  ha_checksum UNINIT_VAR(old_checksum);
+  ha_checksum old_checksum= 0;
   DBUG_ENTER("mi_update");
 
   DBUG_EXECUTE_IF("myisam_pretend_crashed_table_on_usage",
                   mi_print_error(info->s, HA_ERR_CRASHED);
-                  DBUG_RETURN(my_errno= HA_ERR_CRASHED););
+                  set_my_errno(HA_ERR_CRASHED);
+                  DBUG_RETURN(HA_ERR_CRASHED););
   if (!(info->update & HA_STATE_AKTIV))
   {
-    DBUG_RETURN(my_errno=HA_ERR_KEY_NOT_FOUND);
+    set_my_errno(HA_ERR_KEY_NOT_FOUND);
+    DBUG_RETURN(HA_ERR_KEY_NOT_FOUND);
   }
   if (share->options & HA_OPTION_READ_ONLY_DATA)
   {
-    DBUG_RETURN(my_errno=EACCES);
+    set_my_errno(EACCES);
+    DBUG_RETURN(EACCES);
   }
   if (info->state->key_file_length >= share->base.margin_key_file_length)
   {
-    DBUG_RETURN(my_errno=HA_ERR_INDEX_FILE_FULL);
+    set_my_errno(HA_ERR_INDEX_FILE_FULL);
+    DBUG_RETURN(HA_ERR_INDEX_FILE_FULL);
   }
   pos=info->lastpos;
   if (_mi_readinfo(info,F_WRLCK,1))
-    DBUG_RETURN(my_errno);
+    DBUG_RETURN(my_errno());
 
   if (share->calc_checksum)
     old_checksum=info->checksum=(*share->calc_checksum)(info,oldrec);
   if ((*share->compare_record)(info,oldrec))
   {
-    save_errno=my_errno;
+    save_errno=my_errno();
     goto err_end;			/* Record has changed */
   }
 
@@ -68,13 +79,13 @@ int mi_update(register MI_INFO *info, const uchar *oldrec, uchar *newrec)
 	mi_check_unique(info, def, newrec, mi_unique_hash(def, newrec),
 			info->lastpos))
     {
-      save_errno=my_errno;
+      save_errno=my_errno();
       goto err_end;
     }
   }
   if (_mi_mark_file_changed(info))
   {
-    save_errno=my_errno;
+    save_errno=my_errno();
     goto err_end;
   }
 
@@ -186,12 +197,12 @@ int mi_update(register MI_INFO *info, const uchar *oldrec, uchar *newrec)
   DBUG_RETURN(0);
 
 err:
-  DBUG_PRINT("error",("key: %d  errno: %d",i,my_errno));
-  save_errno=my_errno;
+  DBUG_PRINT("error",("key: %d  errno: %d",i,my_errno()));
+  save_errno=my_errno();
   if (changed)
     key_changed|= HA_STATE_CHANGED;
-  if (my_errno == HA_ERR_FOUND_DUPP_KEY || my_errno == HA_ERR_RECORD_FILE_FULL ||
-      my_errno == HA_ERR_NULL_IN_SPATIAL || my_errno == HA_ERR_OUT_OF_MEM)
+  if (my_errno() == HA_ERR_FOUND_DUPP_KEY || my_errno() == HA_ERR_RECORD_FILE_FULL ||
+      my_errno() == HA_ERR_NULL_IN_SPATIAL || my_errno() == HA_ERR_OUT_OF_MEM)
   {
     info->errkey= (int) i;
     flag=0;
@@ -226,12 +237,13 @@ err:
 		 key_changed);
 
  err_end:
-  myisam_log_record(MI_LOG_UPDATE,info,newrec,info->lastpos,my_errno);
+  myisam_log_record(MI_LOG_UPDATE,info,newrec,info->lastpos,my_errno());
   (void) _mi_writeinfo(info,WRITEINFO_UPDATE_KEYFILE);
   if (save_errno == HA_ERR_KEY_NOT_FOUND)
   {
     mi_print_error(info->s, HA_ERR_CRASHED);
     save_errno=HA_ERR_CRASHED;
   }
-  DBUG_RETURN(my_errno=save_errno);
+  set_my_errno(save_errno);
+  DBUG_RETURN(save_errno);
 } /* mi_update */

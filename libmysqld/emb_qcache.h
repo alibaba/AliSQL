@@ -1,14 +1,21 @@
-/* Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2003, 2023, Oracle and/or its affiliates.
    
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
-   
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-   
+   GNU General Public License, version 2.0, for more details.
+
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
@@ -22,16 +29,16 @@ class Querycache_stream
   Query_cache_block *block;
   uint headers_len;
 public:
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   Query_cache_block *first_block;
-  uint stored_size;
+  size_t stored_size;
 #endif
   Querycache_stream(Query_cache_block *ini_block, uint ini_headers_len) :
     block(ini_block), headers_len(ini_headers_len)    
   {
     cur_data= ((uchar*)block)+headers_len;
     data_end= cur_data + (block->used-headers_len);
-#ifndef DBUG_OFF
+#ifndef NDEBUG
     first_block= ini_block;
     stored_size= 0;
 #endif
@@ -43,8 +50,8 @@ public:
       around to the first block again. That means we're trying to write
       more data than we allocated space for.
     */
-    DBUG_ASSERT(block->next != block);
-    DBUG_ASSERT(block->next != first_block);
+    assert(block->next != block);
+    assert(block->next != first_block);
 
     block= block->next;
     /*
@@ -54,7 +61,7 @@ public:
     if (writing)
       block->type= Query_cache_block::RES_CONT;
     else
-      DBUG_ASSERT(block->type == Query_cache_block::RES_CONT);
+      assert(block->type == Query_cache_block::RES_CONT);
 
     cur_data= ((uchar*)block)+headers_len;
     data_end= cur_data + (block->used-headers_len);
@@ -64,15 +71,15 @@ public:
   void store_short(ushort s);
   void store_int(uint i);
   void store_ll(ulonglong ll);
-  void store_str_only(const char *str, uint str_len);
-  void store_str(const char *str, uint str_len);
-  void store_safe_str(const char *str, uint str_len);
+  void store_str_only(const char *str, size_t str_len);
+  void store_str(const char *str, size_t str_len);
+  void store_safe_str(const char *str, size_t str_len);
 
   uchar load_uchar();
   ushort load_short();
   uint load_int();
   ulonglong load_ll();
-  void load_str_only(char *buffer, uint str_len);
+  void load_str_only(char *buffer, size_t str_len);
   char *load_str(MEM_ROOT *alloc, uint *str_len);
   int load_safe_str(MEM_ROOT *alloc, char **str, uint *str_len);
   int load_column(MEM_ROOT *alloc, char **column);

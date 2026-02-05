@@ -113,8 +113,8 @@ DROP USER ddicttestuser1@'localhost';
 DROP USER ddicttestuser2@'localhost';
 CREATE USER ddicttestuser1@'localhost';
 CREATE USER ddicttestuser2@'localhost';
-SET PASSWORD FOR ddicttestuser1@'localhost' = PASSWORD('ddictpass');
-SET PASSWORD FOR ddicttestuser2@'localhost' = PASSWORD('ddictpass');
+SET PASSWORD FOR ddicttestuser1@'localhost' = 'ddictpass';
+SET PASSWORD FOR ddicttestuser2@'localhost' = 'ddictpass';
 
 --echo ####################################################################################
 --echo 1.2 Establish connection con100 (user=ddicttestuser1 with no PROCESS privilege):
@@ -135,6 +135,7 @@ let $wait_condition=
 SELECT COUNT(*) = 1 FROM INFORMATION_SCHEMA.PROCESSLIST
 WHERE DB = 'information_schema' AND COMMAND = 'Sleep' AND USER = 'ddicttestuser1';
 --source include/wait_condition.inc
+--replace_result InnoDB TMP_TABLE_ENGINE MyISAM TMP_TABLE_ENGINE 
 eval SHOW CREATE TABLE $table;
 --replace_column 1 ID 3 HOST_NAME 6 TIME
 --replace_result "init" STATE "starting" STATE "cleaning up" STATE
@@ -159,6 +160,7 @@ connection con100;
 # No need for poll routine here.
 # The current state of the default session might depend on load of testing box
 # but "ddicttestuser1" must not see anything of the root session.
+--replace_result InnoDB TMP_TABLE_ENGINE MyISAM TMP_TABLE_ENGINE 
 eval SHOW CREATE TABLE $table;
 --replace_column 1 ID 3 HOST_NAME 6 TIME
 --replace_result "init" STATE "starting" STATE "cleaning up" STATE
@@ -224,7 +226,10 @@ SELECT * FROM information_schema.processlist;
 --echo   connection default (user=root)
 --echo ####################################################################################
 connection default;
+set @orig_sql_mode= @@sql_mode;
+set sql_mode= (select replace(@@sql_mode,'NO_AUTO_CREATE_USER',''));
 GRANT PROCESS ON *.* TO ''@'localhost';
+set sql_mode= @orig_sql_mode;
 --real_sleep 0.3
 
 --echo ####################################################################################

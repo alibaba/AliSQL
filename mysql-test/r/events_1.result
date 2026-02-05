@@ -49,7 +49,7 @@ SECOND	10	SELECT 1
 SELECT execute_at IS NULL, starts IS NULL, ends IS NULL, comment FROM mysql.event WHERE db='events_test' AND name='event_starts_test';
 execute_at IS NULL	starts IS NULL	ends IS NULL	comment
 1	0	1	
-ALTER EVENT event_starts_test ON SCHEDULE AT '2020-02-02 20:00:02';
+ALTER EVENT event_starts_test ON SCHEDULE AT date_add(now(), interval 5 day);
 SELECT execute_at IS NULL, starts IS NULL, ends IS NULL, comment FROM mysql.event WHERE db='events_test' AND name='event_starts_test';
 execute_at IS NULL	starts IS NULL	ends IS NULL	comment
 0	1	1	
@@ -62,7 +62,7 @@ SELECT execute_at IS NULL, starts IS NULL, ends IS NULL, comment FROM mysql.even
 execute_at IS NULL	starts IS NULL	ends IS NULL	comment
 0	1	1	
 DROP EVENT event_starts_test;
-CREATE EVENT event_starts_test ON SCHEDULE EVERY 20 SECOND STARTS '2020-02-02 20:00:02' ENDS '2022-02-02 20:00:02' DO SELECT 2;
+CREATE EVENT event_starts_test ON SCHEDULE EVERY 20 SECOND STARTS date_add(now(), interval 5 day) ENDS date_add(now(), interval 10 day) DO SELECT 2;
 SELECT execute_at IS NULL, starts IS NULL, ends IS NULL, comment FROM mysql.event WHERE db='events_test' AND name='event_starts_test';
 execute_at IS NULL	starts IS NULL	ends IS NULL	comment
 1	0	0	
@@ -124,80 +124,80 @@ set names utf8;
 CREATE EVENT root6 ON SCHEDULE EVERY '10:20' MINUTE_SECOND ON COMPLETION PRESERVE ENABLE COMMENT 'some comment' DO select 1;
 SHOW CREATE EVENT root6;
 Event	sql_mode	time_zone	Create Event	character_set_client	collation_connection	Database Collation
-root6	NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `root6` ON SCHEDULE EVERY '10:20' MINUTE_SECOND STARTS '#' ON COMPLETION PRESERVE ENABLE COMMENT 'some comment' DO select 1	utf8	utf8_general_ci	latin1_swedish_ci
+root6	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `root6` ON SCHEDULE EVERY '10:20' MINUTE_SECOND STARTS '#' ON COMPLETION PRESERVE ENABLE COMMENT 'some comment' DO select 1	utf8	utf8_general_ci	latin1_swedish_ci
 create event root7 on schedule every 2 year do select 1;
 SHOW CREATE EVENT root7;
 Event	sql_mode	time_zone	Create Event	character_set_client	collation_connection	Database Collation
-root7	NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `root7` ON SCHEDULE EVERY 2 YEAR STARTS '#' ON COMPLETION NOT PRESERVE ENABLE DO select 1	utf8	utf8_general_ci	latin1_swedish_ci
+root7	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `root7` ON SCHEDULE EVERY 2 YEAR STARTS '#' ON COMPLETION NOT PRESERVE ENABLE DO select 1	utf8	utf8_general_ci	latin1_swedish_ci
 create event root8 on schedule every '2:5' year_month do select 1;
 SHOW CREATE EVENT root8;
 Event	sql_mode	time_zone	Create Event	character_set_client	collation_connection	Database Collation
-root8	NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `root8` ON SCHEDULE EVERY '2-5' YEAR_MONTH STARTS '#' ON COMPLETION NOT PRESERVE ENABLE DO select 1	utf8	utf8_general_ci	latin1_swedish_ci
+root8	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `root8` ON SCHEDULE EVERY '2-5' YEAR_MONTH STARTS '#' ON COMPLETION NOT PRESERVE ENABLE DO select 1	utf8	utf8_general_ci	latin1_swedish_ci
 create event root8_1 on schedule every '2:15' year_month do select 1;
 SHOW CREATE EVENT root8_1;
 Event	sql_mode	time_zone	Create Event	character_set_client	collation_connection	Database Collation
-root8_1	NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `root8_1` ON SCHEDULE EVERY '3-3' YEAR_MONTH STARTS '#' ON COMPLETION NOT PRESERVE ENABLE DO select 1	utf8	utf8_general_ci	latin1_swedish_ci
+root8_1	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `root8_1` ON SCHEDULE EVERY '3-3' YEAR_MONTH STARTS '#' ON COMPLETION NOT PRESERVE ENABLE DO select 1	utf8	utf8_general_ci	latin1_swedish_ci
 create event root9 on schedule every 2 week ON COMPLETION PRESERVE DISABLE COMMENT 'коментар на кирилица' do select 1;
 SHOW CREATE EVENT root9;
 Event	sql_mode	time_zone	Create Event	character_set_client	collation_connection	Database Collation
-root9	NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `root9` ON SCHEDULE EVERY 2 WEEK STARTS '#' ON COMPLETION PRESERVE DISABLE COMMENT 'коментар на кирилица' DO select 1	utf8	utf8_general_ci	latin1_swedish_ci
+root9	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `root9` ON SCHEDULE EVERY 2 WEEK STARTS '#' ON COMPLETION PRESERVE DISABLE COMMENT 'коментар на кирилица' DO select 1	utf8	utf8_general_ci	latin1_swedish_ci
 create event root10 on schedule every '20:5' day_hour do select 1;
 SHOW CREATE EVENT root10;
 Event	sql_mode	time_zone	Create Event	character_set_client	collation_connection	Database Collation
-root10	NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `root10` ON SCHEDULE EVERY '20 5' DAY_HOUR STARTS '#' ON COMPLETION NOT PRESERVE ENABLE DO select 1	utf8	utf8_general_ci	latin1_swedish_ci
+root10	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `root10` ON SCHEDULE EVERY '20 5' DAY_HOUR STARTS '#' ON COMPLETION NOT PRESERVE ENABLE DO select 1	utf8	utf8_general_ci	latin1_swedish_ci
 create event root11 on schedule every '20:25' day_hour do select 1;
 SHOW CREATE EVENT root11;
 Event	sql_mode	time_zone	Create Event	character_set_client	collation_connection	Database Collation
-root11	NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `root11` ON SCHEDULE EVERY '21 1' DAY_HOUR STARTS '#' ON COMPLETION NOT PRESERVE ENABLE DO select 1	utf8	utf8_general_ci	latin1_swedish_ci
+root11	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `root11` ON SCHEDULE EVERY '21 1' DAY_HOUR STARTS '#' ON COMPLETION NOT PRESERVE ENABLE DO select 1	utf8	utf8_general_ci	latin1_swedish_ci
 create event root12 on schedule every '20:25' hour_minute do select 1;
 SHOW CREATE EVENT root12;
 Event	sql_mode	time_zone	Create Event	character_set_client	collation_connection	Database Collation
-root12	NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `root12` ON SCHEDULE EVERY '20:25' HOUR_MINUTE STARTS '#' ON COMPLETION NOT PRESERVE ENABLE DO select 1	utf8	utf8_general_ci	latin1_swedish_ci
+root12	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `root12` ON SCHEDULE EVERY '20:25' HOUR_MINUTE STARTS '#' ON COMPLETION NOT PRESERVE ENABLE DO select 1	utf8	utf8_general_ci	latin1_swedish_ci
 create event root13 on schedule every '25:25' hour_minute do select 1;
 SHOW CREATE EVENT root13;
 Event	sql_mode	time_zone	Create Event	character_set_client	collation_connection	Database Collation
-root13	NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `root13` ON SCHEDULE EVERY '25:25' HOUR_MINUTE STARTS '#' ON COMPLETION NOT PRESERVE ENABLE DO select 1	utf8	utf8_general_ci	latin1_swedish_ci
+root13	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `root13` ON SCHEDULE EVERY '25:25' HOUR_MINUTE STARTS '#' ON COMPLETION NOT PRESERVE ENABLE DO select 1	utf8	utf8_general_ci	latin1_swedish_ci
 create event root13_1 on schedule every '11:65' hour_minute do select 1;
 SHOW CREATE EVENT root13_1;
 Event	sql_mode	time_zone	Create Event	character_set_client	collation_connection	Database Collation
-root13_1	NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `root13_1` ON SCHEDULE EVERY '12:5' HOUR_MINUTE STARTS '#' ON COMPLETION NOT PRESERVE ENABLE DO select 1	utf8	utf8_general_ci	latin1_swedish_ci
+root13_1	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `root13_1` ON SCHEDULE EVERY '12:5' HOUR_MINUTE STARTS '#' ON COMPLETION NOT PRESERVE ENABLE DO select 1	utf8	utf8_general_ci	latin1_swedish_ci
 create event root14 on schedule every '35:35' minute_second do select 1;
 SHOW CREATE EVENT root14;
 Event	sql_mode	time_zone	Create Event	character_set_client	collation_connection	Database Collation
-root14	NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `root14` ON SCHEDULE EVERY '35:35' MINUTE_SECOND STARTS '#' ON COMPLETION NOT PRESERVE ENABLE DO select 1	utf8	utf8_general_ci	latin1_swedish_ci
+root14	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `root14` ON SCHEDULE EVERY '35:35' MINUTE_SECOND STARTS '#' ON COMPLETION NOT PRESERVE ENABLE DO select 1	utf8	utf8_general_ci	latin1_swedish_ci
 create event root15 on schedule every '35:66' minute_second do select 1;
 SHOW CREATE EVENT root15;
 Event	sql_mode	time_zone	Create Event	character_set_client	collation_connection	Database Collation
-root15	NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `root15` ON SCHEDULE EVERY '36:6' MINUTE_SECOND STARTS '#' ON COMPLETION NOT PRESERVE ENABLE DO select 1	utf8	utf8_general_ci	latin1_swedish_ci
+root15	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `root15` ON SCHEDULE EVERY '36:6' MINUTE_SECOND STARTS '#' ON COMPLETION NOT PRESERVE ENABLE DO select 1	utf8	utf8_general_ci	latin1_swedish_ci
 create event root16 on schedule every '35:56' day_minute do select 1;
 SHOW CREATE EVENT root16;
 Event	sql_mode	time_zone	Create Event	character_set_client	collation_connection	Database Collation
-root16	NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `root16` ON SCHEDULE EVERY '1 11:56' DAY_MINUTE STARTS '#' ON COMPLETION NOT PRESERVE ENABLE DO select 1	utf8	utf8_general_ci	latin1_swedish_ci
+root16	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `root16` ON SCHEDULE EVERY '1 11:56' DAY_MINUTE STARTS '#' ON COMPLETION NOT PRESERVE ENABLE DO select 1	utf8	utf8_general_ci	latin1_swedish_ci
 create event root17 on schedule every '35:12:45' day_minute do select 1;
 SHOW CREATE EVENT root17;
 Event	sql_mode	time_zone	Create Event	character_set_client	collation_connection	Database Collation
-root17	NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `root17` ON SCHEDULE EVERY '35 12:45' DAY_MINUTE STARTS '#' ON COMPLETION NOT PRESERVE ENABLE DO select 1	utf8	utf8_general_ci	latin1_swedish_ci
+root17	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `root17` ON SCHEDULE EVERY '35 12:45' DAY_MINUTE STARTS '#' ON COMPLETION NOT PRESERVE ENABLE DO select 1	utf8	utf8_general_ci	latin1_swedish_ci
 create event root17_1 on schedule every '35:25:65' day_minute do select 1;
 SHOW CREATE EVENT root17_1;
 Event	sql_mode	time_zone	Create Event	character_set_client	collation_connection	Database Collation
-root17_1	NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `root17_1` ON SCHEDULE EVERY '36 2:5' DAY_MINUTE STARTS '#' ON COMPLETION NOT PRESERVE ENABLE DO select 1	utf8	utf8_general_ci	latin1_swedish_ci
+root17_1	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `root17_1` ON SCHEDULE EVERY '36 2:5' DAY_MINUTE STARTS '#' ON COMPLETION NOT PRESERVE ENABLE DO select 1	utf8	utf8_general_ci	latin1_swedish_ci
 create event root18 on schedule every '35:12:45' hour_second do select 1;
 SHOW CREATE EVENT root18;
 Event	sql_mode	time_zone	Create Event	character_set_client	collation_connection	Database Collation
-root18	NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `root18` ON SCHEDULE EVERY '35:12:45' HOUR_SECOND STARTS '#' ON COMPLETION NOT PRESERVE ENABLE DO select 1	utf8	utf8_general_ci	latin1_swedish_ci
+root18	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `root18` ON SCHEDULE EVERY '35:12:45' HOUR_SECOND STARTS '#' ON COMPLETION NOT PRESERVE ENABLE DO select 1	utf8	utf8_general_ci	latin1_swedish_ci
 create event root19 on schedule every '15:59:85' hour_second do select 1;
 SHOW CREATE EVENT root19;
 Event	sql_mode	time_zone	Create Event	character_set_client	collation_connection	Database Collation
-root19	NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `root19` ON SCHEDULE EVERY '16:0:25' HOUR_SECOND STARTS '#' ON COMPLETION NOT PRESERVE ENABLE DO select 1	utf8	utf8_general_ci	latin1_swedish_ci
+root19	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `root19` ON SCHEDULE EVERY '16:0:25' HOUR_SECOND STARTS '#' ON COMPLETION NOT PRESERVE ENABLE DO select 1	utf8	utf8_general_ci	latin1_swedish_ci
 create event root20 on schedule every '50:20:12:45' day_second do select 1;
 SHOW CREATE EVENT root20;
 Event	sql_mode	time_zone	Create Event	character_set_client	collation_connection	Database Collation
-root20	NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `root20` ON SCHEDULE EVERY '50 20:12:45' DAY_SECOND STARTS '#' ON COMPLETION NOT PRESERVE ENABLE DO select 1	utf8	utf8_general_ci	latin1_swedish_ci
+root20	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `root20` ON SCHEDULE EVERY '50 20:12:45' DAY_SECOND STARTS '#' ON COMPLETION NOT PRESERVE ENABLE DO select 1	utf8	utf8_general_ci	latin1_swedish_ci
 set names cp1251;
 create event ����21 on schedule every '50:23:59:95' day_second COMMENT '���� � 1251 ��������' do select 1;
 SHOW CREATE EVENT ����21;
 Event	sql_mode	time_zone	Create Event	character_set_client	collation_connection	Database Collation
-����21	NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `руут21` ON SCHEDULE EVERY '51 0:0:35' DAY_SECOND STARTS '#' ON COMPLETION NOT PRESERVE ENABLE COMMENT 'това е 1251 коментар' DO select 1	cp1251	cp1251_general_ci	latin1_swedish_ci
+����21	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION	SYSTEM	CREATE DEFINER=`root`@`localhost` EVENT `руут21` ON SCHEDULE EVERY '51 0:0:35' DAY_SECOND STARTS '#' ON COMPLETION NOT PRESERVE ENABLE COMMENT 'това е 1251 коментар' DO select 1	cp1251	cp1251_general_ci	latin1_swedish_ci
 insert into mysql.event (
 db,
 name,
@@ -262,7 +262,11 @@ event information after mysql.event was tampered with.
 
 First, let's add a column to the end and check the error is emitted.
 
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 ALTER TABLE mysql.event ADD dummy INT;
+SET sql_mode = default;
 SHOW EVENTS;
 ERROR HY000: Failed to open mysql.event
 SELECT event_name FROM INFORMATION_SCHEMA.events;
@@ -469,6 +473,51 @@ DROP EVENT ev1;
 
 SHOW EVENTS;
 Db	Name	Definer	Time zone	Type	Execute at	Interval value	Interval field	Starts	Ends	Status	Originator	character_set_client	collation_connection	Database Collation
+#
+# WL#9262: All system tables should support 32 character length user names
+#
+#This should just work with username + hostname of length 93 as DEFINER
+CREATE DEFINER=user_name_robert_golebiowski1234@oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char EVENT event_test ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 1 HOUR DO SELECT CURRENT_USER();
+Warnings:
+Note	1449	The user specified as a definer ('user_name_robert_golebiowski1234'@'oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char') does not exist
+SHOW EVENTS LIKE 'event_test';
+Db	Name	Definer	Time zone	Type	Execute at	Interval value	Interval field	Starts	Ends	Status	Originator	character_set_client	collation_connection	Database Collation
+events_test	event_test	user_name_robert_golebiowski1234@oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char	SYSTEM	ONE TIME	#	NULL	NULL	#	#	ENABLED	1	latin1	latin1_swedish_ci	latin1_swedish_ci
+SELECT DEFINER FROM information_schema.EVENTS WHERE EVENT_NAME='event_test';
+DEFINER
+user_name_robert_golebiowski1234@oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char
+DROP EVENT event_test;
+# Changing mysql.event.definer column to char(77) - i.e. old layout (5.7.12)
+SET @orig_sql_mode= @@sql_mode;
+SET sql_mode='';
+ALTER TABLE mysql.event
+MODIFY definer char(77) CHARACTER SET utf8 COLLATE utf8_bin NOT NULL default '';
+SET sql_mode= @orig_sql_mode;
+#Now we make sure that username + hostname with length of 77 or less work with
+#this old db schema
+#This should just pass as the DEFINER length is 77 chars - so the same as mysql.event.definer
+CREATE DEFINER=robert_golebiows@oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char EVENT event_test_should_pass ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 1 HOUR DO SELECT CURRENT_USER();
+Warnings:
+Note	1449	The user specified as a definer ('robert_golebiows'@'oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char') does not exist
+DROP EVENT event_test_should_pass;
+#Now definer is 93 char long so we should get error as mysql.event.definer in old schema was only 77 char long
+CREATE DEFINER=user_name_robert_golebiowski1234@oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char EVENT event_test ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 1 HOUR DO SELECT CURRENT_USER();
+ERROR HY000: It seems that your db schema is old. The definer column is 77 characters long and should be 93 characters long. Please run mysql_upgrade.
+# Let us check with user name + hostname of length 78
+CREATE DEFINER=robert_golebiowsk@oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char EVENT event_test ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 1 HOUR DO SELECT CURRENT_USER();
+ERROR HY000: It seems that your db schema is old. The definer column is 77 characters long and should be 93 characters long. Please run mysql_upgrade.
+# DEFINER with length longer than 93 characters should fail with old plain error staying that data is too long for username
+# as upgrading to 93 characters (with mysql_upgrade) will not help
+# Let us try with 94 characters long username
+CREATE DEFINER=user_name_robert_golebiowski12345@oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char EVENT event_test ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 1 HOUR DO SELECT CURRENT_USER();
+ERROR HY000: String 'user_name_robert_golebiowski12345' is too long for user name (should be no longer than 32)
+CREATE DEFINER=user_name_robert_golebiowski1234@oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char1 EVENT event_test ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 1 HOUR DO SELECT CURRENT_USER();
+ERROR HY000: String 'oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char1' is too long for host name (should be no longer than 60)
+SET @orig_sql_mode= @@sql_mode;
+SET sql_mode='';
+ALTER TABLE mysql.event
+MODIFY definer char(93) CHARACTER SET utf8 COLLATE utf8_bin NOT NULL default '';
+SET sql_mode= @orig_sql_mode;
 
 # 
 # End of tests

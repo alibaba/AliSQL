@@ -1,13 +1,20 @@
-/* Copyright (c) 2010, 2013, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation; version 2 of the License.
+  it under the terms of the GNU General Public License, version 2.0,
+  as published by the Free Software Foundation.
+
+  This program is also distributed with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an additional
+  permission to link the program and your derivative works with the
+  separately licensed software that they have included with MySQL.
 
   This program is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
+  GNU General Public License, version 2.0, for more details.
 
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software
@@ -18,23 +25,26 @@
 
 /**
   @file storage/perfschema/pfs_account.h
-  Performance schema user@host (declarations).
+  Performance schema account (declarations).
 */
 
 #include "pfs_lock.h"
 #include "lf.h"
 #include "pfs_con_slice.h"
+#include "mysql_com.h" /* USERNAME_LENGTH */
 
 struct PFS_global_param;
 struct PFS_user;
 struct PFS_host;
 struct PFS_thread;
+struct PFS_memory_stat_delta;
 
 /**
   @addtogroup Performance_schema_buffers
   @{
 */
 
+/** Hash key for an account. */
 struct PFS_account_key
 {
   /**
@@ -46,6 +56,7 @@ struct PFS_account_key
   uint m_key_length;
 };
 
+/** Per account statistics. */
 struct PFS_ALIGNED PFS_account : PFS_connection_slice
 {
 public:
@@ -69,16 +80,25 @@ public:
     PFS_atomic::add_32(& m_refcount, -1);
   }
 
-  void aggregate(PFS_user *safe_user, PFS_host *safe_host);
+  void aggregate(bool alive, PFS_user *safe_user, PFS_host *safe_host);
   void aggregate_waits(PFS_user *safe_user, PFS_host *safe_host);
   void aggregate_stages(PFS_user *safe_user, PFS_host *safe_host);
   void aggregate_statements(PFS_user *safe_user, PFS_host *safe_host);
+  void aggregate_transactions(PFS_user *safe_user, PFS_host *safe_host);
+  void aggregate_memory(bool alive, PFS_user *safe_user, PFS_host *safe_host);
+  void aggregate_status(PFS_user *safe_user, PFS_host *safe_host);
   void aggregate_stats(PFS_user *safe_user, PFS_host *safe_host);
   void release(void);
+
+  void carry_memory_stat_delta(PFS_memory_stat_delta *delta, uint index);
 
   /** Internal lock. */
   pfs_lock m_lock;
   PFS_account_key m_key;
+  /** True if this account is enabled, per rules in table SETUP_ACTORS. */
+  bool m_enabled;
+  /** True if this account has history enabled, per rules in table SETUP_ACTORS. */
+  bool m_history;
   const char *m_username;
   uint m_username_length;
   const char *m_hostname;
@@ -94,7 +114,7 @@ private:
 
 int init_account(const PFS_global_param *param);
 void cleanup_account(void);
-int init_account_hash(void);
+int init_account_hash(const PFS_global_param *param);
 void cleanup_account_hash(void);
 
 PFS_account *
@@ -105,15 +125,9 @@ find_or_create_account(PFS_thread *thread,
 PFS_account *sanitize_account(PFS_account *unsafe);
 void purge_all_account(void);
 
+void update_accounts_derived_flags(PFS_thread *thread);
 
-/* For iterators and show status. */
-
-extern ulong account_max;
-extern ulong account_lost;
-
-/* Exposing the data directly, for iterators. */
-
-extern PFS_account *account_array;
+/* For show status. */
 
 extern LF_HASH account_hash;
 

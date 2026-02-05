@@ -1,3 +1,8 @@
+# The include statement below is a temp one for tests that are yet to
+#be ported to run with InnoDB,
+#but needs to be kept for tests that would need MyISAM in future.
+--source include/force_myisam_default.inc
+
 ################################################################################
 #
 # NOTICE:
@@ -12,10 +17,6 @@
 
 # Uses GRANT commands that usually disabled in embedded server
 -- source include/not_embedded.inc
-
-# check that CSV engine was compiled in, as the result of the test
-# depends on the presence of the log tables (which are CSV-based).
---source include/have_csv.inc
 
 #
 # Test of some show commands
@@ -157,6 +158,7 @@ drop table t1;
 #
 # Do a create table that tries to cover all types and options
 #
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 create table t1 (
 type_bool bool not null default 0,
 type_tiny tinyint not null auto_increment primary key,
@@ -187,6 +189,7 @@ show create table t1;
 insert into t1 (type_timestamp) values ("2003-02-07 10:00:01");
 select * from t1;
 drop table t1;
+SET sql_mode = default;
 
 #
 # Check metadata
@@ -320,9 +323,12 @@ create database mysqltest;
 show create database mysqltest;
 create table mysqltest.t1(a int);
 insert into mysqltest.t1 values(1);
+set @orig_sql_mode = @@sql_mode;
+set sql_mode=(select replace(@@sql_mode,'NO_AUTO_CREATE_USER',''));
 grant select on `mysqltest`.* to mysqltest_1@localhost;
 grant usage  on `mysqltest`.* to mysqltest_2@localhost;
 grant drop   on `mysqltest`.* to mysqltest_3@localhost;
+set sql_mode= @orig_sql_mode;
 
 connect (con1,localhost,mysqltest_1,,mysqltest);
 connection con1;
@@ -764,6 +770,7 @@ SHOW COLUMNS FROM t1;
 
 --echo ----------------------------------------------------------------
 
+--replace_column 6 #
 SHOW TRIGGERS LIKE 't1';
 
 --echo ----------------------------------------------------------------
@@ -980,7 +987,10 @@ create database mysqltest;
 show create database mysqltest;
 create table mysqltest.t1(a int);
 insert into mysqltest.t1 values(1);
+set @orig_sql_mode = @@sql_mode;
+set sql_mode='';
 grant select on `mysqltest`.`t1` to mysqltest_4@localhost;
+set sql_mode= @orig_sql_mode;
 connect (con4,localhost,mysqltest_4,,mysqltest);
 connection con4;
 show create database mysqltest;
@@ -1078,33 +1088,55 @@ CREATE TRIGGER t1_bi BEFORE INSERT ON t1 FOR EACH ROW SET @a = 1;
 
 # Test.
 
+--replace_column 7 #
 SHOW CREATE TRIGGER t1_bi;
 
 CREATE PROCEDURE p1() SHOW CREATE TRIGGER t1_bi;
 
+--replace_column 7 #
 CALL p1();
+--replace_column 7 #
 CALL p1();
+--replace_column 7 #
 CALL p1();
+--replace_column 7 #
 CALL p1();
+--replace_column 7 #
 CALL p1();
+--replace_column 7 #
 CALL p1();
+--replace_column 7 #
 CALL p1();
+--replace_column 7 #
 CALL p1();
+--replace_column 7 #
 CALL p1();
+--replace_column 7 #
 CALL p1();
 
 PREPARE stmt1 FROM 'SHOW CREATE TRIGGER t1_bi';
 
+--replace_column 7 #
 EXECUTE stmt1;
+--replace_column 7 #
 EXECUTE stmt1;
+--replace_column 7 #
 EXECUTE stmt1;
+--replace_column 7 #
 EXECUTE stmt1;
+--replace_column 7 #
 EXECUTE stmt1;
+--replace_column 7 #
 EXECUTE stmt1;
+--replace_column 7 #
 EXECUTE stmt1;
+--replace_column 7 #
 EXECUTE stmt1;
+--replace_column 7 #
 EXECUTE stmt1;
+--replace_column 7 #
 EXECUTE stmt1;
+--replace_column 7 #
 
 # Cleanup.
 
@@ -1164,6 +1196,7 @@ SHOW CREATE PROCEDURE p1;
 
 SHOW CREATE FUNCTION f1;
 
+--replace_column 7 #
 SHOW CREATE TRIGGER t1_bi;
 
 SHOW CREATE EVENT ev1;
@@ -1219,7 +1252,12 @@ eval KILL QUERY $ID;
 --enable_query_log
 
 CONNECTION con1;
---error ER_QUERY_INTERRUPTED
+let $wait_timeout= 5;
+let $wait_condition=
+  SELECT COUNT(*)=0 FROM INFORMATION_SCHEMA.PROCESSLIST WHERE
+  INFO= "KILL QUERY $ID";
+--source include/wait_condition.inc
+--error ER_NO_SUCH_TABLE
 SHOW CREATE TABLE non_existent;
 
 DISCONNECT con1;
@@ -1310,6 +1348,7 @@ LOCK TABLE t1 WRITE;
 --echo # Connection default
 connection default;
 # Should not block.
+--replace_column 7 #
 SHOW CREATE TRIGGER t1_bi;
 
 --echo # Connection con1
@@ -1321,6 +1360,7 @@ UNLOCK TABLES;
 --echo # Connection default
 connection default;
 START TRANSACTION;
+--replace_column 7 #
 SHOW CREATE TRIGGER t1_bi;
 
 --echo # Connection con1
@@ -1380,10 +1420,12 @@ DROP TABLE IF EXISTS t1;
 
 CREATE TABLE t1 (a INT);
 CREATE TRIGGER t1_bi BEFORE INSERT ON t1 FOR EACH ROW BEGIN END;
+--replace_column 7 #
 SHOW CREATE TRIGGER t1_bi;
 
 CREATE TEMPORARY TABLE t1 (b INT);
 # Should still work
+--replace_column 7 #
 SHOW CREATE TRIGGER t1_bi;
 
 DROP TEMPORARY TABLE t1;
@@ -1402,6 +1444,26 @@ SHOW AUTHORS;
 --error ER_PARSE_ERROR
 SHOW CONTRIBUTORS;
 
+
+--echo #
+--echo # Bug#20709462: GENERATED COLUMNS NOT PRINTED CORRECTLY IN
+--echo #               SHOW CREATE TABLE
+--echo #
+
+CREATE TABLE t1 (i CHAR(3),
+                 n CHAR(20) CHARACTER SET utf8 GENERATED ALWAYS AS (md5(i)));
+
+--echo # Use SHOW CREATE TABLE output below unmodified to re-create table
+SHOW CREATE TABLE t1;
+
+DROP TABLE t1;
+
+CREATE TABLE `t1` (
+  `i` char(3) DEFAULT NULL,
+  `n` char(20) CHARACTER SET utf8 GENERATED ALWAYS AS (md5(i)) VIRTUAL
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+DROP TABLE t1;
 
 # Wait till all disconnects are completed
 --source include/wait_until_count_sessions.inc

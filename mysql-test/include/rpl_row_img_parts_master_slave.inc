@@ -50,6 +50,8 @@
 
 -- let $old_conn= $CURRENT_CONNECTION
 
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+
 -- connection master
 -- sync_slave_with_master
 
@@ -63,7 +65,6 @@
 -- eval $row_img_query
 
 # lets wait until the binary log position changes
-# we may have just executed an insert delayed
 -- let $_pos= query_get_value("SHOW MASTER STATUS", Position, 1)
 
 # wait for 5 minutes
@@ -99,3 +100,5 @@ if (!$iterations)
 -- source include/rpl_row_img_parts_assertion.inc
 
 -- connection $old_conn
+
+SET sql_mode = default;

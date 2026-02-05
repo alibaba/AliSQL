@@ -1,13 +1,20 @@
-/* Copyright (c) 2008, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2008, 2022, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -20,11 +27,19 @@
 #ifndef NDB_MT_ASM_H
 #define NDB_MT_ASM_H
 
+/**
+ * Remove comment on NDB_USE_SPINLOCK if it is desired to use spinlocks
+ * instead of the normal mutex calls. This will not work when configuring
+ * with realtime and is thus disabled by default, but can be activated for
+ * special builds.
+ */
+//#define NDB_USE_SPINLOCK
+
 #if defined(__GNUC__)
 /********************
  * GCC
  *******************/
-#if defined(__x86_64__) || defined (__i386__)
+#if defined(__x86_64__) || defined (__i386__) /* 64 or 32 bit x86 */
 
 #define NDB_HAVE_MB
 #define NDB_HAVE_RMB
@@ -93,6 +108,52 @@ extern  int xcng(volatile unsigned * addr, int val);
 extern void cpu_pause();
 #endif
 
+#elif defined(__powerpc__)
+#define NDB_HAVE_MB
+#define NDB_HAVE_RMB
+#define NDB_HAVE_WMB
+#define NDB_HAVE_READ_BARRIER_DEPENDS
+#define NDB_HAVE_XCNG
+
+#define mb() asm volatile("lwsync;" ::: "memory")
+#define rmb() asm volatile("lwsync;" ::: "memory")
+#define wmb() asm volatile("lwsync;" ::: "memory")
+#define read_barrier_depends() do {} while(0)
+
+static
+inline
+int
+xcng(volatile unsigned * addr, int val)
+{
+  int prev;
+
+  asm volatile ( "lwsync;\n"
+		 "1: lwarx   %0,0,%2;"
+		 "   stwcx.  %3,0,%2;"
+		 "   bne-    1b;"
+		 "isync;"
+		 : "=&r" (prev), "+m" (*(volatile unsigned int *)addr)
+		 : "r" (addr), "r" (val)
+		 : "cc", "memory");
+
+  return prev;
+}
+
+#elif defined(__aarch64__)
+#include <atomic>
+#define NDB_HAVE_MB
+#define NDB_HAVE_RMB
+#define NDB_HAVE_WMB
+#define NDB_HAVE_READ_BARRIER_DEPENDS
+//#define NDB_HAVE_XCNG
+
+#define mb() std::atomic_thread_fence(std::memory_order_seq_cst)
+#define rmb() std::atomic_thread_fence(std::memory_order_seq_cst)
+#define wmb() std::atomic_thread_fence(std::memory_order_seq_cst)
+#define read_barrier_depends() do {} while(0)
+
+#define cpu_pause()  __asm__ __volatile__ ("yield")
+
 #else
 #define NDB_NO_ASM "Unsupported architecture (gcc)"
 #endif
@@ -106,7 +167,7 @@ extern void cpu_pause();
  * TODO check that asm ("") implies a compiler barrier
  *      i.e that it clobbers memory
  */
-#if defined(__x86_64__)
+#if defined(__x86_64) || defined (__i386) /* 64 or 32 bit x86 */
 #define NDB_HAVE_MB
 #define NDB_HAVE_RMB
 #define NDB_HAVE_WMB
@@ -131,9 +192,10 @@ extern void cpu_pause();
 #define read_barrier_depends()  do {} while(0)
 #else
 #define NDB_NO_ASM "Unsupported architecture (sun studio)"
+#error "Unsupported architecture (sun studio)"
 #endif
 
-#if defined(__x86_64__) || defined(__sparc)
+#if defined(__x86_64) || defined (__i386) || defined(__sparc)
 /**
  * we should probably use assembler for x86 aswell...
  *   but i'm not really sure how you do this in sun-studio :-(
@@ -156,7 +218,7 @@ xcng(volatile unsigned * addr, int val)
   return ret;
 }
 #define cpu_pause()
-#elif defined(__x86_64__)
+#elif defined(__x86_64) || defined (__i386)
 static inline
 int
 xcng(volatile unsigned * addr, int val)

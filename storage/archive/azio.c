@@ -7,6 +7,8 @@
  * Copyright (C) 1995-2005 Jean-loup Gailly.
  * For conditions of distribution and use, see copyright notice in zlib.h
  *
+ * This file was modified by Oracle on 2015-01-23.
+ * Modifications Copyright (c) 2015, 2023, Oracle and/or its affiliates.
  */
 
 /* @(#) $Id$ */
@@ -15,6 +17,8 @@
 
 #include <stdio.h>
 #include <string.h>
+#include "my_thread_local.h"
+#include "mysql/psi/mysql_file.h"
 
 static int const gz_magic[2] = {0x1f, 0x8b}; /* gzip magic header */
 static int const az_magic[3] = {0xfe, 0x03, 0x01}; /* az magic header */
@@ -59,21 +63,21 @@ int az_open (azio_stream *s, const char *path, int Flags, File fd)
   memset(s, 0, sizeof(azio_stream));
   s->stream.next_in = s->inbuf;
   s->stream.next_out = s->outbuf;
-  DBUG_ASSERT(s->z_err == Z_OK);
+  assert(s->z_err == Z_OK);
   s->back = EOF;
   s->crc = crc32(0L, Z_NULL, 0);
   s->mode = 'r';
   /* this needs to be a define to version */
   s->version = (unsigned char)az_magic[1];
   s->minor_version= (unsigned char) az_magic[2]; /* minor version */
-  DBUG_ASSERT(s->dirty == AZ_STATE_CLEAN);
+  assert(s->dirty == AZ_STATE_CLEAN);
 
   /*
     We do our own version of append by nature.
     We must always have write access to take card of the header.
   */
-  DBUG_ASSERT(Flags | O_APPEND);
-  DBUG_ASSERT(Flags | O_WRONLY);
+  assert(Flags | O_APPEND);
+  assert(Flags | O_WRONLY);
 
   if (Flags & O_RDWR) 
     s->mode = 'w';
@@ -116,7 +120,7 @@ int az_open (azio_stream *s, const char *path, int Flags, File fd)
     {
       my_close(s->file, MYF(0));
       s->file= -1;
-      my_errno= EMFILE;
+      set_my_errno(EMFILE);
     }
   });
 
@@ -152,8 +156,8 @@ int az_open (azio_stream *s, const char *path, int Flags, File fd)
 
 int write_header(azio_stream *s)
 {
-  char buffer[AZHEADER_SIZE + AZMETA_BUFFER_SIZE];
-  char *ptr= buffer;
+  uchar buffer[AZHEADER_SIZE + AZMETA_BUFFER_SIZE];
+  uchar *ptr= buffer;
 
   if (s->version == 1)
     return 0;
@@ -402,7 +406,7 @@ int destroy (s)
   Reads the given number of uncompressed bytes from the compressed file.
   azread returns the number of bytes actually read (0 for end of file).
 */
-unsigned int ZEXPORT azread ( azio_stream *s, voidp buf, size_t len, int *error)
+size_t ZEXPORT azread ( azio_stream *s, voidp buf, size_t len, int *error)
 {
   Bytef *start = (Bytef*)buf; /* starting point for crc computation */
   Byte  *next_out; /* == stream.next_out but not forced far (for MSDOS) */
@@ -427,7 +431,7 @@ unsigned int ZEXPORT azread ( azio_stream *s, voidp buf, size_t len, int *error)
 
   next_out = (Byte*)buf;
   s->stream.next_out = (Bytef*)buf;
-  s->stream.avail_out = len;
+  s->stream.avail_out = (uInt)len;
 
   if (s->stream.avail_out && s->back != EOF) {
     *next_out++ = s->back;
@@ -745,7 +749,7 @@ my_off_t azseek (s, offset, whence)
   }
   while (offset > 0)  {
     int error;
-    unsigned int size = AZ_BUFSIZE_WRITE;
+    size_t size = AZ_BUFSIZE_WRITE;
     if (offset < AZ_BUFSIZE_WRITE) size = (int)offset;
 
     size = azread(s, s->outbuf, size, &error);
@@ -830,7 +834,7 @@ int azclose (azio_stream *s)
   Though this was added to support MySQL's FRM file, anything can be 
   stored in this location.
 */
-int azwrite_frm(azio_stream *s, char *blob, unsigned int length)
+int azwrite_frm(azio_stream *s, char *blob, size_t length)
 {
   if (s->mode == 'r') 
     return 1;
@@ -861,7 +865,7 @@ int azread_frm(azio_stream *s, char *blob)
 /*
   Simple comment field
 */
-int azwrite_comment(azio_stream *s, char *blob, unsigned int length)
+int azwrite_comment(azio_stream *s, char *blob, size_t length)
 {
   if (s->mode == 'r') 
     return 1;

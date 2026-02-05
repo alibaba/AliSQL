@@ -1,14 +1,20 @@
-/* Copyright (C) 2007, 2008 MySQL AB, 2008 Sun Microsystems, Inc.
-    All rights reserved. Use is subject to license terms.
+/* Copyright (c) 2007, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -18,6 +24,9 @@
 #define SCHEMA_TRANS_HPP
 
 #include "SignalData.hpp"
+
+#define JAM_FILE_ID 123
+
 
 // begin
 
@@ -44,7 +53,8 @@ struct SchemaTransBeginRef {
     BusyWithNR = 711,
     TooManySchemaTrans = 780,
     IncompatibleVersions = 763,
-    Nodefailure = 786
+    Nodefailure = 786,
+    OutOfSchemaTransMemory = 796
   };
   Uint32 senderRef;
   Uint32 transId;
@@ -80,6 +90,7 @@ struct SchemaTransEndConf {
 struct SchemaTransEndRef {
   enum ErrorCode {
     NoError = 0,
+    Busy = 701,
     NotMaster = 702,
     InvalidTransKey = 781,
     InvalidTransId = 782,
@@ -107,5 +118,8 @@ struct SchemaTransEndRep {
   Uint32 errorNodeId;
   Uint32 masterNodeId;
 };
+
+
+#undef JAM_FILE_ID
 
 #endif

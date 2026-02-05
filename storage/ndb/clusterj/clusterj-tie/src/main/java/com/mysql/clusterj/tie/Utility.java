@@ -1,14 +1,21 @@
 /*
- *  Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
+ *  Copyright (c) 2010, 2021, Oracle and/or its affiliates.
  *
  *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; version 2 of the License.
+ *  it under the terms of the GNU General Public License, version 2.0,
+ *  as published by the Free Software Foundation.
+ *
+ *  This program is also distributed with certain software (including
+ *  but not limited to OpenSSL) that is licensed under separate terms,
+ *  as designated in a particular file or component or in included license
+ *  documentation.  The authors of MySQL hereby grant you an additional
+ *  permission to link the program and your derivative works with the
+ *  separately licensed software that they have included with MySQL.
  *
  *  This program is distributed in the hope that it will be useful,
  *  but WITHOUT ANY WARRANTY; without even the implied warranty of
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
+ *  GNU General Public License, version 2.0, for more details.
  *
  *  You should have received a copy of the GNU General Public License
  *  along with this program; if not, write to the Free Software
@@ -64,11 +71,8 @@ public class Utility {
     static final Logger logger = LoggerFactoryService.getFactory()
             .getInstance(Utility.class);
 
-    /** Standard Java charset encoder */
-    static CharsetEncoder charsetEncoder = Charset.forName("windows-1252").newEncoder();
-
-    /** Standard Java charset decoder */
-    static CharsetDecoder charsetDecoder = Charset.forName("windows-1252").newDecoder();
+    /** Standard Java charset */
+    static Charset charset = Charset.forName("windows-1252");
 
     static final long ooooooooooooooff = 0x00000000000000ffL;
     static final long ooooooooooooffoo = 0x000000000000ff00L;
@@ -83,6 +87,7 @@ public class Utility {
     static final int ooooffff = 0x0000ffff;
     static final int ooooffoo = 0x0000ff00;
     static final int ooffoooo = 0x00ff0000;
+    static final int ooffffff = 0x00ffffff;
 
     static final char[] SPACE_PAD = new char[255];
     static {
@@ -97,17 +102,51 @@ public class Utility {
             ZERO_PAD[i] = (byte)0;
         }
     }
+ 
+    static final byte[] BLANK_PAD = new byte[255];
+    static {
+        for (int i = 0; i < 255; ++i) {
+            BLANK_PAD[i] = (byte)' ';
+        }
+    }
 
     static final byte[] EMPTY_BYTE_ARRAY = new byte[0];
 
+    /** Scratch buffer pool used for decimal conversions; 65 digits of precision, sign, decimal, null terminator */
+    static final FixedByteBufferPoolImpl decimalByteBufferPool = new FixedByteBufferPoolImpl(68, "Decimal Pool");
+
+    /* Error codes that are not severe, and simply reflect expected conditions */
+    private static Set<Integer> NonSevereErrorCodes = new HashSet<Integer>();
+
+    public static final int SET_NOT_NULL_TO_NULL = 4203;
+    public static final int INDEX_NOT_FOUND = 4243;
+    public static final int ROW_NOT_FOUND = 626;
+    public static final int DUPLICATE_PRIMARY_KEY = 630;
+    public static final int DUPLICATE_UNIQUE_KEY = 893;
+    public static final int FOREIGN_KEY_NO_PARENT = 255;
+    public static final int FOREIGN_KEY_REFERENCED_ROW_EXISTS = 256;
+
+    static {
+        NonSevereErrorCodes.add(SET_NOT_NULL_TO_NULL); // Attempt to set a NOT NULL attribute to NULL
+        NonSevereErrorCodes.add(INDEX_NOT_FOUND); // Index not found
+        NonSevereErrorCodes.add(ROW_NOT_FOUND); // Tuple did not exist
+        NonSevereErrorCodes.add(DUPLICATE_PRIMARY_KEY); // Duplicate primary key on insert
+        NonSevereErrorCodes.add(DUPLICATE_UNIQUE_KEY); // Duplicate unique key on insert
+        NonSevereErrorCodes.add(FOREIGN_KEY_NO_PARENT); // Foreign key violation; no parent exists
+        NonSevereErrorCodes.add(FOREIGN_KEY_REFERENCED_ROW_EXISTS); // Foreign key violation; referenced row exists
+    }
+
     // TODO: this is intended to investigate a class loader issue with Sparc java
     // The idea is to force loading the CharsetMap native class prior to calling the static create method
+    // First, make sure that the native library is loaded because CharsetMap depends on it
+    static {
+        ClusterConnectionServiceImpl.loadSystemLibrary("ndbclient");
+    }
     static Class<?> charsetMapClass = loadClass("com.mysql.ndbjtie.mysql.CharsetMap");
     static Class<?> loadClass(String className) {
         try {
             return Class.forName(className);
         } catch (ClassNotFoundException e) {
-            // TODO Auto-generated catch block
             throw new ClusterJUserException(local.message("ERR_Loading_Native_Class", className), e);
         }
     }
@@ -234,6 +273,19 @@ public class Utility {
             }
         }
 
+        public boolean getBoolean(Column storeColumn, int value) {
+            switch (storeColumn.getType()) {
+                case Bit:
+                    return value == 1;
+                case Tinyint:
+                    // the value is stored in the top 8 bits
+                    return (value >>> 24) == 1;
+                default:
+                    throw new ClusterJUserException(
+                            local.message("ERR_Unsupported_Mapping", storeColumn.getType(), "boolean"));
+            }
+        }
+
         public byte getByte(Column storeColumn, NdbRecAttr ndbRecAttr) {
             switch (storeColumn.getType()) {
                 case Bit:
@@ -246,6 +298,7 @@ public class Utility {
                             local.message("ERR_Unsupported_Mapping", storeColumn.getType(), "byte"));
             }
         }
+
         public short getShort(Column storeColumn, NdbRecAttr ndbRecAttr) {
             switch (storeColumn.getType()) {
                 case Bit:
@@ -257,6 +310,7 @@ public class Utility {
                             local.message("ERR_Unsupported_Mapping", storeColumn.getType(), "short"));
             }
         }
+
         public int getInt(Column storeColumn, NdbRecAttr ndbRecAttr) {
             switch (storeColumn.getType()) {
                 case Bit:
@@ -272,6 +326,25 @@ public class Utility {
                             local.message("ERR_Unsupported_Mapping", storeColumn.getType(), "int"));
             }
         }
+
+        public int getInt(Column storeColumn, int value) {
+            switch (storeColumn.getType()) {
+                case Bit:
+                case Int:
+                case Timestamp:
+                    return value;
+                case Date:
+                    // the unsigned value is stored in the top 3 bytes
+                    return value >>> 8;
+                case Time:
+                    // the signed value is stored in the top 3 bytes
+                    return value >> 8;
+                default:
+                    throw new ClusterJUserException(
+                            local.message("ERR_Unsupported_Mapping", storeColumn.getType(), "int"));
+            }
+        }
+
         public long getLong(Column storeColumn, NdbRecAttr ndbRecAttr) {
             switch (storeColumn.getType()) {
                 case Bit:
@@ -293,6 +366,49 @@ public class Utility {
                             local.message("ERR_Unsupported_Mapping", storeColumn.getType(), "long"));
             }
         }
+
+        public long getLong(Column storeColumn, long value) {
+            switch (storeColumn.getType()) {
+                case Bit:
+                    // the data is stored as two int values
+                    return (value >>> 32) | (value << 32);
+                case Bigint:
+                case Bigunsigned:
+                    return value;
+                case Datetime:
+                    return unpackDatetime(value);
+                case Timestamp:
+                    return (value >> 32) * 1000L;
+                case Date:
+                    // the three high order bytes are the little endian representation
+                    // the original is zzyyxx0000000000 and the result is 0000000000xxyyzz
+                    long packedDate = 0L;
+                    packedDate |= (value & ffoooooooooooooo) >>> 56;
+                    packedDate |= (value & ooffoooooooooooo) >>> 40;
+                    // the xx byte is signed, so shift left 16 and arithmetic shift right 40
+                    packedDate |= ((value & ooooffoooooooooo) << 16) >> 40;
+                    return unpackDate((int)packedDate);
+                case Time:
+                    // the three high order bytes are the little endian representation
+                    // the original is zzyyxx0000000000 and the result is 0000000000xxyyzz
+                    long packedTime = 0L;
+                    packedTime |= (value & ffoooooooooooooo) >>> 56;
+                    packedTime |= (value & ooffoooooooooooo) >>> 40;
+                    // the xx byte is signed, so shift left 16 and arithmetic shift right 40
+                    packedTime |= ((value & ooooffoooooooooo) << 16) >> 40;
+                    return unpackTime((int)packedTime);
+                case Datetime2:
+                    return unpackDatetime2(storeColumn.getPrecision(), value);
+                case Timestamp2:
+                    return unpackTimestamp2(storeColumn.getPrecision(), value);
+                case Time2:
+                    return unpackTime2(storeColumn.getPrecision(), value);
+                default:
+                    throw new ClusterJUserException(
+                            local.message("ERR_Unsupported_Mapping", storeColumn.getType(), "long"));
+            }
+        }
+
         /** Put the low order three bytes of the input value into the ByteBuffer as a medium_value.
          * The format for medium value is always little-endian even on big-endian architectures.
          * Do not flip the buffer, as the caller will do that if needed.
@@ -365,6 +481,17 @@ public class Utility {
             return result;
         }
 
+        public int convertIntValueForStorage(Column storeColumn, int value) {
+            switch (storeColumn.getType()) {
+                case Bit:
+                case Int:
+                    return value;
+                default:
+                    throw new ClusterJUserException(local.message(
+                            "ERR_Unsupported_Mapping", storeColumn.getType(), "int"));
+            }
+        }
+
         public ByteBuffer convertValue(Column storeColumn, long value) {
             ByteBuffer result = ByteBuffer.allocateDirect(8);
             return convertValue(storeColumn, value, result);
@@ -403,6 +530,21 @@ public class Utility {
                 case Timestamp:
                     result.order(ByteOrder.BIG_ENDIAN);
                     result.putInt((int)(value/1000L));
+                    result.flip();
+                    return result;
+                case Datetime2:
+                    result.order(ByteOrder.BIG_ENDIAN);
+                    result.putLong(packDatetime2(storeColumn.getPrecision(), value));
+                    result.flip();
+                    return result;
+                case Time2:
+                    result.order(ByteOrder.BIG_ENDIAN);
+                    result.putLong(packTime2(storeColumn.getPrecision(), value));
+                    result.flip();
+                    return result;
+                case Timestamp2:
+                    result.order(ByteOrder.BIG_ENDIAN);
+                    result.putLong(packTimestamp2(storeColumn.getPrecision(), value));
                     result.flip();
                     return result;
                 default:
@@ -444,6 +586,15 @@ public class Utility {
                     // timestamp is an int so put the value into the high bytes
                     // the original is 00000000tttttttt and the result is tttttttt00000000
                     return (value/1000L) << 32;
+                case Datetime2:
+                    // value is in milliseconds since the epoch
+                    return packDatetime2(storeColumn.getPrecision(), value);
+                case Time2:
+                    // value is in milliseconds since the epoch
+                    return packTime2(storeColumn.getPrecision(), value);
+                case Timestamp2:
+                    // value is in milliseconds since the epoch
+                    return packTimestamp2(storeColumn.getPrecision(), value);
                 default:
                     throw new ClusterJUserException(local.message(
                             "ERR_Unsupported_Mapping", storeColumn.getType(), "long"));
@@ -479,6 +630,12 @@ public class Utility {
             }
         }
 
+        public long convertLongValueFromStorage(Column storeColumn,
+                long fromStorage) {
+            // TODO Auto-generated method stub
+            return 0;
+        }
+
     }:
         /*
          * Little Endian algorithms to convert NdbRecAttr buffer into primitive types
@@ -497,6 +654,17 @@ public class Utility {
             }
         }
 
+        public boolean getBoolean(Column storeColumn, int value) {
+            switch (storeColumn.getType()) {
+                case Bit:
+                case Tinyint:
+                    return value == 1;
+                default:
+                    throw new ClusterJUserException(
+                            local.message("ERR_Unsupported_Mapping", storeColumn.getType(), "boolean"));
+            }
+        }
+
         public byte getByte(Column storeColumn, NdbRecAttr ndbRecAttr) {
             switch (storeColumn.getType()) {
                 case Bit:
@@ -508,6 +676,7 @@ public class Utility {
                             local.message("ERR_Unsupported_Mapping", storeColumn.getType(), "byte"));
             }
         }
+
         public short getShort(Column storeColumn, NdbRecAttr ndbRecAttr) {
             switch (storeColumn.getType()) {
                 case Bit:
@@ -518,6 +687,7 @@ public class Utility {
                             local.message("ERR_Unsupported_Mapping", storeColumn.getType(), "short"));
             }
         }
+
         public int getInt(Column storeColumn, NdbRecAttr ndbRecAttr) {
             switch (storeColumn.getType()) {
                 case Bit:
@@ -533,6 +703,24 @@ public class Utility {
                             local.message("ERR_Unsupported_Mapping", storeColumn.getType(), "int"));
             }
         }
+
+        public int getInt(Column storeColumn, int value) {
+            switch (storeColumn.getType()) {
+                case Bit:
+                case Int:
+                case Timestamp:
+                    return value;
+                case Date:
+                    return value & ooffffff;
+                case Time:
+                    // propagate the sign bit from 3 byte medium_int
+                    return (value << 8) >> 8;
+                default:
+                    throw new ClusterJUserException(
+                            local.message("ERR_Unsupported_Mapping", storeColumn.getType(), "int"));
+            }
+        }
+
         public long getLong(Column storeColumn, NdbRecAttr ndbRecAttr) {
             switch (storeColumn.getType()) {
                 case Bigint:
@@ -547,6 +735,35 @@ public class Utility {
                     return unpackDate(ndbRecAttr.int32_value());
                 case Time:
                     return unpackTime(ndbRecAttr.int32_value());
+                default:
+                    throw new ClusterJUserException(
+                            local.message("ERR_Unsupported_Mapping", storeColumn.getType(), "long"));
+            }
+        }
+
+        public long getLong(Column storeColumn, long value) {
+            switch (storeColumn.getType()) {
+                case Bigint:
+                case Bigunsigned:
+                case Bit:
+                    return value;
+                case Datetime:
+                    return unpackDatetime(value);
+                case Timestamp:
+                    return value * 1000L;
+                case Date:
+                    return unpackDate((int)(value));
+                case Time:
+                    return unpackTime((int)(value));
+                case Datetime2:
+                    // datetime2 is stored in big endian format so need to swap the input
+                    return unpackDatetime2(storeColumn.getPrecision(), swap(value));
+                case Timestamp2:
+                    // timestamp2 is stored in big endian format so need to swap the input
+                    return unpackTimestamp2(storeColumn.getPrecision(), swap(value));
+                case Time2:
+                    // time2 is stored in big endian format so need to swap the input
+                    return unpackTime2(storeColumn.getPrecision(), swap(value));
                 default:
                     throw new ClusterJUserException(
                             local.message("ERR_Unsupported_Mapping", storeColumn.getType(), "long"));
@@ -613,7 +830,18 @@ public class Utility {
                     return result;
                 default:
                     throw new ClusterJUserException(local.message(
-                            "ERR_Unsupported_Mapping", storeColumn.getType(), "short"));
+                            "ERR_Unsupported_Mapping", storeColumn.getType(), "int"));
+            }
+        }
+
+        public int convertIntValueForStorage(Column storeColumn, int value) {
+            switch (storeColumn.getType()) {
+                case Bit:
+                case Int:
+                    return value;
+                default:
+                    throw new ClusterJUserException(local.message(
+                            "ERR_Unsupported_Mapping", storeColumn.getType(), "int"));
             }
         }
 
@@ -651,6 +879,21 @@ public class Utility {
                     put3byteInt(result, packTime(value));
                     result.flip();
                     return result;
+                case Datetime2:
+                    result.order(ByteOrder.BIG_ENDIAN);
+                    result.putLong(packDatetime2(storeColumn.getPrecision(), value));
+                    result.flip();
+                    return result;
+                case Time2:
+                    result.order(ByteOrder.BIG_ENDIAN);
+                    result.putLong(packTime2(storeColumn.getPrecision(), value));
+                    result.flip();
+                    return result;
+                case Timestamp2:
+                    result.order(ByteOrder.BIG_ENDIAN);
+                    result.putLong(packTimestamp2(storeColumn.getPrecision(), value));
+                    result.flip();
+                    return result;
                 default:
                     throw new ClusterJUserException(local.message(
                             "ERR_Unsupported_Mapping", storeColumn.getType(), "long"));
@@ -671,6 +914,18 @@ public class Utility {
                     return packDate(value);
                 case Time:
                     return packTime(value);
+                case Datetime2:
+                    // value is in milliseconds since the epoch
+                    // datetime2 is in big endian format so need to swap the result 
+                    return swap(packDatetime2(storeColumn.getPrecision(), value));
+                case Time2:
+                    // value is in milliseconds since the epoch
+                    // time2 is in big endian format so need to swap the result 
+                    return swap(packTime2(storeColumn.getPrecision(), value));
+                case Timestamp2:
+                    // value is in milliseconds since the epoch
+                    // timestamp2 is in big endian format so need to swap the result 
+                    return swap(packTimestamp2(storeColumn.getPrecision(), value));
                 default:
                     throw new ClusterJUserException(local.message(
                             "ERR_Unsupported_Mapping", storeColumn.getType(), "long"));
@@ -702,29 +957,45 @@ public class Utility {
             }
         }
 
+        public long convertLongValueFromStorage(Column storeColumn, long fromStorage) {
+            switch (storeColumn.getType()) {
+                case Bigint:
+                case Bigunsigned:
+                case Bit:
+                    return fromStorage;
+                case Datetime:
+                    return unpackDatetime(fromStorage);
+                case Timestamp:
+                    return fromStorage * 1000L;
+                case Date:
+                    return unpackDate((int)fromStorage);
+                case Time:
+                    return unpackTime((int)fromStorage);
+                default:
+                    throw new ClusterJUserException(
+                            local.message("ERR_Unsupported_Mapping", storeColumn.getType(), "long"));
+            }
+        }
+
     };
-
-    /* Error codes that are not severe, and simply reflect expected conditions */
-    private static Set<Integer> NonSevereErrorCodes = new HashSet<Integer>();
-
-    static {
-        NonSevereErrorCodes.add(4203); // Trying to set a NOT NULL attribute to NULL
-        NonSevereErrorCodes.add(4243); // Index not found
-        NonSevereErrorCodes.add(626); // Tuple did not exist
-    }
 
     protected static interface EndianManager {
         public void put3byteInt(ByteBuffer byteBuffer, int value);
+        public int getInt(Column storeColumn, int value);
         public int getInt(Column storeColumn, NdbRecAttr ndbRecAttr);
         public short getShort(Column storeColumn, NdbRecAttr ndbRecAttr);
         public long getLong(Column storeColumn, NdbRecAttr ndbRecAttr);
+        public long getLong(Column storeColumn, long value);
         public byte getByte(Column storeColumn, NdbRecAttr ndbRecAttr);
         public ByteBuffer convertValue(Column storeColumn, byte value);
         public ByteBuffer convertValue(Column storeColumn, short value);
         public ByteBuffer convertValue(Column storeColumn, int value);
         public ByteBuffer convertValue(Column storeColumn, long value);
         public boolean getBoolean(Column storeColumn, NdbRecAttr ndbRecAttr);
+        public boolean getBoolean(Column storeColumn, int value);
+        public int convertIntValueForStorage(Column storeColumn, int value);
         public long convertLongValueForStorage(Column storeColumn, long value);
+        public long convertLongValueFromStorage(Column storeColumn, long fromStorage);
         public int convertByteValueForStorage(Column storeColumn, byte value);
         public int convertShortValueForStorage(Column storeColumn, short value);
     }
@@ -792,56 +1063,83 @@ public class Utility {
      * @return the ByteBuffer
      */
     public static ByteBuffer convertValue(Column storeColumn, byte[] value) {
+        int requiredLength = storeColumn.getColumnSpace();
+        ByteBuffer result = ByteBuffer.allocateDirect(requiredLength);
+        convertValue(result, storeColumn, value);
+        result.flip();
+        return result;
+    }
+
+    /** Convert the parameter value and store it in a given ByteBuffer that can be passed to ndbjtie.
+     * 
+     * @param buffer the buffer, positioned at the location to store the value
+     * @param storeColumn the column definition
+     * @param value the value to be converted
+     */
+    public static void convertValue(ByteBuffer buffer, Column storeColumn, byte[] value) {
         int dataLength = value.length;
+        int maximumLength = storeColumn.getLength();
+        if (dataLength > maximumLength) {
+            throw new ClusterJUserException(
+                    local.message("ERR_Data_Too_Long",
+                    storeColumn.getName(), maximumLength, dataLength));
+        }
         int prefixLength = storeColumn.getPrefixLength();
-        ByteBuffer result;
         switch (prefixLength) {
             case 0:
-                int requiredLength = storeColumn.getColumnSpace();
-                if (dataLength > requiredLength) {
-                    throw new ClusterJFatalInternalException(
-                            local.message("ERR_Data_Too_Long",
-                            storeColumn.getName(), requiredLength, dataLength));
-                } else {
-                    result = ByteBuffer.allocateDirect(requiredLength);
-                    result.order(ByteOrder.nativeOrder());
-                    result.put(value);
-                    if (dataLength < requiredLength) {
-                        // pad with 0x00 on right
-                        result.put(ZERO_PAD, 0, requiredLength - dataLength);
-                    }
+                buffer.put(value);
+                if (dataLength < maximumLength) {
+                    // pad with 0x00 on right
+                    buffer.put(ZERO_PAD, 0, maximumLength - dataLength);
                 }
                 break;
             case 1:
-                if (dataLength > 255) {
-                    throw new ClusterJFatalInternalException(
-                            local.message("ERR_Data_Too_Long",
-                            storeColumn.getName(), "255", dataLength));
-                }
-                result = ByteBuffer.allocateDirect(prefixLength + dataLength);
-                result.order(ByteOrder.nativeOrder());
-                result.put((byte)dataLength);
-                result.put(value);
+                buffer.put((byte)dataLength);
+                buffer.put(value);
                 break;
             case 2:
-                if (dataLength > 8000) {
-                    throw new ClusterJFatalInternalException(
-                            local.message("ERR_Data_Too_Long",
-                            storeColumn.getName(), "8000", dataLength));
-                }
-                result = ByteBuffer.allocateDirect(prefixLength + dataLength);
-                result.order(ByteOrder.nativeOrder());
-                result.put((byte)(dataLength%256));
-                result.put((byte)(dataLength/256));
-                result.put(value);
+                buffer.put((byte)(dataLength%256));
+                buffer.put((byte)(dataLength/256));
+                buffer.put(value);
                 break;
             default: 
                     throw new ClusterJFatalInternalException(
                             local.message("ERR_Unknown_Prefix_Length",
                             prefixLength, storeColumn.getName()));
         }
-        result.flip();
-        return result;
+    }
+
+    /** Convert a BigDecimal value to the binary decimal form used by MySQL.
+     * Store the result in the given ByteBuffer that is already positioned.
+     * Use the precision and scale of the column to convert. Values that don't fit
+     * into the column throw a ClusterJUserException.
+     * @param result the buffer, positioned at the location to store the value
+     * @param storeColumn the column metadata
+     * @param value the value to be converted
+     * @return the ByteBuffer
+     */
+    public static void convertValue(ByteBuffer result, Column storeColumn, BigDecimal value) {
+        int precision = storeColumn.getPrecision();
+        int scale = storeColumn.getScale();
+        int bytesNeeded = getDecimalColumnSpace(precision, scale);
+        // TODO this should be a policy option, perhaps an annotation to fail on truncation
+        BigDecimal scaledValue = value.setScale(scale, RoundingMode.HALF_UP);
+        // the new value has the same scale as the column
+        String stringRepresentation = scaledValue.toPlainString();
+        int length = stringRepresentation.length();
+        ByteBuffer byteBuffer = decimalByteBufferPool.borrowBuffer();
+        CharBuffer charBuffer = CharBuffer.wrap(stringRepresentation);
+        // basic encoding
+        charset.newEncoder().encode(charBuffer, byteBuffer, true);
+        byteBuffer.flip();
+        int returnCode = Utils.decimal_str2bin(
+                byteBuffer, length, precision, scale, result, bytesNeeded);
+        decimalByteBufferPool.returnBuffer(byteBuffer);
+        if (returnCode != 0) {
+            throw new ClusterJUserException(
+                    local.message("ERR_String_To_Binary_Decimal",
+                    returnCode, scaledValue, storeColumn.getName(), precision, scale));
+        }
     }
 
     /** Convert a BigDecimal value to the binary decimal form used by MySQL.
@@ -864,7 +1162,7 @@ public class Utility {
         ByteBuffer byteBuffer = ByteBuffer.allocateDirect(length);
         CharBuffer charBuffer = CharBuffer.wrap(stringRepresentation);
         // basic encoding
-        charsetEncoder.encode(charBuffer, byteBuffer, true);
+        charset.newEncoder().encode(charBuffer, byteBuffer, true);
         byteBuffer.flip();
         int returnCode = Utils.decimal_str2bin(
                 byteBuffer, length, precision, scale, result, bytesNeeded);
@@ -873,6 +1171,38 @@ public class Utility {
             throw new ClusterJUserException(
                     local.message("ERR_String_To_Binary_Decimal", 
                     returnCode, scaledValue, storeColumn.getName(), precision, scale));
+        }
+        return result;
+    }
+
+    /** Convert a BigInteger value to the binary decimal form used by MySQL.
+     * Store the result in the given ByteBuffer that is already positioned.
+     * Use the precision and scale of the column to convert. Values that don't fit
+     * into the column throw a ClusterJUserException.
+     * @param result the buffer, positioned at the location to store the value
+     * @param storeColumn the column metadata
+     * @param value the value to be converted
+     * @return the ByteBuffer
+     */
+    public static ByteBuffer convertValue(ByteBuffer result, Column storeColumn, BigInteger value) {
+        int precision = storeColumn.getPrecision();
+        int scale = storeColumn.getScale();
+        int bytesNeeded = getDecimalColumnSpace(precision, scale);
+        String stringRepresentation = value.toString();
+        int length = stringRepresentation.length();
+        ByteBuffer byteBuffer = decimalByteBufferPool.borrowBuffer();
+        CharBuffer charBuffer = CharBuffer.wrap(stringRepresentation);
+        // basic encoding
+        charset.newEncoder().encode(charBuffer, byteBuffer, true);
+        byteBuffer.flip();
+        int returnCode = Utils.decimal_str2bin(
+                byteBuffer, length, precision, scale, result, bytesNeeded);
+        decimalByteBufferPool.returnBuffer(byteBuffer);
+        byteBuffer.flip();
+        if (returnCode != 0) {
+            throw new ClusterJUserException(
+                    local.message("ERR_String_To_Binary_Decimal",
+                    returnCode, stringRepresentation, storeColumn.getName(), precision, scale));
         }
         return result;
     }
@@ -894,7 +1224,7 @@ public class Utility {
         ByteBuffer byteBuffer = ByteBuffer.allocateDirect(length);
         CharBuffer charBuffer = CharBuffer.wrap(stringRepresentation);
         // basic encoding
-        charsetEncoder.encode(charBuffer, byteBuffer, true);
+        charset.newEncoder().encode(charBuffer, byteBuffer, true);
         byteBuffer.flip();
         int returnCode = Utils.decimal_str2bin(
                 byteBuffer, length, precision, scale, result, bytesNeeded);
@@ -1051,6 +1381,28 @@ public class Utility {
         }
         return chars;
     }
+    
+    /** Pad the value with blanks on the right.
+     * @param buffer the input value
+     * @param storeColumn the store column
+     * @return the buffer padded with blanks on the right
+     */
+    private static ByteBuffer padString(ByteBuffer buffer, Column storeColumn) {
+        int suppliedLength = buffer.limit();
+        int requiredLength = storeColumn.getColumnSpace();
+        if (suppliedLength > requiredLength) {
+            throw new ClusterJUserException(local.message("ERR_Data_Too_Long",
+                    storeColumn.getName(), requiredLength, suppliedLength));
+        } else if (suppliedLength < requiredLength) {
+        	//reset buffer's limit
+        	buffer.limit(requiredLength);
+        	//pad to fixed length
+        	buffer.position(suppliedLength);
+        	buffer.put(BLANK_PAD, 0, requiredLength - suppliedLength);
+        	buffer.position(0);
+        }
+        return buffer;
+    }
 
     /** Fix the length information in a buffer based on the length prefix,
      * either 0, 1, or 2 bytes that hold the length information.
@@ -1067,17 +1419,9 @@ public class Utility {
             case 0:
                 break;
             case 1:
-                if (length > 255) {
-                    throw new ClusterJUserException(local.message("ERR_Varchar_Too_Big",
-                            length, columnName));
-                }
                 byteBuffer.put((byte)(length % 256));
                 break;
             case 2:
-                if (length > 65535) {
-                    throw new ClusterJUserException(local.message("ERR_Varchar_Too_Big",
-                            length, columnName));
-                }
                 byteBuffer.put((byte)(length % 256));
                 byteBuffer.put((byte)(length / 256));
                 break;
@@ -1150,6 +1494,200 @@ public class Utility {
         long packedDatetime = (year * 10000000000L) + (month * 100000000L) + (day * 1000000L)
                 + (hour * 10000L) + (minute * 100) + second;
         return packedDatetime;
+    }
+
+    /** Pack milliseconds since the Epoch into a long in database Datetime2 format.
+     * Reference: http://dev.mysql.com/doc/internals/en/date-and-time-data-type-representation.html
+     * The packed datetime2 integer part is:
+     *  1 bit  sign (1= non-negative, 0= negative) [ALWAYS POSITIVE IN MYSQL 5.6]
+     * 17 bits year*13+month (year 0-9999, month 1-12)
+     *  5 bits day           (0-31)
+     *  5 bits hour          (0-23)
+     *  6 bits minute        (0-59)
+     *  6 bits second        (0-59)
+     *  ---------------------------
+     * 40 bits = 5 bytes
+     * Calendar month is 0 origin so add 1 to get packed month
+     * @param millis milliseconds since the Epoch
+     * @return the long in big endian packed Datetime2 format
+     */
+    protected static long packDatetime2(int precision, long millis) {
+        Calendar calendar = Calendar.getInstance();
+        calendar.clear();
+        calendar.setTimeInMillis(millis);
+        long year = calendar.get(Calendar.YEAR);
+        long month = calendar.get(Calendar.MONTH);
+        long day = calendar.get(Calendar.DATE);
+        long hour = calendar.get(Calendar.HOUR);
+        long minute = calendar.get(Calendar.MINUTE);
+        long second = calendar.get(Calendar.SECOND);
+        long milliseconds = calendar.get(Calendar.MILLISECOND);
+        long packedMillis = packFractionalSeconds(precision, milliseconds);
+        long result =         0x8000000000000000L  // 1 bit sign
+                + (year     * 0x0003400000000000L) // 17 bits year * 13
+                + ((month+1)* 0x0000400000000000L) //         + month
+                + (day      * 0x0000020000000000L) // 5 bits day 
+                + (hour     * 0x0000001000000000L) // 5 bits hour
+                + (minute   * 0x0000000040000000L) // 6 bits minute
+                + (second   * 0x0000000001000000L) // 6 bits second
+                + packedMillis;        // fractional microseconds
+        return result;
+    }
+
+    protected static long unpackDatetime2(int precision, long packedDatetime2) {
+        int yearMonth = (int)((packedDatetime2 & 0x7FFFC00000000000L) >>> 46); // 17 bits year * 13 + month
+        int year = yearMonth / 13;
+        int month= (yearMonth % 13) - 1; // calendar month is 0-11
+        int day =       (int)((packedDatetime2 & 0x00003E0000000000L) >>> 41); // 5 bits day
+        int hour =      (int)((packedDatetime2 & 0x000001F000000000L) >>> 36); // 5 bits hour
+        int minute =    (int)((packedDatetime2 & 0x0000000FC0000000L) >>> 30); // 6 bits minute
+        int second =    (int)((packedDatetime2 & 0x000000003F000000L) >>> 24); // 6 bits second
+        int milliseconds = unpackFractionalSeconds(precision, (int)(packedDatetime2 & 0x0000000000FFFFFFL));
+        Calendar calendar = Calendar.getInstance();
+        calendar.clear();
+        calendar.set(Calendar.YEAR, year);
+        calendar.set(Calendar.MONTH, month);
+        calendar.set(Calendar.DATE, day);
+        calendar.set(Calendar.HOUR, hour);
+        calendar.set(Calendar.MINUTE, minute);
+        calendar.set(Calendar.SECOND, second);
+        calendar.set(Calendar.MILLISECOND, milliseconds);
+        return calendar.getTimeInMillis();
+    }
+
+    /** Convert milliseconds to packed time2 format
+     * Fractional format
+
+     * FSP      nBytes MaxValue MaxValueHex
+     * ---      -----  -------- -----------
+     * FSP=1    1byte  9                 9
+     * FSP=2    1byte  99               63
+
+     * FSP=3    2bytes 999             3E7
+     * FSP=4    2bytes 9999           270F
+
+     * FSP=5    3bytes 99999         1869F
+     * FSP=6    3bytes 999999        F423F
+
+     * @param precision number of digits of precision, 0 to 6
+     * @param milliseconds
+     * @return
+     */
+    protected static long packFractionalSeconds(int precision, long milliseconds) {
+        switch (precision) {
+            case 0:
+                if (milliseconds > 0) throwOnTruncation();
+                return 0L;
+            case 1: // possible truncation
+                if (milliseconds % 100 != 0) throwOnTruncation();
+                return (milliseconds / 100L) * 0x0000000000010000L;
+            case 2: // possible truncation
+                if (milliseconds % 10 != 0) throwOnTruncation();
+                return (milliseconds / 10L)  * 0x0000000000010000L;
+            case 3:
+                return milliseconds * 0x0000000000000100L;
+            case 4:
+                return milliseconds * 0x0000000000000A00L; // milliseconds * 10
+            case 5:
+                return milliseconds * 0x0000000000000064L; // milliseconds * 100
+            case 6:
+                return milliseconds * 0x00000000000003E8L; // milliseconds * 1000
+            default:
+                return 0L;
+        }
+    }
+
+    protected static int unpackFractionalSeconds(int precision, int fraction) {
+        switch (precision) {
+            case 0:
+                return 0;
+            case 1:
+                return (fraction & 0x00FF0000) * 100;
+            case 2:
+                return (fraction & 0x00FF0000) * 10;
+            case 3:
+                return  fraction & 0x00FFFF00;
+            case 4:
+                return (fraction & 0x00FFFF00) / 10;
+            case 5:
+                return  fraction / 100;
+            case 6:
+                return  fraction / 1000;
+            default:
+                return 0;
+        }
+    }
+
+    /** Throw an exception if truncation is not allowed
+     * Not currently implemented.
+     */
+    protected static void throwOnTruncation() {
+    }
+
+    /** Pack milliseconds since the Epoch into a long in database Time2 format.
+     *       1 bit sign (1= non-negative, 0= negative)
+     *       1 bit unused (reserved for INTERVAL type)
+     *      10 bits hour   (0-838)
+     *       6 bits minute (0-59) 
+     *       6 bits second (0-59) 
+     *       --------------------
+     *       24 bits = 3 bytes
+
+     * @param millis milliseconds since the Epoch
+     * @return the long in big endian packed Time format
+     */
+    protected static long packTime2(int precision, long millis) {
+        Calendar calendar = Calendar.getInstance();
+        calendar.clear();
+        calendar.setTimeInMillis(millis);
+        long hour = calendar.get(Calendar.HOUR);
+        long minute = calendar.get(Calendar.MINUTE);
+        long second = calendar.get(Calendar.SECOND);
+        long milliseconds = calendar.get(Calendar.MILLISECOND);
+        long packedMillis = packFractionalSeconds(precision, milliseconds);
+        long result =     0x8000000000000000L |
+                (hour   * 0x0010000000000000L) |
+                (minute * 0x0000400000000000L) |
+                (second * 0x0000010000000000L) |
+                packedMillis << 16;
+        return result;
+    }
+
+    protected static long unpackTime2(int precision, long value) {
+        int hour =     (int)((value & 0x3FF0000000000000L) >>> 52);
+        int minute =   (int)((value & 0x000FC00000000000L) >>> 46);
+        int second =   (int)((value & 0x00003F0000000000L) >>> 40);
+        int fraction = (int)((value & 0x000000FFFFFF0000L) >>> 16);        
+           
+        int milliseconds = unpackFractionalSeconds(precision, fraction);
+        Calendar calendar = Calendar.getInstance();
+        calendar.clear();
+        calendar.set(Calendar.HOUR, hour);
+        calendar.set(Calendar.MINUTE, minute);
+        calendar.set(Calendar.SECOND, second);
+        calendar.set(Calendar.MILLISECOND, milliseconds);
+        return calendar.getTimeInMillis();
+    }
+
+    /** Pack milliseconds since the Epoch into a long in database Timestamp2 format.
+     * First four bytes are Unix time format: seconds since the epoch;
+     * Fractional part is 0-3 bytes
+     * @param millis milliseconds since the Epoch
+     * @return the long in big endian packed Timestamp2 format
+     */
+    protected static long packTimestamp2(int precision, long millis) {
+        long milliseconds = millis % 1000; // extract milliseconds
+        long seconds = millis/1000; // truncate to seconds
+        long packedMillis = packFractionalSeconds(precision, milliseconds);
+        long result = (seconds << 32) +
+                (packedMillis << 8);
+        return result;
+    }
+
+    protected static long unpackTimestamp2(int precision, long value) {
+        long result = ((value >>> 32) * 1000) +
+                (unpackFractionalSeconds(precision, (int)value) >>> 8) ;
+        return result;
     }
 
     /** Convert the byte[] into a String to be used for logging and debugging.
@@ -1232,9 +1770,10 @@ public class Utility {
     public static String getDecimalString(ByteBuffer byteBuffer, int length, int precision, int scale) {
         // allow for decimal point and sign and one more for trailing null
         int capacity = precision + 3;
-        ByteBuffer digits = ByteBuffer.allocateDirect(capacity);
+        ByteBuffer digits = decimalByteBufferPool.borrowBuffer();
         int returnCode = Utils.decimal_bin2str(byteBuffer, length, precision, scale, digits, capacity);
         if (returnCode != 0) {
+            decimalByteBufferPool.returnBuffer(digits);
             throw new ClusterJUserException(
                     local.message("ERR_Binary_Decimal_To_String", 
                     returnCode, precision, scale, dumpBytes(byteBuffer)));
@@ -1250,12 +1789,12 @@ public class Utility {
         }
         try {
             // use basic decoding
-            CharBuffer charBuffer = charsetDecoder.decode(digits);
+            CharBuffer charBuffer;
+            charBuffer = charset.decode(digits);
             string = charBuffer.toString();
             return string;
-        } catch (CharacterCodingException e) {
-            throw new ClusterJFatalInternalException(
-                    local.message("ERR_Character_Encoding", string));
+        } finally {
+            decimalByteBufferPool.returnBuffer(digits);
         }
         
     }
@@ -1471,13 +2010,18 @@ public class Utility {
      */
     public static ByteBuffer encode(String input, Column storeColumn, BufferManager bufferManager) {
         int collation = storeColumn.getCharsetNumber();
+//        System.out.println("Utility.encode storeColumn: " + storeColumn.getName() + 
+//                " charsetName " + storeColumn.getCharsetName() +
+//                " charsetNumber " + collation +
+//                " input '" + input + "'");
         CharsetConverter charsetConverter = getCharsetConverter(collation);
         CharSequence chars = input;
         int prefixLength = storeColumn.getPrefixLength();
+        ByteBuffer byteBuffer = charsetConverter.encode(storeColumn.getName(), chars, collation, prefixLength, bufferManager);
         if (prefixLength == 0) {
-            chars = padString(input, storeColumn);
+            padString(byteBuffer, storeColumn);
         }
-        return charsetConverter.encode(storeColumn.getName(), chars, collation, prefixLength, bufferManager);
+        return byteBuffer;
     }
 
     /** Decode a ByteBuffer into a String using the charset. The return value
@@ -1818,6 +2362,10 @@ public class Utility {
         return endianManager.getBoolean(storeColumn, ndbRecAttr);
     }
 
+    public static boolean getBoolean(Column storeColumn, int value) {
+        return endianManager.getBoolean(storeColumn, value);
+    }
+
     /** Get a byte from this ndbRecAttr. 
      * 
      * @param storeColumn the Column
@@ -1848,14 +2396,24 @@ public class Utility {
         return endianManager.getInt(storeColumn, ndbRecAttr);
     }
 
+    public static int getInt(Column storeColumn, int value) {
+        return endianManager.getInt(storeColumn, value);
+    }
+
     /** Get a long from this ndbRecAttr. 
      * 
      * @param storeColumn the Column
      * @param ndbRecAttr the NdbRecAttr
      * @return the long
      */
-    public static long getLong(Column storeColumn, NdbRecAttr ndbRecAttr) {
-        return endianManager.getLong(storeColumn, ndbRecAttr);
+
+    /** Convert a long value from storage.
+     * The value stored in the database might be a time, timestamp, date, bit array,
+     * or simply a long value. The converted value can be converted into a 
+     * time, timestamp, date, bit array, or long value.
+     */
+    public static long getLong(Column storeColumn, long value) {
+        return endianManager.getLong(storeColumn, value);
     }
 
     /** Convert a long value into a long for storage. The value parameter
@@ -1893,6 +2451,10 @@ public class Utility {
     public static int convertShortValueForStorage(Column storeColumn,
             short value) {
         return endianManager.convertShortValueForStorage(storeColumn, value);
+    }
+
+    public static int convertIntValueForStorage(Column storeColumn, int value) {
+        return endianManager.convertIntValueForStorage(storeColumn, value);
     }
 
 }

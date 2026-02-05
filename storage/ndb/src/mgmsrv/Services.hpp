@@ -1,15 +1,21 @@
 /*
-   Copyright (C) 2003-2008 MySQL AB, 2008-2010 Sun Microsystems, Inc.
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -29,8 +35,6 @@
 
 class MgmApiSession : public SocketServer::Session
 {
-  static void stop_session_if_timed_out(SocketServer::Session *_s, void *data);
-  static void stop_session_if_not_connected(SocketServer::Session *_s, void *data);
   static void list_session(SocketServer::Session *_s, void *data);
   static void get_session(SocketServer::Session *_s, void *data);
 private:
@@ -40,7 +44,6 @@ private:
   InputStream *m_input;
   OutputStream *m_output;
   Parser_t *m_parser;
-  MgmtSrvr::Allocated_resources *m_allocated_resources;
   char m_err_str[1024];
   int m_stopSelf; // -1 is restart, 0 do nothing, 1 stop
   NdbMutex *m_mutex;
@@ -130,6 +133,8 @@ public:
   void show_variables(Parser_t::Context &ctx, Properties const &args);
 
   void dump_events(Parser_t::Context &ctx, Properties const &args);
+
+  void set_ports(Parser_t::Context &, Properties const &args);
 };
 
 class MgmApiService : public SocketServer::Service {

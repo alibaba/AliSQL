@@ -1,3 +1,4 @@
+
 --source include/have_gtid.inc
 --source include/have_debug.inc
 --source include/have_binlog_format_row.inc
@@ -9,6 +10,7 @@
 
 --disable_result_log
 --disable_query_log
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 CREATE TABLE t (a VARCHAR(1000000)) ENGINE = InnoDB;
 BEGIN;
  INSERT INTO t VALUES (REPEAT('a', 20000));
@@ -17,6 +19,7 @@ BEGIN;
  ROLLBACK TO sp;
 COMMIT;
 
+SET sql_mode = default;
 DROP TABLE t;
 
 # If the bug had not been fixed, this would result in an

@@ -1,13 +1,23 @@
-/* Copyright (c) 2000, 2015, Oracle and/or its affiliates. All rights reserved.
+#ifndef FT_GLOBAL_INCLUDED
+#define FT_GLOBAL_INCLUDED
+
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -19,8 +29,10 @@
 
 /* #include "myisam.h" */
 
-#ifndef _ft_global_h
-#define _ft_global_h
+#include "my_global.h"
+#include "my_base.h"
+#include "m_ctype.h"
+
 #ifdef  __cplusplus
 extern "C" {
 #endif
@@ -50,10 +62,12 @@ struct _ft_vft_ext
 };
 
 /* Flags for extended FT API */
-#define FTS_ORDERED_RESULT                (LL(1) << 1)
-#define FTS_DOCID_IN_RESULT               (LL(1) << 2)
+#define FTS_ORDERED_RESULT                (1LL << 1)
+#define FTS_DOCID_IN_RESULT               (1LL << 2)
 
 #define FTS_DOC_ID_COL_NAME "FTS_DOC_ID"
+
+#define FTS_NGRAM_PARSER_NAME "ngram"
 
 #ifndef FT_CORE
 struct st_ft_info
@@ -80,10 +94,40 @@ extern struct st_mysql_ftparser ft_default_parser;
 int ft_init_stopwords(void);
 void ft_free_stopwords(void);
 
-#define FT_NL     0
-#define FT_BOOL   1
-#define FT_SORTED 2
-#define FT_EXPAND 4   /* query expansion */
+/**
+  Operation types, used in FT_HINTS.
+*/
+
+enum ft_operation
+{
+  FT_OP_UNDEFINED, /** Operation undefined, use of hints is impossible */
+  FT_OP_NO,        /** No operation, single MATCH function */
+  FT_OP_GT,        /** 'Greater than' operation */
+  FT_OP_GE         /** 'Greater than or equal to' operation */
+};
+
+#define FT_NL              0   /** Normal mode  */
+#define FT_BOOL            1   /** Boolean mode */
+#define FT_SORTED          2   /** perform internal sorting by rank */
+#define FT_EXPAND          4   /** query expansion */
+#define FT_NO_RANKING      8   /** skip rank calculation */
+
+/**
+  Info about FULLTEXT index hints,
+  passed to the storage engine.
+*/
+
+struct ft_hints
+{
+  /** FULLTEXT flags, see FT_NL, etc */
+  uint flags;
+  /** Operation type */
+  enum ft_operation op_type;
+  /** Operation value */
+  double op_value;
+  /** LIMIT value, HA_POS_ERROR if not set */
+  ha_rows limit;
+};
 
 FT_INFO *ft_init_search(uint,void *, uint, uchar *, uint,
                         const CHARSET_INFO *, uchar *);
@@ -92,4 +136,4 @@ my_bool ft_boolean_check_syntax_string(const uchar *);
 #ifdef  __cplusplus
 }
 #endif
-#endif
+#endif /* FT_GLOBAL_INCLUDED */

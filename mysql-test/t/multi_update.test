@@ -1,3 +1,8 @@
+# The include statement below is a temp one for tests that are yet to
+#be ported to run with InnoDB,
+#but needs to be kept for tests that would need MyISAM in future.
+--source include/force_myisam_default.inc
+
 #
 # Test of update statement that uses many tables.
 #
@@ -7,11 +12,14 @@ source include/not_embedded.inc;
 source include/have_log_bin.inc;
 
 CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT.");
-call mtr.add_suppression("Did not write failed .* into binary log while "
-                         "granting/revoking privileges in databases.");
-call mtr.add_suppression("Did not write failed .* into binary log while "
-                         "storing table level and column level grants "
-                         "in the privilege tables.");
+CALL mtr.add_suppression("REVOKE/GRANT failed while storing table level "
+                         "and column level grants in the privilege "
+                         "tables. An incident event has been written to "
+                         "the binary log which will stop the slaves.");
+CALL mtr.add_suppression("REVOKE/GRANT failed while granting/revoking "
+                         "privileges in databases. An incident event "
+                         "has been written to the binary log which "
+                         "will stop the slaves.");
 
 --disable_warnings
 drop table if exists t1,t2,t3;
@@ -189,7 +197,7 @@ drop table t1,t2;
 set sql_safe_updates=1;
 create table t1 (n int(10), d int(10));
 create table t2 (n int(10), d int(10));
-insert into t1 values(1,1);
+insert into t1 values(1,1), (3,30);
 insert into t2 values(1,10),(2,20);
 --error ER_UPDATE_WITHOUT_KEY_IN_SAFE_MODE
 UPDATE t1,t2 SET t1.d=t2.d WHERE t1.n=t2.n;
@@ -357,7 +365,7 @@ DROP TABLE t1,t2;
 # Test update with const tables
 #
 create table `t1` (`p_id` int(10) unsigned NOT NULL auto_increment, `p_code` varchar(20) NOT NULL default '', `p_active` tinyint(1) unsigned NOT NULL default '1', PRIMARY KEY (`p_id`) );
-create table `t2` (`c2_id` int(10) unsigned NULL auto_increment, `c2_p_id` int(10) unsigned NOT NULL default '0', `c2_note` text NOT NULL, `c2_active` tinyint(1) unsigned NOT NULL default '1', PRIMARY KEY (`c2_id`), KEY `c2_p_id` (`c2_p_id`) );
+create table `t2` (`c2_id` int(10) unsigned NOT NULL auto_increment, `c2_p_id` int(10) unsigned NOT NULL default '0', `c2_note` text NOT NULL, `c2_active` tinyint(1) unsigned NOT NULL default '1', PRIMARY KEY (`c2_id`), KEY `c2_p_id` (`c2_p_id`) );
 insert into t1 values (0,'A01-Comp',1);
 insert into t1 values (0,'B01-Comp',1);
 insert into t2 values (0,1,'A Note',1);
@@ -379,7 +387,10 @@ create database mysqltest;
 create table mysqltest.t1 (a int, b int, primary key (a));
 create table mysqltest.t2 (a int, b int, primary key (a));
 create table mysqltest.t3 (a int, b int, primary key (a));
+set @orig_sql_mode= @@sql_mode;
+set sql_mode= (select replace(@@sql_mode,'NO_AUTO_CREATE_USER',''));
 grant select on mysqltest.* to mysqltest_1@localhost;
+set sql_mode= @orig_sql_mode;
 grant update on mysqltest.t1 to mysqltest_1@localhost;
 connect (user1,localhost,mysqltest_1,,mysqltest,$MASTER_MYPORT,$MASTER_MYSOCK);
 connection user1;
@@ -664,6 +675,8 @@ DROP TABLE t1;
 --echo # Bug#54543: update ignore with incorrect subquery leads to assertion
 --echo # failure: inited==INDEX
 --echo #
+set @optimizer_switch_saved=@@optimizer_switch;
+set optimizer_switch='derived_merge=off';
 SET SESSION sql_safe_updates = 0;
 CREATE TABLE t1 ( a INT );
 INSERT INTO t1 VALUES (1), (2);
@@ -681,17 +694,23 @@ SET t3.a = 0;
 
 DROP TABLE t1, t2, t3;
 SET SESSION sql_safe_updates = DEFAULT;
+set @@optimizer_switch=@optimizer_switch_saved;
 
 --echo #
 --echo # Bug#52157 various crashes and assertions with multi-table update, stored function
 --echo #
 
+set @optimizer_switch_saved=@@optimizer_switch;
+set optimizer_switch='derived_merge=off';
+
 CREATE FUNCTION f1 () RETURNS BLOB RETURN 1;
 CREATE TABLE t1 (f1 DATE);
 INSERT INTO t1 VALUES('2001-01-01');
-UPDATE (SELECT 1 FROM t1 WHERE f1 = (SELECT f1() FROM t1)) x, t1 SET f1 = 1;
+UPDATE IGNORE (SELECT 1 FROM t1 WHERE f1 = (SELECT f1() FROM t1)) x, t1 SET f1 = 1;
 DROP FUNCTION f1;
 DROP TABLE t1;
+
+set @@optimizer_switch=@optimizer_switch_saved;
 
 --echo #
 --echo # BUG#57373: Multi update+InnoDB reports ER_KEY_NOT_FOUND if a
@@ -700,6 +719,7 @@ DROP TABLE t1;
 
 # Results differ between storage engines.
 # See multi_update_innodb.test for the InnoDB variant of this test
+
 CREATE TABLE t1(
   pk INT,
   a INT,
@@ -802,7 +822,7 @@ DROP TABLE t1;
 
 CREATE TABLE table_11757486 (field1 tinyint) ENGINE=MYISAM;
 INSERT INTO table_11757486 VALUES (0),(0);
-SET SESSION SQL_MODE='STRICT_ALL_TABLES';
+SET SESSION SQL_MODE=default;
 UPDATE IGNORE (SELECT 128 as col1) x, table_11757486 SET field1=x.col1;
 
 --error ER_WARN_DATA_OUT_OF_RANGE
@@ -812,3 +832,66 @@ SET SESSION SQL_MODE='';
 UPDATE IGNORE (SELECT 128 as col1) x, table_11757486 SET field1=x.col1;
 DROP TABLE table_11757486;
 
+--echo #
+--echo # Bug #18352634 	"UPDATE ORDER BY" OF MULTI-TABLE VIEW DOES NOT WORK
+--echo #
+
+CREATE TABLE t1 (a INT) ENGINE=INNODB;
+CREATE VIEW v AS SELECT t1.a FROM t1,t1 q;
+# different errors in ps / non-ps mode:
+-- error ER_WRONG_USAGE, ER_VIEW_PREVENT_UPDATE
+UPDATE v SET a=1 ORDER BY a;
+-- error ER_WRONG_USAGE, ER_VIEW_PREVENT_UPDATE
+UPDATE v SET a=1 LIMIT 3;
+DROP TABLE t1;
+DROP VIEW v;
+
+--echo #
+--echo # WL#5275: Multi-table update, view with subquery in CHECK OPTION
+--echo #
+
+CREATE TABLE t1 (f1 INTEGER PRIMARY KEY) ENGINE=InnoDB;
+CREATE TABLE t2 (f1 INTEGER PRIMARY KEY, f2 INTEGER) ENGINE=InnoDB;
+CREATE TABLE t3 (f1 INTEGER) ENGINE=INNODB;
+
+INSERT INTO t1 VALUES (1), (2);
+INSERT INTO t2 VALUES (1, 1), (2, 2);
+INSERT INTO t3 VALUES (1), (2);
+
+CREATE VIEW v2 AS 
+SELECT * FROM t2 WHERE f2 IN (SELECT f1 FROM t3)
+WITH CHECK OPTION; 
+
+SELECT * FROM t1 JOIN v2 ON t1.f1=v2.f1;
+
+UPDATE t1 JOIN v2 ON t1.f1=v2.f1
+SET f2 = f2 + 1
+WHERE t1.f1=1;
+
+--error ER_VIEW_CHECK_FAILED
+UPDATE t1 JOIN v2 ON t1.f1=v2.f1
+SET f2 = f2 + 1
+WHERE t1.f1=2;
+
+SELECT * FROM t1 JOIN v2 ON t1.f1=v2.f1;
+
+DROP VIEW v2;
+DROP TABLE t1, t2, t3;
+
+--echo #
+--echo # Bug 18449085: WRONG VALUE AFTER MULTI UPDATE
+--echo #
+
+CREATE TABLE t1 (c1 INTEGER, c2 INTEGER, KEY(c1));
+CREATE TABLE t2 (c1 INTEGER, c2 INTEGER);
+CREATE TABLE t3 (c1 INTEGER, c2 INTEGER);
+INSERT INTO t1 VALUES(1,1),(2,2),(3,3),(4,4),(5,5);
+INSERT INTO t2 VALUES(11,1),(12,1),(13,1),(14,2),(15,6);
+INSERT INTO t3 VALUES(21,11),(22,11),(23,13),(24,14),(25,15);
+ANALYZE TABLE t1, t2, t3;
+let $my_stmt= UPDATE t2 straight_join t3 straight_join t1 SET t1.c2 = 30, t2.c2 = 40, t3.c2=50
+              WHERE t1.c1=t2.c2 AND t2.c1=t3.c2;
+eval $my_stmt;
+eval EXPLAIN $my_stmt;
+SELECT * FROM t3 ORDER BY c1;
+DROP TABLE t1, t2, t3;

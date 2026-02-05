@@ -2,6 +2,7 @@
 # This test verifies if the start slave fails gracefuly when an 
 # invalid directory is used to set --slave-load-tmpdir.
 ##########################################################################
+--source include/not_group_replication_plugin.inc
 --source include/have_log_bin.inc
 --source include/not_embedded.inc
 
@@ -10,11 +11,11 @@
 
 --connection slave
 START SLAVE;
-# Why 12???
+#Error Code:12 (EE_DIR) Can't read dir is expected
 call mtr.add_suppression("Slave SQL.*Unable to use slave.s temporary directory.* Error_code: 12");
 --let $slave_sql_errno= 12
 source include/wait_for_slave_sql_error.inc;
-
+--source include/wait_for_slave_io_to_start.inc
 --source include/stop_slave_io.inc
 RESET SLAVE;
 

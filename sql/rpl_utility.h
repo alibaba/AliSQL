@@ -1,13 +1,20 @@
-/* Copyright (c) 2006, 2014, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2006, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -20,14 +27,11 @@
 #error "Don't include this C++ header file from a non-C++ file!"
 #endif
 
-#include "sql_priv.h"
-#include "m_string.h"
+#include "my_global.h"
+#include "prealloced_array.h"   // Prealloced_array
 #ifdef MYSQL_SERVER
-#include "table.h"                              /* TABLE_LIST */
+#include "table.h"              // TABLE_LIST
 #endif
-#include "mysql_com.h"
-#include <hash.h>
-
 
 class Relay_log_info;
 class Log_event;
@@ -149,7 +153,7 @@ public:
      next() invocations; and 2. must have not been used before in a
      next() operation.
 
-     @param entry[IN/OUT] contains a pointer to an entry that we can
+     @param[in,out] entry contains a pointer to an entry that we can
                           use to search for another adjacent entry
                           (ie, that shares the same key).
 
@@ -273,7 +277,7 @@ public:
    */
   enum_field_types type(ulong index) const
   {
-    DBUG_ASSERT(index < m_size);
+    assert(index < m_size);
     /*
       If the source type is MYSQL_TYPE_STRING, it can in reality be
       either MYSQL_TYPE_STRING, MYSQL_TYPE_ENUM, or MYSQL_TYPE_SET, so
@@ -322,7 +326,7 @@ public:
   */
   uint16 field_metadata(uint index) const
   {
-    DBUG_ASSERT(index < m_size);
+    assert(index < m_size);
     if (m_field_metadata_size)
       return m_field_metadata[index];
     else
@@ -335,7 +339,7 @@ public:
   */
   my_bool maybe_null(uint index) const
   {
-    DBUG_ASSERT(index < m_size);
+    assert(index < m_size);
     return ((m_null_bits[(index / 8)] & 
             (1 << (index % 8))) == (1 << (index %8)));
   }
@@ -430,40 +434,10 @@ struct RPL_TABLE_LIST
 };
 
 
-/* Anonymous namespace for template functions/classes */
-CPP_UNNAMED_NS_START
-
-  /*
-    Smart pointer that will automatically call my_afree (a macro) when
-    the pointer goes out of scope.  This is used so that I do not have
-    to remember to call my_afree() before each return.  There is no
-    overhead associated with this, since all functions are inline.
-
-    I (Matz) would prefer to use the free function as a template
-    parameter, but that is not possible when the "function" is a
-    macro.
-  */
-  template <class Obj>
-  class auto_afree_ptr
-  {
-    Obj* m_ptr;
-  public:
-    auto_afree_ptr(Obj* ptr) : m_ptr(ptr) { }
-    ~auto_afree_ptr() { if (m_ptr) my_afree(m_ptr); }
-    void assign(Obj* ptr) {
-      /* Only to be called if it hasn't been given a value before. */
-      DBUG_ASSERT(m_ptr == NULL);
-      m_ptr= ptr;
-    }
-    Obj* get() { return m_ptr; }
-  };
-
-CPP_UNNAMED_NS_END
-
 class Deferred_log_events
 {
 private:
-  DYNAMIC_ARRAY array;
+  Prealloced_array<Log_event*, 32, true> m_array;
 
 public:
   Deferred_log_events(Relay_log_info *rli);

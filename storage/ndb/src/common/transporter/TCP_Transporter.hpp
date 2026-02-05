@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -43,6 +50,7 @@ struct ReceiveBuffer {
 };
 
 class TCP_Transporter : public Transporter {
+  friend struct TransporterReceiveData;
   friend class TransporterRegistry;
   friend class Loopback_Transporter;
 private:
@@ -51,6 +59,12 @@ private:
 
   // Disconnect, delete send buffers and receive buffer
   virtual ~TCP_Transporter();
+
+  /**
+   * Clear any data buffered in the transporter.
+   * Should only be called in a disconnected state.
+   */
+  virtual void resetBuffers();
 
   virtual bool configure_derived(const TransporterConfiguration* conf);
 
@@ -63,13 +77,13 @@ private:
    * Retrieves the contents of the send buffers and writes it on
    * the external TCP/IP interface.
    */
-  int doSend();
+  bool doSend();
   
   /**
    * It reads the external TCP/IP interface once 
    * and puts the data in the receiveBuffer
    */
-  int doReceive(); 
+  int doReceive(TransporterReceiveHandle&);
 
   /**
    * Returns socket (used for select)
@@ -104,7 +118,7 @@ protected:
   bool connect_common(NDB_SOCKET_TYPE sockfd);
   
   /**
-   * Disconnects a TCP/IP node. Empty receivebuffer.
+   * Disconnects a TCP/IP node, possibly blocking.
    */
   virtual void disconnectImpl();
   
@@ -161,6 +175,7 @@ inline
 void
 TCP_Transporter::updateReceiveDataPtr(Uint32 bytesRead){
   char * ptr = (char *)receiveBuffer.readPtr;
+  assert(receiveBuffer.sizeOfData >= bytesRead);
   ptr += bytesRead;
   receiveBuffer.readPtr = (Uint32*)ptr;
   receiveBuffer.sizeOfData -= bytesRead;

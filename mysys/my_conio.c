@@ -1,13 +1,20 @@
-/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -15,8 +22,9 @@
 
 
 #include "mysys_priv.h"
+#include "my_sys.h"
 
-#ifdef __WIN__
+#ifdef _WIN32
 
 
 /* Windows console handling */
@@ -63,25 +71,26 @@ my_win_is_console(FILE *file)
   Unicode console input, and then convert it to "cs" in a single shot.
   String is terminated with '\0' character.
 
-  @param cs         Character string to convert to.
-  @param mbbuf      Write input data here.
-  @param mbbufsize  Number of bytes available in mbbuf.
+  @param cs          [IN]  Character string to convert to.
+  @param mbbuf       [OUT] Write input data here.
+  @param mbbufsize   [IN]  Number of bytes available in mbbuf.
+  @param nread       [OUT] Number of bytes read.
 
-  @rerval           Pointer to mbbuf, or NULL on I/0 error.
+  @retval           Pointer to mbbuf, or NULL on I/0 error.
 */
 char *
-my_win_console_readline(const CHARSET_INFO *cs, char *mbbuf, size_t mbbufsize)
+my_win_console_readline(const CHARSET_INFO *cs, char *mbbuf, size_t mbbufsize,
+                        size_t *nread)
 {
   uint dummy_errors;
   static wchar_t u16buf[MAX_CONSOLE_LINE_SIZE + 1];
   size_t mblen= 0;
-
   DWORD console_mode;
   DWORD nchars;
 
   HANDLE console= GetStdHandle(STD_INPUT_HANDLE);
 
-  DBUG_ASSERT(mbbufsize > 0); /* Need space for at least trailing '\0' */
+  assert(mbbufsize > 0); /* Need space for at least trailing '\0' */
   GetConsoleMode(console, &console_mode);
   SetConsoleMode(console, ENABLE_LINE_INPUT |
                           ENABLE_PROCESSED_INPUT | ENABLE_ECHO_INPUT);
@@ -91,6 +100,8 @@ my_win_console_readline(const CHARSET_INFO *cs, char *mbbuf, size_t mbbufsize)
     SetConsoleMode(console, console_mode);
     return NULL;
   }
+
+  *nread= nchars;
 
   /* Set length of string */
   if (nchars >= 2 && u16buf[nchars - 2] == L'\r')
@@ -111,7 +122,7 @@ my_win_console_readline(const CHARSET_INFO *cs, char *mbbuf, size_t mbbufsize)
                       (const char *) u16buf, nchars * sizeof(wchar_t),
                       &my_charset_utf16le_bin, &dummy_errors);
 
-  DBUG_ASSERT(mblen < mbbufsize); /* Safety */
+  assert(mblen < mbbufsize); /* Safety */
   mbbuf[mblen]= 0;
   return mbbuf;
 }
@@ -171,7 +182,7 @@ outp:
     if ((cnvres= (*wc_mb)(to_cs, wc, (uchar *) to, (uchar *) to_end)) > 0)
     {
       /* We can never convert only a part of wchar_t */
-      DBUG_ASSERT((cnvres % sizeof(wchar_t)) == 0);
+      assert((cnvres % sizeof(wchar_t)) == 0);
       /* cnvres returns number of bytes, convert to number of wchar_t's */
       to+= cnvres / sizeof(wchar_t);
     }
@@ -204,7 +215,7 @@ my_win_console_write(const CHARSET_INFO *cs, const char *data, size_t datalen)
 {
   static wchar_t u16buf[MAX_CONSOLE_LINE_SIZE + 1];
   size_t nchars= my_mbstou16s(cs, (const uchar *) data, datalen,
-                              u16buf, sizeof(u16buf));
+                              u16buf, sizeof(u16buf) / sizeof(u16buf[0]));
   DWORD nwritten;
   WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE),
                 u16buf, (DWORD) nchars, &nwritten, NULL);
@@ -285,7 +296,7 @@ my_win_translate_command_line_args(const CHARSET_INFO *cs, int *argc, char ***ar
     len= my_convert(av[i], alloced_len, cs,
                     (const char *) wargs[i], arg_len * sizeof(wchar_t),
                     &my_charset_utf16le_bin, &dummy_errors);
-    DBUG_ASSERT(len < alloced_len);
+    assert(len < alloced_len);
     av[i][len]= '\0';
   }
   *argv= av;
@@ -295,4 +306,4 @@ my_win_translate_command_line_args(const CHARSET_INFO *cs, int *argc, char ***ar
   return 0;
 }
 
-#endif /* __WIN__ */
+#endif /* _WIN32 */

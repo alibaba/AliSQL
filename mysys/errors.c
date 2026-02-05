@@ -1,13 +1,25 @@
-/* Copyright (c) 2000, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -15,8 +27,8 @@
 
 #include "mysys_priv.h"
 #include "mysys_err.h"
-
-#ifndef SHARED_LIBRARY
+#include "my_sys.h"
+#include "my_thread_local.h"
 
 const char *globerrs[GLOBERRS]=
 {
@@ -52,52 +64,10 @@ const char *globerrs[GLOBERRS]=
   "File '%s' (fileno: %d) was not closed",
   "Can't change ownership of the file '%s' (Errcode: %d - %s)",
   "Can't change permissions of the file '%s' (Errcode: %d - %s)",
-  "Can't seek in file '%s' (Errcode: %d - %s)"
+  "Can't seek in file '%s' (Errcode: %d - %s)",
+  "Memory capacity exceeded (capacity %llu bytes)"
 };
 
-void init_glob_errs(void)
-{
-  /* This is now done statically. */
-}
-
-#else
-
-void init_glob_errs()
-{
-  EE(EE_CANTCREATEFILE) = "Can't create/write to file '%s' (Errcode: %d - %s)";
-  EE(EE_READ)		= "Error reading file '%s' (Errcode: %d - %s)";
-  EE(EE_WRITE)		= "Error writing file '%s' (Errcode: %d - %s)";
-  EE(EE_BADCLOSE)	= "Error on close of '%'s (Errcode: %d - %s)";
-  EE(EE_OUTOFMEMORY)	= "Out of memory (Needed %u bytes)";
-  EE(EE_DELETE)		= "Error on delete of '%s' (Errcode: %d - %s)";
-  EE(EE_LINK)		= "Error on rename of '%s' to '%s' (Errcode: %d - %s)";
-  EE(EE_EOFERR)		= "Unexpected EOF found when reading file '%s' (Errcode: %d - %s)";
-  EE(EE_CANTLOCK)	= "Can't lock file (Errcode: %d - %s)";
-  EE(EE_CANTUNLOCK)	= "Can't unlock file (Errcode: %d - %s)";
-  EE(EE_DIR)		= "Can't read dir of '%s' (Errcode: %d - %s)";
-  EE(EE_STAT)		= "Can't get stat of '%s' (Errcode: %d - %s)";
-  EE(EE_CANT_CHSIZE)	= "Can't change size of file (Errcode: %d - %s)";
-  EE(EE_CANT_OPEN_STREAM)= "Can't open stream from handle (Errcode: %d - %s)";
-  EE(EE_GETWD)		= "Can't get working directory (Errcode: %d - %s)";
-  EE(EE_SETWD)		= "Can't change dir to '%s' (Errcode: %d - %s)";
-  EE(EE_LINK_WARNING)	= "Warning: '%s' had %d links";
-  EE(EE_OPEN_WARNING)	= "Warning: %d files and %d streams is left open\n";
-  EE(EE_DISK_FULL)	= "Disk is full writing '%s' (Errcode: %d - %s). Waiting for someone to free space...";
-  EE(EE_CANT_MKDIR)	="Can't create directory '%s' (Errcode: %d - %s)";
-  EE(EE_UNKNOWN_CHARSET)= "Character set '%s' is not a compiled character set and is not specified in the %s file";
-  EE(EE_OUT_OF_FILERESOURCES)="Out of resources when opening file '%s' (Errcode: %d - %s)";
-  EE(EE_CANT_READLINK)=	"Can't read value for symlink '%s' (Error %d - %s)";
-  EE(EE_CANT_SYMLINK)=	"Can't create symlink '%s' pointing at '%s' (Error %d - %s)";
-  EE(EE_REALPATH)=	"Error on realpath() on '%s' (Error %d - %s)";
-  EE(EE_SYNC)=		"Can't sync file '%s' to disk (Errcode: %d - %s)";
-  EE(EE_UNKNOWN_COLLATION)= "Collation '%s' is not a compiled collation and is not specified in the %s file";
-  EE(EE_FILENOTFOUND)	= "File '%s' not found (Errcode: %d - %s)";
-  EE(EE_FILE_NOT_CLOSED) = "File '%s' (fileno: %d) was not closed";
-  EE(EE_CHANGE_OWNERSHIP)   = "Can't change ownership of the file '%s' (Errcode: %d - %s)";
-  EE(EE_CHANGE_PERMISSIONS) = "Can't change permissions of the file '%s' (Errcode: %d - %s)";
-  EE(EE_CANT_SEEK)      = "Can't seek in file '%s' (Errcode: %d - %s)";
-}
-#endif
 
 /*
  We cannot call my_error/my_printf_error here in this function.
@@ -112,11 +82,13 @@ void wait_for_free_space(const char *filename, int errors)
   if (!(errors % MY_WAIT_GIVE_USER_A_MESSAGE))
   {
     char errbuf[MYSYS_STRERROR_SIZE];
-    my_printf_warning(EE(EE_DISK_FULL),
-             filename,my_errno,my_strerror(errbuf, sizeof(errbuf), my_errno));
-    my_printf_warning("Retry in %d secs. Message reprinted in %d secs",
-                    MY_WAIT_FOR_USER_TO_FIX_PANIC,
-                    MY_WAIT_GIVE_USER_A_MESSAGE * MY_WAIT_FOR_USER_TO_FIX_PANIC );
+    my_message_local(ERROR_LEVEL, EE(EE_DISK_FULL),
+                     filename,my_errno,
+                     my_strerror(errbuf, sizeof(errbuf), my_errno()));
+    my_message_local(ERROR_LEVEL,
+                     "Retry in %d secs. Message reprinted in %d secs",
+                     MY_WAIT_FOR_USER_TO_FIX_PANIC,
+                     MY_WAIT_GIVE_USER_A_MESSAGE * MY_WAIT_FOR_USER_TO_FIX_PANIC );
   }
   DBUG_EXECUTE_IF("simulate_no_free_space_error",
                  {
@@ -126,7 +98,7 @@ void wait_for_free_space(const char *filename, int errors)
   (void) sleep(MY_WAIT_FOR_USER_TO_FIX_PANIC);
 }
 
-const char **get_global_errmsgs()
+const char *get_global_errmsg(int nr)
 {
-  return globerrs;
+  return globerrs[nr - EE_ERROR_FIRST];
 }

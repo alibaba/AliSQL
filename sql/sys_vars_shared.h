@@ -1,16 +1,23 @@
 #ifndef SYS_VARS_SHARED_INCLUDED
 #define SYS_VARS_SHARED_INCLUDED
 
-/* Copyright (c) 2002, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2002, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
@@ -25,16 +32,16 @@
   classes in the sys_var hierarchy (sql_plugin.cc)
 */
 
-#include <sql_priv.h>
-#include "set_var.h"
+#include "my_global.h"
+
+class THD;
+class sys_var;
 
 extern bool throw_bounds_warning(THD *thd, const char *name,
                                  bool fixed, bool is_unsigned, longlong v);
 extern bool throw_bounds_warning(THD *thd, const char *name, bool fixed,
                                  double v);
-extern sys_var *intern_find_sys_var(const char *str, uint length);
-
-extern sys_var_chain all_sys_vars;
+extern sys_var *intern_find_sys_var(const char *str, size_t length);
 
 /** wrapper to hide a mutex and an rwlock under a common interface */
 class PolyLock
@@ -64,6 +71,14 @@ public:
   void rdlock() { mysql_rwlock_rdlock(rwlock); }
   void wrlock() { mysql_rwlock_wrlock(rwlock); }
   void unlock() { mysql_rwlock_unlock(rwlock); }
+};
+
+class PolyLock_lock_log: public PolyLock
+{
+public:
+  void rdlock();
+  void wrlock();
+  void unlock();
 };
 
 class AutoWLock

@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2011, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -40,9 +47,11 @@ NdbPack::Error::set_error(int code, int line) const
   m_error_code = code;
   m_error_line = line;
 #ifdef VM_TRACE
+#ifdef NDB_USE_GET_ENV
   const char* p = NdbEnv_GetEnv("NDB_PACK_ABORT_ON_ERROR", (char*)0, 0);
   if (p != 0 && strchr("1Y", p[0]) != 0)
     require(false);
+#endif
 #endif
 }
 
@@ -109,7 +118,14 @@ g_ndb_pack_type_info[] = {
   { 1, 4, 0, 0, 0 }, // NDB_TYPE_TIMESTAMP
   { 1, 0, 0, 0, 0 }, // NDB_TYPE_OLDDECIMALUNSIGNED
   { 1, 0, 0, 0, 0 }, // NDB_TYPE_DECIMAL
-  { 1, 0, 0, 0, 0 }  // NDB_TYPE_DECIMALUNSIGNED
+  { 1, 0, 0, 0, 0 }, // NDB_TYPE_DECIMALUNSIGNED
+  /*
+   * Fractional time types are varsized.
+   * There is no size validation yet.
+   */
+  { 1, 0, 0, 0, 0 }, // NDB_TYPE_TIME2      (3+(0-3) bytes)
+  { 1, 0, 0, 0, 0 }, // NDB_TYPE_DATETIME2  (5+(0-3) bytes)
+  { 1, 0, 0, 0, 0 }  // NDB_TYPE_TIMESTAMP2 (4+(0-3) bytes)
 };
 
 static const int g_ndb_pack_type_info_cnt =
@@ -930,7 +946,6 @@ const char*
 NdbPack::Data::print(char* buf, Uint32 bufsz) const
 {
   Print p(buf, bufsz);
-  char* ptr = buf;
   if (m_varBytes != 0)
   {
     p.print("varBytes:");
@@ -1291,6 +1306,7 @@ Tdata::create()
     Uint8 xbuf[Tspec::MaxBuf];
     Uint64 xbuf_align;
   };
+  (void)xbuf_align; // compiler warning
   memset(xbuf, 0x3f, sizeof(xbuf));
   m_xsize = 0;
   m_xnulls = 0;
@@ -1395,9 +1411,10 @@ Tdata::create()
     }
     require(m_xnull[i] == (m_xoff[i] == -1));
     require(m_xnull[i] == (m_xlen[i] == 0));
-    AttributeHeader* ah = (AttributeHeader*)&poaiBuf[m_poaiSize];
-    ah->setAttributeId(i); // not used
-    ah->setByteSize(m_xlen[i]);
+    AttributeHeader ah;
+    ah.setAttributeId(i); // not used
+    ah.setByteSize(m_xlen[i]);
+    poaiBuf[m_poaiSize] = ah.m_value;
     m_poaiSize++;
     if (!m_xnull[i]) {
       memcpy(&poaiBuf[m_poaiSize], &xbuf[m_xoff[i]], m_xlen[i]);
@@ -1830,7 +1847,7 @@ testdesc(const Tdata& tdata)
   const NdbPack::Data& data = tdata.m_data;
   const Uint8* buf_old = (const Uint8*)data.get_full_buf();
   const Uint32 varBytes = data.get_var_bytes();
-  const Uint32 nullMaskLen = tspec.m_spec.get_nullmask_len(false);
+  // const Uint32 nullMaskLen = tspec.m_spec.get_nullmask_len(false);
   const Uint32 dataLen = data.get_data_len();
   const Uint32 fullLen = data.get_full_len();
   const Uint32 cnt = data.get_cnt();

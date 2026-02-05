@@ -165,6 +165,8 @@ select @log;
 (BEFORE_INSERT: new=(id=1, data=1))(AFTER_INSERT: new=(id=1, data=1))
 set @log:= "";
 insert ignore t1 values (1, 2);
+Warnings:
+Warning	1062	Duplicate entry '1' for key 'PRIMARY'
 select @log;
 @log
 (BEFORE_INSERT: new=(id=1, data=2))
@@ -294,8 +296,6 @@ ERROR 42S02: Table 'test.t2' doesn't exist
 create trigger trg before insert on t1 for each row set @a:=1;
 create trigger trg after insert on t1 for each row set @a:=1;
 ERROR HY000: Trigger already exists
-create trigger trg2 before insert on t1 for each row set @a:=1;
-ERROR 42000: This version of MySQL doesn't yet support 'multiple triggers with the same action time and event for one table'
 create trigger trg before insert on t3 for each row set @a:=1;
 ERROR HY000: Trigger already exists
 create trigger trg2 before insert on t3 for each row set @a:=1;
@@ -586,6 +586,8 @@ ERROR 42000: FUNCTION test.bug5893 does not exist
 drop trigger t1_bu;
 drop table t1;
 set sql_mode='ansi';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 create table t1 ("t1 column" int);
 create trigger t1_bi before insert on t1 for each row set new."t1 column" = 5;
 set sql_mode="";
@@ -601,16 +603,22 @@ select @a;
 10
 show triggers;
 Trigger	Event	Table	Statement	Timing	Created	sql_mode	Definer	character_set_client	collation_connection	Database Collation
-t1_bi	INSERT	t1	set new."t1 column" = 5	BEFORE	#	REAL_AS_FLOAT,PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ANSI	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
+t1_bi	INSERT	t1	set new."t1 column" = 5	BEFORE	#	REAL_AS_FLOAT,PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ANSI	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
 t1_af	INSERT	t1	set @a=10	AFTER	#		root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
 drop table t1;
 set sql_mode="traditional";
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 create table t1 (a date);
 insert into t1 values ('2004-01-00');
 ERROR 22007: Incorrect date value: '2004-01-00' for column 'a' at row 1
 set sql_mode="";
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 create trigger t1_bi before insert on t1 for each row set new.a = '2004-01-00';
 set sql_mode="traditional";
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 insert into t1 values ('2004-01-01');
 select * from t1;
 a
@@ -655,6 +663,8 @@ insert into t1 values (0);
 ERROR 0A000: FLUSH is not allowed in stored function or trigger
 drop procedure p1;
 create procedure p1() reset query cache;
+Warnings:
+Warning	1681	'RESET QUERY CACHE' is deprecated and will be removed in a future release.
 insert into t1 values (0);
 ERROR 0A000: RESET is not allowed in stored function or trigger
 drop procedure p1;
@@ -1047,9 +1057,13 @@ DROP TABLE IF EXISTS t1;
 CREATE TABLE t1 (i1 INT);
 SET @save_sql_mode=@@sql_mode;
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TRIGGER t1_ai AFTER INSERT ON t1 FOR EACH ROW
 SET @x = 5/0;
 SET SQL_MODE='traditional';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TRIGGER t1_au AFTER UPDATE ON t1 FOR EACH ROW
 SET @x = 5/0;
 SET @x=1;
@@ -1063,6 +1077,8 @@ SELECT @x;
 @x
 NULL
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET @x=3;
 INSERT INTO t1 VALUES (@x);
 SELECT @x;
@@ -1074,6 +1090,8 @@ SELECT @x;
 @x
 NULL
 SET @@sql_mode=@save_sql_mode;
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 DROP TRIGGER t1_ai;
 DROP TRIGGER t1_au;
 DROP TABLE t1;
@@ -1149,9 +1167,9 @@ DROP TABLE IF EXISTS t1;
 DROP TABLE IF EXISTS t2;
 CREATE TABLE t1(c INT);
 CREATE TABLE t2(c INT);
-CREATE DEFINER=1234567890abcdefGHIKL@localhost
+CREATE DEFINER=1234567890abcdefGHIKL1234567890abcdefGHIKL@localhost
 TRIGGER t1_bi BEFORE INSERT ON t1 FOR EACH ROW SET @a = 1;
-ERROR HY000: String '1234567890abcdefGHIKL' is too long for user name (should be no longer than 16)
+ERROR HY000: String '1234567890abcdefGHIKL1234567890abcdefGHIKL' is too long for user name (should be no longer than 32)
 CREATE DEFINER=some_user_name@1234567890abcdefghij1234567890abcdefghij1234567890abcdefghijQWERTY
 TRIGGER t2_bi BEFORE INSERT ON t2 FOR EACH ROW SET @a = 2;
 ERROR HY000: String '1234567890abcdefghij1234567890abcdefghij1234567890abcdefghijQWERTY' is too long for host name (should be no longer than 60)
@@ -1280,6 +1298,9 @@ a	b
 2	b
 3	c
 drop table t1;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1 (
 id int NOT NULL DEFAULT '0',
 a  varchar(10) NOT NULL,
@@ -1312,6 +1333,7 @@ SELECT fubar_id FROM t2;
 fubar_id
 1
 DROP TABLE t1,t2;
+SET sql_mode = default;
 DROP TABLE IF EXISTS bug21825_A;
 DROP TABLE IF EXISTS bug21825_B;
 CREATE TABLE bug21825_A (id int(10));
@@ -1386,8 +1408,9 @@ SELECT * FROM t2;
 id	val
 1	test1
 2	test2
-3	test3
-4	test4
+3	test2
+4	test3
+5	test4
 DROP TRIGGER trg27006_a_insert;
 DROP TRIGGER trg27006_a_update;
 drop table t1,t2;
@@ -1970,7 +1993,7 @@ drop table if exists t1;
 create table t1 (i int, j int);
 create trigger t1_bi before insert on t1 for each row begin end;
 create trigger t1_bi before insert on t1 for each row begin end;
-ERROR 42000: This version of MySQL doesn't yet support 'multiple triggers with the same action time and event for one table'
+ERROR HY000: Trigger already exists
 drop trigger t1_bi;
 drop trigger t1_bi;
 ERROR HY000: Trigger does not exist
@@ -2077,7 +2100,7 @@ DROP TABLE t1, t2;
 CREATE TABLE t1 (id INT NOT NULL);
 CREATE TABLE t2 (id INT NOT NULL);
 INSERT t1 VALUES (1),(2),(3);
-UPDATE t1 SET id=NULL;
+UPDATE IGNORE t1 SET id=NULL;
 Warnings:
 Warning	1048	Column 'id' cannot be null
 Warning	1048	Column 'id' cannot be null
@@ -2140,6 +2163,9 @@ s1
 DELETE FROM t1;
 DROP TABLE t1;
 DROP TEMPORARY TABLE t2;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 DROP TRIGGER IF EXISTS trg1;
 DROP TABLE IF EXISTS t1;
 CREATE TABLE t1 (a INT);
@@ -2177,6 +2203,7 @@ INSERT INTO t1 VALUES (1),(2);
 DROP TRIGGER trg1;
 DROP TRIGGER trg2;
 DROP TABLE t1;
+SET sql_mode = default;
 #
 # Bug #46747 "Crash in MDL_ticket::upgrade_shared_lock_to_exclusive
 #             on TRIGGER + TEMP table".
@@ -2258,6 +2285,302 @@ INSERT INTO t2 VALUES ('Yes', 1, NULL, 'spamfilter','scan_incoming');
 DROP TRIGGER t2_ai;
 DROP TABLE t1, t2, t3;
 #
+# Bug#14493938 - CREATE TEMPORARY TABLE INSIDE TRIGGER -- CRASH (DEBUG ONLY)
+#
+CREATE TABLE t1 (a INT, b INT DEFAULT 150);
+CREATE TRIGGER t1_bi BEFORE INSERT ON t1
+FOR EACH ROW 
+BEGIN
+CREATE TEMPORARY TABLE t2 AS SELECT NEW.a, NEW.b;
+INSERT INTO t2(a) VALUES (10);
+INSERT INTO t2 VALUES (100, 500);
+INSERT INTO t2(a) VALUES (1000);
+END
+|
+INSERT INTO t1 VALUES (1, 2);
+SELECT * FROM t2;
+a	b
+1	2
+10	150
+100	500
+1000	150
+DROP TABLE t1;
+DROP TEMPORARY TABLE t2;
+#
+# Bug#15985318 - ASSERTION FAILED: ! thd->in_sub_stmt with certain
+#                                    commands in triggers
+#
+CREATE TABLE t1(a INT);
+CREATE TRIGGER t1_au AFTER UPDATE ON t1 FOR EACH ROW START SLAVE;
+ERROR HY000: Explicit or implicit commit is not allowed in stored function or trigger.
+CREATE TRIGGER t1_au AFTER UPDATE ON t1 FOR EACH ROW STOP SLAVE;
+ERROR HY000: Explicit or implicit commit is not allowed in stored function or trigger.
+CREATE TRIGGER t1_au AFTER UPDATE ON t1 FOR EACH ROW
+CREATE SERVER s FOREIGN DATA WRAPPER mysql OPTIONS (USER 'Remote',
+HOST '192.168.1.106',
+DATABASE 'test');
+ERROR HY000: Explicit or implicit commit is not allowed in stored function or trigger.
+CREATE TRIGGER t1_bu BEFORE UPDATE ON t1 FOR EACH ROW
+ALTER SERVER s OPTIONS (password '1');
+ERROR HY000: Explicit or implicit commit is not allowed in stored function or trigger.
+CREATE TRIGGER tr1 AFTER UPDATE ON t1 FOR EACH ROW
+DROP SERVER IF EXISTS s;
+ERROR HY000: Explicit or implicit commit is not allowed in stored function or trigger.
+CREATE DATABASE db1;
+CREATE TRIGGER tr1 AFTER UPDATE ON t1 FOR EACH ROW
+ALTER DATABASE db1 CHARACTER SET latin1;
+ERROR HY000: Explicit or implicit commit is not allowed in stored function or trigger.
+DROP DATABASE db1;
+CREATE USER 'u1'@'localhost' IDENTIFIED BY 'pass';
+CREATE TRIGGER tr1 AFTER UPDATE ON t1 FOR EACH ROW
+ALTER USER 'u1'@'localhost' PASSWORD EXPIRE;
+ERROR HY000: Explicit or implicit commit is not allowed in stored function or trigger.
+DROP USER 'u1'@'localhost';
+CREATE TRIGGER tr1 AFTER UPDATE ON t1 FOR EACH ROW
+CHANGE MASTER TO MASTER_SSL = 0;
+ERROR HY000: Explicit or implicit commit is not allowed in stored function or trigger.
+DROP TABLE t1;
+#
+# Bug#17864349 - CHANGING TRUNCATE TABLE TO DROP TABLE & CREATE TABLE
+# MAKES TRIGGER.TEST FAIL
+#
+# The following tests check for non in-place update (i.e. using temporary table)
+# of column with different datatypes
+SET @save_sql_mode= @@sql_mode;
+SET sql_mode= 'traditional';
+# t1 column type name: INT
+# t2 column type name: INT
+# t2 column value: 3
+CREATE TABLE t1(a INT, b INT);
+CREATE TABLE t2(a INT, b INT NOT NULL);
+INSERT INTO t1 VALUES (1, NULL);
+INSERT INTO t2 VALUES (1, 3);
+CREATE TRIGGER t2_bu BEFORE UPDATE ON t2 FOR EACH ROW SET @b = 1;
+UPDATE t1, t2 SET t2.b = t1.b;
+ERROR 23000: Column 'b' cannot be null
+DROP TABLE t1, t2;
+# t1 column type name: TINYINT
+# t2 column type name: TINYINT
+# t2 column value: 3
+CREATE TABLE t1(a INT, b TINYINT);
+CREATE TABLE t2(a INT, b TINYINT NOT NULL);
+INSERT INTO t1 VALUES (1, NULL);
+INSERT INTO t2 VALUES (1, 3);
+CREATE TRIGGER t2_bu BEFORE UPDATE ON t2 FOR EACH ROW SET @b = 1;
+UPDATE t1, t2 SET t2.b = t1.b;
+ERROR 23000: Column 'b' cannot be null
+DROP TABLE t1, t2;
+# t1 column type name: BOOL
+# t2 column type name: BOOL
+# t2 column value: TRUE
+CREATE TABLE t1(a INT, b BOOL);
+CREATE TABLE t2(a INT, b BOOL NOT NULL);
+INSERT INTO t1 VALUES (1, NULL);
+INSERT INTO t2 VALUES (1, TRUE);
+CREATE TRIGGER t2_bu BEFORE UPDATE ON t2 FOR EACH ROW SET @b = 1;
+UPDATE t1, t2 SET t2.b = t1.b;
+ERROR 23000: Column 'b' cannot be null
+DROP TABLE t1, t2;
+# t1 column type name: SMALLINT
+# t2 column type name: SMALLINT
+# t2 column value: 3
+CREATE TABLE t1(a INT, b SMALLINT);
+CREATE TABLE t2(a INT, b SMALLINT NOT NULL);
+INSERT INTO t1 VALUES (1, NULL);
+INSERT INTO t2 VALUES (1, 3);
+CREATE TRIGGER t2_bu BEFORE UPDATE ON t2 FOR EACH ROW SET @b = 1;
+UPDATE t1, t2 SET t2.b = t1.b;
+ERROR 23000: Column 'b' cannot be null
+DROP TABLE t1, t2;
+# t1 column type name: BIGINT
+# t2 column type name: BIGINT
+# t2 column value: 3
+CREATE TABLE t1(a INT, b BIGINT);
+CREATE TABLE t2(a INT, b BIGINT NOT NULL);
+INSERT INTO t1 VALUES (1, NULL);
+INSERT INTO t2 VALUES (1, 3);
+CREATE TRIGGER t2_bu BEFORE UPDATE ON t2 FOR EACH ROW SET @b = 1;
+UPDATE t1, t2 SET t2.b = t1.b;
+ERROR 23000: Column 'b' cannot be null
+DROP TABLE t1, t2;
+# t1 column type name: DECIMAL
+# t2 column type name: DECIMAL
+# t2 column value: 3
+CREATE TABLE t1(a INT, b DECIMAL);
+CREATE TABLE t2(a INT, b DECIMAL NOT NULL);
+INSERT INTO t1 VALUES (1, NULL);
+INSERT INTO t2 VALUES (1, 3);
+CREATE TRIGGER t2_bu BEFORE UPDATE ON t2 FOR EACH ROW SET @b = 1;
+UPDATE t1, t2 SET t2.b = t1.b;
+ERROR 23000: Column 'b' cannot be null
+DROP TABLE t1, t2;
+# t1 column type name: FLOAT
+# t2 column type name: FLOAT
+# t2 column value: 3
+CREATE TABLE t1(a INT, b FLOAT);
+CREATE TABLE t2(a INT, b FLOAT NOT NULL);
+INSERT INTO t1 VALUES (1, NULL);
+INSERT INTO t2 VALUES (1, 3);
+CREATE TRIGGER t2_bu BEFORE UPDATE ON t2 FOR EACH ROW SET @b = 1;
+UPDATE t1, t2 SET t2.b = t1.b;
+ERROR 23000: Column 'b' cannot be null
+DROP TABLE t1, t2;
+# t1 column type name: DOUBLE
+# t2 column type name: DOUBLE
+# t2 column value: 3
+CREATE TABLE t1(a INT, b DOUBLE);
+CREATE TABLE t2(a INT, b DOUBLE NOT NULL);
+INSERT INTO t1 VALUES (1, NULL);
+INSERT INTO t2 VALUES (1, 3);
+CREATE TRIGGER t2_bu BEFORE UPDATE ON t2 FOR EACH ROW SET @b = 1;
+UPDATE t1, t2 SET t2.b = t1.b;
+ERROR 23000: Column 'b' cannot be null
+DROP TABLE t1, t2;
+# t1 column type name: BIT
+# t2 column type name: BIT
+# t2 column value: 1
+CREATE TABLE t1(a INT, b BIT);
+CREATE TABLE t2(a INT, b BIT NOT NULL);
+INSERT INTO t1 VALUES (1, NULL);
+INSERT INTO t2 VALUES (1, 1);
+CREATE TRIGGER t2_bu BEFORE UPDATE ON t2 FOR EACH ROW SET @b = 1;
+UPDATE t1, t2 SET t2.b = t1.b;
+ERROR 23000: Column 'b' cannot be null
+DROP TABLE t1, t2;
+# t1 column type name: ENUM('a', 'b', 'c')
+# t2 column type name: ENUM('a', 'b', 'c')
+# t2 column value: 'b'
+CREATE TABLE t1(a INT, b ENUM('a', 'b', 'c'));
+CREATE TABLE t2(a INT, b ENUM('a', 'b', 'c') NOT NULL);
+INSERT INTO t1 VALUES (1, NULL);
+INSERT INTO t2 VALUES (1, 'b');
+CREATE TRIGGER t2_bu BEFORE UPDATE ON t2 FOR EACH ROW SET @b = 1;
+UPDATE t1, t2 SET t2.b = t1.b;
+ERROR 23000: Column 'b' cannot be null
+DROP TABLE t1, t2;
+# t1 column type name: SET('a', 'b', 'c')
+# t2 column type name: SET('a', 'b', 'c')
+# t2 column value: 'b'
+CREATE TABLE t1(a INT, b SET('a', 'b', 'c'));
+CREATE TABLE t2(a INT, b SET('a', 'b', 'c') NOT NULL);
+INSERT INTO t1 VALUES (1, NULL);
+INSERT INTO t2 VALUES (1, 'b');
+CREATE TRIGGER t2_bu BEFORE UPDATE ON t2 FOR EACH ROW SET @b = 1;
+UPDATE t1, t2 SET t2.b = t1.b;
+ERROR 23000: Column 'b' cannot be null
+DROP TABLE t1, t2;
+# t1 column type name: VARBINARY(10)
+# t2 column type name: VARBINARY(10)
+# t2 column value: 'binary'
+CREATE TABLE t1(a INT, b VARBINARY(10));
+CREATE TABLE t2(a INT, b VARBINARY(10) NOT NULL);
+INSERT INTO t1 VALUES (1, NULL);
+INSERT INTO t2 VALUES (1, 'binary');
+CREATE TRIGGER t2_bu BEFORE UPDATE ON t2 FOR EACH ROW SET @b = 1;
+UPDATE t1, t2 SET t2.b = t1.b;
+ERROR 23000: Column 'b' cannot be null
+DROP TABLE t1, t2;
+# t1 column type name: BINARY(10)
+# t2 column type name: BINARY(10)
+# t2 column value: 'binary'
+CREATE TABLE t1(a INT, b BINARY(10));
+CREATE TABLE t2(a INT, b BINARY(10) NOT NULL);
+INSERT INTO t1 VALUES (1, NULL);
+INSERT INTO t2 VALUES (1, 'binary');
+CREATE TRIGGER t2_bu BEFORE UPDATE ON t2 FOR EACH ROW SET @b = 1;
+UPDATE t1, t2 SET t2.b = t1.b;
+ERROR 23000: Column 'b' cannot be null
+DROP TABLE t1, t2;
+# t1 column type name: TINYTEXT
+# t2 column type name: TINYTEXT
+# t2 column value: 'text'
+CREATE TABLE t1(a INT, b TINYTEXT);
+CREATE TABLE t2(a INT, b TINYTEXT NOT NULL);
+INSERT INTO t1 VALUES (1, NULL);
+INSERT INTO t2 VALUES (1, 'text');
+CREATE TRIGGER t2_bu BEFORE UPDATE ON t2 FOR EACH ROW SET @b = 1;
+UPDATE t1, t2 SET t2.b = t1.b;
+ERROR 23000: Column 'b' cannot be null
+DROP TABLE t1, t2;
+# t1 column type name: TEXT(10)
+# t2 column type name: TEXT(10)
+# t2 column value: 'text'
+CREATE TABLE t1(a INT, b TEXT(10));
+CREATE TABLE t2(a INT, b TEXT(10) NOT NULL);
+INSERT INTO t1 VALUES (1, NULL);
+INSERT INTO t2 VALUES (1, 'text');
+CREATE TRIGGER t2_bu BEFORE UPDATE ON t2 FOR EACH ROW SET @b = 1;
+UPDATE t1, t2 SET t2.b = t1.b;
+ERROR 23000: Column 'b' cannot be null
+DROP TABLE t1, t2;
+# t1 column type name: BLOB
+# t2 column type name: BLOB
+# t2 column value: 'binary'
+CREATE TABLE t1(a INT, b BLOB);
+CREATE TABLE t2(a INT, b BLOB NOT NULL);
+INSERT INTO t1 VALUES (1, NULL);
+INSERT INTO t2 VALUES (1, 'binary');
+CREATE TRIGGER t2_bu BEFORE UPDATE ON t2 FOR EACH ROW SET @b = 1;
+UPDATE t1, t2 SET t2.b = t1.b;
+ERROR 23000: Column 'b' cannot be null
+DROP TABLE t1, t2;
+# t1 column type name: VARCHAR(5)
+# t2 column type name: INT
+# t2 column value: 3
+CREATE TABLE t1(a INT, b VARCHAR(5));
+CREATE TABLE t2(a INT, b INT NOT NULL);
+INSERT INTO t1 VALUES (1, NULL);
+INSERT INTO t2 VALUES (1, 3);
+CREATE TRIGGER t2_bu BEFORE UPDATE ON t2 FOR EACH ROW SET @b = 1;
+UPDATE t1, t2 SET t2.b = t1.b;
+ERROR 23000: Column 'b' cannot be null
+DROP TABLE t1, t2;
+# t1 column type name: INT
+# t2 column type name: VARCHAR(5)
+# t2 column value: 'str'
+CREATE TABLE t1(a INT, b INT);
+CREATE TABLE t2(a INT, b VARCHAR(5) NOT NULL);
+INSERT INTO t1 VALUES (1, NULL);
+INSERT INTO t2 VALUES (1, 'str');
+CREATE TRIGGER t2_bu BEFORE UPDATE ON t2 FOR EACH ROW SET @b = 1;
+UPDATE t1, t2 SET t2.b = t1.b;
+ERROR 23000: Column 'b' cannot be null
+DROP TABLE t1, t2;
+# t1 column type name: VARCHAR(15)
+# t2 column type name: VARCHAR(5)
+# t2 column value: 'str'
+CREATE TABLE t1(a INT, b VARCHAR(15));
+CREATE TABLE t2(a INT, b VARCHAR(5) NOT NULL);
+INSERT INTO t1 VALUES (1, NULL);
+INSERT INTO t2 VALUES (1, 'str');
+CREATE TRIGGER t2_bu BEFORE UPDATE ON t2 FOR EACH ROW SET @b = 1;
+UPDATE t1, t2 SET t2.b = t1.b;
+ERROR 23000: Column 'b' cannot be null
+DROP TABLE t1, t2;
+# t1 column type name: VARCHAR(15)
+# t2 column type name: BLOB
+# t2 column value: 'str'
+CREATE TABLE t1(a INT, b VARCHAR(15));
+CREATE TABLE t2(a INT, b BLOB NOT NULL);
+INSERT INTO t1 VALUES (1, NULL);
+INSERT INTO t2 VALUES (1, 'str');
+CREATE TRIGGER t2_bu BEFORE UPDATE ON t2 FOR EACH ROW SET @b = 1;
+UPDATE t1, t2 SET t2.b = t1.b;
+ERROR 23000: Column 'b' cannot be null
+DROP TABLE t1, t2;
+# t1 column type name: TEXT(20)
+# t2 column type name: TEXT(10)
+# t2 column value: 'text'
+CREATE TABLE t1(a INT, b TEXT(20));
+CREATE TABLE t2(a INT, b TEXT(10) NOT NULL);
+INSERT INTO t1 VALUES (1, NULL);
+INSERT INTO t2 VALUES (1, 'text');
+CREATE TRIGGER t2_bu BEFORE UPDATE ON t2 FOR EACH ROW SET @b = 1;
+UPDATE t1, t2 SET t2.b = t1.b;
+ERROR 23000: Column 'b' cannot be null
+DROP TABLE t1, t2;
+SET sql_mode= @save_sql_mode;
+#
 # Bug#18596756 - FAILED PREPARING OF TRIGGER ON TRUNCATED TABLES CAUSE
 #                ERROR 1054.
 #
@@ -2274,4 +2597,278 @@ DROP TABLE t2;
 INSERT INTO t1 VALUES(0);
 ERROR 42S02: Table 'test.t2' doesn't exist
 DROP TABLE t1;
-End of 6.0 tests.
+#
+# Bug#16522924 : UPDATE TRIGGER INVOKED WHEN UPDATE IGNORE MEANS
+#                      THAT NO UPDATE IS PERFORMED
+#
+CREATE TABLE t1 (a INT PRIMARY KEY);
+CREATE TABLE t2 (after_update CHAR(50));
+CREATE TABLE t3(b INT PRIMARY KEY);
+INSERT INTO t1 VALUES (1), (2);
+INSERT INTO t3 VALUES (1);
+CREATE TRIGGER post_update_t1 AFTER UPDATE ON t1
+FOR EACH ROW BEGIN
+INSERT INTO t2 VALUES("POST UPDATE TRIGGER FOR UPDATE IGNORE ON t1 FIRED");
+END|
+UPDATE IGNORE t1 SET a=2 WHERE a=1;
+Warnings:
+Warning	1062	Duplicate entry '2' for key 'PRIMARY'
+SELECT * FROM t2;
+after_update
+UPDATE IGNORE t1,t3 SET t1.a=2 WHERE t1.a=1;
+Warnings:
+Warning	1062	Duplicate entry '2' for key 'PRIMARY'
+SELECT * FROM t2;
+after_update
+UPDATE IGNORE t3,t1 SET t1.a=2 WHERE t1.a=1;
+Warnings:
+Warning	1062	Duplicate entry '2' for key 'PRIMARY'
+SELECT * FROM t1;
+a
+1
+2
+SELECT * FROM t2;
+after_update
+DROP TRIGGER post_update_t1;
+DROP TABLE t1,t2,t3;
+#
+# WL#9262: All system tables should support 32 character length user names
+#
+CREATE USER user_name_robert_golebiowski@oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char;
+CREATE TABLE test.silly_one (ID INT);
+CREATE DEFINER=user_name_robert_golebiowski@oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char TRIGGER test.silly_trigger BEFORE INSERT ON test.silly_one FOR EACH ROW SET @x=1;
+SHOW TRIGGERS FROM test LIKE 'silly_one';
+Trigger	Event	Table	Statement	Timing	Created	sql_mode	Definer	character_set_client	collation_connection	Database Collation
+silly_trigger	INSERT	silly_one	SET @x=1	BEFORE	#	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION	user_name_robert_golebiowski@oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char	latin1	latin1_swedish_ci	latin1_swedish_ci
+SELECT DEFINER FROM information_schema.triggers WHERE TRIGGER_NAME='silly_trigger';
+DEFINER
+user_name_robert_golebiowski@oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char
+DROP USER user_name_robert_golebiowski@oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char;
+DROP TRIGGER test.silly_trigger;
+DROP TABLE test.silly_one;
+#
+# Bug#25209512:  CURRENT_TIMESTAMP PRODUCES ZEROS IN TRIGGER
+#
+
+# Case 1: With BEFORE INSERT triggers
+# Scenario 1.1: Normal INSERT
+SET TIMESTAMP= UNIX_TIMESTAMP("2017-05-15 07:07:07");
+CREATE TABLE t1( a TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP );
+CREATE TRIGGER trigger_for_normal_insert BEFORE INSERT ON t1 FOR EACH ROW
+SET @x:= NEW.a;
+INSERT INTO t1() VALUES();
+SELECT * FROM t1;
+a
+2017-05-15 07:07:07
+# Without the patch, x contained zero timestamp.
+SELECT @x;
+@x
+2017-05-15 07:07:07
+DROP TABLE t1;
+
+# Scenario 1.2: INSERT INTO... SELECT
+CREATE TABLE t1(a DATETIME NOT NULL DEFAULT NOW(), b INT);
+CREATE TRIGGER trigger_for_insert_select BEFORE INSERT ON t1 FOR EACH ROW
+SET @x:= NEW.a;
+INSERT INTO t1(b) SELECT 1;
+SELECT * FROM t1;
+a	b
+2017-05-15 07:07:07	1
+# Without the patch, x contained zero timestamp.
+SELECT @x;
+@x
+2017-05-15 07:07:07
+DROP TABLE t1;
+
+# Scenario 1.3: Normal REPLACE
+CREATE TABLE t1( a TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP );
+CREATE TRIGGER trigger_for_normal_replace BEFORE INSERT ON t1 FOR EACH ROW
+SET @x:= NEW.a;
+REPLACE INTO t1() VALUES();
+SELECT * FROM t1;
+a
+2017-05-15 07:07:07
+# Without the patch, x contained zero timestamp.
+SELECT @x;
+@x
+2017-05-15 07:07:07
+DROP TABLE t1;
+
+# Scenario 1.4: REPLACE INTO... SELECT
+CREATE TABLE t1(a DATETIME NOT NULL DEFAULT NOW(), b INT);
+CREATE TRIGGER trigger_for_replace_select BEFORE INSERT ON t1 FOR EACH ROW
+SET @x:= NEW.a;
+REPLACE INTO t1(b) SELECT 1;
+SELECT * FROM t1;
+a	b
+2017-05-15 07:07:07	1
+# Without the patch, x contained zero timestamp.
+SELECT @x;
+@x
+2017-05-15 07:07:07
+DROP TABLE t1;
+
+# Case 2: With BEFORE UPDATE triggers
+# Scenario 2.1: Normal UPDATE with ON UPDATE NOW() clause for
+#               the timestamp field.
+SET TIMESTAMP= UNIX_TIMESTAMP("2017-04-11 09:09:09");
+CREATE TABLE t1( a TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+ON UPDATE NOW(), b INT DEFAULT 1 );
+CREATE TRIGGER trigger_before_update BEFORE UPDATE ON t1 FOR EACH ROW
+SET @x:= NEW.a;
+INSERT INTO t1 VALUES();
+SELECT * FROM t1;
+a	b
+2017-04-11 09:09:09	1
+SET TIMESTAMP= UNIX_TIMESTAMP("2017-04-12 10:10:10");
+UPDATE t1 SET b= 2;
+SELECT * FROM t1;
+a	b
+2017-04-12 10:10:10	2
+# Without the patch, x contained the old timestamp.
+SELECT @x;
+@x
+2017-04-12 10:10:10
+DROP TABLE t1;
+
+# Scenario 2.2: Normal UPDATE without ON UPDATE NOW() clause for
+#               the timestamp field.
+SET TIMESTAMP= UNIX_TIMESTAMP("2017-04-13 08:08:08");
+CREATE TABLE t1( a TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+b INT DEFAULT 1 );
+CREATE TRIGGER trigger_before_update BEFORE UPDATE ON t1 FOR EACH ROW
+SET @x:= NEW.a;
+INSERT INTO t1 VALUES();
+SELECT * FROM t1;
+a	b
+2017-04-13 08:08:08	1
+SET TIMESTAMP= UNIX_TIMESTAMP("2017-05-04 05:05:05");
+UPDATE t1 SET b= 2;
+SELECT * FROM t1;
+a	b
+2017-04-13 08:08:08	2
+# x contains the old timestamp because of the absence of
+# ON UPDATE clause for the timestamp field.
+SELECT @x;
+@x
+2017-04-13 08:08:08
+DROP TABLE t1;
+
+# Scenario 2.3: UPDATE with join
+SET TIMESTAMP= UNIX_TIMESTAMP("2017-04-25 11:11:11");
+CREATE TABLE t1( a DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+ON UPDATE CURRENT_TIMESTAMP, b INT);
+CREATE TABLE t2( d INT);
+INSERT INTO t1(b) VALUES(1);
+INSERT INTO t2 VALUES(2);
+SELECT * FROM t1;
+a	b
+2017-04-25 11:11:11	1
+SELECT * FROM t2;
+d
+2
+CREATE TRIGGER trigger_before_update_with_join BEFORE UPDATE ON t1 FOR EACH ROW
+SET @x:= NEW.a;
+SET TIMESTAMP= UNIX_TIMESTAMP("2017-04-25 01:01:01");
+UPDATE t1, t2 SET t1.b= t2.d;
+SELECT * FROM t1;
+a	b
+2017-04-25 01:01:01	2
+# Without the patch, x contained old timestamp
+SELECT @x;
+@x
+2017-04-25 01:01:01
+DROP TABLE t1, t2;
+
+# Case 3: LOAD DATA INFILE... with BEFORE INSERT triggers
+SET TIMESTAMP= UNIX_TIMESTAMP("2017-04-17 06:06:06");
+CREATE TABLE t1( a TIMESTAMP NOT NULL DEFAULT NOW(), b INT );
+CREATE TRIGGER trigger_for_load_infile BEFORE INSERT ON t1 FOR EACH ROW
+SET @x:= NEW.a;
+SELECT 1 INTO OUTFILE 't1.dat' FROM dual;
+LOAD DATA INFILE 't1.dat' INTO TABLE t1(b);
+SELECT * FROM t1;
+a	b
+2017-04-17 06:06:06	1
+# Without the patch, x contained zero timestamp
+SELECT @x;
+@x
+2017-04-17 06:06:06
+DROP TABLE t1;
+SET TIMESTAMP= DEFAULT;
+#
+# BUG 26626277: BUG IN "INSERT... ON DUPLICATE KEY UPDATE" QUERY
+#
+# Setup.
+CREATE TABLE t1 (fld1 VARCHAR(64) NOT NULL,
+fld2 INT DEFAULT 0, PRIMARY KEY (fld1));
+CREATE TABLE t2 (fld1 VARCHAR(64) NOT NULL,
+fld2 INT(11) DEFAULT NULL, PRIMARY KEY (fld1));
+INSERT INTO t1(fld1) VALUES (1100);
+INSERT INTO t2 VALUES (1100, 40);
+CREATE TRIGGER update_after_update
+AFTER UPDATE ON t2 FOR EACH ROW
+BEGIN
+UPDATE t1 SET t1.fld2 = t1.fld2 + 1
+WHERE t1.fld1 = NEW.fld1;
+END$$
+SELECT * FROM t1;
+fld1	fld2
+1100	0
+SELECT * FROM t2;
+fld1	fld2
+1100	40
+INSERT INTO t2 (fld1) values (1100) ON DUPLICATE KEY UPDATE
+fld2= 50;
+SELECT * FROM t1;
+fld1	fld2
+1100	1
+SELECT * FROM t2;
+fld1	fld2
+1100	50
+# Without patch, the after update trigger is not invoked.
+INSERT INTO t2 (fld1) values (1100) ON DUPLICATE KEY UPDATE
+fld2= 50;
+SELECT * FROM t1;
+fld1	fld2
+1100	2
+SELECT * FROM t2;
+fld1	fld2
+1100	50
+# Tests covering before update trigger.
+# Setup.
+TRUNCATE TABLE t1;
+DROP TRIGGER update_after_update;
+INSERT INTO t1(fld1) VALUES (1100);
+CREATE TRIGGER update_before_update
+BEFORE UPDATE ON t2 FOR EACH ROW
+BEGIN
+UPDATE t1 SET t1.fld2 = t1.fld2 + 1
+WHERE t1.fld1 = NEW.fld1;
+END$$
+SELECT * FROM t1;
+fld1	fld2
+1100	0
+SELECT * FROM t2;
+fld1	fld2
+1100	50
+INSERT INTO t2 (fld1) values (1100) ON DUPLICATE KEY UPDATE
+fld2= 50;
+SELECT * FROM t1;
+fld1	fld2
+1100	1
+SELECT * FROM t2;
+fld1	fld2
+1100	50
+INSERT INTO t2 (fld1) values (1100) ON DUPLICATE KEY UPDATE
+fld2= 50;
+SELECT * FROM t1;
+fld1	fld2
+1100	2
+SELECT * FROM t2;
+fld1	fld2
+1100	50
+# Cleanup
+DROP TRIGGER update_before_update;
+DROP TABLE t1, t2;
+End of 5.7 tests.

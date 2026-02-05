@@ -1,13 +1,20 @@
-/* Copyright (c) 2008, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation; version 2 of the License.
+  it under the terms of the GNU General Public License, version 2.0,
+  as published by the Free Software Foundation.
+
+  This program is also distributed with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an additional
+  permission to link the program and your derivative works with the
+  separately licensed software that they have included with MySQL.
 
   This program is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
+  GNU General Public License, version 2.0, for more details.
 
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software Foundation,
@@ -143,12 +150,12 @@ protected:
   {}
 
   void clear_object_columns();
-  int make_table_object_columns(volatile PFS_events_waits *wait);
-  int make_file_object_columns(volatile PFS_events_waits *wait);
-  int make_socket_object_columns(volatile PFS_events_waits *wait);
+  int make_table_object_columns(PFS_events_waits *wait);
+  int make_file_object_columns(PFS_events_waits *wait);
+  int make_socket_object_columns(PFS_events_waits *wait);
+  int make_metadata_lock_object_columns(PFS_events_waits *wait);
 
-  void make_row(bool thread_own_wait, PFS_thread *pfs_thread,
-                volatile PFS_events_waits *wait);
+  void make_row(PFS_events_waits *wait);
 
   /** Current row. */
   row_events_waits m_row;
@@ -160,10 +167,12 @@ protected:
 class table_events_waits_current : public table_events_waits_common
 {
 public:
+  static PFS_engine_table_share_state m_share_state;
   /** Table share */
   static PFS_engine_table_share m_share;
   static PFS_engine_table* create();
   static int delete_all_rows();
+  static ha_rows get_row_count();
 
   virtual int rnd_next();
   virtual int rnd_pos(const void *pos);
@@ -189,6 +198,8 @@ private:
   */
   static TABLE_FIELD_DEF m_field_def;
 
+  void make_row(PFS_thread *thread, PFS_events_waits *wait);
+
   /** Current position. */
   pos_events_waits_current m_pos;
   /** Next position. */
@@ -199,10 +210,12 @@ private:
 class table_events_waits_history : public table_events_waits_common
 {
 public:
+  static PFS_engine_table_share_state m_share_state;
   /** Table share */
   static PFS_engine_table_share m_share;
   static PFS_engine_table* create();
   static int delete_all_rows();
+  static ha_rows get_row_count();
 
   virtual int rnd_next();
   virtual int rnd_pos(const void *pos);
@@ -219,6 +232,8 @@ private:
   /** Table share lock. */
   static THR_LOCK m_table_lock;
 
+  void make_row(PFS_thread *thread, PFS_events_waits *wait);
+
   /** Current position. */
   pos_events_waits_history m_pos;
   /** Next position. */
@@ -229,10 +244,12 @@ private:
 class table_events_waits_history_long : public table_events_waits_common
 {
 public:
+  static PFS_engine_table_share_state m_share_state;
   /** Table share */
   static PFS_engine_table_share m_share;
   static PFS_engine_table* create();
   static int delete_all_rows();
+  static ha_rows get_row_count();
 
   virtual int rnd_next();
   virtual int rnd_pos(const void *pos);

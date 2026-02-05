@@ -25,9 +25,9 @@ let $message= #### Testcase for trigger privilege on execution time ########;
 	eval create table t1 (f1 char(20)) engine= $engine_type;
 
 	create User test_yesprivs@localhost;
-	set password for test_yesprivs@localhost = password('PWD');
+	set password for test_yesprivs@localhost = 'PWD';
         create User test_useprivs@localhost;
-        set password for test_useprivs@localhost = password('PWD');
+        set password for test_useprivs@localhost = 'PWD';
 
 	revoke ALL PRIVILEGES, GRANT OPTION FROM test_yesprivs@localhost;
         revoke ALL PRIVILEGES, GRANT OPTION FROM test_useprivs@localhost;
@@ -36,6 +36,7 @@ let $message= #### Testcase for trigger privilege on execution time ########;
 
 	connection default;
         select current_user;
+--replace_column 6 #
 	show triggers;
 	grant  select, insert, update ,trigger
 	        on priv_db.t1 to test_yesprivs@localhost

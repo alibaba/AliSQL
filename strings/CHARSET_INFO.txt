@@ -1,3 +1,24 @@
+Copyright (c) 2020, 2023, Oracle and/or its affiliates.
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License, version 2.0,
+as published by the Free Software Foundation.
+
+This program is also distributed with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have included with MySQL.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License, version 2.0, for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 CHARSET_INFO
 ============
@@ -18,13 +39,13 @@ typedef struct charset_info_st
   const char *name;
   const char *comment;
 
-  uchar    *ctype;
-  uchar    *to_lower;
-  uchar    *to_upper;
-  uchar    *sort_order;
+  const uchar *ctype;
+  const uchar *to_lower;
+  const uchar *to_upper;
+  const uchar *sort_order;
 
-  uint16      *tab_to_uni;
-  MY_UNI_IDX  *tab_from_uni;
+  const uint16     *tab_to_uni;
+  const MY_UNI_IDX *tab_from_uni;
 
   uchar state_map[256];
   uchar ident_map[256];
@@ -32,6 +53,7 @@ typedef struct charset_info_st
   uint      strxfrm_multiply;
   uint      mbminlen;
   uint      mbmaxlen;
+  uint      mbmaxlenlen;
   uint16    max_sort_char; /* For LIKE optimization */
 
   MY_CHARSET_HANDLER *cset;
@@ -179,6 +201,10 @@ Miscellaneous fields
                      it is 2.
   mbmaxlen         - maximum multi-byte sequence length.
                      1 for 8-bit charsets. Can be also 2 or 3.
+
+  mbmaxlenlen      - maximum leading bytes of a sequence to
+                     determine the length of the multi-byte
+                     sequence length.
 
   max_sort_char    - for LIKE range
                      in case of 8-bit character sets - native code

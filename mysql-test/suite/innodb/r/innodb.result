@@ -15,6 +15,8 @@ id	code	name
 6	3	Jeremy
 7	4	Matt
 update ignore t1 set id = 8, name = 'Sinisa' where id < 3;
+Warnings:
+Warning	1062	Duplicate entry '8' for key 'PRIMARY'
 select id, code, name from t1 order by id;
 id	code	name
 2	1	Monty
@@ -25,6 +27,8 @@ id	code	name
 7	4	Matt
 8	1	Sinisa
 update ignore t1 set id = id + 10, name = 'Ralph' where id < 4;
+Warnings:
+Warning	1062	Duplicate entry 'Ralph' for key 'name'
 select id, code, name from t1 order by id;
 id	code	name
 3	2	David
@@ -95,6 +99,37 @@ id	parent_id	level
 1202	107	2
 1203	107	2
 update ignore t1 set id=id+1;
+Warnings:
+Warning	1062	Duplicate entry '1002' for key 'PRIMARY'
+Warning	1062	Duplicate entry '1003' for key 'PRIMARY'
+Warning	1062	Duplicate entry '1004' for key 'PRIMARY'
+Warning	1062	Duplicate entry '1005' for key 'PRIMARY'
+Warning	1062	Duplicate entry '1006' for key 'PRIMARY'
+Warning	1062	Duplicate entry '1007' for key 'PRIMARY'
+Warning	1062	Duplicate entry '1008' for key 'PRIMARY'
+Warning	1062	Duplicate entry '1009' for key 'PRIMARY'
+Warning	1062	Duplicate entry '1016' for key 'PRIMARY'
+Warning	1062	Duplicate entry '1017' for key 'PRIMARY'
+Warning	1062	Duplicate entry '1018' for key 'PRIMARY'
+Warning	1062	Duplicate entry '1019' for key 'PRIMARY'
+Warning	1062	Duplicate entry '1020' for key 'PRIMARY'
+Warning	1062	Duplicate entry '1021' for key 'PRIMARY'
+Warning	1062	Duplicate entry '1022' for key 'PRIMARY'
+Warning	1062	Duplicate entry '1025' for key 'PRIMARY'
+Warning	1062	Duplicate entry '1026' for key 'PRIMARY'
+Warning	1062	Duplicate entry '1027' for key 'PRIMARY'
+Warning	1062	Duplicate entry '1028' for key 'PRIMARY'
+Warning	1062	Duplicate entry '1029' for key 'PRIMARY'
+Warning	1062	Duplicate entry '1030' for key 'PRIMARY'
+Warning	1062	Duplicate entry '1031' for key 'PRIMARY'
+Warning	1062	Duplicate entry '1032' for key 'PRIMARY'
+Warning	1062	Duplicate entry '1033' for key 'PRIMARY'
+Warning	1062	Duplicate entry '1034' for key 'PRIMARY'
+Warning	1062	Duplicate entry '1035' for key 'PRIMARY'
+Warning	1062	Duplicate entry '1036' for key 'PRIMARY'
+Warning	1062	Duplicate entry '1037' for key 'PRIMARY'
+Warning	1062	Duplicate entry '1038' for key 'PRIMARY'
+Warning	1062	Duplicate entry '1203' for key 'PRIMARY'
 select * from t1;
 id	parent_id	level
 1001	100	0
@@ -137,20 +172,28 @@ id	parent_id	level
 1202	107	2
 1204	107	2
 update ignore t1 set id=1023 where id=1010;
+Warnings:
+Warning	1062	Duplicate entry '1023' for key 'PRIMARY'
 select * from t1 where parent_id=102;
 id	parent_id	level
 1008	102	2
 1010	102	2
 1015	102	2
 explain select level from t1 where level=1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	level	level	1	const	#	Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	level	level	1	const	#	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`level` AS `level` from `test`.`t1` where (`test`.`t1`.`level` = 1)
 explain select level,id from t1 where level=1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	level	level	1	const	#	Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	level	level	1	const	#	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`level` AS `level`,`test`.`t1`.`id` AS `id` from `test`.`t1` where (`test`.`t1`.`level` = 1)
 explain select level,id,parent_id from t1 where level=1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	level	level	1	const	#	NULL
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	level	level	1	const	#	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`level` AS `level`,`test`.`t1`.`id` AS `id`,`test`.`t1`.`parent_id` AS `parent_id` from `test`.`t1` where (`test`.`t1`.`level` = 1)
 select level,id from t1 where level=1;
 level	id
 1	1002
@@ -172,10 +215,10 @@ Table	Op	Msg_type	Msg_text
 test.t1	optimize	note	Table does not support optimize, doing recreate + analyze instead
 test.t1	optimize	status	OK
 show keys from t1;
-Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible
-t1	0	PRIMARY	1	id	A	#	NULL	NULL		BTREE			YES
-t1	1	parent_id	1	parent_id	A	#	NULL	NULL		BTREE			YES
-t1	1	level	1	level	A	#	NULL	NULL		BTREE			YES
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment
+t1	0	PRIMARY	1	id	A	#	NULL	NULL		BTREE		
+t1	1	parent_id	1	parent_id	A	#	NULL	NULL		BTREE		
+t1	1	level	1	level	A	#	NULL	NULL		BTREE		
 drop table t1;
 CREATE TABLE t1 (
 gesuchnr int(11) DEFAULT '0' NOT NULL,
@@ -216,8 +259,8 @@ analyze table t1;
 Table	Op	Msg_type	Msg_text
 test.t1	analyze	status	OK
 show keys from t1;
-Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible
-t1	1	skr	1	a	A	#	NULL	NULL	YES	BTREE			YES
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment
+t1	1	skr	1	a	A	#	NULL	NULL	YES	BTREE		
 drop table t1;
 create table t1 (a int,b varchar(20),key(a)) engine=innodb;
 insert into t1 values (1,""), (2,"testing");
@@ -404,15 +447,15 @@ drop table t1;
 CREATE TABLE t1 (a int not null, b int not null,c int not null,
 key(a),primary key(a,b), unique(c),key(a),unique(b));
 Warnings:
-Note	1831	Duplicate index 'a_2' defined on the table 'test.t1'. This is deprecated and will be disallowed in a future release.
+Warning	1831	Duplicate index 'a_2' defined on the table 'test.t1'. This is deprecated and will be disallowed in a future release.
 show index from t1;
-Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible
-t1	0	PRIMARY	1	a	A	#	NULL	NULL		BTREE			YES
-t1	0	PRIMARY	2	b	A	#	NULL	NULL		BTREE			YES
-t1	0	c	1	c	A	#	NULL	NULL		BTREE			YES
-t1	0	b	1	b	A	#	NULL	NULL		BTREE			YES
-t1	1	a	1	a	A	#	NULL	NULL		BTREE			YES
-t1	1	a_2	1	a	A	#	NULL	NULL		BTREE			YES
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment
+t1	0	PRIMARY	1	a	A	#	NULL	NULL		BTREE		
+t1	0	PRIMARY	2	b	A	#	NULL	NULL		BTREE		
+t1	0	c	1	c	A	#	NULL	NULL		BTREE		
+t1	0	b	1	b	A	#	NULL	NULL		BTREE		
+t1	1	a	1	a	A	#	NULL	NULL		BTREE		
+t1	1	a_2	1	a	A	#	NULL	NULL		BTREE		
 drop table t1;
 create table t1 (col1 int not null, col2 char(4) not null, primary key(col1));
 alter table t1 engine=innodb;
@@ -612,8 +655,10 @@ id	parent_id	level
 1025	102	2
 1016	102	2
 explain select level from t1 where level=1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	level	level	1	const	#	Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	level	level	1	const	#	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`level` AS `level` from `test`.`t1` where (`test`.`t1`.`level` = 1)
 select level,id from t1 where level=1;
 level	id
 1	1004
@@ -718,7 +763,7 @@ update t1 set sca_pic="test" where sca_pic is null;
 delete from t1 where sca_code='pd';
 drop table t1;
 set @a:=now();
-CREATE TABLE t1 (a int not null, b timestamp not null default 
+CREATE TABLE t1 (a int not null, b timestamp not null default
 current_timestamp on update current_timestamp, primary key (a)) engine=innodb;
 insert into t1 (a) values(1),(2),(3);
 select t1.a from t1 natural join t1 as t2 where t1.b >= @a order by t1.a;
@@ -749,8 +794,8 @@ Table	Op	Msg_type	Msg_text
 test.t1	optimize	note	Table does not support optimize, doing recreate + analyze instead
 test.t1	optimize	status	OK
 show keys from t1;
-Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible
-t1	0	PRIMARY	1	a	A	#	NULL	NULL		BTREE			YES
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment
+t1	0	PRIMARY	1	a	A	#	NULL	NULL		BTREE		
 drop table t1;
 create table t1 (i int, j int ) ENGINE=innodb;
 insert into t1 values (1,2);
@@ -772,17 +817,13 @@ SELECT MIN(B),MAX(b) FROM t1 WHERE t1.a = 1;
 MIN(B)	MAX(b)
 1	1
 drop table t1;
-CREATE TABLE t1 (a int unsigned NOT NULL) engine=innodb;
-INSERT INTO t1 VALUES (1);
-SELECT * FROM t1;
-a
-1
-DROP TABLE t1;
 create table t1 (a int  primary key,b int, c int, d int, e int, f int, g int, h int, i int, j int, k int, l int, m int, n int, o int, p int, q int, r int, s int, t int, u int, v int, w int, x int, y int, z int, a1 int, a2 int, a3 int, a4 int, a5 int, a6 int, a7 int, a8 int, a9 int, b1 int, b2 int, b3 int, b4 int, b5 int, b6 int) engine = innodb;
 insert into t1 values (1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1);
 explain select * from t1 where a > 0 and a < 50;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	range	PRIMARY	PRIMARY	4	NULL	#	Using where
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	PRIMARY	PRIMARY	4	NULL	#	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`c` AS `c`,`test`.`t1`.`d` AS `d`,`test`.`t1`.`e` AS `e`,`test`.`t1`.`f` AS `f`,`test`.`t1`.`g` AS `g`,`test`.`t1`.`h` AS `h`,`test`.`t1`.`i` AS `i`,`test`.`t1`.`j` AS `j`,`test`.`t1`.`k` AS `k`,`test`.`t1`.`l` AS `l`,`test`.`t1`.`m` AS `m`,`test`.`t1`.`n` AS `n`,`test`.`t1`.`o` AS `o`,`test`.`t1`.`p` AS `p`,`test`.`t1`.`q` AS `q`,`test`.`t1`.`r` AS `r`,`test`.`t1`.`s` AS `s`,`test`.`t1`.`t` AS `t`,`test`.`t1`.`u` AS `u`,`test`.`t1`.`v` AS `v`,`test`.`t1`.`w` AS `w`,`test`.`t1`.`x` AS `x`,`test`.`t1`.`y` AS `y`,`test`.`t1`.`z` AS `z`,`test`.`t1`.`a1` AS `a1`,`test`.`t1`.`a2` AS `a2`,`test`.`t1`.`a3` AS `a3`,`test`.`t1`.`a4` AS `a4`,`test`.`t1`.`a5` AS `a5`,`test`.`t1`.`a6` AS `a6`,`test`.`t1`.`a7` AS `a7`,`test`.`t1`.`a8` AS `a8`,`test`.`t1`.`a9` AS `a9`,`test`.`t1`.`b1` AS `b1`,`test`.`t1`.`b2` AS `b2`,`test`.`t1`.`b3` AS `b3`,`test`.`t1`.`b4` AS `b4`,`test`.`t1`.`b5` AS `b5`,`test`.`t1`.`b6` AS `b6` from `test`.`t1` where ((`test`.`t1`.`a` > 0) and (`test`.`t1`.`a` < 50))
 drop table t1;
 create table t1 (id int NOT NULL,id2 int NOT NULL,id3 int NOT NULL,dummy1 char(30),primary key (id,id2),index index_id3 (id3)) engine=innodb;
 insert into t1 values (0,0,0,'ABCDEFGHIJ'),(2,2,2,'BCDEFGHIJK'),(1,1,1,'CDEFGHIJKL');
@@ -813,6 +854,8 @@ id
 1
 2
 insert ignore into t1 values (100,1,2,'D'),(1,1,99,'D');
+Warnings:
+Warning	1062	Duplicate entry '1-1' for key 'PRIMARY'
 commit;
 select id,id3 from t1;
 id	id3
@@ -915,35 +958,54 @@ drop table t1;
 create table t1 (a int not null, b int not null, c int not null, primary key (a),key(b)) engine=innodb;
 insert into t1 values (3,3,3),(1,1,1),(2,2,2),(4,4,4);
 explain select * from t1 order by a;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	index	NULL	PRIMARY	4	NULL	#	NULL
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	PRIMARY	4	NULL	#	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`c` AS `c` from `test`.`t1` order by `test`.`t1`.`a`
 explain select * from t1 order by b;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ALL	NULL	NULL	NULL	NULL	#	Using filesort
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`c` AS `c` from `test`.`t1` order by `test`.`t1`.`b`
 explain select * from t1 order by c;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ALL	NULL	NULL	NULL	NULL	#	Using filesort
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`c` AS `c` from `test`.`t1` order by `test`.`t1`.`c`
 explain select a from t1 order by a;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	index	NULL	PRIMARY	4	NULL	#	Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	PRIMARY	4	NULL	#	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` order by `test`.`t1`.`a`
 explain select b from t1 order by b;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	index	NULL	b	4	NULL	#	Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	b	4	NULL	#	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`b` AS `b` from `test`.`t1` order by `test`.`t1`.`b`
 explain select a,b from t1 order by b;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	index	NULL	b	4	NULL	#	Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	b	4	NULL	#	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b` from `test`.`t1` order by `test`.`t1`.`b`
 explain select a,b from t1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	index	NULL	b	4	NULL	#	Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	b	4	NULL	#	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b` from `test`.`t1`
 explain select a,b,c from t1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ALL	NULL	NULL	NULL	NULL	#	NULL
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	#	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`c` AS `c` from `test`.`t1`
 drop table t1;
 create table t1 (t int not null default 1, key (t)) engine=innodb;
 desc t1;
 Field	Type	Null	Key	Default	Extra
 t	int(11)	NO	MUL	1	
 drop table t1;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1 (
 number bigint(20) NOT NULL default '0',
 cname char(15) NOT NULL default '',
@@ -1006,12 +1068,16 @@ select * from t2;
 number	cname	carrier_id	privacy	last_mod_date	last_mod_id	last_app_date	last_app_id	version	assigned_scps	status
 333	tubs	99	2	2002-01-09 11:34:53	501	2002-01-09 11:34:53	500	3	10	0
 drop table t1,t2;
+SET sql_mode = default;
 create table t1 (id int unsigned not null auto_increment, code tinyint unsigned not null, name char(20) not null, primary key (id), key (code), unique (name)) engine=innodb;
 BEGIN;
 SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE;
 SELECT @@tx_isolation,@@global.tx_isolation;
 @@tx_isolation	@@global.tx_isolation
 SERIALIZABLE	REPEATABLE-READ
+Warnings:
+Warning	1287	'@@tx_isolation' is deprecated and will be removed in a future release. Please use '@@transaction_isolation' instead
+Warning	1287	'@@tx_isolation' is deprecated and will be removed in a future release. Please use '@@transaction_isolation' instead
 insert into t1 (code, name) values (1, 'Tim'), (1, 'Monty'), (2, 'David');
 select id, code, name from t1 order by id;
 id	code	name
@@ -1222,12 +1288,16 @@ select count(*) from t1;
 count(*)
 623
 explain select * from t1 where c between 1 and 2500;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	range	c	c	5	NULL	#	Using index condition
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	c	c	5	NULL	#	100.00	Using index condition
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`c` AS `c` from `test`.`t1` where (`test`.`t1`.`c` between 1 and 2500)
 update t1 set c=a;
 explain select * from t1 where c between 1 and 2500;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ALL	c	NULL	NULL	NULL	#	Using where
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	c	NULL	NULL	NULL	#	#	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`c` AS `c` from `test`.`t1` where (`test`.`t1`.`c` between 1 and 2500)
 drop table t1,t2;
 create table t1 (id int primary key auto_increment, fk int, index index_fk (fk)) engine=innodb;
 insert into t1 (id) values (null),(null),(null),(null),(null);
@@ -1313,6 +1383,7 @@ INSERT INTO t2 VALUES (10, 'old'), (20, 'other');
 UPDATE t1 SET c1 = 'other' WHERE c1 = 'old';
 ERROR 23000: Foreign key constraint for table 't1', record 'other-somevalu' would lead to a duplicate entry in table 't2', key 'c1'
 DROP TABLE t2,t1;
+call mtr.add_suppression("Cannot delete/update rows with cascading foreign key constraints that exceed max depth of 15. Please drop excessive foreign constraints and try again");
 create table t1(
 id int primary key,
 pid int,
@@ -1321,7 +1392,7 @@ foreign key(pid) references t1(id) on delete cascade) engine=innodb;
 insert into t1 values(0,0),(1,0),(2,1),(3,2),(4,3),(5,4),(6,5),(7,6),
 (8,7),(9,8),(10,9),(11,10),(12,11),(13,12),(14,13),(15,14);
 delete from t1 where id=0;
-ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails (`test`.`t1`, CONSTRAINT `t1_ibfk_1` FOREIGN KEY (`pid`) REFERENCES `t1` (`id`) ON DELETE CASCADE)
+ERROR HY000: Foreign key cascade delete/update exceeds max depth of 15.
 delete from t1 where id=15;
 delete from t1 where id=0;
 drop table t1;
@@ -1329,7 +1400,7 @@ CREATE TABLE t1 (col1 int(1))ENGINE=InnoDB;
 CREATE TABLE t2 (col1 int(1),stamp TIMESTAMP,INDEX stamp_idx
 (stamp))ENGINE=InnoDB;
 insert into t1 values (1),(2),(3);
-insert into t2 values (1, 20020204130000),(2, 20020204130000),(4,20020204310000 ),(5,20020204230000);
+insert ignore into t2 values (1, 20020204130000),(2, 20020204130000),(4,20020204310000 ),(5,20020204230000);
 Warnings:
 Warning	1265	Data truncated for column 'stamp' at row 3
 SELECT col1 FROM t1 UNION SELECT col1 FROM t2 WHERE stamp <
@@ -1359,7 +1430,7 @@ KEY `id_version` (`id_version`)
 ) ENGINE=InnoDB;
 INSERT INTO t2 VALUES("3524", "1"),("3525", "1"),("1794", "4"),("102", "5"),("1822", "6"),("3382", "9");
 SELECT t2.id, t1.`label` FROM t2 INNER JOIN
-(SELECT t1.id_object as id_object FROM t1 WHERE t1.`label` LIKE '%test%') AS lbl 
+(SELECT t1.id_object as id_object FROM t1 WHERE t1.`label` LIKE '%test%') AS lbl
 ON (t2.id = lbl.id_object) INNER JOIN t1 ON (t2.id = t1.id_object) ORDER BY 1;
 id	label
 102	Le Pekin (Test)
@@ -1443,7 +1514,7 @@ t2	CREATE TABLE `t2` (
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1
 create index id2 on t2 (id);
 Warnings:
-Note	1831	Duplicate index 'id2' defined on the table 'test.t2'. This is deprecated and will be disallowed in a future release.
+Warning	1831	Duplicate index 'id2' defined on the table 'test.t2'. This is deprecated and will be disallowed in a future release.
 show create table t2;
 Table	Create Table
 t2	CREATE TABLE `t2` (
@@ -1591,7 +1662,7 @@ ERROR 42S21: Duplicate column name 'c1'
 drop table t1;
 CREATE TABLE t1 (a_id tinyint(4) NOT NULL default '0', PRIMARY KEY  (a_id)) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 INSERT INTO t1 VALUES (1),(2),(3);
-CREATE TABLE t2 (b_id tinyint(4) NOT NULL default '0',b_a tinyint(4) NOT NULL default '0', PRIMARY KEY  (b_id), KEY  (b_a), 
+CREATE TABLE t2 (b_id tinyint(4) NOT NULL default '0',b_a tinyint(4) NOT NULL default '0', PRIMARY KEY  (b_id), KEY  (b_a),
 CONSTRAINT fk_b_a FOREIGN KEY (b_a) REFERENCES t1 (a_id) ON DELETE CASCADE ON UPDATE NO ACTION) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 INSERT INTO t2 VALUES (1,1),(2,1),(3,1),(4,2),(5,2);
 SELECT * FROM (SELECT t1.*,GROUP_CONCAT(t2.b_id SEPARATOR ',') as b_list FROM (t1 LEFT JOIN (t2) on t1.a_id = t2.b_a) GROUP BY t1.a_id ) AS xyz;
@@ -1626,8 +1697,10 @@ a	b	c	d	e
 2	2	b	2	2
 3	3	ab	3	3
 explain select * from t1 order by a,b,c,d;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ALL	NULL	NULL	NULL	NULL	3	Using filesort
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`c` AS `c`,`test`.`t1`.`d` AS `d`,`test`.`t1`.`e` AS `e` from `test`.`t1` order by `test`.`t1`.`a`,`test`.`t1`.`b`,`test`.`t1`.`c`,`test`.`t1`.`d`
 drop table t1;
 create table t1 (a char(1), b char(1), key(a, b)) engine=innodb;
 insert into t1 values ('8', '6'), ('4', '7');
@@ -1660,8 +1733,10 @@ select count(*) from t1 where x = -16;
 count(*)
 0
 explain select count(*) from t1 where x > -16;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	index	PRIMARY	PRIMARY	8	NULL	2	Using where; Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	PRIMARY	PRIMARY	8	NULL	2	50.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `test`.`t1` where (`test`.`t1`.`x` > <cache>(-(16)))
 select count(*) from t1 where x > -16;
 count(*)
 2
@@ -1684,7 +1759,7 @@ variable_value - @innodb_rows_deleted_orig
 71
 SELECT variable_value - @innodb_rows_inserted_orig FROM information_schema.global_status WHERE LOWER(variable_name) = 'innodb_rows_inserted';
 variable_value - @innodb_rows_inserted_orig
-963
+966
 SELECT variable_value - @innodb_rows_updated_orig FROM information_schema.global_status WHERE LOWER(variable_name) = 'innodb_rows_updated';
 variable_value - @innodb_rows_updated_orig
 866
@@ -1890,28 +1965,40 @@ select count(*) from t1 where v like 'a %';
 count(*)
 9
 explain select count(*) from t1 where v='a  ';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	v	v	13	const	#	Using where; Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	v	v	13	const	#	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `test`.`t1` where (`test`.`t1`.`v` = 'a  ')
 explain select count(*) from t1 where c='a  ';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	c	c	11	const	#	Using where; Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	c	c	11	const	#	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `test`.`t1` where (`test`.`t1`.`c` = 'a  ')
 explain select count(*) from t1 where t='a  ';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	t	t	13	const	#	Using where
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	t	t	13	const	#	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `test`.`t1` where (`test`.`t1`.`t` = 'a  ')
 explain select count(*) from t1 where v like 'a%';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	range	v	v	13	NULL	#	Using where; Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	v	v	13	NULL	#	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `test`.`t1` where (`test`.`t1`.`v` like 'a%')
 explain select count(*) from t1 where v between 'a' and 'a ';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	v	v	13	const	#	Using where; Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	v	v	13	const	#	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `test`.`t1` where (`test`.`t1`.`v` between 'a' and 'a ')
 explain select count(*) from t1 where v between 'a' and 'a ' and v between 'a  ' and 'b\n';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	v	v	13	const	#	Using where; Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	v	v	13	const	#	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `test`.`t1` where ((`test`.`t1`.`v` between 'a' and 'a ') and (`test`.`t1`.`v` between 'a  ' and 'b\n'))
 alter table t1 add unique(v);
 ERROR 23000: Duplicate entry '{ ' for key 'v_2'
 alter table t1 add key(v);
 Warnings:
-Note	1831	Duplicate index 'v_2' defined on the table 'test.t1'. This is deprecated and will be disallowed in a future release.
+Warning	1831	Duplicate index 'v_2' defined on the table 'test.t1'. This is deprecated and will be disallowed in a future release.
 select concat('*',v,'*',c,'*',t,'*') as qq from t1 where v='a';
 qq
 *a*a*a*
@@ -1925,8 +2012,10 @@ qq
 *a        *a*a        *
 *a         *a*a         *
 explain select * from t1 where v='a';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	v,v_2	#	13	const	#	Using index condition
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	v,v_2	#	13	const	#	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`v` AS `v`,`test`.`t1`.`c` AS `c`,`test`.`t1`.`t` AS `t` from `test`.`t1` where (`test`.`t1`.`v` = 'a')
 select v,count(*) from t1 group by v limit 10;
 v	count(*)
 a	1
@@ -2089,20 +2178,30 @@ select count(*) from t1 where v like 'a %';
 count(*)
 9
 explain select count(*) from t1 where v='a  ';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	v	v	303	const	#	Using where; Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	v	v	303	const	#	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `test`.`t1` where (`test`.`t1`.`v` = 'a  ')
 explain select count(*) from t1 where v like 'a%';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	range	v	v	303	NULL	#	Using where; Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	v	v	303	NULL	#	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `test`.`t1` where (`test`.`t1`.`v` like 'a%')
 explain select count(*) from t1 where v between 'a' and 'a ';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	v	v	303	const	#	Using where; Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	v	v	303	const	#	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `test`.`t1` where (`test`.`t1`.`v` between 'a' and 'a ')
 explain select count(*) from t1 where v between 'a' and 'a ' and v between 'a  ' and 'b\n';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	v	v	303	const	#	Using where; Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	v	v	303	const	#	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `test`.`t1` where ((`test`.`t1`.`v` between 'a' and 'a ') and (`test`.`t1`.`v` between 'a  ' and 'b\n'))
 explain select * from t1 where v='a';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	v	v	303	const	#	Using index condition
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	v	v	303	const	#	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`v` AS `v`,`test`.`t1`.`c` AS `c`,`test`.`t1`.`t` AS `t` from `test`.`t1` where (`test`.`t1`.`v` = 'a')
 select v,count(*) from t1 group by v limit 10;
 v	count(*)
 a	1
@@ -2169,20 +2268,30 @@ select count(*) from t1 where v like 'a %';
 count(*)
 9
 explain select count(*) from t1 where v='a  ';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	v	v	33	const	#	Using where
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	v	v	33	const	#	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `test`.`t1` where (`test`.`t1`.`v` = 'a  ')
 explain select count(*) from t1 where v like 'a%';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	range	v	v	33	NULL	#	Using where
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	v	v	33	NULL	#	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `test`.`t1` where (`test`.`t1`.`v` like 'a%')
 explain select count(*) from t1 where v between 'a' and 'a ';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	v	v	33	const	#	Using where
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	v	v	33	const	#	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `test`.`t1` where (`test`.`t1`.`v` between 'a' and 'a ')
 explain select count(*) from t1 where v between 'a' and 'a ' and v between 'a  ' and 'b\n';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	v	v	33	const	#	Using where
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	v	v	33	const	#	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `count(*)` from `test`.`t1` where ((`test`.`t1`.`v` between 'a' and 'a ') and (`test`.`t1`.`v` between 'a  ' and 'b\n'))
 explain select * from t1 where v='a';
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	v	v	33	const	#	Using where
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	v	v	33	const	#	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`v` AS `v`,`test`.`t1`.`c` AS `c`,`test`.`t1`.`t` AS `t` from `test`.`t1` where (`test`.`t1`.`v` = 'a')
 select v,count(*) from t1 group by v limit 10;
 v	count(*)
 a	1
@@ -2318,7 +2427,7 @@ t1	CREATE TABLE `t1` (
 drop table t1;
 create table t1 (v varchar(10), c char(10)) row_format=fixed;
 Warnings:
-Warning	1478	InnoDB: assuming ROW_FORMAT=COMPACT.
+Warning	1478	InnoDB: assuming ROW_FORMAT=DYNAMIC.
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
@@ -2340,16 +2449,27 @@ drop table t1;
 create table t1(a int, b varchar(12), key ba(b, a));
 insert into t1 values (1, 'A'), (20, NULL);
 explain select * from t1 where a=20 and b is null;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	ba	ba	20	const,const	1	Using where; Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	ba	ba	20	const,const	1	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b` from `test`.`t1` where ((`test`.`t1`.`a` = 20) and isnull(`test`.`t1`.`b`))
 select * from t1 where a=20 and b is null;
 a	b
 20	NULL
 drop table t1;
 set session old_alter_table=0;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+SET GLOBAL innodb_large_prefix=OFF;
+Warnings:
+Warning	131	Using innodb_large_prefix is deprecated and the parameter may be removed in future releases. See http://dev.mysql.com/doc/refman/5.7/en/innodb-file-format.html
 create table t1 (v varchar(65530), key(v));
 Warnings:
 Warning	1071	Specified key was too long; max key length is 767 bytes
+SET GLOBAL innodb_large_prefix=default;
+Warnings:
+Warning	131	Using innodb_large_prefix is deprecated and the parameter may be removed in future releases. See http://dev.mysql.com/doc/refman/5.7/en/innodb-file-format.html
 drop table t1;
 create table t1 (v varchar(65536));
 Warnings:
@@ -2369,6 +2489,7 @@ t1	CREATE TABLE `t1` (
   `v` mediumtext CHARACTER SET utf8
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1
 drop table t1;
+SET sql_mode = default;
 set default_storage_engine=MyISAM;
 create table t1 (v varchar(16384)) engine=innodb;
 drop table t1;
@@ -2485,6 +2606,12 @@ character set = latin1 engine = innodb;
 create table t8 (col1 blob, index(col1(767)))
 character set = latin1 engine = innodb;
 drop table t1, t2, t3, t4, t5, t6, t7, t8;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+SET GLOBAL innodb_large_prefix=OFF;
+Warnings:
+Warning	131	Using innodb_large_prefix is deprecated and the parameter may be removed in future releases. See http://dev.mysql.com/doc/refman/5.7/en/innodb-file-format.html
 create table t1 (col1 varchar(768), index(col1))
 character set = latin1 engine = innodb;
 Warnings:
@@ -2501,6 +2628,9 @@ create table t4 (col1 blob, index(col1(768)))
 character set = latin1 engine = innodb;
 Warnings:
 Warning	1071	Specified key was too long; max key length is 767 bytes
+SET GLOBAL innodb_large_prefix=default;
+Warnings:
+Warning	131	Using innodb_large_prefix is deprecated and the parameter may be removed in future releases. See http://dev.mysql.com/doc/refman/5.7/en/innodb-file-format.html
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
@@ -2508,6 +2638,9 @@ t1	CREATE TABLE `t1` (
   KEY `col1` (`col1`(767))
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1
 drop table t1, t2, t3, t4;
+set global innodb_large_prefix=OFF;
+Warnings:
+Warning	131	Using innodb_large_prefix is deprecated and the parameter may be removed in future releases. See http://dev.mysql.com/doc/refman/5.7/en/innodb-file-format.html
 create table t1 (col1 varchar(768) primary key)
 character set = latin1 engine = innodb;
 ERROR 42000: Specified key was too long; max key length is 767 bytes
@@ -2520,6 +2653,10 @@ ERROR 42000: Specified key was too long; max key length is 767 bytes
 create table t4 (col1 blob, primary key(col1(768)))
 character set = latin1 engine = innodb;
 ERROR 42000: Specified key was too long; max key length is 767 bytes
+SET sql_mode = default;
+set global innodb_large_prefix=default;
+Warnings:
+Warning	131	Using innodb_large_prefix is deprecated and the parameter may be removed in future releases. See http://dev.mysql.com/doc/refman/5.7/en/innodb-file-format.html
 CREATE TABLE t1
 (
 id INT PRIMARY KEY
@@ -2634,6 +2771,9 @@ ERROR 42000: Cannot truncate a table referenced in a foreign key constraint (`te
 truncate t3;
 ERROR 42000: Cannot truncate a table referenced in a foreign key constraint (`test`.`t4`, CONSTRAINT `t4_ibfk_1` FOREIGN KEY (`a`) REFERENCES `test`.`t3` (`a`))
 drop table t4,t3,t2,t1;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 create table t1 (s1 varbinary(2),primary key (s1)) engine=innodb;
 create table t2 (s1 binary(2),primary key (s1)) engine=innodb;
 create table t3 (s1 varchar(2) binary,primary key (s1)) engine=innodb;
@@ -2749,6 +2889,7 @@ t2	CREATE TABLE `t2` (
   KEY `t2_ibfk_0` (`a`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1
 DROP TABLE t2,t1;
+SET sql_mode = default;
 CREATE TABLE t1 (
 field1 varchar(8) NOT NULL DEFAULT '',
 field2 varchar(8) NOT NULL DEFAULT '',
@@ -3013,11 +3154,8 @@ CREATE TABLE t2 (a INT, INDEX(a)) ENGINE=InnoDB;
 INSERT INTO t1 VALUES (1);
 INSERT INTO t2 VALUES (1);
 ALTER TABLE t2 ADD FOREIGN KEY (a) REFERENCES t1 (a) ON DELETE SET NULL;
-set @old_sql_mode = @@sql_mode;
-set @@sql_mode = 'STRICT_TRANS_TABLES';
 ALTER TABLE t2 MODIFY a INT NOT NULL;
 ERROR HY000: Column 'a' cannot be NOT NULL: needed in a foreign key constraint 'test/t2_ibfk_1' SET NULL
-set @@sql_mode = @old_sql_mode;
 DELETE FROM t1;
 DROP TABLE t2,t1;
 CREATE TABLE t1 (a VARCHAR(5) COLLATE utf8_unicode_ci PRIMARY KEY)
@@ -3065,7 +3203,7 @@ c21 CHAR(255), c22 CHAR(255), c23 CHAR(255), c24 CHAR(255),
 c25 CHAR(255), c26 CHAR(255), c27 CHAR(255), c28 CHAR(255),
 c29 CHAR(255), c30 CHAR(255), c31 CHAR(255), c32 CHAR(255)
 ) ENGINE = InnoDB;
-ERROR 42000: Row size too large (> {checked_valid}). Changing some columns to TEXT or BLOB or using ROW_FORMAT=DYNAMIC or ROW_FORMAT=COMPRESSED may help. In current row format, BLOB prefix of 768 bytes is stored inline.
+ERROR 42000: Row size too large (> {checked_valid}). Changing some columns to TEXT or BLOB may help. In current row format, BLOB prefix of 0 bytes is stored inline.
 SET innodb_strict_mode=OFF;
 DROP TABLE IF EXISTS t1;
 Warnings:
@@ -3085,6 +3223,8 @@ id
 DROP TABLE t1;
 SET binlog_format='MIXED';
 SET TX_ISOLATION='read-committed';
+Warnings:
+Warning	1287	'@@tx_isolation' is deprecated and will be removed in a future release. Please use '@@transaction_isolation' instead
 SET AUTOCOMMIT=0;
 DROP TABLE IF EXISTS t1, t2;
 Warnings:
@@ -3096,6 +3236,8 @@ SELECT * FROM t2;
 a
 SET binlog_format='MIXED';
 SET TX_ISOLATION='read-committed';
+Warnings:
+Warning	1287	'@@tx_isolation' is deprecated and will be removed in a future release. Please use '@@transaction_isolation' instead
 SET AUTOCOMMIT=0;
 INSERT INTO t1 VALUES (1);
 COMMIT;
@@ -3104,11 +3246,15 @@ a
 1
 SET binlog_format='MIXED';
 SET TX_ISOLATION='read-committed';
+Warnings:
+Warning	1287	'@@tx_isolation' is deprecated and will be removed in a future release. Please use '@@transaction_isolation' instead
 SET AUTOCOMMIT=0;
 SELECT * FROM t2;
 a
 SET binlog_format='MIXED';
 SET TX_ISOLATION='read-committed';
+Warnings:
+Warning	1287	'@@tx_isolation' is deprecated and will be removed in a future release. Please use '@@transaction_isolation' instead
 SET AUTOCOMMIT=0;
 INSERT INTO t1 VALUES (2);
 COMMIT;
@@ -3263,3 +3409,6 @@ c1	c2
 9	3
 DROP TABLE t1;
 DROP TABLE t2;
+count_alloc WHERE event_name like 'memory/innodb/other'
+count_alloc
+0

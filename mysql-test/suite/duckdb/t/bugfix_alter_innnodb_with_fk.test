@@ -1,0 +1,31 @@
+# Alter InnoDB Table with FK shouldn't fail when force_innodb_to_duckdb is ON.
+
+--echo #
+--echo # Prepare
+--echo #
+SET GLOBAL force_innodb_to_duckdb = OFF;
+--disable_warnings
+CREATE TABLE `t1` (
+  `pk` int(11) NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  `a` int(11) DEFAULT NULL UNIQUE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+ 
+CREATE TABLE `t2` (
+  `pk` int(11) NOT NULL PRIMARY KEY,
+  `b` int(11) DEFAULT NULL UNIQUE,
+  CONSTRAINT `t2_ibfk_1` FOREIGN KEY (`b`) REFERENCES `t1` (`a`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+--enable_warnings
+
+--echo #
+--echo # Alter InnoDB Table with FK shouldn't fail. 
+--echo #
+SET GLOBAL force_innodb_to_duckdb = ON;
+alter table `t2` add column `rand_ddl_40880752` VARBINARY(8) default '';
+
+--echo #
+--echo # Cleanup. 
+--echo #
+SET GLOBAL force_innodb_to_duckdb = default;
+DROP TABLE t1;
+DROP TABLE t2;

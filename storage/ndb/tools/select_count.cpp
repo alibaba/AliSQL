@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -56,7 +63,7 @@ static struct my_option my_long_options[] =
 
 static void short_usage_sub(void)
 {
-  ndb_short_usage_sub(NULL);
+  ndb_short_usage_sub("<table name>[, <table name>[, ...]]");
 }
 
 static void usage()
@@ -67,9 +74,9 @@ static void usage()
 int main(int argc, char** argv){
   NDB_INIT(argv[0]);
   ndb_opt_set_usage_funcs(short_usage_sub, usage);
-  load_defaults("my",load_default_groups,&argc,&argv);
+  ndb_load_defaults(NULL,load_default_groups,&argc,&argv);
   int ho_error;
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   opt_debug= "d:t:O,/tmp/ndb_select_count.trace";
 #endif
   if ((ho_error=handle_options(&argc, &argv, my_long_options,
@@ -95,7 +102,7 @@ int main(int argc, char** argv){
 
   Ndb MyNdb(&con, _dbname );
   if(MyNdb.init() != 0){
-    ERR(MyNdb.getNdbError());
+    NDB_ERR(MyNdb.getNdbError());
     return NDBT_ProgramExit(NDBT_FAILED);
   }
 
@@ -137,7 +144,7 @@ select_count(Ndb* pNdb, const NdbDictionary::Table* pTab,
   if ((code.interpret_exit_last_row() != 0) ||
       (code.finalise() != 0))
   {
-    ERR(code.getNdbError());
+    NDB_ERR(code.getNdbError());
     return NDBT_FAILED;
   }
 
@@ -158,18 +165,18 @@ select_count(Ndb* pNdb, const NdbDictionary::Table* pTab,
 	retryAttempt++;
 	continue;
       }
-      ERR(err);
+      NDB_ERR(err);
       return NDBT_FAILED;
     }
     pOp = pTrans->getNdbScanOperation(pTab->getName());	
     if (pOp == NULL) {
-      ERR(pTrans->getNdbError());
+      NDB_ERR(pTrans->getNdbError());
       pNdb->closeTransaction(pTrans);
       return NDBT_FAILED;
     }
 
     if( pOp->readTuples(NdbScanOperation::LM_Dirty) ) {
-      ERR(pTrans->getNdbError());
+      NDB_ERR(pTrans->getNdbError());
       pNdb->closeTransaction(pTrans);
       return NDBT_FAILED;
     }
@@ -177,7 +184,7 @@ select_count(Ndb* pNdb, const NdbDictionary::Table* pTab,
 
     check = pOp->setInterpretedCode(&code);
     if( check == -1 ) {
-      ERR(pTrans->getNdbError());
+      NDB_ERR(pTrans->getNdbError());
       pNdb->closeTransaction(pTrans);
       return NDBT_FAILED;
     }
@@ -188,7 +195,7 @@ select_count(Ndb* pNdb, const NdbDictionary::Table* pTab,
     pOp->getValue(NdbDictionary::Column::ROW_SIZE, (char*)&row_size);
     check = pTrans->execute(NdbTransaction::NoCommit);
     if( check == -1 ) {
-      ERR(pTrans->getNdbError());
+      NDB_ERR(pTrans->getNdbError());
       pNdb->closeTransaction(pTrans);
       return NDBT_FAILED;
     }
@@ -208,7 +215,7 @@ select_count(Ndb* pNdb, const NdbDictionary::Table* pTab,
 	retryAttempt++;
 	continue;
       }
-      ERR(err);
+      NDB_ERR(err);
       pNdb->closeTransaction(pTrans);
       return NDBT_FAILED;
     }

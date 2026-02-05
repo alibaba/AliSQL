@@ -13,8 +13,10 @@ select @@global.optimizer_switch;
 select @@session.optimizer_switch;
 show global variables like 'optimizer_switch';
 show session variables like 'optimizer_switch';
+--disable_warnings
 select * from information_schema.global_variables where variable_name='optimizer_switch';
 select * from information_schema.session_variables where variable_name='optimizer_switch';
+--enable_warnings
 
 #
 # show that it's writable
@@ -29,8 +31,10 @@ select @@global.optimizer_switch;
 select @@session.optimizer_switch;
 show global variables like 'optimizer_switch';
 show session variables like 'optimizer_switch';
+--disable_warnings
 select * from information_schema.global_variables where variable_name='optimizer_switch';
 select * from information_schema.session_variables where variable_name='optimizer_switch';
+--enable_warnings
 set session optimizer_switch="default";
 select @@session.optimizer_switch;
 
@@ -50,7 +54,7 @@ set session optimizer_switch="foobar";
 --echo # Bug#59894 set optimizer_switch to e or d causes invalid
 --echo # memory writes/valgrind warnings
 --echo
-set global optimizer_switch = 'd'; # means default
+set global optimizer_switch = 'def'; # means default
 --error ER_WRONG_VALUE_FOR_VAR
 set global optimizer_switch = 'e';
 

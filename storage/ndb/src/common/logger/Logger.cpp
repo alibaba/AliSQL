@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -29,6 +36,8 @@
 #else
 #include <SysLogHandler.hpp>
 #endif
+
+#include <portlib/ndb_localtime.h>
 
 const char* Logger::LoggerLevelNames[] = { "ON      ", 
 					   "DEBUG   ",
@@ -130,8 +139,7 @@ Logger::createFileHandler(char*filename)
   if (m_pFileHandler)
     return true; // Ok, already exist
 
-  LogHandler* log_handler = filename ? new FileLogHandler(filename)
-                                     : new FileLogHandler();
+  LogHandler* log_handler = new FileLogHandler(filename);
   if (!log_handler)
     return false;
 
@@ -210,65 +218,6 @@ Logger::addHandler(LogHandler* pHandler)
   return true;
 }
 
-bool
-Logger::addHandler(const BaseString &logstring, int *err, int len, char* errStr) {
-  size_t i;
-  Vector<BaseString> logdest;
-  DBUG_ENTER("Logger::addHandler");
-
-  logstring.split(logdest, ";");
-
-  for(i = 0; i < logdest.size(); i++) {
-    DBUG_PRINT("info",("adding: %s",logdest[i].c_str()));
-
-    Vector<BaseString> v_type_args;
-    logdest[i].split(v_type_args, ":", 2);
-
-    BaseString type(v_type_args[0]);
-    BaseString params;
-    if(v_type_args.size() >= 2)
-      params = v_type_args[1];
-
-    LogHandler *handler = NULL;
-
-#ifndef _WIN32
-    if(type == "SYSLOG")
-    {
-      handler = new SysLogHandler();
-    } else 
-#endif
-    if(type == "FILE")
-      handler = new FileLogHandler();
-    else if(type == "CONSOLE")
-      handler = new ConsoleLogHandler();
-    
-    if(handler == NULL)
-    {
-      BaseString::snprintf(errStr,len,"Could not create log destination: %s",
-                           logdest[i].c_str());
-      DBUG_RETURN(false);
-    }
-
-    if(!handler->parseParams(params))
-    {
-      *err= handler->getErrorCode();
-      if(handler->getErrorStr())
-        strncpy(errStr, handler->getErrorStr(), len);
-      delete handler;
-      DBUG_RETURN(false);
-    }
-
-    if (!addHandler(handler))
-    {
-      BaseString::snprintf(errStr,len,"Could not add log destination: %s",
-                           logdest[i].c_str());
-      delete handler;
-      DBUG_RETURN(false);
-    }
-  }
-
-  DBUG_RETURN(true);
-}
 
 bool
 Logger::removeHandler(LogHandler* pHandler)
@@ -441,4 +390,37 @@ void Logger::setRepeatFrequency(unsigned val)
   {
     pHandler->setRepeatFrequency(val);
   }
+}
+
+
+void
+Logger::format_timestamp(const time_t epoch,
+                         char* str, size_t len)
+{
+  assert(len > 0); // Assume buffer has size
+
+  // convert to local timezone
+  tm tm_buf;
+  if (ndb_localtime_r(&epoch, &tm_buf) == NULL)
+  {
+    // Failed to convert to local timezone.
+    // Fill with bogus time stamp value in order
+    // to ensure buffer can be safely printed
+    strncpy(str, "2001-01-01 00:00:00", len);
+    str[len-1] = 0;
+    return;
+  }
+
+  // Print the broken down time in timestamp format
+  // to the string buffer
+  BaseString::snprintf(str, len,
+                       "%d-%.2d-%.2d %.2d:%.2d:%.2d",
+                       tm_buf.tm_year + 1900,
+                       tm_buf.tm_mon + 1, //month is [0,11]. +1 -> [1,12]
+                       tm_buf.tm_mday,
+                       tm_buf.tm_hour,
+                       tm_buf.tm_min,
+                       tm_buf.tm_sec);
+  str[len-1] = 0;
+  return;
 }

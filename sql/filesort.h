@@ -1,13 +1,20 @@
-/* Copyright (c) 2006, 2013, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2006, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -16,66 +23,68 @@
 #ifndef FILESORT_INCLUDED
 #define FILESORT_INCLUDED
 
-class SQL_SELECT;
-
 #include "my_global.h"                          /* uint, uchar */
 #include "my_base.h"                            /* ha_rows */
 #include "sql_list.h"                           /* Sql_alloc */
-class SQL_SELECT;
 class THD;
 struct TABLE;
-typedef struct st_sort_field SORT_FIELD;
-typedef struct st_order ORDER;
+struct st_sort_field;
+struct st_order;
+class Addon_fields;
+class Field;
+
+
+class QEP_TAB;
 
 /**
   Sorting related info.
-  To be extended by another WL to include complete filesort implementation.
 */
 class Filesort: public Sql_alloc
 {
 public:
-  /** List of expressions to order the table by */
-  ORDER *order;
-  /** Number of records to return */
+  /// The QEP entry for the table to be sorted
+  QEP_TAB *const tab;
+  /// List of expressions to order the table by
+  st_order *order;
+  /// Maximum number of rows to return
   ha_rows limit;
-  /** ORDER BY list with some precalculated info for filesort */
-  SORT_FIELD *sortorder;
-  /** select to use for getting records */
-  SQL_SELECT *select;
-  /** TRUE <=> free select on destruction */
-  bool own_select;
-  /** true means we are using Priority Queue for order by with limit. */
+  /// ORDER BY list with some precalculated info for filesort
+  st_sort_field *sortorder;
+  /// true means we are using Priority Queue for order by with limit.
   bool using_pq;
+  /// Addon fields descriptor
+  Addon_fields *addon_fields;
 
-  Filesort(ORDER *order_arg, ha_rows limit_arg, SQL_SELECT *select_arg):
+  Filesort(QEP_TAB *tab_arg, st_order *order_arg, ha_rows limit_arg):
+    tab(tab_arg),
     order(order_arg),
     limit(limit_arg),
     sortorder(NULL),
-    select(select_arg),
-    own_select(false), 
-    using_pq(false)
+    using_pq(false),
+    addon_fields(NULL)
   {
-    DBUG_ASSERT(order);
+    assert(order);
   };
 
-  ~Filesort() { cleanup(); }
   /* Prepare ORDER BY list for sorting. */
   uint make_sortorder();
 
+  Addon_fields *get_addon_fields(ulong max_length_for_sort_data,
+                                 Field **ptabfield,
+                                 uint sortlength, uint *plength,
+                                 uint *ppackable_length);
 private:
   void cleanup();
 };
 
-ha_rows filesort(THD *thd, TABLE *table, Filesort *fsort, bool sort_positions,
-                 ha_rows *examined_rows, ha_rows *found_rows);
+bool filesort(THD *thd, Filesort *fsort, bool sort_positions,
+              ha_rows *examined_rows, ha_rows *found_rows,
+              ha_rows *returned_rows);
 void filesort_free_buffers(TABLE *table, bool full);
 void change_double_for_sort(double nr,uchar *to);
 
-class Sort_param;
 /// Declared here so we can unit test it.
-void make_sortkey(Sort_param *param, uchar *to, uchar *ref_pos);
-/// Declared here so we can unit test it.
-uint sortlength(THD *thd, SORT_FIELD *sortorder, uint s_length,
-                bool *multi_byte_charset);
+uint sortlength(THD *thd, st_sort_field *sortorder, uint s_length,
+                bool *multi_byte_charset, bool *use_hash);
 
 #endif /* FILESORT_INCLUDED */

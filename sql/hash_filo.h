@@ -1,13 +1,20 @@
-/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
@@ -43,12 +50,12 @@ public:
 class hash_filo
 {
 private:
+  PSI_memory_key m_psi_key;
   const uint key_offset, key_length;
   const my_hash_get_key get_key;
   /** Size of this hash table. */
   uint m_size;
   my_hash_free_key free_element;
-  bool init;
   CHARSET_INFO *hash_charset;
 
   hash_filo_element *first_link,*last_link;
@@ -56,42 +63,37 @@ public:
   mysql_mutex_t lock;
   HASH cache;
 
-  hash_filo(uint size, uint key_offset_arg , uint key_length_arg,
+  hash_filo(PSI_memory_key psi_key,
+            uint size, uint key_offset_arg , uint key_length_arg,
 	    my_hash_get_key get_key_arg, my_hash_free_key free_element_arg,
 	    CHARSET_INFO *hash_charset_arg)
-    : key_offset(key_offset_arg), key_length(key_length_arg),
+    : m_psi_key(psi_key),
+    key_offset(key_offset_arg), key_length(key_length_arg),
     get_key(get_key_arg), m_size(size),
-    free_element(free_element_arg),init(0),
+    free_element(free_element_arg),
     hash_charset(hash_charset_arg),
     first_link(NULL),
     last_link(NULL)
   {
     memset(&cache, 0, sizeof(cache));
+    mysql_mutex_init(key_hash_filo_lock, &lock, MY_MUTEX_INIT_FAST);
   }
 
   ~hash_filo()
   {
-    if (init)
-    {
-      if (cache.array.buffer)	/* Avoid problems with thread library */
-	(void) my_hash_free(&cache);
-      mysql_mutex_destroy(&lock);
-    }
+    if (cache.array.buffer)	/* Avoid problems with thread library */
+      my_hash_free(&cache);
+    mysql_mutex_destroy(&lock);
   }
   void clear(bool locked=0)
   {
-    if (!init)
-    {
-      init=1;
-      mysql_mutex_init(key_hash_filo_lock, &lock, MY_MUTEX_INIT_FAST);
-    }
     if (!locked)
       mysql_mutex_lock(&lock);
     first_link= NULL;
     last_link= NULL;
-    (void) my_hash_free(&cache);
-    (void) my_hash_init(&cache, hash_charset, m_size, key_offset, 
-                        key_length, get_key, free_element,0);
+    my_hash_free(&cache);
+    (void) my_hash_init(&cache, hash_charset, m_size, key_offset,
+                        key_length, get_key, free_element, 0, m_psi_key);
     if (!locked)
       mysql_mutex_unlock(&lock);
   }
@@ -113,11 +115,11 @@ public:
     mysql_mutex_assert_owner(&lock);
 
     hash_filo_element *entry=(hash_filo_element*)
-      my_hash_search(&cache,(uchar*) key,length);
+      my_hash_search(&cache, key, length);
     if (entry)
     {						// Found; link it first
-      DBUG_ASSERT(first_link != NULL);
-      DBUG_ASSERT(last_link != NULL);
+      assert(first_link != NULL);
+      assert(last_link != NULL);
       if (entry != first_link)
       {						// Relink used-chain
 	if (entry == last_link)
@@ -127,13 +129,13 @@ public:
             The list must have at least 2 elements,
             otherwise entry would be equal to first_link.
           */
-          DBUG_ASSERT(last_link != NULL);
+          assert(last_link != NULL);
           last_link->next_used= NULL;
         }
 	else
 	{
-          DBUG_ASSERT(entry->next_used != NULL);
-          DBUG_ASSERT(entry->prev_used != NULL);
+          assert(entry->next_used != NULL);
+          assert(entry->prev_used != NULL);
 	  entry->next_used->prev_used = entry->prev_used;
 	  entry->prev_used->next_used = entry->next_used;
 	}

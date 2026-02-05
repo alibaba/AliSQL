@@ -1,13 +1,20 @@
--- Copyright (c) 2008, 2015, Oracle and/or its affiliates. All rights reserved.
+-- Copyright (c) 2008, 2023, Oracle and/or its affiliates.
 --
 -- This program is free software; you can redistribute it and/or modify
--- it under the terms of the GNU General Public License as published by
--- the Free Software Foundation; version 2 of the License.
+-- it under the terms of the GNU General Public License, version 2.0,
+-- as published by the Free Software Foundation.
+--
+-- This program is also distributed with certain software (including
+-- but not limited to OpenSSL) that is licensed under separate terms,
+-- as designated in a particular file or component or in included license
+-- documentation.  The authors of MySQL hereby grant you an additional
+-- permission to link the program and your derivative works with the
+-- separately licensed software that they have included with MySQL.
 --
 -- This program is distributed in the hope that it will be useful,
 -- but WITHOUT ANY WARRANTY; without even the implied warranty of
 -- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
--- GNU General Public License for more details.
+-- GNU General Public License, version 2.0, for more details.
 --
 -- You should have received a copy of the GNU General Public License
 -- along with this program; if not, write to the Free Software Foundation,
@@ -99,6 +106,8 @@ INSERT INTO global_suppressions VALUES
  ("Forcing shutdown of [0-9]* plugins"),
  ("Forcing close of thread"),
 
+ ("innodb-page-size has been changed"),
+
  /*
    Due to timing issues, it might be that this warning
    is printed when the server shuts down and the
@@ -175,6 +184,8 @@ INSERT INTO global_suppressions VALUES
  ("No existing UUID has been found, so we assume that this is the first time that this server has been started.*"),
  /*It will print a warning if server is run without --explicit_defaults_for_timestamp.*/
  ("TIMESTAMP with implicit DEFAULT value is deprecated. Please use --explicit_defaults_for_timestamp server option (see documentation for more details)*"),
+ /*It will print a warning if a server is run without NO_AUTO_CREATE_USER sql mode.*/
+ ("'NO_AUTO_CREATE_USER' sql mode was not set."),
 
  /* Added 2009-08-XX after fixing Bug #42408 */
 
@@ -197,31 +208,36 @@ INSERT INTO global_suppressions VALUES
  ("==[0-9]*== Warning: set address range perms: large range"),
  /* valgrind-3.5.0 dumps this */
  ("==[0-9]*== Command: "),
+ /* Messages from valgrind tools */
+ ("==[0-9]*== Callgrind"),
+ ("==[0-9]*== For interactive control, run 'callgrind_control -h'"),
+ ("==[0-9]*== Events    :"),
+ ("==[0-9]*== Collected : [0-9]+"),
+ ("==[0-9]*== I   refs:      [0-9]+"),
+ ("==[0-9]*== Massif"),
+ ("==[0-9]*== Helgrind"),
 
  /* valgrind warnings: invalid file descriptor -1 in syscall
     write()/read(). Bug #50414 */
  ("==[0-9]*== Warning: invalid file descriptor -1 in syscall write()"),
  ("==[0-9]*== Warning: invalid file descriptor -1 in syscall read()"),
 
+ /* Suppress warnings caused by foreign clients, see Bug#31893901 */
+
+ ("IP address .* could not be resolved.*"),
+
  /*
    Transient network failures that cause warnings on reconnect.
    BUG#47743 and BUG#47983.
  */
- ("Slave I/O: Get master SERVER_UUID failed with error:.*"),
- ("Slave I/O: Get master SERVER_ID failed with error:.*"),
- ("Slave I/O: Get master clock failed with error:.*"),
- ("Slave I/O: Get master COLLATION_SERVER failed with error:.*"),
- ("Slave I/O: Get master TIME_ZONE failed with error:.*"),
- ("Slave I/O: The slave I/O thread stops because a fatal error is encountered when it tried to SET @master_binlog_checksum on master.*"),
- ("Slave I/O: Get master BINLOG_CHECKSUM failed with error.*"),
- ("Slave I/O: Notifying master by SET @master_binlog_checksum= @@global.binlog_checksum failed with error.*"),
- /*
-   BUG#42147 - Concurrent DML and LOCK TABLE ... READ for InnoDB 
-   table cause warnings in errlog
-   Note: This is a temporary suppression until Bug#42147 can be 
-   fixed properly. See bug page for more information.
-  */
- ("Found lock of type 6 that is write and read locked"),
+ ("Slave I/O.*: Get master SERVER_UUID failed with error:.*"),
+ ("Slave I/O.*: Get master SERVER_ID failed with error:.*"),
+ ("Slave I/O.*: Get master clock failed with error:.*"),
+ ("Slave I/O.*: Get master COLLATION_SERVER failed with error:.*"),
+ ("Slave I/O.*: Get master TIME_ZONE failed with error:.*"),
+ ("Slave I/O.*: The slave I/O thread stops because a fatal error is encountered when it tried to SET @master_binlog_checksum on master.*"),
+ ("Slave I/O.*: Get master BINLOG_CHECKSUM failed with error.*"),
+ ("Slave I/O.*: Notifying master by SET @master_binlog_checksum= @@global.binlog_checksum failed with error.*"),
 
  /*
    Warning message is printed out whenever a slave is started with
@@ -239,12 +255,67 @@ INSERT INTO global_suppressions VALUES
   In MTS if the user issues a stop slave sql while it is scheduling a group
   of events, this warning is emitted.
   */
- ("Slave SQL: Coordinator thread of multi-threaded slave is being stopped in the middle of assigning a group of events.*"),
+ ("Slave SQL.*: Coordinator thread of multi-threaded slave is being stopped in the middle of assigning a group of events.*"),
  
  ("Changed limits: max_open_files: *"),
  ("Changed limits: max_connections: *"),
  ("Changed limits: table_open_cache: *"),
  ("Could not increase number of max_open_files to more than *"),
+
+ /*
+   Warning message introduced by wl#7706
+ */
+ ("CA certificate .* is self signed"),
+
+ /*
+   Warnings related to --secure-file-priv
+ */
+ ("Insecure configuration for --secure-file-priv:*"),
+
+ /*
+   Bug#26585560, warning related to --pid-file
+ */
+ ("Insecure configuration for --pid-file:*"),
+ ("Few location(s) are inaccessible while checking PID filepath"),
+ /*
+   Following WL#12670, this warning is expected.
+ */
+ ("Setting named_pipe_full_access_group='\\*everyone\\*' is insecure"),
+
+ /*
+   On slow runs (valgrind) the message may be sent twice.
+  */
+ ("The member with address .* has already sent the stable set. Therefore discarding the second message."),
+
+ /*
+   We do have offline members on some Group Replication tests, XCom
+   will throw warnings when trying to connect to them.
+ */
+ ("Connection to socket .* failed with error .*.*"),
+ ("select - Timeout! Cancelling connection..."),
+ ("connect - Error connecting .*"),
+ ("\\[GCS\\] The member is already leaving or joining a group."),
+ ("\\[GCS\\] The member is leaving a group without being on one."),
+ ("\\[GCS\\] Processing new view on handler without a valid group configuration."),
+ ("\\[GCS\\] Error on opening a connection to localhost:.* on local port: .*."),
+ ("\\[GCS\\] Error pushing message into group communication engine."),
+ ("\\[GCS\\] Message cannot be sent because the member does not belong to a group."),
+ ("\\[GCS\\] Automatically adding IPv4 localhost address to the whitelist. It is mandatory that it is added."),
+ ("Slave SQL for channel 'group_replication_recovery': ... The slave coordinator and worker threads are stopped, possibly leaving data in inconsistent state.*"),
+ ("Member with address .* has become unreachable."),
+ ("This server is not able to reach a majority of members in the group.*"),
+ ("Member with address .* is reachable again."),
+ ("The member has resumed contact with a majority of the members in the group.*"),
+ ("Members removed from the group.*"),
+ /*
+   Missing Private/Public key files
+ */
+ ("RSA private key file not found"),
+ ("RSA public key file not found"),
+
+ /* TLS v1.0 and v1.1 deprecated */
+ ("A deprecated TLS version TLSv1 is enabled"),
+ ("A deprecated TLS version TLSv1.1 is enabled"),
 
  ("THE_LAST_SUPPRESSION")||
 

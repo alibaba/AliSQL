@@ -1,13 +1,20 @@
-/* Copyright (c) 2003, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2003, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -75,9 +82,10 @@ int mi_assign_to_key_cache(MI_INFO *info,
     in the old key cache.
   */
 
-  if (flush_key_blocks(share->key_cache, share->kfile, FLUSH_RELEASE))
+  if (flush_key_blocks(share->key_cache, keycache_thread_var(),
+                       share->kfile, FLUSH_RELEASE))
   {
-    error= my_errno;
+    error= my_errno();
     mi_print_error(info->s, HA_ERR_CRASHED);
     mi_mark_crashed(info);		/* Mark that table must be checked */
   }
@@ -90,7 +98,8 @@ int mi_assign_to_key_cache(MI_INFO *info,
     (This can never fail as there is never any not written data in the
     new key cache)
   */
-  (void) flush_key_blocks(key_cache, share->kfile, FLUSH_RELEASE);
+  (void) flush_key_blocks(key_cache, keycache_thread_var(),
+                          share->kfile, FLUSH_RELEASE);
 
   /*
     ensure that setting the key cache and changing the multi_key_cache
@@ -107,7 +116,7 @@ int mi_assign_to_key_cache(MI_INFO *info,
   if (multi_key_cache_set((uchar*) share->unique_file_name,
                           share->unique_name_length,
 			  share->key_cache))
-    error= my_errno;
+    error= my_errno();
   mysql_mutex_unlock(&share->intern_lock);
   DBUG_RETURN(error);
 }

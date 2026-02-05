@@ -76,7 +76,7 @@ SELECT @@global.innodb_max_dirty_pages_pct;
 #      change the value of innodb_max_dirty_pages_pct to a valid value   #
 ##########################################################################
 
-SET @@global.innodb_max_dirty_pages_pct = 0;
+SET @@global.innodb_max_dirty_pages_pct = 0.0;
 SELECT @@global.innodb_max_dirty_pages_pct;
 
 SET @@global.innodb_max_dirty_pages_pct = 1;
@@ -102,7 +102,8 @@ SELECT @@global.innodb_max_dirty_pages_pct;
 
 SET @@global.innodb_max_dirty_pages_pct = -1;
 SELECT @@global.innodb_max_dirty_pages_pct;
-
+SET @@global.innodb_max_dirty_pages_pct = -1024;
+SELECT @@global.innodb_max_dirty_pages_pct;
 --Error ER_WRONG_TYPE_FOR_VAR
 SET @@global.innodb_max_dirty_pages_pct = "T";
 SELECT @@global.innodb_max_dirty_pages_pct;
@@ -111,21 +112,44 @@ SELECT @@global.innodb_max_dirty_pages_pct;
 SET @@global.innodb_max_dirty_pages_pct = "Y";
 SELECT @@global.innodb_max_dirty_pages_pct;
 
+SET @@global.innodb_max_dirty_pages_pct = 100;
+SELECT @@global.innodb_max_dirty_pages_pct;
 SET @@global.innodb_max_dirty_pages_pct = 1001;
 SELECT @@global.innodb_max_dirty_pages_pct;
-
+SET @@global.innodb_max_dirty_pages_pct = 100000;
+SELECT @@global.innodb_max_dirty_pages_pct;
+--Error ER_WRONG_TYPE_FOR_VAR
+SET @@global.innodb_max_dirty_pages_pct = ' ';
+SELECT @@global.innodb_max_dirty_pages_pct;
+--Error ER_WRONG_TYPE_FOR_VAR
+SET @@global.innodb_max_dirty_pages_pct = " ";
+SELECT @@global.innodb_max_dirty_pages_pct;
+SET @@global.innodb_max_dirty_pages_pct = 1.1;
+SELECT @@global.innodb_max_dirty_pages_pct;
+set global innodb_max_dirty_pages_pct = 0.1;
+SELECT @@global.innodb_max_dirty_pages_pct;
+set global innodb_max_dirty_pages_pct = 31.34;
+SELECT @@global.innodb_max_dirty_pages_pct;
+set global innodb_max_dirty_pages_pct = 100;
+SELECT @@global.innodb_max_dirty_pages_pct;
+set global innodb_max_dirty_pages_pct = 99.999;
+SELECT @@global.innodb_max_dirty_pages_pct;
 
 --echo '#----------------------FN_DYNVARS_046_06------------------------#'
 #########################################################################
 #     Check if the value in GLOBAL Table matches value in variable      #
 #########################################################################
 
+--disable_warnings
 SELECT @@global.innodb_max_dirty_pages_pct =
  VARIABLE_VALUE FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES
   WHERE VARIABLE_NAME='innodb_max_dirty_pages_pct';
+--enable_warnings
 SELECT @@global.innodb_max_dirty_pages_pct;
+--disable_warnings
 SELECT VARIABLE_VALUE FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES
  WHERE VARIABLE_NAME='innodb_max_dirty_pages_pct';
+--enable_warnings
 
 --echo '#---------------------FN_DYNVARS_046_07-------------------------#'
 ###################################################################

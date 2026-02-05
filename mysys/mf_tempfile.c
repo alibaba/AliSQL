@@ -1,13 +1,25 @@
-/* Copyright (c) 2000, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -18,10 +30,7 @@
 #include "my_static.h"
 #include "mysys_err.h"
 #include <errno.h>
-#ifdef HAVE_PATHS_H
-#include <paths.h>
-#endif
-
+#include "my_thread_local.h"
 
 
 /*
@@ -55,17 +64,16 @@
 */
 
 File create_temp_file(char *to, const char *dir, const char *prefix,
-		      int mode MY_ATTRIBUTE((unused)),
-		      myf MyFlags MY_ATTRIBUTE((unused)))
+		      int mode, myf MyFlags)
 {
   File file= -1;
-#ifdef __WIN__
+#ifdef _WIN32
   TCHAR path_buf[MAX_PATH-14];
 #endif
 
   DBUG_ENTER("create_temp_file");
   DBUG_PRINT("enter", ("dir: %s, prefix: %s", dir, prefix));
-#if defined (__WIN__)
+#if defined(_WIN32)
 
    /*
      Use GetTempPath to determine path for temporary files.
@@ -95,18 +103,18 @@ File create_temp_file(char *to, const char *dir, const char *prefix,
   if ((file= my_open(to,  (mode & ~O_EXCL), MyFlags)) < 0)
   {
     /* Open failed, remove the file created by GetTempFileName */
-    int tmp= my_errno;
+    int tmp= my_errno();
     (void) my_delete(to, MYF(0));
-    my_errno= tmp;
+    set_my_errno(tmp);
   }
 
-#elif defined(HAVE_MKSTEMP)
+#else /* mkstemp() is available on all non-Windows supported platforms. */
   {
     char prefix_buff[30];
     uint pfx_len;
     File org_file;
 
-    pfx_len= (uint) (strmov(strnmov(prefix_buff,
+    pfx_len= (uint) (my_stpcpy(my_stpnmov(prefix_buff,
 				    prefix ? prefix : "tmp.",
 				    sizeof(prefix_buff)-7),"XXXXXX") -
 		     prefix_buff);
@@ -114,64 +122,31 @@ File create_temp_file(char *to, const char *dir, const char *prefix,
       dir= DEFAULT_TMPDIR;
     if (strlen(dir)+ pfx_len > FN_REFLEN-2)
     {
-      errno=my_errno= ENAMETOOLONG;
+      errno=ENAMETOOLONG;
+      set_my_errno(ENAMETOOLONG);
       DBUG_RETURN(file);
     }
-    strmov(convert_dirname(to,dir,NullS),prefix_buff);
+    my_stpcpy(convert_dirname(to,dir,NullS),prefix_buff);
     org_file=mkstemp(to);
     if (mode & O_TEMPORARY)
-      (void) my_delete(to, MYF(MY_WME | ME_NOINPUT));
+      (void) my_delete(to, MYF(MY_WME));
     file=my_register_filename(org_file, to, FILE_BY_MKSTEMP,
 			      EE_CANTCREATEFILE, MyFlags);
     /* If we didn't manage to register the name, remove the temp file */
     if (org_file >= 0 && file < 0)
     {
-      int tmp=my_errno;
+      int tmp=my_errno();
       close(org_file);
-      (void) my_delete(to, MYF(MY_WME | ME_NOINPUT));
-      my_errno=tmp;
+      (void) my_delete(to, MYF(MY_WME));
+      set_my_errno(tmp);
     }
   }
-#elif defined(HAVE_TEMPNAM)
-  {
-    extern char **environ;
-
-    char *res,**old_env,*temp_env[1];
-    if (dir && !dir[0])
-    {				/* Change empty string to current dir */
-      to[0]= FN_CURLIB;
-      to[1]= 0;
-      dir=to;
-    }
-
-    old_env= (char**) environ;
-    if (dir)
-    {				/* Don't use TMPDIR if dir is given */
-      environ=(const char**) temp_env;
-      temp_env[0]=0;
-    }
-
-    if ((res=tempnam((char*) dir, (char*) prefix)))
-    {
-      strmake(to,res,FN_REFLEN-1);
-      (*free)(res);
-      file=my_create(to,0,
-		     (int) (O_RDWR | O_BINARY | O_TRUNC | O_EXCL | O_NOFOLLOW |
-			    O_TEMPORARY | O_SHORT_LIVED),
-		     MYF(MY_WME));
-
-    }
-    else
-    {
-      DBUG_PRINT("error",("Got error: %d from tempnam",errno));
-    }
-
-    environ=(const char**) old_env;
-  }
-#else
-#error No implementation found for create_temp_file
 #endif
   if (file >= 0)
-    thread_safe_increment(my_tmp_file_created,&THR_LOCK_open);
+  {
+    mysql_mutex_lock(&THR_LOCK_open);
+    my_tmp_file_created++;
+    mysql_mutex_unlock(&THR_LOCK_open);
+  }
   DBUG_RETURN(file);
 }

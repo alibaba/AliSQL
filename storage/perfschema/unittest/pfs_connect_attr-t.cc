@@ -1,20 +1,27 @@
-/* Copyright (c) 2008, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation; version 2 of the License.
+  it under the terms of the GNU General Public License, version 2.0,
+  as published by the Free Software Foundation.
+
+  This program is also distributed with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an additional
+  permission to link the program and your derivative works with the
+  separately licensed software that they have included with MySQL.
 
   This program is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
+  GNU General Public License, version 2.0, for more details.
 
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software Foundation,
   51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
 
 #include <my_global.h>
-#include <my_pthread.h>
+#include <my_thread.h>
 #include <pfs_server.h>
 #include <pfs_instr_class.h>
 #include <pfs_instr.h>
@@ -251,7 +258,7 @@ void test_utf8_parser_bad_encoding()
   ptr= packet;
   *ptr++= strlen(attr);
   memcpy(ptr, attr, strlen(attr));
-  ptr[0]= 0xFA; // invalid UTF-8 char
+  ptr[0]= (char)0xFA; // invalid UTF-8 char
   ptr+= strlen(attr);
   *ptr++= strlen(val);
   memcpy(ptr, val, strlen(val));
@@ -341,5 +348,5 @@ int main(int, char **)
     diag("skipping the cp1251 tests : missing character set");
   plan(59 + (cs_cp1251 ? 10 : 0));
   do_all_tests();
-  return 0;
+  return (exit_status());
 }

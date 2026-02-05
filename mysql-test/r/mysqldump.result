@@ -8,14 +8,15 @@ drop database if exists mysqldump_test_db;
 drop database if exists db1;
 drop database if exists db2;
 drop view if exists v1, v2, v3;
-CREATE TABLE t1(a INT, KEY (a)) KEY_BLOCK_SIZE=1024;
+set global innodb_file_per_table=1;
+CREATE TABLE t1(a INT, KEY (a)) ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=1 ENGINE=Innodb;
 INSERT INTO t1 VALUES (1), (2);
 <?xml version="1.0"?>
 <mysqldump xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 <database name="test">
 	<table_structure name="t1">
 		<field Field="a" Type="int(11)" Null="YES" Key="MUL" Extra="" Comment="" />
-		<key Table="t1" Non_unique="1" Key_name="a" Seq_in_index="1" Column_name="a" Collation="A" Null="YES" Index_type="BTREE" Comment="" Index_comment="" Visible="YES" />
+		<key Table="t1" Non_unique="1" Key_name="a" Seq_in_index="1" Column_name="a" Collation="A" Cardinality="filtered" Null="YES" Index_type="BTREE" Comment="" Index_comment="" />
 	</table_structure>
 	<table_data name="t1">
 	<row>
@@ -28,6 +29,7 @@ INSERT INTO t1 VALUES (1), (2);
 </database>
 </mysqldump>
 DROP TABLE t1;
+SET GLOBAL innodb_file_per_table=1;
 #
 # Bug#2005 Long decimal comparison bug.
 #
@@ -38,7 +40,7 @@ INSERT INTO t1 VALUES ("1234567890123456789012345678901234567890"),
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `t1` (
   `a` decimal(64,20) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 INSERT INTO `t1` VALUES (1234567890123456789012345678901234567890.00000000000000000000),(987654321098765432109876543210987654321.00000000000000000000);
 DROP TABLE t1;
@@ -46,14 +48,14 @@ DROP TABLE t1;
 # Bug#2055 mysqldump should replace "-inf" numeric field values with "NULL"
 #
 CREATE TABLE t1 (a double);
-INSERT INTO t1 VALUES ('-9e999999');
+INSERT IGNORE INTO t1 VALUES ('-9e999999');
 Warnings:
 Warning	1264	Out of range value for column 'a' at row 1
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `t1` (
   `a` double DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 INSERT INTO `t1` VALUES (-1.7976931348623157e308);
 DROP TABLE t1;
@@ -65,17 +67,21 @@ INSERT INTO t1 VALUES (1.2345, 2.3456);
 INSERT INTO t1 VALUES ('1.2345', 2.3456);
 INSERT INTO t1 VALUES ("1.2345", 2.3456);
 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='ANSI_QUOTES';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 INSERT INTO t1 VALUES (1.2345, 2.3456);
 INSERT INTO t1 VALUES ('1.2345', 2.3456);
 INSERT INTO t1 VALUES ("1.2345", 2.3456);
 ERROR 42S22: Unknown column '1.2345' in 'field list'
 SET SQL_MODE=@OLD_SQL_MODE;
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `t1` (
   `a` decimal(10,5) DEFAULT NULL,
   `b` float DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 INSERT INTO `t1` VALUES (1.23450,2.3456),(1.23450,2.3456),(1.23450,2.3456),(1.23450,2.3456),(1.23450,2.3456);
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -213,7 +219,7 @@ DROP TABLE IF EXISTS `t1`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `t1` (
   `a` varchar(255) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=koi8r;
+) ENGINE=InnoDB DEFAULT CHARSET=koi8r;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `t1` WRITE;
@@ -293,7 +299,7 @@ create table ```a` (i int);
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE ```a` (
   `i` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 drop table ```a`;
 #
@@ -316,7 +322,7 @@ DROP TABLE IF EXISTS `t1`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `t1` (
   `a` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `t1` WRITE;
@@ -359,6 +365,8 @@ UNLOCK TABLES;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
 set global sql_mode='ANSI_QUOTES';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -375,7 +383,7 @@ DROP TABLE IF EXISTS `t1`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `t1` (
   `a` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `t1` WRITE;
@@ -438,7 +446,7 @@ DROP TABLE IF EXISTS `t1`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `t1` (
   `a` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -532,7 +540,7 @@ DROP TABLE IF EXISTS `t1`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `t1` (
   `a` char(10) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `t1` WRITE;
@@ -566,7 +574,7 @@ UNLOCK TABLES;
 DROP TABLE IF EXISTS `t1`;
 CREATE TABLE `t1` (
   `a` char(10) DEFAULT NULL
-) TYPE=MyISAM;
+) TYPE=InnoDB;
 
 LOCK TABLES `t1` WRITE;
 /*!40000 ALTER TABLE `t1` DISABLE KEYS */;
@@ -589,7 +597,7 @@ UNLOCK TABLES;
 DROP TABLE IF EXISTS `t1`;
 CREATE TABLE `t1` (
   `a` char(10) DEFAULT NULL
-) TYPE=MyISAM;
+) TYPE=InnoDB;
 
 LOCK TABLES `t1` WRITE;
 /*!40000 ALTER TABLE `t1` DISABLE KEYS */;
@@ -612,7 +620,7 @@ UNLOCK TABLES;
 DROP TABLE IF EXISTS `t1`;
 CREATE TABLE `t1` (
   `a` char(10) DEFAULT NULL
-) TYPE=MyISAM;
+) TYPE=InnoDB;
 
 LOCK TABLES `t1` WRITE;
 /*!40000 ALTER TABLE `t1` DISABLE KEYS */;
@@ -650,7 +658,7 @@ DROP TABLE IF EXISTS `t2`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `t2` (
   `a` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `t2` WRITE;
@@ -691,7 +699,7 @@ DROP TABLE IF EXISTS `t1`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `t1` (
   `b` blob
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `t1` WRITE;
@@ -732,7 +740,7 @@ DROP TABLE IF EXISTS `t1`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `t1` (
   `a` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `t1` WRITE;
@@ -740,38 +748,6 @@ LOCK TABLES `t1` WRITE;
 INSERT  IGNORE INTO `t1` VALUES (1),(2),(3),(4),(5),(6);
 /*!40000 ALTER TABLE `t1` ENABLE KEYS */;
 UNLOCK TABLES;
-/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
-
-/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
-/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
-/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
-/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
-/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
-/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
-/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
-
-
-/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
-/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
-/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
-/*!40101 SET NAMES utf8 */;
-/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
-/*!40103 SET TIME_ZONE='+00:00' */;
-/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
-/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
-/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
-/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
-DROP TABLE IF EXISTS `t1`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `t1` (
-  `a` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
-/*!40000 ALTER TABLE `t1` DISABLE KEYS */;
-INSERT  DELAYED IGNORE INTO `t1` VALUES (1),(2),(3),(4),(5),(6);
-/*!40000 ALTER TABLE `t1` ENABLE KEYS */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
@@ -1464,7 +1440,7 @@ CREATE TABLE `t1` (
   `F_cd00692c3bfe59267d5ecfac5310286c` int(11) DEFAULT NULL,
   `F_6faa8040da20ef399b63a72d0e4ab575` int(11) DEFAULT NULL,
   `F_fe73f687e5bc5280214e0486b273a5f9` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `t1` WRITE;
@@ -1510,7 +1486,7 @@ DROP TABLE IF EXISTS `t1`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `t1` (
   `a` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `t1` WRITE;
@@ -1554,14 +1530,14 @@ DROP TABLE IF EXISTS `t1`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `t1` (
   `a` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `t2`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `t2` (
   `a` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
@@ -1589,14 +1565,14 @@ DROP TABLE IF EXISTS `t1`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `t1` (
   `a` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `t2`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `t2` (
   `a` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
@@ -1763,7 +1739,7 @@ t1	CREATE TABLE `t1` (
   `t1_id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   PRIMARY KEY (`t1_id`),
   KEY `t1_name` (`t1_name`)
-) ENGINE=MyISAM AUTO_INCREMENT=1003 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=1003 DEFAULT CHARSET=latin1
 DROP TABLE `t1`;
 select * from t1;
 t1_name	t1_id
@@ -1777,7 +1753,7 @@ t1	CREATE TABLE `t1` (
   `t1_id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   PRIMARY KEY (`t1_id`),
   KEY `t1_name` (`t1_name`)
-) ENGINE=MyISAM AUTO_INCREMENT=1003 DEFAULT CHARSET=latin1
+) ENGINE=InnoDB AUTO_INCREMENT=1003 DEFAULT CHARSET=latin1
 drop table `t1`;
 #
 # Bug#18536 wrong table order
@@ -1801,21 +1777,21 @@ DROP TABLE IF EXISTS `t3`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `t3` (
   `a` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `t1`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `t1` (
   `a` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `t2`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `t2` (
   `a` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
@@ -1850,7 +1826,7 @@ DROP TABLE IF EXISTS `t1`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `t1` (
   `a` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -1885,9 +1861,9 @@ DROP TABLE IF EXISTS "t1";
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE "t1" (
-  "a b" int(11) NOT NULL DEFAULT '0',
-  "c""d" int(11) NOT NULL DEFAULT '0',
-  "e`f" int(11) NOT NULL DEFAULT '0',
+  "a b" int(11) NOT NULL,
+  "c""d" int(11) NOT NULL,
+  "e`f" int(11) NOT NULL,
   PRIMARY KEY ("a b","c""d","e`f")
 );
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -1919,9 +1895,9 @@ DROP TABLE IF EXISTS `t1`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `t1` (
-  `a b` int(11) NOT NULL DEFAULT '0',
-  `c"d` int(11) NOT NULL DEFAULT '0',
-  `e``f` int(11) NOT NULL DEFAULT '0',
+  `a b` int(11) NOT NULL,
+  `c"d` int(11) NOT NULL,
+  `e``f` int(11) NOT NULL,
   PRIMARY KEY (`a b`,`c"d`,`e``f`)
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -1975,7 +1951,7 @@ DROP TABLE IF EXISTS `t2`;
 CREATE TABLE `t2` (
   `a` varchar(30) DEFAULT NULL,
   KEY `a` (`a`(5))
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `t2` WRITE;
@@ -2068,7 +2044,7 @@ DROP TABLE IF EXISTS `t1`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `t1` (
   `a` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `t1` WRITE;
@@ -2139,7 +2115,7 @@ DROP TABLE IF EXISTS `t2`;
 CREATE TABLE `t2` (
   `a` varchar(30) DEFAULT NULL,
   KEY `a` (`a`(5))
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `t2` WRITE;
@@ -2203,7 +2179,7 @@ DROP TABLE IF EXISTS `t1`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `t1` (
   `a` char(10) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `t1` WRITE;
@@ -2251,7 +2227,7 @@ CREATE TABLE `t1` (
   `a` int(11) DEFAULT NULL,
   `b` int(11) DEFAULT NULL,
   `c` varchar(30) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `t1` WRITE;
@@ -2371,10 +2347,10 @@ if new.a > 10 then
 set new.a := 10;
 set new.a := 11;
 end if;
-end	BEFORE	0000-00-00 00:00:00	NO_ENGINE_SUBSTITUTION	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
+end	BEFORE	0000-00-00 00:00:00	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
 trg2	UPDATE	t1	begin
 if old.a % 2 = 0 then set new.b := 12; end if;
-end	BEFORE	0000-00-00 00:00:00	NO_ENGINE_SUBSTITUTION	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
+end	BEFORE	0000-00-00 00:00:00	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
 trg3	UPDATE	t1	begin
 if new.a = -1 then
 set @fired:= "Yes";
@@ -2403,7 +2379,7 @@ DROP TABLE IF EXISTS `t1`;
 CREATE TABLE `t1` (
   `a` int(11) DEFAULT NULL,
   `b` bigint(20) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `t1` WRITE;
@@ -2418,7 +2394,7 @@ UNLOCK TABLES;
 /*!50003 SET character_set_results = latin1 */ ;
 /*!50003 SET collation_connection  = latin1_swedish_ci */ ;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
-/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
 DELIMITER ;;
 /*!50003 CREATE*/ /*!50017 DEFINER=`root`@`localhost`*/ /*!50003 trigger trg1 before insert on t1 for each row
 begin
@@ -2439,7 +2415,7 @@ DELIMITER ;
 /*!50003 SET character_set_results = latin1 */ ;
 /*!50003 SET collation_connection  = latin1_swedish_ci */ ;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
-/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
 DELIMITER ;;
 /*!50003 CREATE*/ /*!50017 DEFINER=`root`@`localhost`*/ /*!50003 trigger trg2 before update on t1 for each row begin
 if old.a % 2 = 0 then set new.b := 12; end if;
@@ -2456,7 +2432,7 @@ DELIMITER ;
 /*!50003 SET character_set_results = latin1 */ ;
 /*!50003 SET collation_connection  = latin1_swedish_ci */ ;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
-/*!50003 SET sql_mode              = 'STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,TRADITIONAL,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION' */ ;
+/*!50003 SET sql_mode              = 'STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,TRADITIONAL,NO_ENGINE_SUBSTITUTION' */ ;
 DELIMITER ;;
 /*!50003 CREATE*/ /*!50017 DEFINER=`root`@`localhost`*/ /*!50003 trigger trg3 after update on t1 for each row
 begin
@@ -2474,7 +2450,7 @@ DROP TABLE IF EXISTS `t2`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `t2` (
   `a` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `t2` WRITE;
@@ -2488,7 +2464,7 @@ UNLOCK TABLES;
 /*!50003 SET character_set_results = latin1 */ ;
 /*!50003 SET collation_connection  = latin1_swedish_ci */ ;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
-/*!50003 SET sql_mode              = 'STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,TRADITIONAL,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION' */ ;
+/*!50003 SET sql_mode              = 'STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,TRADITIONAL,NO_ENGINE_SUBSTITUTION' */ ;
 DELIMITER ;;
 /*!50003 CREATE*/ /*!50017 DEFINER=`root`@`localhost`*/ /*!50003 trigger trg4 before insert on t2 for each row
 begin
@@ -2532,7 +2508,7 @@ DROP TABLE IF EXISTS `t1`;
 CREATE TABLE `t1` (
   `a` int(11) DEFAULT NULL,
   `b` bigint(20) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `t1` WRITE;
@@ -2545,7 +2521,7 @@ DROP TABLE IF EXISTS `t2`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `t2` (
   `a` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `t2` WRITE;
@@ -2574,10 +2550,10 @@ if new.a > 10 then
 set new.a := 10;
 set new.a := 11;
 end if;
-end	BEFORE	#	NO_ENGINE_SUBSTITUTION	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
+end	BEFORE	#	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
 trg2	UPDATE	t1	begin
 if old.a % 2 = 0 then set new.b := 12; end if;
-end	BEFORE	#	NO_ENGINE_SUBSTITUTION	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
+end	BEFORE	#	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
 trg3	UPDATE	t1	begin
 if new.a = -1 then
 set @fired:= "Yes";
@@ -2620,7 +2596,7 @@ a2
 SHOW TRIGGERS;
 Trigger	Event	Table	Statement	Timing	Created	sql_mode	Definer	character_set_client	collation_connection	Database Collation
 testref	INSERT	test1	BEGIN
-INSERT INTO test2 SET a2 = NEW.a1; END	BEFORE	NULL	NO_ENGINE_SUBSTITUTION	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
+INSERT INTO test2 SET a2 = NEW.a1; END	BEFORE	#	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
 SELECT * FROM `test1`;
 a1
 1
@@ -2654,6 +2630,8 @@ BEGIN
 select sum(id) from t1 into a;
 END //
 set sql_mode='ansi';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 create procedure `a'b` () select 1;
 set sql_mode='';
 
@@ -2676,7 +2654,7 @@ DROP TABLE IF EXISTS `t1`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `t1` (
   `id` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `t1` WRITE;
@@ -2692,7 +2670,7 @@ UNLOCK TABLES;
 /*!50003 SET character_set_results = latin1 */ ;
 /*!50003 SET collation_connection  = latin1_swedish_ci */ ;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
-/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
 DELIMITER ;;
 CREATE DEFINER=`root`@`localhost` FUNCTION `bug9056_func1`(a INT, b INT) RETURNS int(11)
 RETURN a+b ;;
@@ -2709,7 +2687,7 @@ DELIMITER ;
 /*!50003 SET character_set_results = latin1 */ ;
 /*!50003 SET collation_connection  = latin1_swedish_ci */ ;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
-/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
 DELIMITER ;;
 CREATE DEFINER=`root`@`localhost` FUNCTION `bug9056_func2`(f1 char binary) RETURNS char(1) CHARSET latin1
 begin
@@ -2729,7 +2707,7 @@ DELIMITER ;
 /*!50003 SET character_set_results = latin1 */ ;
 /*!50003 SET collation_connection  = latin1_swedish_ci */ ;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
-/*!50003 SET sql_mode              = 'REAL_AS_FLOAT,PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ANSI' */ ;
+/*!50003 SET sql_mode              = 'REAL_AS_FLOAT,PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ANSI' */ ;
 DELIMITER ;;
 CREATE DEFINER="root"@"localhost" PROCEDURE "a'b"()
 select 1 ;;
@@ -2746,7 +2724,7 @@ DELIMITER ;
 /*!50003 SET character_set_results = latin1 */ ;
 /*!50003 SET collation_connection  = latin1_swedish_ci */ ;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
-/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
 DELIMITER ;;
 CREATE DEFINER=`root`@`localhost` PROCEDURE `bug9056_proc1`(IN a INT, IN b INT, OUT c INT)
 BEGIN SELECT a+b INTO c; end ;;
@@ -2763,7 +2741,7 @@ DELIMITER ;
 /*!50003 SET character_set_results = latin1 */ ;
 /*!50003 SET collation_connection  = latin1_swedish_ci */ ;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
-/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
 DELIMITER ;;
 CREATE DEFINER=`root`@`localhost` PROCEDURE `bug9056_proc2`(OUT a INT)
 BEGIN
@@ -2828,7 +2806,7 @@ DROP TABLE IF EXISTS `t1`;
 CREATE TABLE `t1` (
   `d` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY `d` (`d`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `t1` WRITE;
@@ -2865,7 +2843,7 @@ DROP TABLE IF EXISTS `t1`;
 CREATE TABLE `t1` (
   `d` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY `d` (`d`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `t1` WRITE;
@@ -3002,7 +2980,7 @@ CREATE TABLE `t1` (
   `a` int(11) DEFAULT NULL,
   `b` varchar(32) DEFAULT NULL,
   `c` varchar(32) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `t1` WRITE;
@@ -3125,7 +3103,7 @@ DROP TABLE IF EXISTS `t1`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `t1` (
   `a` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `t1` WRITE;
@@ -3185,12 +3163,12 @@ DROP TABLE IF EXISTS `t1`;
 CREATE TABLE `t1` (
   `a` binary(1) DEFAULT NULL,
   `b` blob
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `t1` WRITE;
 /*!40000 ALTER TABLE `t1` DISABLE KEYS */;
-INSERT INTO `t1` VALUES (0x00,'');
+INSERT INTO `t1` VALUES (0x00,_binary '');
 /*!40000 ALTER TABLE `t1` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -3220,7 +3198,7 @@ DROP TABLE IF EXISTS `t1`;
 CREATE TABLE `t1` (
   `a` binary(1) DEFAULT NULL,
   `b` blob
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `t1` WRITE;
@@ -3361,7 +3339,7 @@ create view v1 as select * from t1;
 drop table t1;
 mysqldump {
 
--- failed on view `v1`: CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select `test`.`t1`.`id` AS `id` from `t1`
+-- failed on view `v1`: CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select `t1`.`id` AS `id` from `t1`
 
 } mysqldump
 drop view v1;
@@ -3398,7 +3376,7 @@ DROP TABLE IF EXISTS `t1`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `t1` (
   `id` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `t1` WRITE;
@@ -3460,7 +3438,7 @@ CREATE TABLE `basetable` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `tag` varchar(64) DEFAULT NULL,
   UNIQUE KEY `id` (`id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 CREATE DATABASE /*!32312 IF NOT EXISTS*/ `mysqldump_views` /*!40100 DEFAULT CHARACTER SET latin1 */;
@@ -3596,7 +3574,7 @@ CREATE TEMPORARY TABLE `TABLES` (
   `TABLE_TYPE` varchar(64) NOT NULL DEFAULT '',
   `ENGINE` varchar(64) DEFAULT NULL,
   `VERSION` bigint(21) unsigned DEFAULT NULL,
-  `ROW_FORMAT` varchar(20) DEFAULT NULL,
+  `ROW_FORMAT` varchar(10) DEFAULT NULL,
   `TABLE_ROWS` bigint(21) unsigned DEFAULT NULL,
   `AVG_ROW_LENGTH` bigint(21) unsigned DEFAULT NULL,
   `DATA_LENGTH` bigint(21) unsigned DEFAULT NULL,
@@ -3642,8 +3620,8 @@ CREATE TABLE t1(a int);
 INSERT INTO t1 VALUES (1), (2);
 mysqldump: Input filename too long: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 DROP TABLE t1;
-CREATE TABLE t2 (a INT);
-CREATE TABLE t3 (a INT);
+CREATE TABLE t2 (a INT) ENGINE=MYISAM;
+CREATE TABLE t3 (a INT) ENGINE=MYISAM;
 CREATE TABLE t1 (a INT) ENGINE=merge UNION=(t2, t3);
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
@@ -3730,7 +3708,11 @@ use test;
 #
 create database mysqldump_test_db;
 grant all privileges on mysqldump_test_db.*  to user1;
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
 grant all privileges on mysqldump_test_db.*  to user2;
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
 create procedure mysqldump_test_db.sp1() select 'hello';
 
 -- insufficient privileges to SHOW CREATE PROCEDURE `sp1`
@@ -3743,7 +3725,7 @@ create procedure mysqldump_test_db.sp1() select 'hello';
 /*!50003 SET character_set_results = latin1 */ ;
 /*!50003 SET collation_connection  = latin1_swedish_ci */ ;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
-/*!50003 SET sql_mode              = 'NO_ENGINE_SUBSTITUTION' */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
 DELIMITER ;;
 CREATE DEFINER=`user1`@`%` PROCEDURE `sp1`()
 select 'hello' ;;
@@ -3849,7 +3831,7 @@ DROP TABLE IF EXISTS `t1`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `t1` (
   `id` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `t1` WRITE;
@@ -3902,7 +3884,7 @@ CREATE TABLE `straße` ( f1 INT );
 DROP TABLE IF EXISTS `straße`;
 CREATE TABLE `straße` (
   `f1` int(11) DEFAULT NULL
-) TYPE=MyISAM;
+) TYPE=InnoDB;
 
 LOCK TABLES `straße` WRITE;
 /*!40000 ALTER TABLE `straße` DISABLE KEYS */;
@@ -3924,7 +3906,7 @@ UNLOCK TABLES;
 DROP TABLE IF EXISTS `stra�e`;
 CREATE TABLE `stra�e` (
   `f1` int(11) DEFAULT NULL
-) TYPE=MyISAM;
+) TYPE=InnoDB;
 
 LOCK TABLES `stra�e` WRITE;
 /*!40000 ALTER TABLE `stra�e` DISABLE KEYS */;
@@ -3948,7 +3930,7 @@ CREATE TABLE `כדשגכחךלדגכחשךדגחכךלדגכ` ( f1 INT );
 DROP TABLE IF EXISTS `כדשגכחךלדגכחשךדגחכךלדגכ`;
 CREATE TABLE `כדשגכחךלדגכחשךדגחכךלדגכ` (
   `f1` int(11) DEFAULT NULL
-) TYPE=MyISAM;
+) TYPE=InnoDB;
 
 LOCK TABLES `כדשגכחךלדגכחשךדגחכךלדגכ` WRITE;
 /*!40000 ALTER TABLE `כדשגכחךלדגכחשךדגחכךלדגכ` DISABLE KEYS */;
@@ -3994,7 +3976,7 @@ DROP TABLE IF EXISTS `t1`;
 CREATE TABLE `t1` (
   `a` int(11) DEFAULT NULL,
   `b` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `t1` WRITE;
@@ -4210,12 +4192,12 @@ second	ee1	root@localhost	UTC	ONE TIME	2035-12-31 20:01:23	NULL	NULL	NULL	NULL	E
 show create event ee1;
 Event	sql_mode	time_zone	Create Event	character_set_client	collation_connection	Database Collation
 ee1		UTC	CREATE DEFINER=`root`@`localhost` EVENT `ee1` ON SCHEDULE AT '2035-12-31 20:01:23' ON COMPLETION NOT PRESERVE ENABLE DO set @a=5	latin1	latin1_swedish_ci	latin1_swedish_ci
-create event ee2 on schedule at '2018-12-31 21:01:23' do set @a=5;
+create event ee2 on schedule at '2029-12-31 21:01:23' do set @a=5;
 create event ee3 on schedule at '2030-12-31 22:01:23' do set @a=5;
 show events;
 Db	Name	Definer	Time zone	Type	Execute at	Interval value	Interval field	Starts	Ends	Status	Originator	character_set_client	collation_connection	Database Collation
 second	ee1	root@localhost	UTC	ONE TIME	2035-12-31 20:01:23	NULL	NULL	NULL	NULL	ENABLED	1	latin1	latin1_swedish_ci	latin1_swedish_ci
-second	ee2	root@localhost	UTC	ONE TIME	2018-12-31 21:01:23	NULL	NULL	NULL	NULL	ENABLED	1	latin1	latin1_swedish_ci	latin1_swedish_ci
+second	ee2	root@localhost	UTC	ONE TIME	2029-12-31 21:01:23	NULL	NULL	NULL	NULL	ENABLED	1	latin1	latin1_swedish_ci	latin1_swedish_ci
 second	ee3	root@localhost	UTC	ONE TIME	2030-12-31 22:01:23	NULL	NULL	NULL	NULL	ENABLED	1	latin1	latin1_swedish_ci	latin1_swedish_ci
 drop database second;
 create database third;
@@ -4223,7 +4205,7 @@ use third;
 show events;
 Db	Name	Definer	Time zone	Type	Execute at	Interval value	Interval field	Starts	Ends	Status	Originator	character_set_client	collation_connection	Database Collation
 third	ee1	root@localhost	UTC	ONE TIME	2035-12-31 20:01:23	NULL	NULL	NULL	NULL	ENABLED	1	latin1	latin1_swedish_ci	latin1_swedish_ci
-third	ee2	root@localhost	UTC	ONE TIME	2018-12-31 21:01:23	NULL	NULL	NULL	NULL	ENABLED	1	latin1	latin1_swedish_ci	latin1_swedish_ci
+third	ee2	root@localhost	UTC	ONE TIME	2029-12-31 21:01:23	NULL	NULL	NULL	NULL	ENABLED	1	latin1	latin1_swedish_ci	latin1_swedish_ci
 third	ee3	root@localhost	UTC	ONE TIME	2030-12-31 22:01:23	NULL	NULL	NULL	NULL	ENABLED	1	latin1	latin1_swedish_ci	latin1_swedish_ci
 drop database third;
 set time_zone = 'SYSTEM';
@@ -4263,7 +4245,7 @@ DROP TABLE IF EXISTS `t1`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `t1` (
   `id` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `t1` WRITE;
@@ -4365,7 +4347,7 @@ DROP TABLE IF EXISTS `test`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `test` (
   `a` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 LOCK TABLES `test` WRITE;
 /*!40000 ALTER TABLE `test` DISABLE KEYS */;
@@ -4437,7 +4419,7 @@ CREATE EVENT ev1 ON SCHEDULE AT '2030-01-01 00:00:00' DO SELECT "Meow";
 
 SHOW TRIGGERS;
 Trigger	Event	Table	Statement	Timing	Created	sql_mode	Definer	character_set_client	collation_connection	Database Collation
-tr1	UPDATE	t1	SET @f1 = 1	BEFORE	NULL		root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
+tr1	UPDATE	t1	SET @f1 = 1	BEFORE	#		root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
 SHOW EVENTS;
 Db	Name	Definer	Time zone	Type	Execute at	Interval value	Interval field	Starts	Ends	Status	Originator	character_set_client	collation_connection	Database Collation
 test	ev1	root@localhost	SYSTEM	ONE TIME	2030-01-01 00:00:00	NULL	NULL	NULL	NULL	ENABLED	1	latin1	latin1_swedish_ci	latin1_swedish_ci
@@ -4456,7 +4438,7 @@ DROP PROCEDURE pr1;
 reload table; this should restore table and trigger
 SHOW TRIGGERS;
 Trigger	Event	Table	Statement	Timing	Created	sql_mode	Definer	character_set_client	collation_connection	Database Collation
-tr1	UPDATE	t1	SET @f1 = 1	BEFORE	NULL		root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
+tr1	UPDATE	t1	SET @f1 = 1	BEFORE	#		root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
 SHOW EVENTS;
 Db	Name	Definer	Time zone	Type	Execute at	Interval value	Interval field	Starts	Ends	Status	Originator	character_set_client	collation_connection	Database Collation
 SELECT name,body FROM mysql.proc WHERE NAME = 'pr1';
@@ -4465,7 +4447,7 @@ name	body
 reload db; this should restore routines and events
 SHOW TRIGGERS;
 Trigger	Event	Table	Statement	Timing	Created	sql_mode	Definer	character_set_client	collation_connection	Database Collation
-tr1	UPDATE	t1	SET @f1 = 1	BEFORE	NULL		root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
+tr1	UPDATE	t1	SET @f1 = 1	BEFORE	#		root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
 SHOW EVENTS;
 Db	Name	Definer	Time zone	Type	Execute at	Interval value	Interval field	Starts	Ends	Status	Originator	character_set_client	collation_connection	Database Collation
 test	ev1	root@localhost	SYSTEM	ONE TIME	2030-01-01 00:00:00	NULL	NULL	NULL	NULL	ENABLED	1	latin1	latin1_swedish_ci	latin1_swedish_ci
@@ -4614,8 +4596,8 @@ USE test;
 #
 CREATE DATABASE BUG52792;
 USE BUG52792;
-CREATE TABLE t1 (c1 INT, c2 VARCHAR(20));
-CREATE TABLE t2 (c1 INT);
+CREATE TABLE t1 (c1 INT, c2 VARCHAR(20)) ENGINE=MyISAM;
+CREATE TABLE t2 (c1 INT) ENGINE=MyISAM;
 INSERT INTO t1 VALUES (1, 'aaa'), (2, 'bbb'), (3, 'ccc');
 INSERT INTO t2 VALUES (1),(2),(3);
 # Stored Procedures.
@@ -4696,7 +4678,7 @@ CREATE VIEW v2 AS SELECT * FROM t2;
 	</row>
 	</table_data>
 	<triggers name="t2">
-		<trigger Trigger="trig1" sql_mode="" character_set_client="latin1" collation_connection="latin1_swedish_ci" Database_Collation="latin1_swedish_ci">
+		<trigger Trigger="trig1" sql_mode="" character_set_client="latin1" collation_connection="latin1_swedish_ci" Database_Collation="latin1_swedish_ci" Created="--TIMESTAMP--">
 <![CDATA[
 CREATE DEFINER=`root`@`localhost` TRIGGER trig1 BEFORE INSERT ON t2
 FOR EACH ROW BEGIN
@@ -4704,7 +4686,7 @@ INSERT INTO t2 VALUES(1);
 END
 ]]>
 		</trigger>
-		<trigger Trigger="trig2" sql_mode="" character_set_client="latin1" collation_connection="latin1_swedish_ci" Database_Collation="latin1_swedish_ci">
+		<trigger Trigger="trig2" sql_mode="" character_set_client="latin1" collation_connection="latin1_swedish_ci" Database_Collation="latin1_swedish_ci" Created="--TIMESTAMP--">
 <![CDATA[
 CREATE DEFINER=`root`@`localhost` TRIGGER trig2 AFTER INSERT ON t2
 FOR EACH ROW BEGIN
@@ -4835,7 +4817,7 @@ END
 	</row>
 	</table_data>
 	<triggers name="t2">
-		<trigger Trigger="trig1" sql_mode="" character_set_client="latin1" collation_connection="latin1_swedish_ci" Database_Collation="latin1_swedish_ci">
+		<trigger Trigger="trig1" sql_mode="" character_set_client="latin1" collation_connection="latin1_swedish_ci" Database_Collation="latin1_swedish_ci" Created="--TIMESTAMP--">
 <![CDATA[
 CREATE DEFINER=`root`@`localhost` TRIGGER trig1 BEFORE INSERT ON t2
 FOR EACH ROW BEGIN
@@ -4843,7 +4825,7 @@ INSERT INTO t2 VALUES(1);
 END
 ]]>
 		</trigger>
-		<trigger Trigger="trig2" sql_mode="" character_set_client="latin1" collation_connection="latin1_swedish_ci" Database_Collation="latin1_swedish_ci">
+		<trigger Trigger="trig2" sql_mode="" character_set_client="latin1" collation_connection="latin1_swedish_ci" Database_Collation="latin1_swedish_ci" Created="--TIMESTAMP--">
 <![CDATA[
 CREATE DEFINER=`root`@`localhost` TRIGGER trig2 AFTER INSERT ON t2
 FOR EACH ROW BEGIN
@@ -4936,6 +4918,8 @@ END
 # Test to check 'Insufficient privileges' error.
 
 GRANT ALL PRIVILEGES ON BUG52792.* TO user1;
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
 # Running 'replace_regex on timestamp'
 <?xml version="1.0"?>
 <mysqldump xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
@@ -4975,7 +4959,7 @@ GRANT ALL PRIVILEGES ON BUG52792.* TO user1;
 	</row>
 	</table_data>
 	<triggers name="t2">
-		<trigger Trigger="trig1" sql_mode="" character_set_client="latin1" collation_connection="latin1_swedish_ci" Database_Collation="latin1_swedish_ci">
+		<trigger Trigger="trig1" sql_mode="" character_set_client="latin1" collation_connection="latin1_swedish_ci" Database_Collation="latin1_swedish_ci" Created="--TIMESTAMP--">
 <![CDATA[
 CREATE DEFINER=`root`@`localhost` TRIGGER trig1 BEFORE INSERT ON t2
 FOR EACH ROW BEGIN
@@ -4983,7 +4967,7 @@ INSERT INTO t2 VALUES(1);
 END
 ]]>
 		</trigger>
-		<trigger Trigger="trig2" sql_mode="" character_set_client="latin1" collation_connection="latin1_swedish_ci" Database_Collation="latin1_swedish_ci">
+		<trigger Trigger="trig2" sql_mode="" character_set_client="latin1" collation_connection="latin1_swedish_ci" Database_Collation="latin1_swedish_ci" Created="--TIMESTAMP--">
 <![CDATA[
 CREATE DEFINER=`root`@`localhost` TRIGGER trig2 AFTER INSERT ON t2
 FOR EACH ROW BEGIN
@@ -5179,7 +5163,7 @@ CREATE TABLE `t1` (
   `j` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `k` datetime DEFAULT NULL,
   `l` datetime DEFAULT '2010-05-26 12:34:56'
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `t1` WRITE;
@@ -5241,7 +5225,7 @@ DROP TABLE IF EXISTS `t1`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `t1` (
   `c1` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -5263,7 +5247,7 @@ DROP TABLE IF EXISTS `t2`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `t2` (
   `c1` int(11) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -5315,7 +5299,7 @@ RESET MASTER;
 #
 DROP DATABASE IF EXISTS b12688860_db;
 CREATE DATABASE b12688860_db;
-Warning: Using a password on the command line interface can be insecure.
+mysqldump: [Warning] Using a password on the command line interface can be insecure.
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -5355,27 +5339,27 @@ Error	1146	Table 'mysql.event' doesn't exist
 SHOW CREATE TABLE mysql.general_log;
 Table	Create Table
 general_log	CREATE TABLE `general_log` (
-  `event_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `event_time` timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   `user_host` mediumtext NOT NULL,
   `thread_id` bigint(21) unsigned NOT NULL,
   `server_id` int(10) unsigned NOT NULL,
   `command_type` varchar(64) NOT NULL,
-  `argument` mediumtext NOT NULL
+  `argument` mediumblob NOT NULL
 ) ENGINE=CSV DEFAULT CHARSET=utf8 COMMENT='General log'
 SHOW CREATE TABLE mysql.slow_log;
 Table	Create Table
 slow_log	CREATE TABLE `slow_log` (
-  `start_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `start_time` timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   `user_host` mediumtext NOT NULL,
-  `query_time` time NOT NULL,
-  `lock_time` time NOT NULL,
+  `query_time` time(6) NOT NULL,
+  `lock_time` time(6) NOT NULL,
   `rows_sent` int(11) NOT NULL,
   `rows_examined` int(11) NOT NULL,
   `db` varchar(512) NOT NULL,
   `last_insert_id` int(11) NOT NULL,
   `insert_id` int(11) NOT NULL,
   `server_id` int(10) unsigned NOT NULL,
-  `sql_text` mediumtext NOT NULL,
+  `sql_text` mediumblob NOT NULL,
   `thread_id` bigint(21) unsigned NOT NULL
 ) ENGINE=CSV DEFAULT CHARSET=utf8 COMMENT='Slow log'
 SET @@global.log_output=       @old_log_output_state;
@@ -5390,6 +5374,19 @@ SET @@global.general_log=      @old_general_log_state;
 CREATE VIEW v1 AS SELECT 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit1, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit2, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit3, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit4, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit5, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit6, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit7, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit8, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit9, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit10, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit11, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit12, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit13, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit14, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit15, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit16, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit17, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit18, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit19, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit20, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit21, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit22, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit23, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit24, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit25, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit26, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit27, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit28, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit29, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit30, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit31, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit32, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit33, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit34, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit35, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit36, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit37, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit38, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit39, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit40, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit41, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit42, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit43, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit44, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit45, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit46, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit47, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit48, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit49, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit50, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit51, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit52, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit53, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit54, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit55, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit56, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit57, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit58, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit59, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit60, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit61, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit62, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit63, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit64, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit65, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit66, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit67, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit68, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit69, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit70, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit71, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit72, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit73, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit74, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit75, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit76, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit77, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit78, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit79, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit80, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit81, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit82, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit83, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit84, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit85, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit86, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit87, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit88, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit89, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit90, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit91, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit92, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit93, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit94, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit95, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit96, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit97, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit98, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit99, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit100, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit101, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit102, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit103, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit104, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit105, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit106, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit107, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit108, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit109, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit110, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit111, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit112, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit113, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit114, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit115, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit116, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit117, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit118, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit119, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit120, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit121, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit122, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit123, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit124, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit125, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit126, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit127, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit128, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit129, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit130, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit131, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit132, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit133, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit134, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit135, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit136, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit137, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit138, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit139, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit140, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit141, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit142, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit143, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit144, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit145, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit146, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit147, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit148, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit149, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit150, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit151, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit152, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit153, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit154, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit155, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit156, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit157, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit158, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit159, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit160, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit161, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit162, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit163, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit164, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit165, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit166, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit167, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit168, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit169, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit170, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit171, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit172, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit173, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit174, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit175, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit176, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit177, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit178, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit179, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit180, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit181, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit182, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit183, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit184, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit185, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit186, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit187, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit188, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit189, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit190, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit191, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit192, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit193, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit194, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit195, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit196, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit197, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit198, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit199, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit200, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit201, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit202, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit203, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit204, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit205, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit206, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit207, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit208, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit209, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit210, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit211, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit212, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit213, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit214, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit215, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit216, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit217, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit218, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit219, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit220, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit221, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit222, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit223, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit224, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit225, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit226, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit227, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit228, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit229, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit230, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit231, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit232, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit233, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit234, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit235, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit236, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit237, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit238, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit239, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit240, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit241, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit242, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit243, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit244, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit245, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit246, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit247, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit248, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit249, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit250, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit251, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit252, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit253, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit254, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit255, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit256, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit257, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit258, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit259, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit260, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit261, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit262, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit263, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit264, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit265, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit266, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit267, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit268, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit269, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit270, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit271, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit272, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit273, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit274, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit275, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit276, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit277, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit278, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit279, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit280, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit281, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit282, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit283, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit284, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit285, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit286, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit287, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit288, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit289, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit290, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit291, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit292, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit293, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit294, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit295, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit296, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit297, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit298, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit299, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit300, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit301, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit302, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit303, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit304, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit305, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit306, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit307, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit308, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit309, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit310, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit311, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit312, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit313, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit314, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit315, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit316, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit317, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit318, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit319, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit320, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit321, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit322, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit323, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit324, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit325, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit326, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit327, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit328, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit329, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit330, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit331, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit332, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit333, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit334, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit335, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit336, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit337, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit338, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit339, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit340, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit341, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit342, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit343, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit344, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit345, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit346, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit347, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit348, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit349, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit350, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit351, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit352, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit353, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit354, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit355, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit356, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit357, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit358, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit359, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit360, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit361, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit362, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit363, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit364, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit365, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit366, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit367, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit368, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit369, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit370, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit371, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit372, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit373, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit374, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit375, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit376, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit377, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit378, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit379, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit380, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit381, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit382, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit383, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit384, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit385, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit386, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit387, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit388, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit389, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit390, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit391, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit392, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit393, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit394, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit395, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit396, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit397, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit398, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit399, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit400, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit401, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit402, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit403, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit404, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit405, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit406, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit407, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit408, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit409, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit410, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit411, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit412, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit413, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit414, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit415, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit416, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit417, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit418, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit419, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit420, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit421, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit422, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit423, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit424, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit425, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit426, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit427, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit428, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit429, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit430, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit431, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit432, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit433, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit434, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit435, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit436, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit437, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit438, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit439, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit440, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit441, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit442, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit443, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit444, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit445, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit446, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit447, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit448, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit449, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit450, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit451, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit452, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit453, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit454, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit455, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit456, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit457, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit458, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit459, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit460, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit461, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit462, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit463, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit464, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit465, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit466, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit467, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit468, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit469, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit470, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit471, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit472, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit473, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit474, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit475, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit476, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit477, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit478, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit479, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit480, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit481, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit482, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit483, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit484, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit485, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit486, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit487, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit488, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit489, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit490, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit491, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit492, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit493, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit494, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit495, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit496, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit497, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit498, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit499, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit500, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit501, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit502, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit503, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit504, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit505, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit506, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit507, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit508, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit509, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit510, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit511, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit512, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit513, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit514, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit515, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit516, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit517, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit518, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit519, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit520, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit521, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit522, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit523, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit524, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit525, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit526, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit527, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit528, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit529, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit530, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit531, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit532, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit533, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit534, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit535, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit536, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit537, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit538, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit539, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit540, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit541, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit542, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit543, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit544, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit545, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit546, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit547, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit548, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit549, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit550, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit551, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit552, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit553, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit554, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit555, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit556, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit557, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit558, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit559, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit560, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit561, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit562, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit563, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit564, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit565, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit566, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit567, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit568, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit569, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit570, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit571, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit572, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit573, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit574, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit575, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit576, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit577, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit578, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit579, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit580, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit581, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit582, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit583, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit584, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit585, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit586, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit587, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit588, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit589, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit590, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit591, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit592, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit593, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit594, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit595, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit596, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit597, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit598, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit599, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit600, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit601, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit602, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit603, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit604, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit605, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit606, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit607, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit608, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit609, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit610, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit611, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit612, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit613, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit614, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit615, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit616, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit617, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit618, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit619, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit620, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit621, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit622, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit623, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit624, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit625, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit626, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit627, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit628, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit629, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit630, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit631, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit632, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit633, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit634, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit635, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit636, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit637, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit638, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit639, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit640, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit641, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit642, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit643, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit644, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit645, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit646, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit647, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit648, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit649, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit650, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit651, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit652, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit653, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit654, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit655, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit656, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit657, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit658, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit659, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit660, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit661, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit662, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit663, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit664, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit665, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit666, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit667, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit668, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit669, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit670, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit671, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit672, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit673, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit674, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit675, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit676, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit677, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit678, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit679, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit680, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit681, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit682, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit683, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit684, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit685, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit686, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit687, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit688, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit689, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit690, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit691, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit692, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit693, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit694, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit695, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit696, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit697, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit698, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit699, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit700, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit701, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit702, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit703, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit704, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit705, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit706, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit707, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit708, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit709, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit710, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit711, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit712, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit713, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit714, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit715, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit716, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit717, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit718, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit719, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit720, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit721, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit722, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit723, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit724, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit725, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit726, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit727, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit728, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit729, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit730, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit731, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit732, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit733, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit734, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit735, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit736, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit737, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit738, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit739, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit740, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit741, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit742, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit743, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit744, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit745, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit746, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit747, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit748, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit749, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit750, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit751, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit752, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit753, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit754, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit755, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit756, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit757, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit758, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit759, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit760, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit761, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit762, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit763, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit764, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit765, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit766, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit767, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit768, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit769, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit770, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit771, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit772, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit773, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit774, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit775, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit776, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit777, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit778, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit779, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit780, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit781, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit782, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit783, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit784, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit785, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit786, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit787, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit788, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit789, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit790, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit791, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit792, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit793, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit794, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit795, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit796, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit797, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit798, 1 AS thisColumnContainsAVeryLongNameThatNearsThe64CharacterLimit;
 DROP VIEW v1;
 #
+# Bug #18109728 DUMP & RESTORE FAILS WHEN DATABASE NAME CONTAINS '\'
+#
+CREATE DATABASE `a\\k`;
+CREATE TABLE `a\\k`.t1(i INT);
+SHOW TABLES FROM `a\\k`;
+Tables_in_a\\k
+t1
+DROP DATABASE `a\\k`;
+SHOW TABLES FROM `a\\k`;
+Tables_in_a\\k
+t1
+DROP DATABASE `a\\k`;
+#
 # End of 5.6 tests
 #
 #
@@ -5398,7 +5395,7 @@ DROP VIEW v1;
 CREATE DATABASE dump_gis;
 USE dump_gis;
 CREATE TABLE t1 (a GEOMETRY);
-INSERT INTO t1 VALUES(GeomFromText('LineString(1 1, 2 1, 2 2, 1 2, 1 1)'));
+INSERT INTO t1 VALUES(ST_GeomFromText('LineString(1 1, 2 1, 2 2, 1 2, 1 1)'));
 SELECT HEX(a) FROM t1;
 HEX(a)
 00000000010200000005000000000000000000F03F000000000000F03F0000000000000040000000000000F03F00000000000000400000000000000040000000000000F03F0000000000000040000000000000F03F000000000000F03F
@@ -5433,26 +5430,356 @@ DROP TABLE t1;
 DROP TABLE t2;
 DROP DATABASE db_20772273;
 #
-# WL#8697: Invisible Indexes
-# Test of mysqldump.
+# WL#8132 JSON datatype and binary storage format
 #
-CREATE TABLE test.t1 (
-a INT,
-b INT,
-c INT,
-INDEX (a) VISIBLE,
-INDEX (b) INVISIBLE,
-INDEX (c)
-);
+CREATE DATABASE dump_json;
+USE dump_json;
+CREATE TABLE t1 (j JSON);
+INSERT INTO t1 VALUES (JSON_ARRAY(1, 2, 3, "one", "two", "three"));
+SELECT * FROM t1;
+j
+[1, 2, 3, "one", "two", "three"]
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `t1` (
-  `a` int(11) DEFAULT NULL,
-  `b` int(11) DEFAULT NULL,
-  `c` int(11) DEFAULT NULL,
-  KEY `a` (`a`),
-  KEY `b` (`b`) /*!50616 INVISIBLE */,
-  KEY `c` (`c`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+  `j` json DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE test.t1;
+INSERT INTO `t1` VALUES ('[1, 2, 3, \"one\", \"two\", \"three\"]');
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `t1` (
+  `j` json DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+/*!40101 SET character_set_client = @saved_cs_client */;
+INSERT INTO `t1` VALUES ('[1, 2, 3, \"one\", \"two\", \"three\"]');
+DROP DATABASE dump_json;
+#
+# WL#411 Generated columns
+#
+CREATE DATABASE dump_generated;
+USE dump_generated;
+CREATE TABLE t1 (pk INTEGER, a INTEGER, b INTEGER, c VARCHAR(16),
+sum INTEGER GENERATED ALWAYS AS (a+b),
+sub VARCHAR(4) GENERATED ALWAYS AS (SUBSTRING(c, 1, 4)),
+key k1(sum),
+key k2(sub)
+) engine=innodb;
+INSERT INTO t1(pk, a, b, c) VALUES (1, 11, 12, 'oneone'), (2, 21, 22, 'twotwo');
+SELECT * FROM t1;
+pk	a	b	c	sum	sub
+1	11	12	oneone	23	oneo
+2	21	22	twotwo	43	twot
+DELETE FROM t1;
+SELECT * FROM t1;
+pk	a	b	c	sum	sub
+1	11	12	oneone	23	oneo
+2	21	22	twotwo	43	twot
+DELETE FROM t1;
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/t1.txt' INTO TABLE t1;
+SELECT * FROM t1;
+pk	a	b	c	sum	sub
+1	11	12	oneone	23	oneo
+2	21	22	twotwo	43	twot
+DROP TABLE t1;
+# A table with regular columns after generated
+CREATE TABLE t2 (pk INTEGER, a INTEGER, b INTEGER,
+sum INTEGER GENERATED ALWAYS AS (a+b),
+c VARCHAR(16),
+key k1(sum)
+) engine=innodb;
+INSERT INTO t2(pk, a, b, c) VALUES (1, 11, 12, 'oneone'), (2, 21, 22, 'twotwo');
+SELECT * FROM t2;
+pk	a	b	sum	c
+1	11	12	23	oneone
+2	21	22	43	twotwo
+DELETE FROM t2;
+SELECT * FROM t2;
+pk	a	b	sum	c
+1	11	12	23	oneone
+2	21	22	43	twotwo
+DELETE FROM t2;
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/t2.txt' INTO TABLE t2;
+SELECT * FROM t2;
+pk	a	b	sum	c
+1	11	12	23	oneone
+2	21	22	43	twotwo
+DROP TABLE t2;
+DROP DATABASE dump_generated;
+#
+# End of 5.7 tests
+#
+#
+# Bug #21549860 MYSQLDUMP/MYSQLPUMP INCLUDES SYS SCHEMA STORED PROGRAMS
+#               EVEN IF SKIPPING SCHEMA
+#
+SELECT COUNT(*) FROM mysql.proc WHERE db = 'sys';
+COUNT(*)
+48
+DROP DATABASE sys;
+SELECT COUNT(*) FROM mysql.proc WHERE db = 'sys';
+COUNT(*)
+0
+SELECT COUNT(*) FROM mysql.proc WHERE db = 'sys';
+COUNT(*)
+0
+SELECT COUNT(*) FROM mysql.proc WHERE db = 'sys';
+COUNT(*)
+48
+#
+# Bug #25717383: MYSQLDUMP MAY EXECUTE ANY ARBITRARY QUERY
+#
+CREATE DATABASE bug25717383;
+use bug25717383;
+CREATE TABLE `tab
+one` (a int);
+CREATE VIEW `view
+one` as SELECT * FROM `tab
+one`;
+CREATE PROCEDURE `proc
+one`() SELECT * from `tab
+one`;
+CREATE TEMPORARY TABLE `temp
+one` (id INT);
+CREATE TRIGGER `trig
+one` BEFORE INSERT ON `tab
+one` FOR EACH ROW SET NEW.a = 1;
+CREATE EVENT `event
+one` ON SCHEDULE AT '2030-01-01 00:00:00' DO SET @a=5;
+SHOW TABLES FROM bug25717383;
+Tables_in_bug25717383
+tab
+one
+view
+one
+SHOW TRIGGERS FROM bug25717383;
+Trigger	Event	Table	Statement	Timing	Created	sql_mode	Definer	character_set_client	collation_connection	Database Collation
+trig
+one	INSERT	tab
+one	SET NEW.a = 1	BEFORE	#		root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
+SHOW EVENTS FROM bug25717383;
+Db	Name	Definer	Time zone	Type	Execute at	Interval value	Interval field	Starts	Ends	Status	Originator	character_set_client	collation_connection	Database Collation
+bug25717383	event
+one	root@localhost	SYSTEM	ONE TIME	#	NULL	NULL	NULL	NULL	ENABLED	1	latin1	latin1_swedish_ci	latin1_swedish_ci
+SELECT ROUTINE_NAME FROM INFORMATION_SCHEMA.ROUTINES
+WHERE ROUTINE_SCHEMA='bug25717383' AND ROUTINE_TYPE= 'PROCEDURE'
+       ORDER BY ROUTINE_NAME;
+ROUTINE_NAME
+proc
+one
+SHOW TABLES FROM bug25717383;
+Tables_in_bug25717383
+tab
+one
+view
+one
+SHOW TRIGGERS FROM bug25717383;
+Trigger	Event	Table	Statement	Timing	Created	sql_mode	Definer	character_set_client	collation_connection	Database Collation
+trig
+one	INSERT	tab
+one	SET NEW.a = 1	BEFORE	#		root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
+SHOW EVENTS FROM bug25717383;
+Db	Name	Definer	Time zone	Type	Execute at	Interval value	Interval field	Starts	Ends	Status	Originator	character_set_client	collation_connection	Database Collation
+bug25717383	event
+one	root@localhost	SYSTEM	ONE TIME	#	NULL	NULL	NULL	NULL	ENABLED	1	latin1	latin1_swedish_ci	latin1_swedish_ci
+SELECT ROUTINE_NAME FROM INFORMATION_SCHEMA.ROUTINES
+WHERE ROUTINE_SCHEMA='bug25717383' AND ROUTINE_TYPE= 'PROCEDURE'
+       ORDER BY ROUTINE_NAME;
+ROUTINE_NAME
+proc
+one
+DROP DATABASE bug25717383;
+#
+# Bug #25469161: MYSQLDUMP SHOULD EXCLUDE REPLICATION
+#                REPOSITORY METADATA TABLES
+#
+SHOW VARIABLES LIKE "master_info_repository";
+Variable_name	Value
+master_info_repository	FILE
+SHOW VARIABLES LIKE "relay_log_info_repository";
+Variable_name	Value
+relay_log_info_repository	FILE
+SET GLOBAL master_info_repository= 'TABLE';
+SET GLOBAL relay_log_info_repository= 'TABLE';
+SHOW VARIABLES LIKE "master_info_repository";
+Variable_name	Value
+master_info_repository	TABLE
+SHOW VARIABLES LIKE "relay_log_info_repository";
+Variable_name	Value
+relay_log_info_repository	TABLE
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!40101 SET NAMES utf8 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE IF NOT EXISTS `slave_master_info` (
+  `Number_of_lines` int(10) unsigned NOT NULL COMMENT 'Number of lines in the file.',
+  `Master_log_name` text CHARACTER SET utf8 COLLATE utf8_bin NOT NULL COMMENT 'The name of the master binary log currently being read from the master.',
+  `Master_log_pos` bigint(20) unsigned NOT NULL COMMENT 'The master log position of the last read event.',
+  `Host` char(64) CHARACTER SET utf8 COLLATE utf8_bin DEFAULT NULL COMMENT 'The host name of the master.',
+  `User_name` text CHARACTER SET utf8 COLLATE utf8_bin COMMENT 'The user name used to connect to the master.',
+  `User_password` text CHARACTER SET utf8 COLLATE utf8_bin COMMENT 'The password used to connect to the master.',
+  `Port` int(10) unsigned NOT NULL COMMENT 'The network port used to connect to the master.',
+  `Connect_retry` int(10) unsigned NOT NULL COMMENT 'The period (in seconds) that the slave will wait before trying to reconnect to the master.',
+  `Enabled_ssl` tinyint(1) NOT NULL COMMENT 'Indicates whether the server supports SSL connections.',
+  `Ssl_ca` text CHARACTER SET utf8 COLLATE utf8_bin COMMENT 'The file used for the Certificate Authority (CA) certificate.',
+  `Ssl_capath` text CHARACTER SET utf8 COLLATE utf8_bin COMMENT 'The path to the Certificate Authority (CA) certificates.',
+  `Ssl_cert` text CHARACTER SET utf8 COLLATE utf8_bin COMMENT 'The name of the SSL certificate file.',
+  `Ssl_cipher` text CHARACTER SET utf8 COLLATE utf8_bin COMMENT 'The name of the cipher in use for the SSL connection.',
+  `Ssl_key` text CHARACTER SET utf8 COLLATE utf8_bin COMMENT 'The name of the SSL key file.',
+  `Ssl_verify_server_cert` tinyint(1) NOT NULL COMMENT 'Whether to verify the server certificate.',
+  `Heartbeat` float NOT NULL,
+  `Bind` text CHARACTER SET utf8 COLLATE utf8_bin COMMENT 'Displays which interface is employed when connecting to the MySQL server',
+  `Ignored_server_ids` text CHARACTER SET utf8 COLLATE utf8_bin COMMENT 'The number of server IDs to be ignored, followed by the actual server IDs',
+  `Uuid` text CHARACTER SET utf8 COLLATE utf8_bin COMMENT 'The master server uuid.',
+  `Retry_count` bigint(20) unsigned NOT NULL COMMENT 'Number of reconnect attempts, to the master, before giving up.',
+  `Ssl_crl` text CHARACTER SET utf8 COLLATE utf8_bin COMMENT 'The file used for the Certificate Revocation List (CRL)',
+  `Ssl_crlpath` text CHARACTER SET utf8 COLLATE utf8_bin COMMENT 'The path used for Certificate Revocation List (CRL) files',
+  `Enabled_auto_position` tinyint(1) NOT NULL COMMENT 'Indicates whether GTIDs will be used to retrieve events from the master.',
+  `Channel_name` char(64) NOT NULL COMMENT 'The channel on which the slave is connected to a source. Used in Multisource Replication',
+  `Tls_version` text CHARACTER SET utf8 COLLATE utf8_bin COMMENT 'Tls version',
+  PRIMARY KEY (`Channel_name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 STATS_PERSISTENT=0 COMMENT='Master Information';
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE IF NOT EXISTS `slave_relay_log_info` (
+  `Number_of_lines` int(10) unsigned NOT NULL COMMENT 'Number of lines in the file or rows in the table. Used to version table definitions.',
+  `Relay_log_name` text CHARACTER SET utf8 COLLATE utf8_bin NOT NULL COMMENT 'The name of the current relay log file.',
+  `Relay_log_pos` bigint(20) unsigned NOT NULL COMMENT 'The relay log position of the last executed event.',
+  `Master_log_name` text CHARACTER SET utf8 COLLATE utf8_bin NOT NULL COMMENT 'The name of the master binary log file from which the events in the relay log file were read.',
+  `Master_log_pos` bigint(20) unsigned NOT NULL COMMENT 'The master log position of the last executed event.',
+  `Sql_delay` int(11) NOT NULL COMMENT 'The number of seconds that the slave must lag behind the master.',
+  `Number_of_workers` int(10) unsigned NOT NULL,
+  `Id` int(10) unsigned NOT NULL COMMENT 'Internal Id that uniquely identifies this record.',
+  `Channel_name` char(64) NOT NULL COMMENT 'The channel on which the slave is connected to a source. Used in Multisource Replication',
+  PRIMARY KEY (`Channel_name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 STATS_PERSISTENT=0 COMMENT='Relay Log Information';
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
+
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
+/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+SET GLOBAL master_info_repository= 'FILE';
+SET GLOBAL relay_log_info_repository= 'FILE';
+SHOW VARIABLES LIKE "master_info_repository";
+Variable_name	Value
+master_info_repository	FILE
+SHOW VARIABLES LIKE "relay_log_info_repository";
+Variable_name	Value
+relay_log_info_repository	FILE
+#
+# Bug#27931181: RESTAURE DUMP CREATED WITH 5.7.22 ON 8.0.11
+#
+CREATE DATABASE bug27931181;
+USE bug27931181;
+CREATE TABLE t1 (a INT);
+SET sql_mode='NO_AUTO_CREATE_USER';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+CREATE TRIGGER trig1 BEFORE INSERT ON t1 FOR EACH ROW SET NEW.a = 1;
+SET sql_mode='NO_AUTO_CREATE_USER,ONLY_FULL_GROUP_BY';
+CREATE PROCEDURE p1() SELECT 1;
+SET sql_mode=@@global.sql_mode;
+CREATE FUNCTION f1() RETURNS INT RETURN 1;
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!40101 SET NAMES utf8 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+CREATE DATABASE /*!32312 IF NOT EXISTS*/ `bug27931181` /*!40100 DEFAULT CHARACTER SET latin1 */;
+
+USE `bug27931181`;
+DROP TABLE IF EXISTS `t1`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `t1` (
+  `a` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+LOCK TABLES `t1` WRITE;
+/*!40000 ALTER TABLE `t1` DISABLE KEYS */;
+/*!40000 ALTER TABLE `t1` ENABLE KEYS */;
+UNLOCK TABLES;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = latin1 */ ;
+/*!50003 SET character_set_results = latin1 */ ;
+/*!50003 SET collation_connection  = latin1_swedish_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = '' */ ;
+DELIMITER ;;
+/*!50003 CREATE*/ /*!50017 DEFINER=`root`@`localhost`*/ /*!50003 TRIGGER trig1 BEFORE INSERT ON t1 FOR EACH ROW SET NEW.a = 1 */;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP FUNCTION IF EXISTS `f1` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = latin1 */ ;
+/*!50003 SET character_set_results = latin1 */ ;
+/*!50003 SET collation_connection  = latin1_swedish_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` FUNCTION `f1`() RETURNS int(11)
+RETURN 1 ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 DROP PROCEDURE IF EXISTS `p1` */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = latin1 */ ;
+/*!50003 SET character_set_results = latin1 */ ;
+/*!50003 SET collation_connection  = latin1_swedish_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'ONLY_FULL_GROUP_BY' */ ;
+DELIMITER ;;
+CREATE DEFINER=`root`@`localhost` PROCEDURE `p1`()
+SELECT 1 ;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
+
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
+/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+DROP DATABASE bug27931181;

@@ -1,13 +1,20 @@
-/* Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation; version 2 of the License.
+  it under the terms of the GNU General Public License, version 2.0,
+  as published by the Free Software Foundation.
+
+  This program is also distributed with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an additional
+  permission to link the program and your derivative works with the
+  separately licensed software that they have included with MySQL.
 
   This program is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
+  GNU General Public License, version 2.0, for more details.
 
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software Foundation,
@@ -26,6 +33,7 @@
 #include "lf.h"
 
 struct PFS_global_param;
+class PFS_opaque_container_page;
 
 /* WL#988 Roles Not implemented yet */
 #define ROLENAME_LENGTH 64
@@ -67,30 +75,35 @@ struct PFS_ALIGNED PFS_setup_actor
   const char *m_rolename;
   /** Length of @c m_rolename. */
   uint m_rolename_length;
+  /** ENABLED flag. */
+  bool m_enabled;
+  /** HISTORY flag. */
+  bool m_history;
+  /** Container page. */
+  PFS_opaque_container_page *m_page;
 };
 
 int init_setup_actor(const PFS_global_param *param);
 void cleanup_setup_actor(void);
-int init_setup_actor_hash(void);
+int init_setup_actor_hash(const PFS_global_param *param);
 void cleanup_setup_actor_hash(void);
 
-int insert_setup_actor(const String *user, const String *host, const String *role);
-int delete_setup_actor(const String *user, const String *host, const String *role);
+int insert_setup_actor(const String *user, const String *host,
+                       const String *role, bool enabled, bool history);
+int delete_setup_actor(const String *user, const String *host,
+                       const String *role);
 int reset_setup_actor(void);
 long setup_actor_count(void);
 
 void lookup_setup_actor(PFS_thread *thread,
                         const char *user, uint user_length,
                         const char *host, uint host_length,
-                        bool *enabled);
+                        bool *enabled, bool *history);
 
-/* For iterators and show status. */
+/** Update derived flags for all setup_actors. */
+int update_setup_actors_derived_flags();
 
-extern ulong setup_actor_max;
-
-/* Exposing the data directly, for iterators. */
-
-extern PFS_setup_actor *setup_actor_array;
+/* For show status. */
 
 extern LF_HASH setup_actor_hash;
 

@@ -1,13 +1,20 @@
-# Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2010, 2021, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; version 2 of the License.
+# it under the terms of the GNU General Public License, version 2.0,
+# as published by the Free Software Foundation.
+#
+# This program is also distributed with certain software (including
+# but not limited to OpenSSL) that is licensed under separate terms,
+# as designated in a particular file or component or in included license
+# documentation.  The authors of MySQL hereby grant you an additional
+# permission to link the program and your derivative works with the
+# separately licensed software that they have included with MySQL.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# GNU General Public License, version 2.0, for more details.
 #
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
@@ -15,6 +22,8 @@
 
 INCLUDE(libutils)
 INCLUDE(cmake_parse_arguments)
+
+SET(JAVAC_TARGET "1.6")
 
 # Build (if not already done) NDB version string used for generating jars etc.
 MACRO(SET_JAVA_NDB_VERSION)
@@ -34,7 +43,7 @@ MACRO(SET_JAVA_NDB_VERSION)
 ENDMACRO(SET_JAVA_NDB_VERSION)
 
 MACRO(CREATE_MANIFEST filename EXPORTS NAME)
-  FILE(WRITE ${filename} "Manifest-Version: 1.0
+  FILE(WRITE "${CMAKE_CURRENT_BINARY_DIR}/${filename}" "Manifest-Version: 1.0
 Export-Package: ${EXPORTS}
 Bundle-Name: ${NAME}
 Bundle-Description: ClusterJ")
@@ -43,7 +52,7 @@ ENDMACRO(CREATE_MANIFEST)
 MACRO(CREATE_JAR)
 
   MYSQL_PARSE_ARGUMENTS(ARG
-    "CLASSPATH;MERGE_JARS;DEPENDENCIES;MANIFEST;ENHANCE;EXTRA_FILES"
+    "CLASSPATH;MERGE_JARS;DEPENDENCIES;MANIFEST;ENHANCE;EXTRA_FILES;BROKEN_JAVAC"
     ""
     ${ARGN}
   )
@@ -86,16 +95,29 @@ MACRO(CREATE_JAR)
 
   # Compile
   IF (JAVA_FILES)
-    ADD_CUSTOM_COMMAND(
-      OUTPUT ${MARKER}
-      COMMAND ${CMAKE_COMMAND} -E remove_directory ${BUILD_DIR}
-      COMMAND ${CMAKE_COMMAND} -E make_directory ${CLASS_DIR}
-      COMMAND echo \"${JAVA_COMPILE} -d ${TARGET_DIR} -classpath ${classpath_str} ${JAVA_FILES}\"
-      COMMAND ${JAVA_COMPILE} -d ${TARGET_DIR} -classpath "${classpath_str}" ${JAVA_FILES}
-      COMMAND ${CMAKE_COMMAND} -E touch ${MARKER}
-      DEPENDS ${JAVA_FILES}
-      COMMENT "Building objects for ${TARGET}.jar"
-    )
+    IF (ARG_BROKEN_JAVAC)
+      ADD_CUSTOM_COMMAND(
+        OUTPUT ${MARKER}
+        COMMAND ${CMAKE_COMMAND} -E remove_directory ${BUILD_DIR}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${CLASS_DIR}
+        COMMAND echo \"${JAVA_COMPILE} -target ${JAVAC_TARGET} -source ${JAVAC_TARGET} -d ${TARGET_DIR} -classpath ${classpath_str} ${ARG_BROKEN_JAVAC}\"
+        COMMAND ${JAVA_COMPILE} -target ${JAVAC_TARGET} -source ${JAVAC_TARGET} -d ${TARGET_DIR} -classpath "${classpath_str}" ${ARG_BROKEN_JAVAC}
+        COMMAND ${CMAKE_COMMAND} -E touch ${MARKER}
+        DEPENDS ${JAVA_FILES}
+        COMMENT "Building objects for ${TARGET}.jar"
+      )
+    ELSE()
+      ADD_CUSTOM_COMMAND(
+        OUTPUT ${MARKER}
+        COMMAND ${CMAKE_COMMAND} -E remove_directory ${BUILD_DIR}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${CLASS_DIR}
+        COMMAND echo \"${JAVA_COMPILE} -target ${JAVAC_TARGET} -source ${JAVAC_TARGET} -d ${TARGET_DIR} -classpath ${classpath_str} ${JAVA_FILES}\"
+        COMMAND ${JAVA_COMPILE} -target ${JAVAC_TARGET} -source ${JAVAC_TARGET} -d ${TARGET_DIR} -classpath "${classpath_str}" ${JAVA_FILES}
+        COMMAND ${CMAKE_COMMAND} -E touch ${MARKER}
+        DEPENDS ${JAVA_FILES}
+        COMMENT "Building objects for ${TARGET}.jar"
+      )
+    ENDIF()
   ELSE()
     ADD_CUSTOM_COMMAND(
       OUTPUT ${MARKER}
@@ -118,7 +140,7 @@ MACRO(CREATE_JAR)
     IF(IS_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${F})
       ADD_CUSTOM_COMMAND(
         OUTPUT ${MARKER}
-        COMMAND ${CMAKE_COMMAND} -E copy_directory ${F} ${CLASS_DIR}/${N}
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/${F} ${CLASS_DIR}/${N}
         COMMAND ${CMAKE_COMMAND} -E touch ${MARKER}
         DEPENDS ${F} ${OLD_MARKER}
         COMMENT "Adding directory ${N} to ${TARGET}.jar"
@@ -126,7 +148,7 @@ MACRO(CREATE_JAR)
     ELSE()
       ADD_CUSTOM_COMMAND(
         OUTPUT ${MARKER}
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${F} ${CLASS_DIR}/${N}
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_SOURCE_DIR}/${F} ${CLASS_DIR}/${N}
         COMMAND ${CMAKE_COMMAND} -E touch ${MARKER}
         DEPENDS ${F} ${OLD_MARKER}
         COMMENT "Adding file ${N} to ${TARGET}.jar"

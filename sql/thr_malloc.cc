@@ -1,13 +1,20 @@
-/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -16,8 +23,6 @@
 
 /* Mallocs for used in threads */
 
-#include "sql_priv.h"
-#include "unireg.h"
 #include "thr_malloc.h"
 #include "sql_class.h"
 
@@ -28,16 +33,16 @@ using std::max;
 
 extern "C" void sql_alloc_error_handler(void);
 
-void init_sql_alloc(MEM_ROOT *mem_root, uint block_size, uint pre_alloc)
+void init_sql_alloc(PSI_memory_key key,
+                    MEM_ROOT *mem_root, size_t block_size, size_t pre_alloc)
 {
-  init_alloc_root(mem_root, block_size, pre_alloc);
+  init_alloc_root(key, mem_root, block_size, pre_alloc);
   mem_root->error_handler=sql_alloc_error_handler;
 }
 
-
 void *sql_alloc(size_t Size)
 {
-  MEM_ROOT *root= *my_pthread_getspecific_ptr(MEM_ROOT**,THR_MALLOC);
+  MEM_ROOT *root= *my_thread_get_THR_MALLOC();
   return alloc_root(root,Size);
 }
 
@@ -104,7 +109,7 @@ char *sql_strmake_with_convert(const char *str, size_t arg_length,
   else
   {
     uint dummy_errors;
-    new_length= copy_and_convert((char*) pos, new_length, to_cs, str,
+    new_length= copy_and_convert(pos, new_length, to_cs, str,
 				 arg_length, from_cs, &dummy_errors);
   }
   pos[new_length]= 0;

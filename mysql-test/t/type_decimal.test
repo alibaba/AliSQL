@@ -1,10 +1,14 @@
+
+ #Get deafult engine value
+--let $DEFAULT_ENGINE = `select @@global.default_storage_engine`
+
 # bug in decimal() with negative numbers by kaido@tradenet.ee
 
 --disable_warnings
 DROP TABLE IF EXISTS t1, t2;
 --enable_warnings
 SET SQL_WARNINGS=1;
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 CREATE TABLE t1 (
    id int(11) NOT NULL auto_increment,
    datatype_id int(11) DEFAULT '0' NOT NULL,
@@ -307,9 +311,15 @@ insert into t1 values (1);
 select * from t1;
 drop table t1;
 create table t1 (d decimal(5));
+
+#Replace default engine value with static engine string 
+--replace_result $DEFAULT_ENGINE ENGINE
 show create table t1;
 drop table t1;
 create table t1 (d decimal);
+
+#Replace default engine value with static engine string 
+--replace_result $DEFAULT_ENGINE ENGINE
 show create table t1;
 drop table t1;
 --error 1426
@@ -484,6 +494,9 @@ SELECT ROUND( a, 100 ) AS c FROM t4 ORDER BY c;
 
 delete from t1;
 INSERT INTO t1 VALUES (1234567890, 20), (999.99, 5);
+
+#Replace default engine value with static engine string 
+--replace_result $DEFAULT_ENGINE ENGINE
 show create table t1;
 
 select round(a,b) as c from t1 order by c;
@@ -583,3 +596,4 @@ JOIN
 WHERE CONCAT(t1.col1, CAST(subq.col0 AS DECIMAL));
 
 DROP TABLE t1, t2;
+SET sql_mode = default;

@@ -1,16 +1,11 @@
-#
 # functional change user tests
 #
-connect (con_main,localhost,root,,,,,SKIPSECUREAUTH);
+connect (con_main,localhost,root);
 
-SET GLOBAL secure_auth = OFF;
+create user test_nopw;
 grant select on test.* to test_nopw;
-create user test_oldpw identified with 'mysql_old_password';
-# need to suppress the deprecation warnings because they're absent in embedded
---disable_warnings
-grant select on test.* to test_oldpw identified by password "09301740536db389";
---enable_warnings
-grant select on test.* to test_newpw identified by "newpw";
+create user test_newpw identified by "newpw";
+grant select on test.* to test_newpw;
 
 select user(), current_user(), database();
 #
@@ -18,41 +13,32 @@ select user(), current_user(), database();
 # that has authentication completely disabled.
 #
 
---replace_result <@> <test_nopw@%> @> @localhost>
+--replace_result "<skip-grants user@skip-grants host>" <test_nopw@%> @> @localhost>
 select concat('<', user(), '>'), concat('<', current_user(), '>'), database();
    
 
 change_user test_nopw;
---replace_result <@> <test_nopw@%> @> @localhost>
-select concat('<', user(), '>'), concat('<', current_user(), '>'), database();
-change_user test_oldpw, oldpw;
---replace_result <@> <test_oldpw@%> @> @localhost>
+--replace_result "<skip-grants user@skip-grants host>" <test_nopw@%> @> @localhost>
 select concat('<', user(), '>'), concat('<', current_user(), '>'), database();
 change_user test_newpw, newpw;
---replace_result <@> <test_newpw@%> @> @localhost>
+--replace_result "<skip-grants user@skip-grants host>" <test_newpw@%> @> @localhost>
 select concat('<', user(), '>'), concat('<', current_user(), '>'), database();
 change_user root;
---replace_result <@> <root@localhost> @> @localhost>
+--replace_result "<skip-grants user@skip-grants host>" <root@localhost> @> @localhost>
 select concat('<', user(), '>'), concat('<', current_user(), '>'), database();
 
 change_user test_nopw,,test;
---replace_result <@> <test_nopw@%> @> @localhost>
-select concat('<', user(), '>'), concat('<', current_user(), '>'), database();
-change_user test_oldpw,oldpw,test;
---replace_result <@> <test_oldpw@%> @> @localhost>
+--replace_result "<skip-grants user@skip-grants host>" <test_nopw@%> @> @localhost>
 select concat('<', user(), '>'), concat('<', current_user(), '>'), database();
 change_user test_newpw,newpw,test;
---replace_result <@> <test_newpw@%> @> @localhost>
+--replace_result "<skip-grants user@skip-grants host>" <test_newpw@%> @> @localhost>
 select concat('<', user(), '>'), concat('<', current_user(), '>'), database();
 change_user root,,test;
---replace_result <@> <root@localhost> @> @localhost>
+--replace_result "<skip-grants user@skip-grants host>" <root@localhost> @> @localhost>
 select concat('<', user(), '>'), concat('<', current_user(), '>'), database();
 
 drop user test_nopw;
-drop user test_oldpw;
 drop user test_newpw;
-
-SET GLOBAL secure_auth = DEFAULT;
 
 connection default;
 disconnect con_main;
@@ -85,6 +71,20 @@ SET @@session.max_join_size = default;
 --echo change_user
 --change_user
 SELECT @@session.sql_big_selects;
+
+#
+# Bug #18329348 Bug #18329560 Bug #18328396 Bug #18329452 mysql_change_user()
+# resets all SESSION ONLY system variables
+#
+
+SET INSERT_ID=12;
+SELECT @@INSERT_ID;
+SET TIMESTAMP=200;
+SELECT @@TIMESTAMP;
+--echo change_user
+--change_user
+SELECT @@INSERT_ID;
+SELECT @@TIMESTAMP=200;
 
 #
 # Bug#31418 User locks misfunctioning after mysql_change_user()

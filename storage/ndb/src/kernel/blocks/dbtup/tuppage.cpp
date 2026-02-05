@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2005, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -17,6 +24,9 @@
 
 #include <ndb_global.h>
 #include "tuppage.hpp"
+
+#define JAM_FILE_ID 427
+
 
 /**
  * Fix pages maintain a double linked list of free entries
@@ -39,7 +49,9 @@ Tup_fixsize_page::alloc_record()
   Uint32 page_idx = next_free_index;
   assert(page_idx + 1 < DATA_WORDS);
 
+#ifdef VM_TRACE
   Uint32 prev = m_data[page_idx] >> 16;
+#endif
   Uint32 next = m_data[page_idx] & 0xFFFF;
 
   assert(prev == 0xFFFF);

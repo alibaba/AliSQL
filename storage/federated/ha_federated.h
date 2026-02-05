@@ -1,13 +1,20 @@
-/* Copyright (c) 2004, 2013, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2004, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation; version 2 of the License.
+  it under the terms of the GNU General Public License, version 2.0,
+  as published by the Free Software Foundation.
+
+  This program is also distributed with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an additional
+  permission to link the program and your derivative works with the
+  separately licensed software that they have included with MySQL.
 
   This program is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
+  GNU General Public License, version 2.0, for more details.
 
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software
@@ -21,6 +28,7 @@
 */
 
 #include <mysql.h>
+#include "prealloced_array.h"
 
 /* 
   handler::print_error has a case statement for error numbers.
@@ -83,9 +91,8 @@ class ha_federated: public handler
   /**
     Array of all stored results we get during a query execution.
   */
-  DYNAMIC_ARRAY results;
+  Prealloced_array<MYSQL_RES*, 4, true> results;
   bool position_called;
-  uint fetch_num; // stores the fetch num
   MYSQL_ROW_OFFSET current_position;  // Current position used by ::position()
   int remote_error_number;
   char remote_error_buf[FEDERATED_QUERY_BUFFER_SIZE];
@@ -168,7 +175,9 @@ public:
   uint max_supported_keys()          const { return MAX_KEY; }
   uint max_supported_key_parts()     const { return MAX_REF_PARTS; }
   uint max_supported_key_length()    const { return FEDERATED_MAX_KEY_LENGTH; }
-  uint max_supported_key_part_length() const { return FEDERATED_MAX_KEY_LENGTH; }
+  uint max_supported_key_part_length(HA_CREATE_INFO
+                    *create_info MY_ATTRIBUTE((unused))) const
+  { return FEDERATED_MAX_KEY_LENGTH; }
   /*
     Called in test_quick_select to determine if indexes should be used.
     Normally, we need to know number of blocks . For federated we need to
@@ -269,5 +278,6 @@ public:
   int connection_autocommit(bool state);
   int execute_simple_query(const char *query, int len);
   int reset(void);
+  int rnd_pos_by_record(uchar *record);
 };
 

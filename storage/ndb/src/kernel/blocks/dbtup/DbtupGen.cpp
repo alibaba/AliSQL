@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -32,20 +39,26 @@
 #include <signaldata/TupCommit.hpp>
 #include <signaldata/TupKey.hpp>
 #include <signaldata/NodeFailRep.hpp>
+#include <signaldata/NodeStateSignalData.hpp>
 
 #include <signaldata/DropTab.hpp>
-#include <SLList.hpp>
+#include <IntrusiveList.hpp>
 
 #include <EventLogger.hpp>
+
+#define JAM_FILE_ID 420
+
 extern EventLogger * g_eventLogger;
 
 #define DEBUG(x) { ndbout << "TUP::" << x << endl; }
 
 void Dbtup::initData() 
 {
-  cnoOfFragrec = MAX_FRAG_PER_NODE;
-  cnoOfFragoprec = MAX_FRAG_PER_NODE;
-  cnoOfAlterTabOps = MAX_FRAG_PER_NODE;
+  TablerecPtr tablePtr;
+  (void)tablePtr; // hide unused warning
+  cnoOfFragrec = NDB_ARRAY_SIZE(tablePtr.p->fragrec);
+  cnoOfFragoprec = NDB_ARRAY_SIZE(tablePtr.p->fragrec);
+  cnoOfAlterTabOps = NDB_ARRAY_SIZE(tablePtr.p->fragrec);
   c_maxTriggersPerTable = ZDEFAULT_MAX_NO_TRIGGERS_PER_TABLE;
   c_noOfBuildIndexRec = 32;
 
@@ -57,11 +70,14 @@ void Dbtup::initData()
   // Records with constant sizes
   init_list_sizes();
   cpackedListIndex = 0;
+
+  m_minFreePages = 0;
 }//Dbtup::initData()
 
 Dbtup::Dbtup(Block_context& ctx, Uint32 instanceNumber)
   : SimulatedBlock(DBTUP, ctx, instanceNumber),
     c_lqh(0),
+    c_backup(0),
     c_tsman(0),
     c_lgman(0),
     c_pgman(0),
@@ -85,7 +101,6 @@ Dbtup::Dbtup(Block_context& ctx, Uint32 instanceNumber)
   addRecSignal(GSN_SEND_PACKED, &Dbtup::execSEND_PACKED, true);
   addRecSignal(GSN_STTOR, &Dbtup::execSTTOR);
   addRecSignal(GSN_MEMCHECKREQ, &Dbtup::execMEMCHECKREQ);
-  addRecSignal(GSN_TUPKEYREQ, &Dbtup::execTUPKEYREQ);
   addRecSignal(GSN_TUPSEIZEREQ, &Dbtup::execTUPSEIZEREQ);
   addRecSignal(GSN_TUPRELEASEREQ, &Dbtup::execTUPRELEASEREQ);
   addRecSignal(GSN_STORED_PROCREQ, &Dbtup::execSTORED_PROCREQ);
@@ -98,6 +113,7 @@ Dbtup::Dbtup(Block_context& ctx, Uint32 instanceNumber)
   addRecSignal(GSN_TUP_ABORTREQ, &Dbtup::execTUP_ABORTREQ);
   addRecSignal(GSN_NDB_STTOR, &Dbtup::execNDB_STTOR);
   addRecSignal(GSN_READ_CONFIG_REQ, &Dbtup::execREAD_CONFIG_REQ, true);
+  addRecSignal(GSN_NODE_STATE_REP, &Dbtup::execNODE_STATE_REP, true);
 
   // Trigger Signals
   addRecSignal(GSN_CREATE_TRIG_IMPL_REQ, &Dbtup::execCREATE_TRIG_IMPL_REQ);
@@ -185,7 +201,7 @@ Dbtup::Dbtup(Block_context& ctx, Uint32 instanceNumber)
   { // 7
     CallbackEntry& ce = m_callbackEntry[DISK_PAGE_LOG_BUFFER_CALLBACK];
     ce.m_function = safe_cast(&Dbtup::disk_page_log_buffer_callback);
-    ce.m_flags = 0;
+    ce.m_flags = CALLBACK_ACK;
   }
   {
     CallbackTable& ct = m_callbackTable;
@@ -356,6 +372,7 @@ void Dbtup::execSTTOR(Signal* signal)
   case ZSTARTPHASE1:
     jam();
     ndbrequire((c_lqh= (Dblqh*)globalData.getBlock(DBLQH, instance())) != 0);
+    ndbrequire((c_backup= (Backup*)globalData.getBlock(BACKUP, instance())) != 0);
     ndbrequire((c_tsman= (Tsman*)globalData.getBlock(TSMAN)) != 0);
     ndbrequire((c_lgman= (Lgman*)globalData.getBlock(LGMAN)) != 0);
     ndbrequire((c_pgman= (Pgman*)globalData.getBlock(PGMAN, instance())) != 0);
@@ -497,7 +514,15 @@ void Dbtup::execREAD_CONFIG_REQ(Signal* signal)
   }
   
   initialiseRecordsLab(signal, 0, ref, senderData);
-}//Dbtup::execSIZEALT_REP()
+
+  {
+    Uint32 val = 0;
+    ndb_mgm_get_int_parameter(p, CFG_DB_CRASH_ON_CORRUPTED_TUPLE,
+                              &val);
+    c_crashOnCorruptedTuple = val ? true : false;
+  }
+
+}
 
 void Dbtup::initRecords() 
 {
@@ -642,7 +667,6 @@ void Dbtup::execNDB_STTOR(Signal* signal)
     break;
   case ZSTARTPHASE3:
     jam();
-    startphase3Lab(signal, ~0, ~0);
     break;
   case ZSTARTPHASE4:
     jam();
@@ -659,10 +683,6 @@ void Dbtup::execNDB_STTOR(Signal* signal)
   sendSignal(cntrRef, GSN_NDB_STTORRY, signal, 1, JBB);
 }//Dbtup::execNDB_STTOR()
 
-void Dbtup::startphase3Lab(Signal* signal, Uint32 config1, Uint32 config2) 
-{
-}//Dbtup::startphase3Lab()
-
 void Dbtup::initializeDefaultValuesFrag()
 {
   /* Grab and initialize a fragment record for storing default
@@ -674,7 +694,8 @@ void Dbtup::initializeDefaultValuesFrag()
   DefaultValuesFragment.p->m_lcp_scan_op = RNIL;
   DefaultValuesFragment.p->noOfPages = 0;
   DefaultValuesFragment.p->noOfVarPages = 0;
-  DefaultValuesFragment.p->m_max_page_no = 0;
+  DefaultValuesFragment.p->m_varWordsFree = 0;
+  DefaultValuesFragment.p->m_max_page_cnt = 0;
   DefaultValuesFragment.p->m_free_page_id_list = FREE_PAGE_RNIL;
   ndbrequire(DefaultValuesFragment.p->m_page_map.isEmpty());
   DefaultValuesFragment.p->m_restore_lcp_id = RNIL;
@@ -764,7 +785,7 @@ void Dbtup::initializeTablerec()
 void
 Dbtup::initTab(Tablerec* const regTabPtr)
 {
-  for (Uint32 i = 0; i < MAX_FRAG_PER_NODE; i++) {
+  for (Uint32 i = 0; i < NDB_ARRAY_SIZE(regTabPtr->fragid); i++) {
     regTabPtr->fragid[i] = RNIL;
     regTabPtr->fragrec[i] = RNIL;
   }//for
@@ -793,21 +814,21 @@ Dbtup::initTab(Tablerec* const regTabPtr)
 
   // Clear trigger data
   if (!regTabPtr->afterInsertTriggers.isEmpty())
-    regTabPtr->afterInsertTriggers.release();
+    while (regTabPtr->afterInsertTriggers.releaseFirst());
   if (!regTabPtr->afterDeleteTriggers.isEmpty())
-    regTabPtr->afterDeleteTriggers.release();
+    while (regTabPtr->afterDeleteTriggers.releaseFirst());
   if (!regTabPtr->afterUpdateTriggers.isEmpty())
-    regTabPtr->afterUpdateTriggers.release();
+    while (regTabPtr->afterUpdateTriggers.releaseFirst());
   if (!regTabPtr->subscriptionInsertTriggers.isEmpty())
-    regTabPtr->subscriptionInsertTriggers.release();
+    while (regTabPtr->subscriptionInsertTriggers.releaseFirst());
   if (!regTabPtr->subscriptionDeleteTriggers.isEmpty())
-    regTabPtr->subscriptionDeleteTriggers.release();
+    while (regTabPtr->subscriptionDeleteTriggers.releaseFirst());
   if (!regTabPtr->subscriptionUpdateTriggers.isEmpty())
-    regTabPtr->subscriptionUpdateTriggers.release();
+    while (regTabPtr->subscriptionUpdateTriggers.releaseFirst());
   if (!regTabPtr->constraintUpdateTriggers.isEmpty())
-    regTabPtr->constraintUpdateTriggers.release();
+    while (regTabPtr->constraintUpdateTriggers.releaseFirst());
   if (!regTabPtr->tuxCustomTriggers.isEmpty())
-    regTabPtr->tuxCustomTriggers.release();
+    while (regTabPtr->tuxCustomTriggers.releaseFirst());
 }//Dbtup::initTab()
 
 void Dbtup::initializeTabDescr() 
@@ -846,13 +867,13 @@ void Dbtup::execTUPSEIZEREQ(Signal* signal)
 
   new (regOperPtr.p) Operationrec();
   regOperPtr.p->m_any_value = 0;
-  regOperPtr.p->op_struct.op_type = ZREAD;
-  regOperPtr.p->op_struct.in_active_list = false;
+  regOperPtr.p->op_type = ZREAD;
+  regOperPtr.p->op_struct.bit_field.in_active_list = false;
   set_trans_state(regOperPtr.p, TRANS_DISCONNECTED);
   regOperPtr.p->prevActiveOp = RNIL;
   regOperPtr.p->nextActiveOp = RNIL;
-  regOperPtr.p->tupVersion = ZNIL;
-  regOperPtr.p->op_struct.delete_insert_flag = false;
+  regOperPtr.p->op_struct.bit_field.tupVersion = ZNIL;
+  regOperPtr.p->op_struct.bit_field.delete_insert_flag = false;
   
   initOpConnection(regOperPtr.p);
   regOperPtr.p->userpointer = userPtr;
@@ -862,7 +883,7 @@ void Dbtup::execTUPSEIZEREQ(Signal* signal)
   return;
 }//Dbtup::execTUPSEIZEREQ()
 
-#define printFragment(t){ for(Uint32 i = 0; i < MAX_FRAG_PER_NODE;i++){\
+#define printFragment(t){ for(Uint32 i = 0; i < NDB_ARRAY_SIZE(t.p->fragid);i++){ \
   ndbout_c("table = %d fragid[%d] = %d fragrec[%d] = %d", \
            t.i, t.p->fragid[i], i, t.p->fragrec[i]); }}
 
@@ -907,3 +928,31 @@ void Dbtup::execNODE_FAILREP(Signal* signal)
   }//for
 }
 
+extern Uint32 compute_acc_32kpages(const ndb_mgm_configuration_iterator * p);
+
+void
+Dbtup::execNODE_STATE_REP(Signal* signal)
+{
+  jamEntry();
+  const NodeStateRep* rep = CAST_CONSTPTR(NodeStateRep,
+                                          signal->getDataPtr());
+
+  if (rep->nodeState.startLevel == NodeState::SL_STARTED)
+  {
+    jam();
+
+    const ndb_mgm_configuration_iterator * p =
+      m_ctx.m_config.getOwnConfigIterator();
+    ndbrequire(p != 0);
+
+    Uint32 free_pct = 5;
+    ndb_mgm_get_int_parameter(p, CFG_DB_FREE_PCT, &free_pct);
+
+    Uint32 accpages = compute_acc_32kpages(p);
+
+    Resource_limit rl;
+    m_ctx.m_mm.get_resource_limit(RG_DATAMEM, rl);
+    m_minFreePages = ((rl.m_min - accpages) * free_pct) / 100;
+  }
+  SimulatedBlock::execNODE_STATE_REP(signal);
+}

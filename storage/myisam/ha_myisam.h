@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -38,6 +45,14 @@ extern ulonglong myisam_recover_options;
 C_MODE_START
 ICP_RESULT index_cond_func_myisam(void *arg);
 C_MODE_END
+
+class Myisam_handler_share: public Handler_share
+{
+public:
+  Myisam_handler_share() : m_share(NULL) {}
+  ~Myisam_handler_share() {}
+  struct st_mi_isam_share *m_share;
+};
 
 class ha_myisam: public handler
 {
@@ -75,7 +90,9 @@ class ha_myisam: public handler
   }
   uint max_supported_keys()          const { return MI_MAX_KEY; }
   uint max_supported_key_length()    const { return MI_MAX_KEY_LENGTH; }
-  uint max_supported_key_part_length() const { return MI_MAX_KEY_LENGTH; }
+  uint max_supported_key_part_length(HA_CREATE_INFO
+                    *create_info MY_ATTRIBUTE((unused))) const
+  { return MI_MAX_KEY_LENGTH; }
   uint checksum() const;
 
   int open(const char *name, int mode, uint test_if_locked);
@@ -104,14 +121,13 @@ class ha_myisam: public handler
   FT_INFO *ft_init_ext(uint flags, uint inx,String *key)
   {
     return ft_init_search(flags,file,inx,
-                          (uchar *)key->ptr(), key->length(), key->charset(),
-                          table->record[0]);
+                          (uchar *)key->ptr(), (uint)key->length(),
+                          key->charset(), table->record[0]);
   }
   int ft_read(uchar *buf);
   int rnd_init(bool scan);
   int rnd_next(uchar *buf);
   int rnd_pos(uchar * buf, uchar *pos);
-  int restart_rnd_next(uchar *buf, uchar *pos);
   void position(const uchar *record);
   int info(uint);
   int extra(enum ha_extra_function operation);
@@ -147,13 +163,11 @@ class ha_myisam: public handler
   int assign_to_keycache(THD* thd, HA_CHECK_OPT* check_opt);
   int preload_keys(THD* thd, HA_CHECK_OPT* check_opt);
   bool check_if_incompatible_data(HA_CREATE_INFO *info, uint table_changes);
-#ifdef HAVE_QUERY_CACHE
   my_bool register_query_cache_table(THD *thd, char *table_key,
-                                     uint key_length,
+                                     size_t key_length,
                                      qc_engine_callback
                                      *engine_callback,
                                      ulonglong *engine_data);
-#endif
   MI_INFO *file_ptr(void)
   {
     return file;

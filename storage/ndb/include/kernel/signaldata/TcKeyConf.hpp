@@ -1,15 +1,21 @@
 /*
-   Copyright (C) 2003-2007 MySQL AB
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -21,6 +27,9 @@
 
 #include "SignalData.hpp"
 
+#define JAM_FILE_ID 58
+
+
 /**
  * 
  */
@@ -28,10 +37,12 @@ class TcKeyConf {
   /**
    * Reciver(s)
    */
-  friend class Ndb;
+  friend class NdbImpl;
   friend class NdbTransaction;
   friend class Ndbcntr;
   friend class DbUtil;
+
+  friend class TransporterFacade;
 
   /**
    * Sender(s)
@@ -51,9 +62,8 @@ public:
   STATIC_CONST( StaticLength = 5 );
   STATIC_CONST( OperationLength = 2 );
   STATIC_CONST( DirtyReadBit = (((Uint32)1) << 31) );
-  
-private:
 
+protected:
   /**
    * DATA VARIABLES
    */
@@ -76,7 +86,7 @@ private:
   // No of actually sent = getNoOfOperations(confInfo)
   //-------------------------------------------------------------
   OperationConf operations[10];
-  
+
   /**
    * Get:ers for confInfo
    */
@@ -131,5 +141,8 @@ TcKeyConf::setMarkerFlag(Uint32 & confInfo, Uint32 flag){
   ASSERT_BOOL(flag, "TcKeyConf::setMarkerFlag");
   confInfo |= (flag << 17);
 }
+
+
+#undef JAM_FILE_ID
 
 #endif

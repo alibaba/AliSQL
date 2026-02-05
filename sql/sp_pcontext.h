@@ -1,14 +1,21 @@
 /* -*- C++ -*- */
-/* Copyright (c) 2002, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2002, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
@@ -17,10 +24,11 @@
 #ifndef _SP_PCONTEXT_H_
 #define _SP_PCONTEXT_H_
 
-#include "sql_string.h"                         // LEX_STRING
+#include "my_global.h"
+#include "mysql/mysql_lex_string.h"             // LEX_STRING
 #include "mysql_com.h"                          // enum_field_types
 #include "field.h"                              // Create_field
-#include "sql_array.h"                          // Dynamic_array
+#include "mem_root_array.h"                     // Mem_root_array
 
 
 /// This class represents a stored program variable or a parameter
@@ -165,8 +173,13 @@ public:
    :Sql_alloc(),
     type(_type)
   {
-    DBUG_ASSERT(type != ERROR_CODE && type != SQLSTATE);
+    assert(type != ERROR_CODE && type != SQLSTATE);
   }
+
+  /// Print a condition_value in human-readable form.
+  ///
+  /// @param str The variable to print to.
+  void print(String *str) const;
 
   /// Check if two instances of sp_condition_value are equal or not.
   ///
@@ -220,7 +233,7 @@ public:
   sp_pcontext *scope;
 
   /// Conditions caught by this handler.
-  List<sp_condition_value> condition_values;
+  List<const sp_condition_value> condition_values;
 
 public:
   /// The constructor.
@@ -232,6 +245,16 @@ public:
     type(_type),
     scope(_scope)
   { }
+
+  /// Print all conditions of a handler in human-readable form.
+  ///
+  /// @param str The variable to print to.
+  void print_conditions(String *str) const;
+
+  /// Print type and conditions (but not body) of a handler.
+  ///
+  /// @param str The variable to print to.
+  void print(String *str) const;
 };
 
 ///////////////////////////////////////////////////////////////////////////
@@ -272,7 +295,7 @@ public:
   };
 
 public:
-  sp_pcontext();
+  sp_pcontext(THD *thd);
   ~sp_pcontext();
 
 
@@ -303,7 +326,7 @@ public:
   /// this one.  If 'exclusive' is true, don't count the last scope we are
   /// leaving; this is used for LEAVE where we will jump to the hpop
   /// instructions.
-  uint diff_handlers(const sp_pcontext *ctx, bool exclusive) const;
+  size_t diff_handlers(const sp_pcontext *ctx, bool exclusive) const;
 
   /// Calculate and return the number of cursors to pop between the given
   /// context and this one.
@@ -315,7 +338,7 @@ public:
   /// this one.  If 'exclusive' is true, don't count the last scope we are
   /// leaving; this is used for LEAVE where we will jump to the cpop
   /// instructions.
-  uint diff_cursors(const sp_pcontext *ctx, bool exclusive) const;
+  size_t diff_cursors(const sp_pcontext *ctx, bool exclusive) const;
 
   /////////////////////////////////////////////////////////////////////////
   // SP-variables (parameters and variables).
@@ -330,11 +353,11 @@ public:
   /// @return the current number of variables used in the parent contexts
   /// (from the root), including this context.
   uint current_var_count() const
-  { return m_var_offset + m_vars.elements(); }
+  { return m_var_offset + static_cast<uint>(m_vars.size()); }
 
   /// @return the number of variables in this context alone.
   uint context_var_count() const
-  { return m_vars.elements(); }
+  { return static_cast<uint>(m_vars.size()); }
 
   /// @return map index in this parsing context to runtime offset.
   uint var_context2runtime(uint i) const
@@ -399,17 +422,17 @@ public:
 
   int push_case_expr_id()
   {
-    if (m_case_expr_ids.append(m_num_case_exprs))
+    if (m_case_expr_ids.push_back(m_num_case_exprs))
       return -1;
 
     return m_num_case_exprs++;
   }
 
   void pop_case_expr_id()
-  { m_case_expr_ids.pop(); }
+  { m_case_expr_ids.pop_back(); }
 
   int get_current_case_expr_id() const
-  { return *m_case_expr_ids.back(); }
+  { return m_case_expr_ids.back(); }
 
   /////////////////////////////////////////////////////////////////////////
   // Labels.
@@ -470,12 +493,12 @@ public:
   ///
   /// @param sql_state        The SQL condition state
   /// @param sql_errno        The error code
-  /// @param level            The SQL condition level
+  /// @param severity         The SQL condition severity level
   ///
   /// @return a pointer to the found SQL-handler or NULL.
   sp_handler *find_handler(const char *sql_state,
                            uint sql_errno,
-                           Sql_condition::enum_warning_level level) const;
+                           Sql_condition::enum_severity_level severity) const;
 
   /////////////////////////////////////////////////////////////////////////
   // Cursors.
@@ -490,16 +513,17 @@ public:
   const LEX_STRING *find_cursor(uint offset) const;
 
   uint max_cursor_index() const
-  { return m_max_cursor_index + m_cursors.elements(); }
+  { return m_max_cursor_index + static_cast<uint>(m_cursors.size()); }
 
   uint current_cursor_count() const
-  { return m_cursor_offset + m_cursors.elements(); }
+  { return m_cursor_offset + static_cast<uint>(m_cursors.size()); }
 
 private:
   /// Constructor for a tree node.
+  /// @param thd  thread context
   /// @param prev the parent parsing context
   /// @param scope scope of this parsing context
-  sp_pcontext(sp_pcontext *prev, enum_scope scope);
+  sp_pcontext(THD *thd, sp_pcontext *prev, enum_scope scope);
 
   void init(uint var_offset, uint cursor_offset, int num_case_expressions);
 
@@ -514,7 +538,7 @@ private:
   /// m_max_var_index -- number of variables (including all types of arguments)
   /// in this context including all children contexts.
   ///
-  /// m_max_var_index >= m_vars.elements().
+  /// m_max_var_index >= m_vars.size().
   ///
   /// m_max_var_index of the root parsing context contains number of all
   /// variables (including arguments) in all enclosed contexts.
@@ -546,25 +570,25 @@ private:
   int m_num_case_exprs;
 
   /// SP parameters/variables.
-  Dynamic_array<sp_variable *> m_vars;
+  Mem_root_array<sp_variable *, true> m_vars;
 
   /// Stack of CASE expression ids.
-  Dynamic_array<int> m_case_expr_ids;
+  Mem_root_array<int, true> m_case_expr_ids;
 
   /// Stack of SQL-conditions.
-  Dynamic_array<sp_condition *> m_conditions;
+  Mem_root_array<sp_condition *, true> m_conditions;
 
   /// Stack of cursors.
-  Dynamic_array<LEX_STRING> m_cursors;
+  Mem_root_array<LEX_STRING, true> m_cursors;
 
   /// Stack of SQL-handlers.
-  Dynamic_array<sp_handler *> m_handlers;
+  Mem_root_array<sp_handler *, true> m_handlers;
 
   /// List of labels.
   List<sp_label> m_labels;
 
   /// Children contexts, used for destruction.
-  Dynamic_array<sp_pcontext *> m_children;
+  Mem_root_array<sp_pcontext *, true> m_children;
 
   /// Scope of this parsing context.
   enum_scope m_scope;

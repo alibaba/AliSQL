@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -31,6 +38,7 @@
 #include <NdbApi.hpp>
 #include <NdbDictionary.hpp>
 #include <ndb_rand.h>
+#include "../../src/ndbapi/ndb_cluster_connection_impl.hpp"
 
 class NDBT_Step;
 class NDBT_TestCase;
@@ -100,6 +108,17 @@ public:
    */
   void sync_down(const char * key);
   void sync_up_and_wait(const char * key, Uint32 count = 0);
+
+  /**
+   * safety for slow machines...
+   * 0 means no safety
+   */
+  bool closeToTimeout(int safety_percent = 0);
+
+  /**
+   * Get config by beeing friend to ndb_cluster_connection_impl - ugly
+   */
+  NdbApiConfig const& getConfig() const;
 private:
   friend class NDBT_Step;
   friend class NDBT_TestSuite;
@@ -120,6 +139,9 @@ private:
   Properties props;
   NdbMutex* propertyMutexPtr;
   NdbCondition* propertyCondPtr;
+
+  int m_env_timeout;
+  Uint64 m_test_start_time;
 };
 
 typedef int (NDBT_TESTFUNC)(NDBT_Context*, NDBT_Step*);
@@ -259,17 +281,17 @@ static const int FAILED_TO_DISCOVER = 1001;
 
 class NDBT_TestCaseResult{
 public: 
-  NDBT_TestCaseResult(const char* name, int _result, NDB_TICKS _ticks):
+  NDBT_TestCaseResult(const char* name, int _result, Uint64 _elapsed):
     m_result(_result){
     m_name.assign(name); 
-    m_ticks = _ticks;
+    m_elapsed = _elapsed;
     
   };
   const char* getName(){return m_name.c_str(); };
   int getResult(){return m_result; };
   const char* getTimeStr(){
-      // Convert to Uint32 in order to be able to print it to screen
-    Uint32 lapTime = (Uint32)m_ticks;
+    // Convert to Uint32 in order to be able to print it to screen
+    Uint32 lapTime = (Uint32)m_elapsed;
     Uint32 secTime = lapTime/1000;
     BaseString::snprintf(buf, 255, "%d secs (%d ms)", secTime, lapTime);
     return buf;
@@ -278,7 +300,7 @@ private:
   char buf[255];
   int m_result;
   BaseString m_name;
-  NDB_TICKS m_ticks;
+  Uint64 m_elapsed;  // Milliseconds
 };
 
 class NDBT_TestCaseImpl1 : public NDBT_TestCase {
@@ -367,12 +389,13 @@ public:
   /**
    * Returns current date and time in the format of 2002-12-04 10:00:01
    */
-  const char* getDate();
+  const char* getDate(char* str, size_t len);
 
   // Returns true if timing info should be printed
   bool timerIsOn();
 
   int addTest(NDBT_TestCase* pTest);
+  int addExplicitTest(NDBT_TestCase* pTest);
 
   // Table create tweaks
   int createHook(Ndb*, NdbDictionary::Table&, int when);
@@ -400,6 +423,9 @@ private:
   void execute(Ndb_cluster_connection&,
 	       const NdbDictionary::Table*, const char* testname = NULL);
 
+  void execute(Ndb_cluster_connection&, NDBT_TestCase*,
+               const NdbDictionary::Table * pTab);
+
   int report(const char* _tcname = NULL);
   int reportAllTables(const char* );
   const char* name;
@@ -408,6 +434,9 @@ private:
   int numTestsFail;
   int numTestsExecuted;
   Vector<NDBT_TestCase*> tests;
+  Vector<NDBT_TestCase*> explicitTests;
+  NDBT_TestCase * findTest(const char * name, bool explicitOK = true);
+
   NDBT_Context* ctx;
   int records;
   int loops;
@@ -445,6 +474,10 @@ C##suitname():NDBT_TestSuite(#suitname){ \
 #define TESTCASE(testname, comment) \
   pt = new NDBT_TestCaseImpl1(this, testname, comment); \
   addTest(pt);
+
+#define X_TESTCASE(testname, comment) \
+  pt = new NDBT_TestCaseImpl1(this, testname, comment); \
+  addExplicitTest(pt);
 
 // The driver type to use for a particular testcase
 #define TESTCASE_DRIVER(type) \

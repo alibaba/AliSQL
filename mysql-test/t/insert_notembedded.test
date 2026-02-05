@@ -1,19 +1,13 @@
+# The include statement below is a temp one for tests that are yet to
+#be ported to run with InnoDB,
+#but needs to be kept for tests that would need MyISAM in future.
+--source include/force_myisam_default.inc
+
 -- source include/not_embedded.inc
 
 --disable_warnings
 drop table if exists t1;
 --enable_warnings
-
-# Test for INSERT DELAYED INTO a <view>
-# BUG#13683: INSERT DELAYED into a view creates an infinite loop
-#
-
-create table t1 (n int);
-create view  v1 as select * from t1;
---error 1347
-insert delayed into v1 values (1);
-drop table t1;
-drop view  v1;
 
 #
 # Bug #20989: View '(null).(null)' references invalid table(s)... on
@@ -46,7 +40,10 @@ CREATE ALGORITHM=MERGE SQL SECURITY INVOKER VIEW view_stations AS select table_s
 CREATE TABLE table_source ( id varchar(4), datetime TIMESTAMP, PRIMARY KEY (id));
 INSERT INTO  table_source VALUES ('XXXX','2006-07-12 07:50:00');
 
+SET @orig_sql_mode= @@sql_mode;
+SET sql_mode= (select replace(@@sql_mode,'NO_AUTO_CREATE_USER',''));
 GRANT  SELECT                ON table_source    TO   user20989@localhost;
+SET sql_mode= @orig_sql_mode;
 GRANT  SELECT                ON table_countries TO   user20989@localhost;
 GRANT  SELECT                ON table_stations  TO   user20989@localhost;
 GRANT  SELECT                ON view_stations   TO   user20989@localhost;
@@ -153,38 +150,3 @@ connection default;
 
 DROP DATABASE meow;
 
-#
-# Bug#28587 SELECT is blocked by INSERT waiting on read lock, even with low_priority_updates
-#
---echo connection: default
-set low_priority_updates=1;
---disable_warnings
-drop table if exists t1;
---enable_warnings
-create table t1 (a int, b int, unique key t1$a (a));
-lock table t1 read;
-connect (update,localhost,root,,);
-connection update;
---echo connection: update
-set low_priority_updates=1;
-show variables like 'low_priority_updates';
-let $ID= `select connection_id()`;
---send insert into t1 values (1, 2) ON DUPLICATE KEY UPDATE b = 2;
-connection default;
-# we must wait till the insert opens and locks the table
-let $wait_condition=
-  select count(*) = 1 from information_schema.processlist
-  where state = "Waiting for table level lock" and id = $ID;
---source include/wait_condition.inc
-connect (select,localhost,root,,);
---echo connection: select
-select * from t1;
-connection default;
---echo connection: default
-select * from t1;
-connection default;
-disconnect update;
-disconnect select;
-unlock tables;
-drop table t1;
-set low_priority_updates=default;

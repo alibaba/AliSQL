@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -19,6 +26,9 @@
 #define DUMP_STATE_ORD_HPP
 
 #include "SignalData.hpp"
+
+#define JAM_FILE_ID 137
+
 
 /**
  * DumpStateOrd is sent by the mgmtsrvr to CMVMI.
@@ -58,6 +68,12 @@ public:
 
     _BackupMin   = 100000,
     BackupStatus = 100000,
+    BackupMinWriteSpeed32 = 100001,
+    BackupMaxWriteSpeed32 = 100002,
+    BackupMaxWriteSpeedOtherNodeRestart32 = 100003,
+    BackupMinWriteSpeed64 = 100004,
+    BackupMaxWriteSpeed64 = 100005,
+    BackupMaxWriteSpeedOtherNodeRestart64 = 100006,
     _BackupMax   = 100999,
 
     _TCMin       = 101000,
@@ -76,6 +92,7 @@ public:
     DihDumpNodeRestartInfo = 16, // 16 DIH Dump node restart info
     DihDumpNodeStatusInfo = 17,// 17 DIH Dump node status info
     DihPrintFragmentation = 18,// 18 DIH Print fragmentation
+    DihPrintOneFragmentation = 19,// 18 DIH Print info about one fragmentation
     // 19 NDBFS Fipple with O_SYNC, O_CREATE etc.
     // 20-24 BACKUP
     NdbcntrTestStopOnError = 25,
@@ -94,6 +111,7 @@ public:
     CmvmiMaintLockCPU = 505,
     CmvmiSchedulerSpinTimer = 506,
     // 1222-1225 DICT
+    DictDumpLockQueue = 1228,
     LqhDumpAllDefinedTabs = 1332,
     LqhDumpNoLogPages = 1333,
     LqhDumpOneScanRec = 2300,
@@ -101,6 +119,8 @@ public:
     LqhDumpAllActiveScanRec = 2302,
     LqhDumpLcpState = 2303,
     LqhErrorInsert5042 = 2315,
+    LqhDumpPoolLevels = 2353,
+    LqhReportCopyInfo = 2354,
 
     AccDumpOneScanRec = 2400,
     AccDumpAllScanRec = 2401,
@@ -110,17 +130,20 @@ public:
     AccDumpFreeOpRecs = 2405,
     AccDumpNotFreeOpRecs = 2406,
     DumpPageMemory = 1000, // Acc & TUP
-    TcDumpAllScanFragRec = 2500,
+    TcDumpSetOfScanFragRec = 2500,
     TcDumpOneScanFragRec = 2501,
-    TcDumpAllScanRec = 2502,
-    TcDumpAllActiveScanRec = 2503,
+    TcDumpSetOfScanRec = 2502,
     TcDumpOneScanRec = 2504,
     TcDumpOneApiConnectRec = 2505,
-    TcDumpAllApiConnectRec = 2506,
     TcSetTransactionTimeout = 2507,
     TcSetApplTransactionTimeout = 2508,
     TcStartDumpIndexOpCount = 2512,
     TcDumpIndexOpCount = 2513,
+    TcDumpApiConnectRecSummary = 2514,
+    TcDumpSetOfApiConnectRec = 2515,
+    TcDumpOneTcConnectRec = 2516,
+    TcDumpSetOfTcConnectRec = 2517,
+    TcDumpPoolLevels = 2555,
     CmvmiDumpConnections = 2600,
     CmvmiDumpLongSignalMemory = 2601,
     CmvmiSetRestartOnErrorInsert = 2602,
@@ -131,6 +154,12 @@ public:
                                       in clusterlog */
     CmvmiTestLongSig = 2605,  /* Long signal testing trigger */
     DumpEventLog = 2606,
+
+    CmvmiLongSignalMemorySnapshotStart = 2607,
+    CmvmiLongSignalMemorySnapshot = 2608,
+    CmvmiLongSignalMemorySnapshotCheck = 2609,
+    CmvmiSetKillerWatchdog = 2610,
+
     LCPContinue = 5900,
     // 7000 DIH
     // 7001 DIH
@@ -152,9 +181,28 @@ public:
     DihAllAllowNodeStart = 7016,
     DihMinTimeBetweenLCP = 7017,
     DihMaxTimeBetweenLCP = 7018,
-    // 7019
+    // Check if blocks are done with handling the failure of another node.
+    DihTcSumaNodeFailCompleted = 7019, // DIH+TC+SUMA
     // 7020
     // 7021
+    // 7022
+    // 7023
+    /*
+      Checks whether add frag failure was cleaned up.
+      Should NOT be used while commands involving addFragReq
+      are being performed.
+      NB: This value is only intended for use in test cases. If used 
+      interactively, it is likely to crash the node. It should therefore
+      *not* be described in end-user documentation.
+    */
+    DihAddFragFailCleanedUp = 7024,
+    /**
+     * Allows GCP stop thresholds to be set
+     */
+    DihSetGcpStopVals = 7026,
+    DihDumpPageRecInfo = 7032,
+    DihFragmentsPerNode = 7033,
+    DihDisplayPauseState = 7034,
     EnableUndoDelayDataWrite = 7080, // DIH+ACC+TUP
     DihSetTimeBetweenGcp = 7090,
     DihStartLcpImmediately = 7099,
@@ -178,11 +226,19 @@ public:
     DbinfoScanTable = 14003,
 
     SchemaResourceSnapshot = 4000, // Save resource consumption
-    SchemaResourceCheckLeak = 4001 // check same as snapshot
+    SchemaResourceCheckLeak = 4001, // check same as snapshot
+
+    TcResourceSnapshot = 2553,
+    TcResourceCheckLeak = 2554,
+
+    RestoreRates = 30000
   };
 public:
   
   Uint32 args[25];          // Generic argument
 };
+
+
+#undef JAM_FILE_ID
 
 #endif

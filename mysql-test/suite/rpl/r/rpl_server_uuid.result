@@ -16,20 +16,16 @@ include/sync_slave_sql_with_master.inc
 # Master's UUID appears in the result of 'SHOW SLAVE STATUS'.
 # Slave's UUID appears in the result of 'SHOW SLAVE HOSTS'.
 -----------------------------------------------------------------------------
-SHOW SLAVE HOSTS;
-Server_id	Host	Port	Master_id	Slave_UUID
-2	127.0.0.1	SLAVE_PORT	1	SLAVE_UUID
-include/check_slave_param.inc [Master_UUID]
+include/assert.inc ["Slave's SHOW SLAVE HOST should contain the correct value for master's server_uuid]
+include/assert.inc [Master's SHOW SLAVE HOSTS should contain the correct value for slave's server_uuid]
 
 # Case 2: 
 # After executing 'STOP SLAVE [IO_THREAD|SQL_THREAD]' successfully, Master's UUID
 # is still kept into Slave status.
 -----------------------------------------------------------------------------
-STOP SLAVE IO_THREAD;
-include/wait_for_slave_io_to_stop.inc
+include/stop_slave_io.inc
 include/check_slave_param.inc [Slave_IO_Running]
-STOP SLAVE SQL_THREAD;
-include/wait_for_slave_sql_to_stop.inc
+include/stop_slave_sql.inc
 include/check_slave_param.inc [Slave_SQL_Running]
 include/start_slave.inc
 include/stop_slave.inc
@@ -51,6 +47,7 @@ MASTER_PORT= MASTER_PORT,
 MASTER_USER= 'root',
 MASTER_LOG_FILE='master-bin.000001';
 Warnings:
+Warning	####	CHANGE MASTER TO with a MASTER_LOG_FILE clause but no MASTER_LOG_POS clause may not be safe. The old position value may not be valid for the new binary log file.
 Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
 Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
 include/start_slave.inc
@@ -65,7 +62,7 @@ include/rpl_restart_server.inc [server_number=1]
 # Master's UUID and server_id will not be cleared if both master_port
 # and master_host are not changed.
 -----------------------------------------------------------------------------
-START SLAVE IO_THREAD;
+include/start_slave_io.inc
 include/wait_for_slave_param.inc [Master_UUID]
 include/stop_slave.inc
 
@@ -75,7 +72,7 @@ include/check_slave_param.inc [Master_UUID]
 include/check_slave_param.inc [Master_Server_Id]
 CHANGE MASTER TO MASTER_PORT= MASTER_PORT,
 MASTER_LOG_FILE= 'MASTER_LOG_FILE', MASTER_LOG_POS= MASTER_POS;
-START SLAVE IO_THREAD;
+include/start_slave_io.inc
 include/wait_for_slave_param.inc [Master_UUID]
 
 # Only change MASTER_HOST
@@ -86,7 +83,7 @@ include/check_slave_param.inc [Master_UUID]
 include/check_slave_param.inc [Master_Server_Id]
 CHANGE MASTER TO MASTER_HOST= '127.0.0.1',
 MASTER_LOG_FILE= 'MASTER_LOG_FILE', MASTER_LOG_POS= MASTER_POS;
-START SLAVE IO_THREAD;
+include/start_slave_io.inc
 include/wait_for_slave_param.inc [Master_UUID]
 
 # Both MASTER_HOST and MASTER_PORT are changed
@@ -97,7 +94,7 @@ include/check_slave_param.inc [Master_UUID]
 include/check_slave_param.inc [Master_Server_Id]
 CHANGE MASTER TO MASTER_HOST= '127.0.0.1', MASTER_PORT= MASTER_PORT,
 MASTER_LOG_FILE= 'MASTER_LOG_FILE', MASTER_LOG_POS= MASTER_POS;
-START SLAVE IO_THREAD;
+include/start_slave_io.inc
 include/wait_for_slave_param.inc [Master_UUID]
 
 # Both MASTER_HOST and MASTER_PORT are NOT changed

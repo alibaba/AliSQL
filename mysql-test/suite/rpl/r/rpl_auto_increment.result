@@ -132,6 +132,10 @@ insert into t1 values(600),(NULL),(NULL);
 ERROR 23000: Duplicate entry '600' for key 'PRIMARY'
 set @@insert_id=600;
 insert ignore into t1 values(600),(NULL),(NULL),(610),(NULL);
+Warnings:
+Warning	1062	Duplicate entry '600' for key 'PRIMARY'
+Warning	1062	Duplicate entry '600' for key 'PRIMARY'
+Warning	1062	Duplicate entry '600' for key 'PRIMARY'
 select * from t1;
 a
 1
@@ -189,6 +193,9 @@ a
 32
 42
 drop table t1;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 create table t1 (a tinyint not null auto_increment primary key) engine=myisam;
 insert into t1 values(103);
 set auto_increment_increment=11;
@@ -234,6 +241,7 @@ select * from t3 order by a;
 a
 127
 drop table t1,t2,t3;
+SET sql_mode = default;
 include/sync_slave_sql_with_master.inc
 set auto_increment_increment=1;
 set auto_increment_offset=1;
@@ -259,6 +267,8 @@ DROP TABLE IF EXISTS t2;
 CREATE TABLE t1 (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY) ENGINE=innodb;
 CREATE TABLE t2 (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY) ENGINE=myisam;
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 INSERT INTO t1 VALUES(NULL);
 INSERT INTO t2 VALUES(NULL);
 SELECT * FROM t1;

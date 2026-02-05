@@ -1,0 +1,425 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+#
+# Init
+#
+CREATE TABLE t1(c1 INT NOT NULL PRIMARY KEY, c2 VARCHAR(200)) ENGINE = DUCKDB;
+call dbms_duckdb.query("DROP TABLE test.t1");
+RESULT
+Success	
+BOOLEAN	
+[ Rows: 0]
+
+
+call dbms_duckdb.query("CREATE TABLE test.t1(c1 INT NOT NULL PRIMARY KEY, c2 VARCHAR(200))");
+RESULT
+Count	
+BIGINT	
+[ Rows: 0]
+
+
+include/rpl_sync.inc
+[connection slave]
+call dbms_duckdb.query("DROP TABLE test.t1");
+RESULT
+Success	
+BOOLEAN	
+[ Rows: 0]
+
+
+call dbms_duckdb.query("CREATE TABLE test.t1(c1 INT NOT NULL PRIMARY KEY, c2 VARCHAR(200))");
+RESULT
+Count	
+BIGINT	
+[ Rows: 0]
+
+
+[connection master]
+INSERT INTO t1 VALUES(1, "1"), (2, "2"), (3, "3");
+#
+# Use a single INSERT transaction to trigger duplicate key error at
+# commit, when error happens at DuckDB engine commit, the generated
+# binlog events are truncated from binlog file and the
+# transaction is rolled back.
+#
+[connection master1]
+SET debug = "d,duckdb_prepare_skip_flush";
+SET debug_sync = "after_binlog_sync SIGNAL binlog_flushed WAIT_FOR continue";
+INSERT INTO t1 VALUES(3, "duplicate key");
+[connection master]
+
+# mysqlbinlog can see the events.
+include/mysqlbinlog.inc
+/*!50530 SET @@SESSION.PSEUDO_SLAVE_MODE=1*/;
+/*!50003 SET @OLD_COMPLETION_TYPE=@@COMPLETION_TYPE,COMPLETION_TYPE=0*/;
+DELIMITER /*!*/;
+ROLLBACK/*!*/;
+SET @@SESSION.GTID_NEXT= '#'/*!*/;
+SET TIMESTAMP=#/*!*/;
+SET @@session.pseudo_thread_id=#/*!*/;
+SET @@session.foreign_key_checks=1, @@session.sql_auto_is_null=0, @@session.unique_checks=1, @@session.autocommit=1/*!*/;
+SET @@session.sql_mode=1436549152/*!*/;
+SET @@session.auto_increment_increment=1, @@session.auto_increment_offset=1/*!*/;
+/*!\C utf8mb4 *//*!*/;
+SET @@session.character_set_client=45,@@session.collation_connection=45,@@session.collation_server=33/*!*/;
+SET @@session.lc_time_names=0/*!*/;
+SET @@session.collation_database=DEFAULT/*!*/;
+BEGIN
+/*!*/;
+use `test`/*!*/;
+SET TIMESTAMP=#/*!*/;
+INSERT INTO t1 VALUES(3, "duplicate key")
+/*!*/;
+COMMIT/*!*/;
+SET @@SESSION.GTID_NEXT= '#' /* added by mysqlbinlog */ /*!*/;
+DELIMITER ;
+# End of log file
+/*!50003 SET COMPLETION_TYPE=@OLD_COMPLETION_TYPE*/;
+/*!50530 SET @@SESSION.PSEUDO_SLAVE_MODE=0*/;
+
+SET debug_sync = "now SIGNAL continue";
+[connection master1]
+ERROR HY000: [DuckDB] DuckDB commit transaction error. Duplicate key "c1: 3" violates primary key constraint.
+SELECT * FROM t1;
+c1	c2
+1	1
+2	2
+3	3
+
+# The binlog events is truncated.
+include/mysqlbinlog.inc
+/*!50530 SET @@SESSION.PSEUDO_SLAVE_MODE=1*/;
+/*!50003 SET @OLD_COMPLETION_TYPE=@@COMPLETION_TYPE,COMPLETION_TYPE=0*/;
+DELIMITER /*!*/;
+ROLLBACK/*!*/;
+SET @@SESSION.GTID_NEXT= '#' /* added by mysqlbinlog */ /*!*/;
+DELIMITER ;
+# End of log file
+/*!50003 SET COMPLETION_TYPE=@OLD_COMPLETION_TYPE*/;
+/*!50530 SET @@SESSION.PSEUDO_SLAVE_MODE=0*/;
+
+include/rpl_diff.inc
+[connection master1]
+INSERT INTO t1 VALUES(4, "4");
+SELECT * FROM t1;
+c1	c2
+1	1
+2	2
+3	3
+4	4
+[connection master]
+INSERT INTO t1 VALUES(5, "5");
+SELECT * FROM t1;
+c1	c2
+1	1
+2	2
+3	3
+4	4
+5	5
+SHOW BINLOG EVENTS;
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	4	Format_desc	#	123	Server ver: #.#.#
+master-bin.000001	123	Previous_gtids	#	154	
+master-bin.000001	154	Gtid	#	219	SET @@SESSION.GTID_NEXT= 'SERVER_UUID:1'
+master-bin.000001	219	Query	#	370	use `test`; CREATE TABLE t1(c1 INT NOT NULL PRIMARY KEY, c2 VARCHAR(200)) ENGINE = DUCKDB
+master-bin.000001	370	Gtid	#	435	SET @@SESSION.GTID_NEXT= 'SERVER_UUID:2'
+master-bin.000001	435	Query	#	514	BEGIN
+master-bin.000001	514	Query	#	637	use `test`; INSERT INTO t1 VALUES(1, "1"), (2, "2"), (3, "3")
+master-bin.000001	637	Xid	#	668	COMMIT /* xid=#*/
+master-bin.000001	668	Gtid	#	733	SET @@SESSION.GTID_NEXT= 'SERVER_UUID:3'
+master-bin.000001	733	Query	#	812	BEGIN
+master-bin.000001	812	Query	#	915	use `test`; INSERT INTO t1 VALUES(4, "4")
+master-bin.000001	915	Xid	#	946	COMMIT /* xid=#*/
+master-bin.000001	946	Gtid	#	1011	SET @@SESSION.GTID_NEXT= 'SERVER_UUID:4'
+master-bin.000001	1011	Query	#	1090	BEGIN
+master-bin.000001	1090	Query	#	1193	use `test`; INSERT INTO t1 VALUES(5, "5")
+master-bin.000001	1193	Xid	#	1224	COMMIT /* xid=#*/
+include/rpl_diff.inc
+#
+# Same to above test but the INSERT in a multiple statement transaction.
+# COMMIT will trigger the duplicate key error.
+# when error happens at DuckDB engine commit, the generated binlog events
+# is truncated from binlog file and the transaction is rolled back.
+#
+[connection master1]
+BEGIN;
+UPDATE t1 SET c2 = "test";
+INSERT INTO t1 VALUES(4, "duplicate key");
+SELECT * FROM t1;
+c1	c2
+1	test
+2	test
+3	test
+4	test
+5	test
+SET debug = "d,duckdb_prepare_skip_flush";
+SET debug_sync = "after_binlog_sync SIGNAL binlog_flushed WAIT_FOR continue";
+COMMIT;
+[connection master]
+SET debug_sync = "now WAIT_FOR binlog_flushed";
+
+# mysqlbinlog can see the events.
+include/mysqlbinlog.inc
+/*!50530 SET @@SESSION.PSEUDO_SLAVE_MODE=1*/;
+/*!50003 SET @OLD_COMPLETION_TYPE=@@COMPLETION_TYPE,COMPLETION_TYPE=0*/;
+DELIMITER /*!*/;
+ROLLBACK/*!*/;
+SET @@SESSION.GTID_NEXT= '#'/*!*/;
+SET TIMESTAMP=#/*!*/;
+SET @@session.pseudo_thread_id=#/*!*/;
+SET @@session.foreign_key_checks=1, @@session.sql_auto_is_null=0, @@session.unique_checks=1, @@session.autocommit=1/*!*/;
+SET @@session.sql_mode=1436549152/*!*/;
+SET @@session.auto_increment_increment=1, @@session.auto_increment_offset=1/*!*/;
+/*!\C utf8mb4 *//*!*/;
+SET @@session.character_set_client=45,@@session.collation_connection=45,@@session.collation_server=33/*!*/;
+SET @@session.lc_time_names=0/*!*/;
+SET @@session.collation_database=DEFAULT/*!*/;
+BEGIN
+/*!*/;
+use `test`/*!*/;
+SET TIMESTAMP=#/*!*/;
+UPDATE t1 SET c2 = "test"
+/*!*/;
+SET TIMESTAMP=#/*!*/;
+INSERT INTO t1 VALUES(4, "duplicate key")
+/*!*/;
+COMMIT/*!*/;
+SET @@SESSION.GTID_NEXT= '#' /* added by mysqlbinlog */ /*!*/;
+DELIMITER ;
+# End of log file
+/*!50003 SET COMPLETION_TYPE=@OLD_COMPLETION_TYPE*/;
+/*!50530 SET @@SESSION.PSEUDO_SLAVE_MODE=0*/;
+
+SET debug_sync = "now SIGNAL continue";
+[connection master1]
+ERROR HY000: [DuckDB] DuckDB commit transaction error. Duplicate key "c1: 4" violates primary key constraint.
+SELECT * FROM t1;
+c1	c2
+1	1
+2	2
+3	3
+4	4
+5	5
+
+# The binlog events is truncated.
+include/mysqlbinlog.inc
+/*!50530 SET @@SESSION.PSEUDO_SLAVE_MODE=1*/;
+/*!50003 SET @OLD_COMPLETION_TYPE=@@COMPLETION_TYPE,COMPLETION_TYPE=0*/;
+DELIMITER /*!*/;
+ROLLBACK/*!*/;
+SET @@SESSION.GTID_NEXT= '#' /* added by mysqlbinlog */ /*!*/;
+DELIMITER ;
+# End of log file
+/*!50003 SET COMPLETION_TYPE=@OLD_COMPLETION_TYPE*/;
+/*!50530 SET @@SESSION.PSEUDO_SLAVE_MODE=0*/;
+
+include/rpl_diff.inc
+FLUSH BINARY LOGS;
+INSERT INTO t1 VALUES(6, "6");
+SELECT * FROM t1;
+c1	c2
+1	1
+2	2
+3	3
+4	4
+5	5
+6	6
+[connection master]
+INSERT INTO t1 VALUES(7, "7");
+SELECT * FROM t1;
+c1	c2
+1	1
+2	2
+3	3
+4	4
+5	5
+6	6
+7	7
+SHOW BINLOG EVENTS IN 'master-bin.000002';
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000002	4	Format_desc	#	123	Server ver: #.#.#
+master-bin.000002	123	Previous_gtids	#	194	SERVER_UUID:1-4
+master-bin.000002	194	Gtid	#	259	SET @@SESSION.GTID_NEXT= 'SERVER_UUID:5'
+master-bin.000002	259	Query	#	338	BEGIN
+master-bin.000002	338	Query	#	441	use `test`; INSERT INTO t1 VALUES(6, "6")
+master-bin.000002	441	Xid	#	472	COMMIT /* xid=# */
+master-bin.000002	472	Gtid	#	537	SET @@SESSION.GTID_NEXT= 'SERVER_UUID:6'
+master-bin.000002	537	Query	#	616	BEGIN
+master-bin.000002	616	Query	#	719	use `test`; INSERT INTO t1 VALUES(7, "7")
+master-bin.000002	719	Xid	#	750	COMMIT /* xid=# */
+include/rpl_diff.inc
+SET debug = "+d,simulate_duckdb_commit_failed";
+INSERT INTO t1 VALUES(9, "9");
+ERROR HY000: [DuckDB] DuckDB commit transaction error. DuckDB COMMIT failed.
+SET debug = "-d,simulate_duckdb_commit_failed";
+SELECT * FROM t1;
+c1	c2
+1	1
+2	2
+3	3
+4	4
+5	5
+6	6
+7	7
+include/rpl_diff.inc
+#
+# Simulate failed to insert duckdb_binlog_position on master
+#
+CALL dbms_duckdb.query("ALTER TABLE mysql.duckdb_binlog_position RENAME TO duckdb_binlog_position_bk");
+RESULT
+Success	
+BOOLEAN	
+[ Rows: 0]
+
+
+INSERT INTO t1 VALUES(8, "8");
+ERROR HY000: [DuckDB] DuckDB commit transaction error. Catalog Error: Table with name duckdb_binlog_position does not exist!
+Did you mean "duckdb_binlog_position_bk"?
+SELECT * FROM t1 WHERE c1 = 8;
+c1	c2
+include/show_binlog_events.inc
+
+# mysqlbinlog can see the events.
+include/mysqlbinlog.inc
+/*!50530 SET @@SESSION.PSEUDO_SLAVE_MODE=1*/;
+/*!50003 SET @OLD_COMPLETION_TYPE=@@COMPLETION_TYPE,COMPLETION_TYPE=0*/;
+DELIMITER /*!*/;
+SET @@SESSION.GTID_NEXT= '#' /* added by mysqlbinlog */ /*!*/;
+DELIMITER ;
+# End of log file
+/*!50003 SET COMPLETION_TYPE=@OLD_COMPLETION_TYPE*/;
+/*!50530 SET @@SESSION.PSEUDO_SLAVE_MODE=0*/;
+
+CALL dbms_duckdb.query("ALTER TABLE mysql.duckdb_binlog_position_bk RENAME TO duckdb_binlog_position");
+RESULT
+Success	
+BOOLEAN	
+[ Rows: 0]
+
+
+SET debug = "-d,simulate_insert_duckdb_binlog_position_failed";
+include/rpl_sync.inc
+#
+# Simulate failed to insert duckdb_binlog_position on slave
+#
+[connection slave]
+CALL dbms_duckdb.query("ALTER TABLE mysql.duckdb_binlog_position RENAME TO duckdb_binlog_position_bk");
+RESULT
+Success	
+BOOLEAN	
+[ Rows: 0]
+
+
+[connection master]
+INSERT INTO t1 VALUES(8, "8");
+[connection slave]
+include/wait_for_slave_sql_error.inc [errno=7593]
+SELECT * FROM t1 WHERE c1 = 8;
+c1	c2
+include/show_binlog_events.inc
+
+# mysqlbinlog can see the events.
+include/mysqlbinlog.inc
+/*!50530 SET @@SESSION.PSEUDO_SLAVE_MODE=1*/;
+/*!50003 SET @OLD_COMPLETION_TYPE=@@COMPLETION_TYPE,COMPLETION_TYPE=0*/;
+DELIMITER /*!*/;
+SET @@SESSION.GTID_NEXT= '#' /* added by mysqlbinlog */ /*!*/;
+DELIMITER ;
+# End of log file
+/*!50003 SET COMPLETION_TYPE=@OLD_COMPLETION_TYPE*/;
+/*!50530 SET @@SESSION.PSEUDO_SLAVE_MODE=0*/;
+
+CALL dbms_duckdb.query("ALTER TABLE mysql.duckdb_binlog_position_bk RENAME TO duckdb_binlog_position");
+RESULT
+Success	
+BOOLEAN	
+[ Rows: 0]
+
+
+include/start_slave_sql.inc
+include/rpl_sync.inc
+SELECT * FROM t1 WHERE c1 = 8;
+c1	c2
+8	8
+include/show_binlog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+slave-bin.000001	#	Query	#	#	BEGIN
+slave-bin.000001	#	Query	#	#	use `test`; INSERT INTO t1 VALUES(8, "8")
+slave-bin.000001	#	Xid	#	#	COMMIT /* XID */
+
+# mysqlbinlog can see the events.
+include/mysqlbinlog.inc
+/*!50530 SET @@SESSION.PSEUDO_SLAVE_MODE=1*/;
+/*!50003 SET @OLD_COMPLETION_TYPE=@@COMPLETION_TYPE,COMPLETION_TYPE=0*/;
+DELIMITER /*!*/;
+SET @@SESSION.GTID_NEXT= '#' /* added by mysqlbinlog */ /*!*/;
+DELIMITER ;
+# End of log file
+/*!50003 SET COMPLETION_TYPE=@OLD_COMPLETION_TYPE*/;
+/*!50530 SET @@SESSION.PSEUDO_SLAVE_MODE=0*/;
+
+#
+# Simulate failed to commit duckdb engine on slave
+#
+include/stop_slave_sql.inc
+SET GLOBAL debug = "+d,simulate_duckdb_commit_failed";
+include/start_slave_sql.inc
+[connection master]
+INSERT INTO t1 VALUES(9, "9");
+[connection slave]
+include/wait_for_slave_sql_error.inc [errno=7593]
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `c1` int(11) NOT NULL,
+  `c2` varchar(200) DEFAULT NULL,
+  PRIMARY KEY (`c1`)
+) ENGINE=DUCKDB DEFAULT CHARSET=utf8
+include/show_binlog_events.inc
+
+# mysqlbinlog can see the events.
+include/mysqlbinlog.inc
+/*!50530 SET @@SESSION.PSEUDO_SLAVE_MODE=1*/;
+/*!50003 SET @OLD_COMPLETION_TYPE=@@COMPLETION_TYPE,COMPLETION_TYPE=0*/;
+DELIMITER /*!*/;
+SET @@SESSION.GTID_NEXT= '#' /* added by mysqlbinlog */ /*!*/;
+DELIMITER ;
+# End of log file
+/*!50003 SET COMPLETION_TYPE=@OLD_COMPLETION_TYPE*/;
+/*!50530 SET @@SESSION.PSEUDO_SLAVE_MODE=0*/;
+
+SET GLOBAL debug = "-d,simulate_duckdb_commit_failed";
+include/start_slave_sql.inc
+include/rpl_sync.inc
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `c1` int(11) NOT NULL,
+  `c2` varchar(200) DEFAULT NULL,
+  PRIMARY KEY (`c1`)
+) ENGINE=DUCKDB DEFAULT CHARSET=utf8
+include/show_binlog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+slave-bin.000001	#	Query	#	#	BEGIN
+slave-bin.000001	#	Query	#	#	use `test`; INSERT INTO t1 VALUES(9, "9")
+slave-bin.000001	#	Xid	#	#	COMMIT /* XID */
+
+# mysqlbinlog can see the events.
+include/mysqlbinlog.inc
+/*!50530 SET @@SESSION.PSEUDO_SLAVE_MODE=1*/;
+/*!50003 SET @OLD_COMPLETION_TYPE=@@COMPLETION_TYPE,COMPLETION_TYPE=0*/;
+DELIMITER /*!*/;
+SET @@SESSION.GTID_NEXT= '#' /* added by mysqlbinlog */ /*!*/;
+DELIMITER ;
+# End of log file
+/*!50003 SET COMPLETION_TYPE=@OLD_COMPLETION_TYPE*/;
+/*!50530 SET @@SESSION.PSEUDO_SLAVE_MODE=0*/;
+
+CALL mtr.add_suppression("Worker 1 failed executing transaction");
+CALL mtr.add_suppression("The SLAVE coordinator and worker threads are stopped");
+[connection master]
+DROP TABLE t1;
+include/rpl_end.inc

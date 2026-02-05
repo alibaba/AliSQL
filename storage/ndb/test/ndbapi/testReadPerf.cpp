@@ -1,15 +1,21 @@
 /*
-   Copyright (C) 2004-2006 MySQL AB, 2008, 2009 Sun Microsystems, Inc.
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2004, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -68,9 +74,9 @@ static
 Parameter 
 g_paramters[] = {
   { "operation",   0, 0, 6 }, // 0 
-  { "range",    1000, 1, ~0 },// 1 no of rows to read
-  { "size",  1000000, 1, ~0 },// 2 rows in tables
-  { "iterations",  3, 1, ~0 },// 3
+  { "range",    1000, 1, UINT_MAX },// 1 no of rows to read
+  { "size",  1000000, 1, UINT_MAX },// 2 rows in tables
+  { "iterations",  3, 1, UINT_MAX },// 3
   { "create_drop", 0, 0, 1 }, // 4
   { "data",        0, 0, 1 }  // 5
 };
@@ -165,10 +171,10 @@ error:
 int
 create_table(){
   NdbDictionary::Dictionary* dict = g_ndb->getDictionary();
-  assert(dict);
+  require(dict);
   if(g_paramters[P_CREATE].value){
     const NdbDictionary::Table * pTab = NDBT_Tables::getTable(g_table);
-    assert(pTab);
+    require(pTab);
     NdbDictionary::Table copy = * pTab;
     copy.setLogging(false);
     if(dict->createTable(copy) != 0){
@@ -201,9 +207,9 @@ create_table(){
   g_tab = dict->getTable(g_table);
   g_i_unique = dict->getIndex(g_unique, g_table);
   g_i_ordered = dict->getIndex(g_ordered, g_table);
-  assert(g_tab);
-  assert(g_i_unique);
-  assert(g_i_ordered);
+  require(g_tab);
+  require(g_i_unique);
+  require(g_i_ordered);
   return 0;
 }
 
@@ -255,7 +261,7 @@ void err(NdbError e){
 int
 run_read(){
   //int iter = g_paramters[P_LOOPS].value;
-  NDB_TICKS start1, stop;
+  Uint64 start1, stop;
   //int sum_time= 0;
   
   const Uint32 rows = g_paramters[P_ROWS].value;
@@ -303,7 +309,7 @@ run_read(){
 	check = pOp->equal(pk, start_row);
 	for(int j = 0; j<g_tab->getNoOfColumns(); j++){
 	  res = pOp->getValue(j);
-	  assert(res);
+	  require(res);
 	}
       }
       break;
@@ -319,7 +325,7 @@ run_read(){
 	check = pOp->equal(pk, start_row);
 	for(int j = 0; j<g_tab->getNoOfColumns(); j++){
 	  res = pOp->getValue(j);
-	  assert(res);
+	  require(res);
 	}
       }
       break;
@@ -354,23 +360,23 @@ run_read(){
       break;
     }
       
-    assert(res);
+    require(res);
     if(check != 0){
       ndbout << pOp->getNdbError() << endl;
       ndbout << pTrans->getNdbError() << endl;
     }
-    assert(check == 0);
+    require(check == 0);
 
     for(int j = 0; j<g_tab->getNoOfColumns(); j++){
       res = pOp->getValue(j);
-      assert(res);
+      require(res);
     }
       
     check = pTrans->execute(NoCommit);
     if(check != 0){
       ndbout << pTrans->getNdbError() << endl;
     }
-    assert(check == 0);
+    require(check == 0);
     if(g_paramters[P_OPER].value >= 4){
       while((check = pSp->nextResult(true)) == 0){
 	cnt++;
@@ -380,11 +386,11 @@ run_read(){
 	err(pTrans->getNdbError());
 	return -1;
       }
-      assert(check == 1);
+      require(check == 1);
       pSp->close();
     }
   }
-  assert(g_paramters[P_OPER].value < 4 || (cnt == range));
+  require(g_paramters[P_OPER].value < 4 || (cnt == range));
   
   pTrans->close();
   

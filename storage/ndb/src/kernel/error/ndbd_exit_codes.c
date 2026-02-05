@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -79,6 +86,7 @@ static const ErrStruct errArray[] =
    {NDBD_EXIT_MEMALLOC, XCE, "Memory allocation failure, "
     "please decrease some configuration parameters"},
    {NDBD_EXIT_BLOCK_JBUFCONGESTION, XIE, "Job buffer congestion"},
+   {NDBD_EXIT_TIME_QUEUE_ZERO, XIE, "Error in zero time queue"},
    {NDBD_EXIT_TIME_QUEUE_SHORT, XIE, "Error in short time queue"},
    {NDBD_EXIT_TIME_QUEUE_LONG, XIE, "Error in long time queue"},
    {NDBD_EXIT_TIME_QUEUE_DELAY, XIE, "Error in time queue, too long delay"},
@@ -143,6 +151,10 @@ static const ErrStruct errArray[] =
    /* TUP */
    {NDBD_EXIT_SR_OUT_OF_DATAMEMORY, XCR,
     "Out of data memory during system restart, please increase DataMemory"},
+
+   /* LQH */
+   {NDBD_EXIT_LCP_SCAN_WATCHDOG_FAIL, XIE,
+    "LCP fragment scan watchdog detected a problem.  Please report a bug."},
 
    /* Ndbfs error messages */
    /* Most codes will have additional info, such as OS error code */
@@ -267,7 +279,7 @@ const char *ndbd_exit_status_message(ndbd_exit_status status)
 
 int ndbd_exit_string(int err_no, char *str, unsigned int size)
 {
-  unsigned int len;
+  size_t len;
 
   ndbd_exit_classification cl;
   ndbd_exit_status st;
@@ -279,8 +291,8 @@ int ndbd_exit_string(int err_no, char *str, unsigned int size)
 
     len = my_snprintf(str, size-1, "%s: %s: %s", msg, st_msg, cl_msg);
     str[size-1]= '\0';
-  
-    return len;
+
+    return (int)len;
   }
   return -1;
 }

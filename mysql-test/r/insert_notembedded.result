@@ -1,10 +1,4 @@
 drop table if exists t1;
-create table t1 (n int);
-create view  v1 as select * from t1;
-insert delayed into v1 values (1);
-ERROR HY000: 'test.v1' is not BASE TABLE
-drop table t1;
-drop view  v1;
 CREATE DATABASE meow;
 CREATE TABLE table_target   ( mexs_id CHAR(8), messzeit TIMESTAMP, PRIMARY KEY (mexs_id));
 CREATE TABLE table_target2  ( mexs_id CHAR(8), messzeit TIMESTAMP, PRIMARY KEY (mexs_id));
@@ -18,7 +12,16 @@ INSERT INTO table_countries VALUES ('YY','Entenhausen');
 CREATE ALGORITHM=MERGE SQL SECURITY INVOKER VIEW view_stations AS select table_stations.mexs_id AS mexs_id, table_stations.icao AS icao, table_stations.country AS landescode from (table_stations join table_countries on((table_stations.country = table_countries.country)));
 CREATE TABLE table_source ( id varchar(4), datetime TIMESTAMP, PRIMARY KEY (id));
 INSERT INTO  table_source VALUES ('XXXX','2006-07-12 07:50:00');
+SET @orig_sql_mode= @@sql_mode;
+SET sql_mode= (select replace(@@sql_mode,'NO_AUTO_CREATE_USER',''));
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 GRANT  SELECT                ON table_source    TO   user20989@localhost;
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
+SET sql_mode= @orig_sql_mode;
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 GRANT  SELECT                ON table_countries TO   user20989@localhost;
 GRANT  SELECT                ON table_stations  TO   user20989@localhost;
 GRANT  SELECT                ON view_stations   TO   user20989@localhost;
@@ -105,23 +108,3 @@ DROP VIEW  view_target2;
 DROP VIEW  view_target3;
 DROP USER  user20989@localhost;
 DROP DATABASE meow;
-connection: default
-set low_priority_updates=1;
-drop table if exists t1;
-create table t1 (a int, b int, unique key t1$a (a));
-lock table t1 read;
-connection: update
-set low_priority_updates=1;
-show variables like 'low_priority_updates';
-Variable_name	Value
-low_priority_updates	ON
-insert into t1 values (1, 2) ON DUPLICATE KEY UPDATE b = 2;;
-connection: select
-select * from t1;
-a	b
-connection: default
-select * from t1;
-a	b
-unlock tables;
-drop table t1;
-set low_priority_updates=default;

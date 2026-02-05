@@ -1,15 +1,21 @@
 /*
-   Copyright (C) 2005-2008 MySQL AB, 2008, 2009 Sun Microsystems, Inc.
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2005, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -21,9 +27,7 @@
 
 #include <SimulatedBlock.hpp>
 
-#include <SLList.hpp>
-#include <DLList.hpp>
-#include <DLFifoList.hpp>
+#include <IntrusiveList.hpp>
 #include <KeyTable.hpp>
 #include <DLHashTable.hpp>
 #include <NodeBitmask.hpp>
@@ -31,8 +35,10 @@
 #include <signaldata/GetTabInfo.hpp>
 
 #include <WOPool.hpp>
-#include <SLFifoList.hpp>
 #include <SafeMutex.hpp>
+
+#define JAM_FILE_ID 339
+
 
 class Lgman : public SimulatedBlock
 {
@@ -69,14 +75,14 @@ protected:
   void execFSREADREF(Signal*);
   void execFSREADCONF(Signal*);
 
-  void execLCP_FRAG_ORD(Signal*);
-  void execEND_LCP_REQ(Signal*);
+  void execEND_LCPREQ(Signal*);
   void execSUB_GCP_COMPLETE_REP(Signal*);
   
   void execSTART_RECREQ(Signal*);
-  void execEND_LCP_CONF(Signal*);
+  void execEND_LCPCONF(Signal*);
 
   void execGET_TABINFOREQ(Signal*);
+  void execCALLBACK_ACK(Signal*);
 
   void sendGET_TABINFOREF(Signal* signal,
 			  GetTabInfoReq * req,
@@ -113,6 +119,7 @@ public:
     Uint32 m_file_size;
     Uint32 m_state;
     Uint32 m_fd; // When speaking to NDBFS
+    Uint64 m_start_lsn;
     
     enum FileState 
     {
@@ -121,16 +128,21 @@ public:
       ,FS_ONLINE      = 0x4   // File is online
       ,FS_OPENING     = 0x8   // File is being opened during SR
       ,FS_SORTING     = 0x10  // Files in group are being sorted
-      ,FS_SEARCHING   = 0x20  // File is being searched for end of log
+      ,FS_SEARCHING   = 0x20  // File is being binary searched for end of log
       ,FS_EXECUTING   = 0x40  // File is used for executing UNDO log
       ,FS_EMPTY       = 0x80  // File is empty (used when online)
       ,FS_OUTSTANDING = 0x100 // File has outstanding request
       ,FS_MOVE_NEXT   = 0x200 // When receiving reply move to next file
+      ,FS_SEARCHING_END   = 0x400  // Searched for end of log, scan
+      ,FS_SEARCHING_FINAL_READ   = 0x800 //Searched for log end, read last page
     };
     
     union {
       struct {
-	Uint32 m_outstanding; // Outstaning pages
+	Uint32 m_outstanding; // Outstanding pages
+        Uint32 m_current_scan_index;
+        Uint32 m_current_scanned_pages;
+        bool m_binary_search_end;
 	Uint64 m_lsn;         // Used when finding log head
       } m_online;
       struct {
@@ -198,8 +210,10 @@ public:
                                   Logfile_group::LG_CUT_LOG_THREAD |
                                   Logfile_group::LG_WAITERS_THREAD |
                                   Logfile_group::LG_FLUSH_THREAD;
-    
-    Uint64 m_last_lsn;
+   
+    Uint32 m_applied;
+
+    Uint64 m_next_lsn;
     Uint64 m_last_sync_req_lsn; // Outstanding
     Uint64 m_last_synced_lsn;   // 
     Uint64 m_max_sync_req_lsn;  // User requested lsn
@@ -211,6 +225,7 @@ public:
     
     Buffer_idx m_tail_pos[3]; // 0 is cut, 1 is saved, 2 is current
     Buffer_idx m_file_pos[2]; // 0 tail, 1 head = { file_ptr_i, page_no }
+    Buffer_idx m_consumer_file_pos;
     Uint64 m_free_file_words; // Free words in logfile group 
     
     Undofile_list::Head m_files;     // Files in log
@@ -261,12 +276,16 @@ private:
 
   /**
    * Alloc/free space in log
-   *   Alloction will be removed at either/or
+   *   Allocation will be removed at either/or
    *   1) Logfile_client::add_entry
    *   2) free_log_space
    */
-  int alloc_log_space(Uint32 logfile_ref, Uint32 words);
-  int free_log_space(Uint32 logfile_ref, Uint32 words);
+  int alloc_log_space(Uint32 logfile_ref,
+                      Uint32 words,
+                      EmulatedJamBuffer *jamBuf);
+  int free_log_space(Uint32 logfile_ref,
+                      Uint32 words,
+                      EmulatedJamBuffer *jamBuf);
   
   Undofile_pool m_file_pool;
   Logfile_group_pool m_logfile_group_pool;
@@ -274,7 +293,7 @@ private:
 
   Page_map::DataBufferPool m_data_buffer_pool;
 
-  Uint64 m_last_lsn;
+  Uint64 m_next_lsn;
   Uint32 m_latest_lcp;
   Logfile_group_list m_logfile_group_list;
   Logfile_group_hash m_logfile_group_hash;
@@ -287,10 +306,13 @@ private:
   bool alloc_logbuffer_memory(Ptr<Logfile_group>, Uint32 pages);
   void init_logbuffer_pointers(Ptr<Logfile_group>);
   void free_logbuffer_memory(Ptr<Logfile_group>);
-  Uint32 compute_free_file_pages(Ptr<Logfile_group>);
-  Uint32* get_log_buffer(Ptr<Logfile_group>, Uint32 sz);
+  Uint32 compute_free_file_pages(Ptr<Logfile_group>,
+                                 EmulatedJamBuffer *jamBuf);
+  Uint32* get_log_buffer(Ptr<Logfile_group>,
+                         Uint32 sz,
+                         EmulatedJamBuffer *jamBuf);
   void process_log_buffer_waiters(Signal* signal, Ptr<Logfile_group>);
-  Uint32 next_page(Logfile_group* ptrP, Uint32 i);
+  Uint32 next_page(Logfile_group* ptrP, Uint32 i, EmulatedJamBuffer *jamBuf);
 
   void force_log_sync(Signal*, Ptr<Logfile_group>, Uint32 lsnhi, Uint32 lnslo);
   void process_log_sync_waiters(Signal* signal, Ptr<Logfile_group>);
@@ -305,6 +327,11 @@ private:
 
   void find_log_head(Signal* signal, Ptr<Logfile_group> ptr);
   void find_log_head_in_file(Signal*, Ptr<Logfile_group>,Ptr<Undofile>,Uint64);
+  void find_log_head_end_check(Signal*,
+                               Ptr<Logfile_group>,
+                               Ptr<Undofile>,
+                               Uint64);
+  void find_log_head_complete(Signal*, Ptr<Logfile_group>,Ptr<Undofile>);
 
   void init_run_undo_log(Signal*);
   void read_undo_log(Signal*, Ptr<Logfile_group> ptr);
@@ -313,6 +340,7 @@ private:
   
   void execute_undo_record(Signal*);
   const Uint32* get_next_undo_record(Uint64* lsn);
+  void update_consumer_file_pos(Ptr<Logfile_group> ptr);
   void stop_run_undo_log(Signal* signal);
   void init_tail_ptr(Signal* signal, Ptr<Logfile_group> ptr);
 
@@ -321,9 +349,14 @@ private:
   void create_file_abort(Signal* signal, Ptr<Logfile_group>, Ptr<Undofile>);
 
 #ifdef VM_TRACE
-  void validate_logfile_group(Ptr<Logfile_group> ptr, const char * = 0);
+  void validate_logfile_group(Ptr<Logfile_group> ptr,
+                              const char*,
+                              EmulatedJamBuffer *jamBuf);
 #else
-  void validate_logfile_group(Ptr<Logfile_group> ptr, const char * = 0) {}
+  void validate_logfile_group(Ptr<Logfile_group> ptr,
+                              const char * = 0,
+                              EmulatedJamBuffer *jamBuf = 0)
+  {}
 #endif
 
   void drop_filegroup_drop_files(Signal*, Ptr<Logfile_group>, 
@@ -361,7 +394,10 @@ public:
    *          0, request in queued
    *         >0, done
    */
-  int sync_lsn(Signal*, Uint64, Request*, Uint32 flags);
+  int sync_lsn(Signal*,
+               Uint64,
+               Request*,
+               Uint32 flags);
 
   /**
    * Undolog entries
@@ -372,11 +408,8 @@ public:
     Uint32 len;
   };
 
-  Uint64 add_entry(const void*, Uint32 len);
-  Uint64 add_entry(const Change*, Uint32 cnt);
-
-  Uint64 add_entry(Local_key, void * base, Change*);
-  Uint64 add_entry(Local_key, Uint32 off, Uint32 change);
+  Uint64 add_entry(const Change*,
+                   Uint32 cnt);
 
   /**
    * Check for space in log buffer
@@ -387,21 +420,32 @@ public:
    */
   int get_log_buffer(Signal*, Uint32 sz, SimulatedBlock::CallbackPtr*);
 
-  int alloc_log_space(Uint32 words) {
-    return m_lgman->alloc_log_space(m_logfile_group_id, words);
+  int alloc_log_space(Uint32 words,
+                      EmulatedJamBuffer *jamBuf)
+  {
+    return m_lgman->alloc_log_space(m_logfile_group_id,
+                                    words,
+                                    jamBuf);
   }
 
-  int free_log_space(Uint32 words) {
-    return m_lgman->free_log_space(m_logfile_group_id, words);
+  int free_log_space(Uint32 words,
+                     EmulatedJamBuffer *jamBuf)
+  {
+    return m_lgman->free_log_space(m_logfile_group_id, words, jamBuf);
   }
 
-  void exec_lcp_frag_ord(Signal* signal) {
-    m_lgman->exec_lcp_frag_ord(signal, m_client_block);
+  void exec_lcp_frag_ord(Signal* signal)
+  {
+    m_lgman->exec_lcp_frag_ord(signal,
+                               m_client_block);
   }
   
 private:
   Uint32* get_log_buffer(Uint32 sz);
 };
 
+
+
+#undef JAM_FILE_ID
 
 #endif

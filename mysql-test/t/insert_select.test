@@ -1,3 +1,4 @@
+
 #
 # Problem with INSERT ... SELECT
 #
@@ -5,7 +6,7 @@
 --disable_warnings
 drop table if exists t1,t2,t3;
 --enable_warnings
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION,NO_AUTO_CREATE_USER';
 create table t1 (bandID MEDIUMINT UNSIGNED NOT NULL PRIMARY KEY, payoutID SMALLINT UNSIGNED NOT NULL);
 insert into t1 (bandID,payoutID) VALUES (1,6),(2,6),(3,4),(4,9),(5,10),(6,1),(7,12),(8,12);
 create table t2 (payoutID SMALLINT UNSIGNED NOT NULL PRIMARY KEY);
@@ -82,12 +83,16 @@ insert into t1 values (a+2);
 insert into t1 values (a+3);
 insert into t1 values (4),(a+5);
 insert into t1 select * from t1;
+--sorted_result
 select * from t1;
 insert into t1 select * from t1 as t2;
+--sorted_result
 select * from t1;
 insert into t2 select * from t1 as t2;
+--sorted_result
 select * from t1;
 insert into t1 select t2.a from t1,t2;
+--sorted_result
 select * from t1;
 --error 1066
 insert into t1 select * from t1,t1;
@@ -129,7 +134,7 @@ CREATE TABLE t1(
  Field int(10) unsigned NOT NULL,
  Count int(10) unsigned NOT NULL,
  UNIQUE KEY Month (Month,Type,Field)
-);
+)engine=myisam;
 	  
 insert into t1 Values
 (20030901, 1, 1, 100),
@@ -186,10 +191,13 @@ insert into t2 values (1,2);
 insert into t3 values (1,6),(3,7);
 select * from t1;
 insert into t1 select a from t2 on duplicate key update a= t1.a + t2.b;
+--sorted_result
 select * from t1;
 insert into t1 select a+1 from t2 on duplicate key update t1.a= t1.a + t2.b+1;
+--sorted_result
 select * from t1;
 insert into t1 select t3.c from t3 on duplicate key update a= a + t3.d;
+--sorted_result
 select * from t1;
 insert into t1 select t2.a from t2 group by t2.a on duplicate key update a= a + 10;
 
@@ -336,7 +344,7 @@ DROP TABLE t1;
 #
 # Bug #26207: inserts don't work with shortened index
 #
-SET SQL_MODE='STRICT_TRANS_TABLES,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION';
+SET SQL_MODE=default;
 
 CREATE TABLE t1 (c VARCHAR(30), INDEX ix_c (c(10)));
 CREATE TABLE t2 (d VARCHAR(10)); 
@@ -397,6 +405,8 @@ drop table t1,t2;
 --echo #
 --echo # Bug #46075: Assertion failed: 0, file .\protocol.cc, line 416
 --echo #
+let $default_internal_tmp_se = `select @@internal_tmp_disk_storage_engine`;
+set global internal_tmp_disk_storage_engine = 'myisam';
 
 CREATE TABLE t1(a INT);
 # To force MyISAM temp. table in the following INSERT ... SELECT.
@@ -410,9 +420,28 @@ INSERT INTO t1 VALUES (1), (2), (3), (4), (5);
 call mtr.add_suppression("mysqld.*: The table '.*#sql.*' is full");
 --error ER_RECORD_FILE_FULL,ER_RECORD_FILE_FULL
 INSERT IGNORE INTO t1 SELECT t1.a FROM t1,t1 t2,t1 t3,t1 t4,t1 t5,t1 t6,t1 t7;
+eval set global internal_tmp_disk_storage_engine = $default_internal_tmp_se;
 
 # Cleanup
 SET GLOBAL myisam_data_pointer_size = @old_myisam_data_pointer_size;
 DROP TABLE t1;
-
 --echo End of 5.0 tests
+
+--echo #
+--echo # Bug #21441405: DASH '-' IS NOT RECOGNIZED IN CHARSET
+--echo #                ARMSCII8 ON SELECT WHERE QUERY
+--echo #
+CREATE TABLE t1 (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  a VARCHAR(100) CHARACTER SET ARMSCII8
+);
+INSERT INTO t1 (a) VALUES('abc-def');
+INSERT INTO t1 (a) VALUES(x'616263AC646566');
+INSERT INTO t1 (a) VALUES('\'(),-.');
+INSERT INTO t1 (a) VALUES(x'FFA5A4ABACA9');
+SELECT *, HEX(a) FROM t1;
+SELECT *, HEX(a) FROM t1 WHERE a = 'abc-def';
+SELECT *, HEX(a) FROM t1 WHERE a = x'616263AC646566';
+SELECT *, HEX(a) FROM t1 WHERE a = '\'(),-.';
+SELECT *, HEX(a) FROM t1 WHERE a = x'FFA5A4ABACA9';
+DROP TABLE t1;

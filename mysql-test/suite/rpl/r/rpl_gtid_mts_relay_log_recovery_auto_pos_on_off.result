@@ -5,8 +5,8 @@ Note	####	Storing MySQL user name or password information in the master info rep
 [connection master]
 [connection slave]
 CALL mtr.add_suppression("Recovery from master pos*");
-CALL mtr.add_suppression("Slave SQL: .*Duplicate entry .1.*");
-CALL mtr.add_suppression("Slave SQL: ... The slave coordinator and worker threads are stopped, possibly leaving data in inconsistent state.");
+CALL mtr.add_suppression("Slave SQL.*Duplicate entry.* Error_code: 1062");
+CALL mtr.add_suppression("The slave coordinator and worker threads are stopped, possibly leaving data in inconsistent state");
 include/stop_slave.inc
 CHANGE MASTER TO MASTER_AUTO_POSITION=0;
 SET @@global.slave_parallel_workers=4;
@@ -65,6 +65,9 @@ DELETE FROM d1.t1 where a=1;
 DELETE FROM d2.t1 where a=2;
 DELETE FROM d3.t1 where a=3;
 include/rpl_restart_server.inc [server_number=2 gtids=on parameters: --skip_slave_start=FALSE --relay_log_info_repository=TABLE --master_info_repository=TABLE --sync_master_info=1 --relay-log-recovery=1]
+include/wait_for_slave_param.inc [Slave_IO_Running]
+include/wait_for_slave_param.inc [Slave_SQL_Running]
+include/start_slave_sql.inc
 [connection master]
 include/sync_slave_sql_with_master.inc
 include/diff_tables.inc [master:d4.t1, slave:d4.t1]

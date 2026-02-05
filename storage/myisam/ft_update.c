@@ -1,13 +1,20 @@
-/* Copyright (c) 2000, 2015, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -18,6 +25,7 @@
 /* functions to work with full-text indices */
 
 #include "ftdefs.h"
+#include "my_base.h" /* HA_KEYTYPE_FLOAT */
 #include <math.h>
 
 void _mi_ft_segiterator_init(MI_INFO *info, uint keynr, const uchar *record,
@@ -52,7 +60,7 @@ void _mi_ft_segiterator_dummy_init(const uchar *record, uint len,
   so "1" means "OK", "0" means "EOF"
 */
 
-uint _mi_ft_segiterator(register FT_SEG_ITERATOR *ftsi)
+uint _mi_ft_segiterator(FT_SEG_ITERATOR *ftsi)
 {
   DBUG_ENTER("_mi_ft_segiterator");
 
@@ -83,7 +91,7 @@ uint _mi_ft_segiterator(register FT_SEG_ITERATOR *ftsi)
   if (ftsi->seg->flag & HA_BLOB_PART)
   {
     ftsi->len=_mi_calc_blob_length(ftsi->seg->bit_start,ftsi->pos);
-    memcpy(&ftsi->pos, ftsi->pos+ftsi->seg->bit_start, sizeof(char*));
+    memcpy((uchar*)&ftsi->pos, ftsi->pos+ftsi->seg->bit_start, sizeof(char*));
     DBUG_RETURN(1);
   }
   ftsi->len=ftsi->seg->length;
@@ -306,7 +314,7 @@ uint _mi_ft_convert_to_ft2(MI_INFO *info, uint keynr, uchar *key)
   my_off_t root;
   DYNAMIC_ARRAY *da=info->ft1_to_ft2;
   MI_KEYDEF *keyinfo=&info->s->ft2_keyinfo;
-  uchar *key_ptr= (uchar*) dynamic_array_ptr(da, 0), *end;
+  uchar *key_ptr= da->buffer, *end;
   uint length, key_length;
   DBUG_ENTER("_mi_ft_convert_to_ft2");
 
@@ -334,7 +342,7 @@ uint _mi_ft_convert_to_ft2(MI_INFO *info, uint keynr, uchar *key)
     DBUG_RETURN(-1);
 
   /* inserting the rest of key values */
-  end= (uchar*) dynamic_array_ptr(da, da->elements);
+  end= da->buffer + (da->elements * da->size_of_element);
   for (key_ptr+=length; key_ptr < end; key_ptr+=keyinfo->keylength)
     if(_mi_ck_real_write_btree(info, keyinfo, key_ptr, 0, &root, SEARCH_SAME))
       DBUG_RETURN(-1);

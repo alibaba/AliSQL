@@ -1,6 +1,7 @@
 # Test that must have symlink. eg. using DATA/INDEX DIR
 # (DATA/INDEX DIR requires symlinks)
 # This test is only useful for MyISAM, since no other engine supports DATA DIR
+--source include/have_myisam.inc
 -- source include/have_partition.inc
 -- source include/have_symlink.inc
 # remove the not_windows line after fixing bug#33687
@@ -74,6 +75,8 @@ DROP TABLE t1, t2;
 -- echo # test.t1 have partitions in mysqltest2-directory!
 -- echo # user root:
   CREATE USER mysqltest_1@localhost;
+-- echo # Need FILE permission to use external datadir or indexdir.
+  GRANT FILE ON *.* TO mysqltest_1@localhost;
   CREATE DATABASE mysqltest2;
   USE mysqltest2;
   CREATE TABLE t1 (a INT) ENGINE = MyISAM;

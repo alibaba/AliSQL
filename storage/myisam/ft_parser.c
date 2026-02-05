@@ -1,14 +1,21 @@
-/* Copyright (c) 2000, 2016, Oracle and/or its affiliates. All rights
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates. All rights
    reserved.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -269,7 +276,7 @@ static int ft_add_word(MYSQL_FTPARSER_PARAM *param,
   if (param->flags & MYSQL_FTFLAGS_NEED_COPY)
   {
     uchar *ptr;
-    DBUG_ASSERT(wtree->with_delete == 0);
+    assert(wtree->with_delete == 0);
     ptr= (uchar *)alloc_root(ft_param->mem_root, word_len);
     memcpy(ptr, word, word_len);
     w.pos= ptr;
@@ -309,7 +316,7 @@ int ft_parse(TREE *wtree, uchar *doc, int doclen,
 {
   MY_FT_PARSER_PARAM my_param;
   DBUG_ENTER("ft_parse");
-  DBUG_ASSERT(parser);
+  assert(parser);
 
   my_param.wtree= wtree;
   my_param.mem_root= mem_root;
@@ -342,9 +349,11 @@ MYSQL_FTPARSER_PARAM* ftparser_alloc_param(MI_INFO *info)
       (ftb_check_phrase_internal, ftb_phrase_add_word). Thus MAX_PARAM_NR=2.
     */
     info->ftparser_param= (MYSQL_FTPARSER_PARAM *)
-      my_malloc(MAX_PARAM_NR * sizeof(MYSQL_FTPARSER_PARAM) *
+      my_malloc(mi_key_memory_FTPARSER_PARAM,
+                MAX_PARAM_NR * sizeof(MYSQL_FTPARSER_PARAM) *
                 info->s->ftkeys, MYF(MY_WME | MY_ZEROFILL));
-    init_alloc_root(&info->ft_memroot, FTPARSER_MEMROOT_ALLOC_SIZE, 0);
+    init_alloc_root(mi_key_memory_ft_memroot,
+                    &info->ft_memroot, FTPARSER_MEMROOT_ALLOC_SIZE, 0);
   }
   return info->ftparser_param;
 }
@@ -369,7 +378,7 @@ MYSQL_FTPARSER_PARAM *ftparser_call_initializer(MI_INFO *info,
     ftparser_nr= info->s->keyinfo[keynr].ftkey_nr;
     parser= info->s->keyinfo[keynr].parser;
   }
-  DBUG_ASSERT(paramnr < MAX_PARAM_NR);
+  assert(paramnr < MAX_PARAM_NR);
   ftparser_nr= ftparser_nr*MAX_PARAM_NR + paramnr;
   if (! info->ftparser_param[ftparser_nr].mysql_add_word)
   {

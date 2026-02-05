@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -23,9 +30,7 @@
 
 #include <NodeBitmask.hpp>
 
-#include <SLList.hpp>
-#include <DLList.hpp>
-#include <DLCFifoList.hpp>
+#include <IntrusiveList.hpp>
 #include <KeyTable.hpp>
 #include <DataBuffer.hpp>
 #include <SignalCounter.hpp>
@@ -35,6 +40,10 @@
 #include <signaldata/UtilSequence.hpp>
 #include <signaldata/SumaImpl.hpp>
 #include <ndbapi/NdbDictionary.hpp>
+#include <NdbTick.h>
+
+#define JAM_FILE_ID 469
+
 
 class Suma : public SimulatedBlock {
   BLOCK_DEFINES(Suma);
@@ -119,11 +128,13 @@ public:
   void suma_ndbrequire(bool v);
 
   // wl4391_todo big enough for now
+  // Keep m_fragDesc within 32 bit,
+  // m_dummy is used to pass value.
   union FragmentDescriptor { 
     struct  {
-      Uint8 m_fragmentNo;
+      Uint16 m_fragmentNo;
       Uint8 m_lqhInstanceKey;
-      Uint16 m_nodeId;
+      Uint8 m_nodeId;
     } m_fragDesc;
     Uint32 m_dummy;
   };
@@ -188,6 +199,15 @@ public:
     DataBuffer<15>::Head m_attributeList; // Attribute if other than default
     DataBuffer<15>::Head m_boundInfo;  // For range scan
     
+    /**
+     * Current row 
+     * (assumes max 1 concurrent frag scan / syncrecord for LM_Exclusive)
+     */
+    Uint32 m_sourceInstance;
+    Uint32 m_headersSection;
+    Uint32 m_dataSection;
+
+
     void startScan(Signal*);
     void nextScan(Signal*);
     bool getNextFragment(TablePtr * tab, FragmentDescriptor * fd);
@@ -505,6 +525,9 @@ public:
   // for LQH transporter overload check
   const NodeBitmask& getSubscriberNodes() const { return c_subscriber_nodes; }
 
+protected:
+  virtual bool getParam(const char * param, Uint32 * retVal);
+
 private:
   /**
    * Variables
@@ -515,9 +538,14 @@ private:
   /**
    * for restarting Suma not to start sending data too early
    */
+
   struct Startup
   {
+    Uint32 m_wait_handover_timeout_ms; // Max time to wait in phase 101 for API nodes to connect
     bool m_wait_handover;
+    NDB_TICKS m_wait_handover_expire;
+    NDB_TICKS m_wait_handover_message_expire;
+    bool m_forced_disconnect_attempted;
     Uint32 m_restart_server_node_id;
     NdbNodeBitmask m_handover_nodes;
   } c_startup;
@@ -561,8 +589,12 @@ private:
   void send_dict_unlock_ord(Signal* signal, Uint32 state);
   void send_start_me_req(Signal* signal);
   void check_start_handover(Signal* signal);
+  void check_wait_handover_timeout(Signal* signal);
+  void check_wait_handover_message(NDB_TICKS now);
   void send_handover_req(Signal* signal, Uint32 type);
 
+  void calculate_sub_data_stream(Uint16 bucket, Uint16 buckets, Uint16 replicas);
+  Uint16 get_sub_data_stream(Uint16 bucket) const;
   Uint32 get_responsible_node(Uint32 B) const;
   Uint32 get_responsible_node(Uint32 B, const NdbNodeBitmask& mask) const;
   bool check_switchover(Uint32 bucket, Uint64 gci);
@@ -598,6 +630,7 @@ private:
     Uint16 m_state;
     Uint16 m_switchover_node;
     Uint16 m_nodes[MAX_REPLICAS]; 
+    Uint16 m_sub_data_stream;
     Uint32 m_buffer_tail;   // Page
     Uint64 m_switchover_gci;
     Uint64 m_max_acked_gci;
@@ -670,6 +703,9 @@ private:
 
   struct Page_chunk
   {
+    STATIC_CONST( CHUNK_PAGE_SIZE = 32768 );
+    STATIC_CONST( PAGES_PER_CHUNK = 16 );
+
     Uint32 m_page_id;
     Uint32 m_size;
     Uint32 m_free;
@@ -708,5 +744,16 @@ private:
 
   void sendScanSubTableData(Signal* signal, Ptr<SyncRecord>, Uint32);
 };
+
+inline
+Uint16
+Suma::get_sub_data_stream(Uint16 bucket) const
+{
+  ndbassert(bucket < NO_OF_BUCKETS);
+  const Bucket* ptr= c_buckets + bucket;
+  return ptr->m_sub_data_stream;
+}
+
+#undef JAM_FILE_ID
 
 #endif

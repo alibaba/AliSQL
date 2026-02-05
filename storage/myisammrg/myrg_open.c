@@ -1,13 +1,20 @@
-/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -34,7 +41,7 @@
 MYRG_INFO *myrg_open(const char *name, int mode, int handle_locking)
 {
   int save_errno,errpos=0;
-  uint files= 0, i, dir_length, length, UNINIT_VAR(key_parts), min_keys= 0;
+  uint files= 0, i, dir_length, length, key_parts= 0, min_keys= 0;
   ulonglong file_offset=0;
   char name_buff[FN_REFLEN*2],buff[FN_REFLEN],*end;
   MYRG_INFO *m_info=0;
@@ -104,12 +111,13 @@ MYRG_INFO *myrg_open(const char *name, int mode, int handle_locking)
     if (!m_info)                                /* First file */
     {
       key_parts=isam->s->base.key_parts;
-      if (!(m_info= (MYRG_INFO*) my_malloc(sizeof(MYRG_INFO) +
+      if (!(m_info= (MYRG_INFO*) my_malloc(rg_key_memory_MYRG_INFO,
+                                           sizeof(MYRG_INFO) +
                                            files*sizeof(MYRG_TABLE) +
                                            key_parts*sizeof(long),
                                            MYF(MY_WME|MY_ZEROFILL))))
         goto err;
-      DBUG_ASSERT(files);
+      assert(files);
       m_info->open_tables=(MYRG_TABLE *) (m_info+1);
       m_info->rec_per_key_part=(ulong *) (m_info->open_tables+files);
       m_info->tables= files;
@@ -145,7 +153,8 @@ MYRG_INFO *myrg_open(const char *name, int mode, int handle_locking)
 
   if (bad_children)
     goto bad_children;
-  if (!m_info && !(m_info= (MYRG_INFO*) my_malloc(sizeof(MYRG_INFO),
+  if (!m_info && !(m_info= (MYRG_INFO*) my_malloc(rg_key_memory_MYRG_INFO,
+                                                  sizeof(MYRG_INFO),
                                                   MYF(MY_WME | MY_ZEROFILL))))
     goto err;
   /* Don't mark table readonly, for ALTER TABLE ... UNION=(...) to work */
@@ -154,7 +163,7 @@ MYRG_INFO *myrg_open(const char *name, int mode, int handle_locking)
 
   if (sizeof(my_off_t) == 4 && file_offset > (ulonglong) (ulong) ~0L)
   {
-    my_errno=HA_ERR_RECORD_FILE_FULL;
+    set_my_errno(HA_ERR_RECORD_FILE_FULL);
     goto err;
   }
   m_info->keys= min_keys;
@@ -176,9 +185,9 @@ MYRG_INFO *myrg_open(const char *name, int mode, int handle_locking)
   DBUG_RETURN(m_info);
 
 bad_children:
-  my_errno= HA_ERR_WRONG_MRG_TABLE_DEF;
+  set_my_errno(HA_ERR_WRONG_MRG_TABLE_DEF);
 err:
-  save_errno=my_errno;
+  save_errno=my_errno();
   switch (errpos) {
   case 3:
     while (files)
@@ -191,7 +200,7 @@ err:
   case 1:
     (void) mysql_file_close(fd, MYF(0));
   }
-  my_errno=save_errno;
+  set_my_errno(save_errno);
   DBUG_RETURN (NULL);
 }
 
@@ -220,7 +229,7 @@ MYRG_INFO *myrg_parent_open(const char *parent_name,
                             int (*callback)(void*, const char*),
                             void *callback_param)
 {
-  MYRG_INFO *UNINIT_VAR(m_info);
+  MYRG_INFO *m_info= NULL;
   int       rc;
   int       errpos;
   int       save_errno;
@@ -281,7 +290,8 @@ MYRG_INFO *myrg_parent_open(const char *parent_name,
   }
 
   /* Allocate MERGE parent table structure. */
-  if (!(m_info= (MYRG_INFO*) my_malloc(sizeof(MYRG_INFO) +
+  if (!(m_info= (MYRG_INFO*) my_malloc(rg_key_memory_MYRG_INFO,
+                                       sizeof(MYRG_INFO) +
                                        child_count * sizeof(MYRG_TABLE),
                                        MYF(MY_WME | MY_ZEROFILL))))
     goto err; /* purecov: inspected */
@@ -330,7 +340,7 @@ MYRG_INFO *myrg_parent_open(const char *parent_name,
 
   /* purecov: begin inspected */
  err:
-  save_errno= my_errno;
+  save_errno= my_errno();
   switch (errpos) {
   case 3:
     my_free(m_info);
@@ -341,7 +351,7 @@ MYRG_INFO *myrg_parent_open(const char *parent_name,
   case 1:
     (void) mysql_file_close(fd, MYF(0));
   }
-  my_errno= save_errno;
+  set_my_errno(save_errno);
   DBUG_RETURN (NULL);
   /* purecov: end */
 }
@@ -382,7 +392,7 @@ int myrg_attach_children(MYRG_INFO *m_info, int handle_locking,
   int        save_errno;
   uint       idx;
   uint       child_nr;
-  uint       UNINIT_VAR(key_parts);
+  uint       key_parts= 0;
   uint       min_keys;
   my_bool    bad_children= FALSE;
   my_bool    first_child= TRUE;
@@ -431,7 +441,8 @@ int myrg_attach_children(MYRG_INFO *m_info, int handle_locking,
       if (!m_info->rec_per_key_part)
       {
         if(!(m_info->rec_per_key_part= (ulong*)
-             my_malloc(key_parts * sizeof(long), MYF(MY_WME))))
+             my_malloc(rg_key_memory_MYRG_INFO,
+                       key_parts * sizeof(long), MYF(MY_WME))))
           goto err; /* purecov: inspected */
         errpos= 1;
       }
@@ -474,7 +485,7 @@ int myrg_attach_children(MYRG_INFO *m_info, int handle_locking,
 
   if (sizeof(my_off_t) == 4 && file_offset > (ulonglong) (ulong) ~0L)
   {
-    my_errno= HA_ERR_RECORD_FILE_FULL;
+    set_my_errno(HA_ERR_RECORD_FILE_FULL);
     goto err;
   }
   /* Don't mark table readonly, for ALTER TABLE ... UNION=(...) to work */
@@ -486,16 +497,16 @@ int myrg_attach_children(MYRG_INFO *m_info, int handle_locking,
   DBUG_RETURN(0);
 
 bad_children:
-  my_errno= HA_ERR_WRONG_MRG_TABLE_DEF;
+  set_my_errno(HA_ERR_WRONG_MRG_TABLE_DEF);
 err:
-  save_errno= my_errno;
+  save_errno= my_errno();
   switch (errpos) {
   case 1:
     my_free(m_info->rec_per_key_part);
     m_info->rec_per_key_part= NULL;
   }
   mysql_mutex_unlock(&m_info->mutex);
-  my_errno= save_errno;
+  set_my_errno(save_errno);
   DBUG_RETURN(1);
 }
 

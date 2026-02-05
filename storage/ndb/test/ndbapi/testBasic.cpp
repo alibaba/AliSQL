@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -24,6 +31,23 @@
 #include <Bitmask.hpp>
 #include <random.h>
 #include <signaldata/DumpStateOrd.hpp>
+#include <NdbConfig.hpp>
+#include <BlockNumbers.h>
+
+#define CHK1(b) \
+  if (!(b)) { \
+    g_err << "ERR: " << #b << " failed at line " << __LINE__; \
+    result = NDBT_FAILED; \
+    break; \
+  }
+
+#define CHK2(b, e) \
+  if (!(b)) { \
+    g_err << "ERR: " << #b << " failed at line " << __LINE__ \
+          << ": " << e << endl; \
+    result = NDBT_FAILED; \
+    break; \
+  }
 
 /**
  * TODO 
@@ -244,6 +268,49 @@ runInsertOne(NDBT_Context* ctx, NDBT_Step* step){
   return NDBT_OK;
 }
 
+/**
+ * Insert error 5083 in DBLQH that puts operation into LOG_QUEUED state and puts
+ * the operation in the REDO log queue. After a while it will be timed out and
+ * the abort code will handle it, the runLoadTableFail method will then abort and
+ * be assumed to be ok, so as long as the node doesn't crash we're passing the
+ * test case and also the operation should be aborted.
+ *
+ * If this test case is run on 7.2 it will simply be the same as Fill since we
+ * don't queue REDO log operations but rather abort it immediately. So it will
+ * pass as well but won't test the desired functionality.
+ */
+int runLoadTableFail(NDBT_Context* ctx, NDBT_Step* step)
+{
+  int records = 16;
+  int res;
+  HugoTransactions hugoTrans(*ctx->getTab());
+  res = hugoTrans.loadTable(GETNDB(step), records, 64, true, 0, true, true);
+  if (res == 266 || /* Timeout when REDO logging queueing active (or not) */
+      res == 0)     /* No error when not REDO logging active and no error insert */
+  {
+    ndbout << "res = " << res << endl;
+    return NDBT_OK;
+  }
+  /* All other error variants are errors in this case */
+  return NDBT_FAILED;
+}
+
+int
+insertError5083(NDBT_Context* ctx, NDBT_Step* step)
+{
+   NdbRestarter restarter;
+   restarter.insertErrorInAllNodes(5083);
+   return 0;
+}
+
+int
+clearError5083(NDBT_Context* ctx, NDBT_Step* step)
+{
+  NdbRestarter restarter;
+  restarter.insertErrorInAllNodes(0);
+  return 0;
+}
+
 static
 int
 readOneNoCommit(Ndb* pNdb, NdbConnection* pTrans, 
@@ -251,7 +318,7 @@ readOneNoCommit(Ndb* pNdb, NdbConnection* pTrans,
   int a;
   NdbOperation * pOp = pTrans->getNdbOperation(tab->getName());
   if (pOp == NULL){
-    ERR(pTrans->getNdbError());
+    NDB_ERR(pTrans->getNdbError());
     return NDBT_FAILED;
   }
   
@@ -259,7 +326,7 @@ readOneNoCommit(Ndb* pNdb, NdbConnection* pTrans,
 
   int check = pOp->readTuple();
   if( check == -1 ) {
-    ERR(pTrans->getNdbError());
+    NDB_ERR(pTrans->getNdbError());
     return NDBT_FAILED;
   }
   
@@ -267,7 +334,7 @@ readOneNoCommit(Ndb* pNdb, NdbConnection* pTrans,
   for(a = 0; a<tab->getNoOfColumns(); a++){
     if (tab->getColumn(a)->getPrimaryKey() == true){
       if(tmp.equalForAttr(pOp, a, 0) != 0){
-	ERR(pTrans->getNdbError());
+	NDB_ERR(pTrans->getNdbError());
 	return NDBT_FAILED;
       }
     }
@@ -277,7 +344,7 @@ readOneNoCommit(Ndb* pNdb, NdbConnection* pTrans,
   for(a = 0; a<tab->getNoOfColumns(); a++){
     if((row->attributeStore(a) = 
 	pOp->getValue(tab->getColumn(a)->getName())) == 0) {
-      ERR(pTrans->getNdbError());
+      NDB_ERR(pTrans->getNdbError());
       return NDBT_FAILED;
     }
   }
@@ -285,7 +352,7 @@ readOneNoCommit(Ndb* pNdb, NdbConnection* pTrans,
   check = pTrans->execute(NoCommit);     
   if( check == -1 ) {
     const NdbError err = pTrans->getNdbError(); 
-    ERR(err);
+    NDB_ERR(err);
     return err.code;
   }
   return NDBT_OK;
@@ -373,6 +440,11 @@ int runClearTable2(NDBT_Context* ctx, NDBT_Step* step){
          << " failed on line " << __LINE__ << endl; \
   result = NDBT_FAILED; \
   break; }
+
+#define CHECK2(b) if (!(b)) { \
+  ndbout << "ERR: "<< step->getName() \
+         << " failed on line " << __LINE__ << endl; \
+  result = NDBT_FAILED; }
 
 int runNoCommitSleep(NDBT_Context* ctx, NDBT_Step* step){
   int result = NDBT_OK;
@@ -1119,6 +1191,36 @@ f_tup_errors[] =
   { -1, 0, 0 }
 };
 
+static
+int
+compare(unsigned block,
+        struct ndb_mgm_events * time0,
+        struct ndb_mgm_events * time1)
+{
+  int diff = 0;
+  for (int i = 0; i < time0->no_of_events; i++)
+  {
+    if (time0->events[i].MemoryUsage.block != block)
+      continue;
+
+    unsigned node = time0->events[i].source_nodeid;
+
+    for (int j = 0; j < time1->no_of_events; j++)
+    {
+      if (time1->events[j].MemoryUsage.block != block)
+        continue;
+
+      if (time1->events[j].source_nodeid != node)
+        continue;
+
+      diff +=
+        time0->events[i].MemoryUsage.pages_used -
+        time1->events[j].MemoryUsage.pages_used;
+    }
+  }
+  return diff;
+}
+
 int
 runTupErrors(NDBT_Context* ctx, NDBT_Step* step){
 
@@ -1173,6 +1275,15 @@ runTupErrors(NDBT_Context* ctx, NDBT_Step* step){
     
     g_err << "Testing error insert: " << f_tup_errors[i].error << endl;
     restarter.insertErrorInAllNodes(f_tup_errors[i].error);
+
+    struct ndb_mgm_events * before =
+      ndb_mgm_dump_events(restarter.handle, NDB_LE_MemoryUsage, 0, 0);
+    if (before == 0)
+    {
+      ndbout_c("ERROR: failed to fetch report!");
+      return NDBT_FAILED;;
+    }
+
     if (f_tup_errors[i].bits & TupError::TE_MULTI_OP)
     {
       
@@ -1186,11 +1297,32 @@ runTupErrors(NDBT_Context* ctx, NDBT_Step* step){
     {
       return NDBT_FAILED;
     }      
+
+    struct ndb_mgm_events * after =
+      ndb_mgm_dump_events(restarter.handle, NDB_LE_MemoryUsage, 0, 0);
+    if (after == 0)
+    {
+      ndbout_c("ERROR: failed to fetch report!");
+      return NDBT_FAILED;;
+    }
+
+    /**
+     * check memory leak
+     */
+    if (compare(DBTUP, before, after) != 0)
+    {
+      ndbout_c("memleak detected!!");
+      return NDBT_FAILED;;
+    }
+    free(before);
+    free(after);
   }
 
   /**
    * update
    */
+  struct ndb_mgm_events * before =
+    ndb_mgm_dump_events(restarter.handle, NDB_LE_MemoryUsage, 0, 0);
   hugoTrans.loadTable(pNdb, 5);
   for(i = 0; f_tup_errors[i].op != -1; i++)
   {
@@ -1223,7 +1355,24 @@ runTupErrors(NDBT_Context* ctx, NDBT_Step* step){
       return NDBT_FAILED;
     }
   }
-  
+  if (hugoTrans.clearTable(pNdb) != 0)
+  {
+    return NDBT_FAILED;
+  }
+
+  struct ndb_mgm_events * after =
+    ndb_mgm_dump_events(restarter.handle, NDB_LE_MemoryUsage, 0, 0);
+
+  int diff = compare(DBTUP, before, after);
+  free(before);
+  free(after);
+
+  if (diff != 0)
+  {
+    ndbout_c("memleak detected!!");
+    return NDBT_FAILED;;
+  }
+
   return NDBT_OK;
 }
 
@@ -1330,7 +1479,7 @@ runDeleteRead(NDBT_Context* ctx, NDBT_Step* step){
     for(a = 0; a<tab->getNoOfColumns(); a++)
     {
       if((row.attributeStore(a) = pOp->getValue(tab->getColumn(a)->getName())) == 0) {
-	ERR(pTrans->getNdbError());
+	NDB_ERR(pTrans->getNdbError());
 	return NDBT_FAILED;
       }
     }
@@ -1350,13 +1499,13 @@ runDeleteRead(NDBT_Context* ctx, NDBT_Step* step){
     {
       if((row.attributeStore(a) = pOp->getValue(tab->getColumn(a)->getName())) == 0) 
       {
-	ERR(pTrans->getNdbError());
+	NDB_ERR(pTrans->getNdbError());
 	return NDBT_FAILED;
       }
     }
     if (pTrans->execute(Commit) != 0)
     {
-      ERR(pTrans->getNdbError());
+      NDB_ERR(pTrans->getNdbError());
       return NDBT_FAILED;
     }
 
@@ -1832,7 +1981,7 @@ runBug34348(NDBT_Context* ctx, NDBT_Step* step)
         }
       }
       chk1(result == NDBT_OK);
-      assert(BitmaskImpl::count(sz, rowmask)== (Uint32)rowcnt);
+      require(BitmaskImpl::count(sz, rowmask)== (Uint32)rowcnt);
 
       // delete about 1/2 remaining
       while (result == NDBT_OK)
@@ -1852,7 +2001,7 @@ runBug34348(NDBT_Context* ctx, NDBT_Step* step)
         break;
       }
       chk1(result == NDBT_OK);
-      assert(BitmaskImpl::count(sz, rowmask)== (Uint32)rowcnt);
+      require(BitmaskImpl::count(sz, rowmask)== (Uint32)rowcnt);
 
       // insert until full again
       while (result == NDBT_OK)
@@ -1874,7 +2023,7 @@ runBug34348(NDBT_Context* ctx, NDBT_Step* step)
         break;
       }
       chk1(result == NDBT_OK);
-      assert(BitmaskImpl::count(sz, rowmask)== (Uint32)rowcnt);
+      require(BitmaskImpl::count(sz, rowmask)== (Uint32)rowcnt);
 
       // delete all
       while (result == NDBT_OK)
@@ -1892,8 +2041,8 @@ runBug34348(NDBT_Context* ctx, NDBT_Step* step)
         break;
       }
       chk1(result == NDBT_OK);
-      assert(BitmaskImpl::count(sz, rowmask)== (Uint32)rowcnt);
-      assert(rowcnt == 0);
+      require(BitmaskImpl::count(sz, rowmask)== (Uint32)rowcnt);
+      require(rowcnt == 0);
 
       loop++;
     }
@@ -1959,7 +2108,7 @@ int runUnlocker(NDBT_Context* ctx, NDBT_Step* step){
         NdbError err = hugoOps.getNdbError();
         if ((err.status == NdbError::TemporaryError) &&
             retryAttempt < maxRetries){
-          ERR(err);
+          NDB_ERR(err);
           NdbSleep_MilliSleep(50);
           retryAttempt++;
           lockHandles.clear();
@@ -1968,7 +2117,7 @@ int runUnlocker(NDBT_Context* ctx, NDBT_Step* step){
           check(hugoOps.startTransaction(ndb) == 0, (*ndb));
           continue;
         }
-        ERR(err);
+        NDB_ERR(err);
         return NDBT_FAILED;
       }
 
@@ -2071,6 +2220,7 @@ runBug54986(NDBT_Context* ctx, NDBT_Step* step)
   NdbDictionary::Dictionary* pDict = pNdb->getDictionary();
   const NdbDictionary::Table * pTab = ctx->getTab();
   NdbDictionary::Table copy = *pTab;
+  int result = NDBT_OK;
 
   BaseString name;
   name.assfmt("%s_COPY", copy.getName());
@@ -2087,6 +2237,7 @@ runBug54986(NDBT_Context* ctx, NDBT_Step* step)
   HugoTransactions hugoTransCopy(*copyTab);
   hugoTransCopy.loadTable(pNdb, rows);
 
+  ndbout << "Waiting for 3 LCPs" << endl;
   {
     restarter.getNumDbNodes(); // connect
     int filter[] = { 15, NDB_MGM_EVENT_CATEGORY_CHECKPOINT, 0 };
@@ -2103,43 +2254,61 @@ runBug54986(NDBT_Context* ctx, NDBT_Step* step)
             event.type != NDB_LE_LocalCheckpointStarted);
       while(ndb_logevent_get_next(handle, &event, 0) >= 0 &&
             event.type != NDB_LE_LocalCheckpointCompleted);
+
+      ndbout << "LCP" << i << endl;
     }
     ndb_mgm_destroy_logevent_handle(&handle);
   }
 
   for (int i = 0; i<5; i++)
   {
+    ndbout  << "loop: " << i << endl;
     int val1 = DumpStateOrd::DihMaxTimeBetweenLCP;
-    int val2 = 7099; // Force start
+    int val2 = DumpStateOrd::DihStartLcpImmediately; // Force start
 
-    restarter.dumpStateAllNodes(&val1, 1);
+    ndbout << " ... dumpState set 'MaxTimeBetweenLCP'" << endl;
+    CHK1(restarter.dumpStateAllNodes(&val1, 1) == 0);
+
     int val[] = { DumpStateOrd::CmvmiSetRestartOnErrorInsert, 1 };
-    restarter.dumpStateAllNodes(val, 2);
+    ndbout << " ... dumpState set 'RestartOnErrorInsert = NoStart'" << endl;
+    CHK1(restarter.dumpStateAllNodes(val, 2) == 0);
 
-    restarter.insertErrorInAllNodes(932); // prevent arbit shutdown
+    ndbout << " ... insert error 932" << endl;
+    CHK1(restarter.insertErrorInAllNodes(932) ==0); // prevent arbit shutdown
 
     HugoTransactions hugoTrans(*pTab);
-    hugoTrans.loadTable(pNdb, 20);
+    ndbout << " ... loadTable" << endl;
+    CHK1(hugoTrans.loadTable(pNdb, 20) == 0);
 
-    restarter.dumpStateAllNodes(&val2, 1);
+    ndbout << " ... dumpState set 'StartLcpImmediately'" << endl;
+    CHK1(restarter.dumpStateAllNodes(&val2, 1) == 0);
 
+    ndbout << " ... sleep for 15 sec" << endl;
     NdbSleep_SecSleep(15);
-    hugoTrans.clearTable(pNdb);
+    ndbout << " ... clearTable" << endl;
+    CHK1(hugoTrans.clearTable(pNdb) == 0);
 
-    hugoTransCopy.pkReadRecords(pNdb, rows);
+    ndbout << " ... Hugo txn" << endl;
+    CHK1(hugoTransCopy.pkReadRecords(pNdb, rows) == 0);
 
     HugoOperations hugoOps(*pTab);
-    hugoOps.startTransaction(pNdb);
-    hugoOps.pkInsertRecord(pNdb, 1);
-    hugoOps.execute_NoCommit(pNdb);
+    CHK1(hugoOps.startTransaction(pNdb) == 0);
+    CHK1(hugoOps.pkInsertRecord(pNdb, 1) == 0);
+    CHK1(hugoOps.execute_NoCommit(pNdb) == 0);
 
-    restarter.insertErrorInAllNodes(5056);
-    restarter.dumpStateAllNodes(&val2, 1);
-    restarter.waitClusterNoStart();
+    ndbout << " ... insert error 5056 (Crash on LCP_COMPLETE_REP)" << endl;
+    CHK1(restarter.insertErrorInAllNodes(5056) == 0);
+
+    ndbout << " ... dumpState set 'StartLcpImmediately'" << endl;
+    CHK1(restarter.dumpStateAllNodes(&val2, 1) == 0);
+
+    ndbout << " ... waitClusterNoStart" << endl;
+    CHK1(restarter.waitClusterNoStart() == 0);
     int vall = 11009;
-    restarter.dumpStateAllNodes(&vall, 1);
-    restarter.startAll();
-    restarter.waitClusterStarted();
+    CHK1(restarter.dumpStateAllNodes(&vall, 1) == 0);
+    CHK1(restarter.startAll() == 0);
+    CHK1(restarter.waitClusterStarted() == 0);
+    CHK1(hugoOps.closeTransaction(pNdb) == 0);
   }
 
   pDict->dropTable(copy.getName());
@@ -2149,7 +2318,7 @@ runBug54986(NDBT_Context* ctx, NDBT_Step* step)
   restarter.waitClusterNoStart();
   restarter.startAll();
   restarter.waitClusterStarted();
-  return NDBT_OK;
+  return result;
 }
 
 int
@@ -2158,6 +2327,7 @@ runBug54944(NDBT_Context* ctx, NDBT_Step* step)
   Ndb* pNdb = GETNDB(step);
   const NdbDictionary::Table * pTab = ctx->getTab();
   NdbRestarter res;
+  int databuffer = ctx->getProperty("DATABUFFER");
 
   for (Uint32 i = 0; i<5; i++)
   {
@@ -2174,7 +2344,10 @@ runBug54944(NDBT_Context* ctx, NDBT_Step* step)
       hugoOps.execute_NoCommit(pNdb);
     }
 
-    res.insertErrorInAllNodes(8087);
+    if (!databuffer)
+      res.insertErrorInAllNodes(8087);
+    else
+      res.insertErrorInAllNodes(8096);
 
     HugoTransactions hugoTrans(*pTab);
     hugoTrans.loadTableStartFrom(pNdb, 50000, 100);
@@ -2601,14 +2774,36 @@ int collectEvents(Ndb* ndb,
                   Vector<NdbRecAttr*>* afterAttrs)
 {
   int MaxTimeouts = 5;
+  int MaxEmptyPollsAfterData = 10;
+  bool some_event_data_received = false;
   while (true)
   {
-    int res = ndb->pollEvents(1000);
+    NdbEventOperation* pOp = NULL;
 
-    if (res > 0)
+    int res = ndb->pollEvents(1000);
+    if (res <= 0)
     {
-      NdbEventOperation* pOp;
-      while ((pOp = ndb->nextEvent()))
+      if (--MaxTimeouts == 0)
+        break;
+    }
+    else
+    {
+      assert(res == 1);
+      pOp = ndb->nextEvent();
+      if (!pOp)
+      {
+        /* pollEvents returning 1 and nextEvent returning 0 means
+         * empty epochs found in the event queue. After we receive
+         * some event data, we wait some empty epoch poll rounds
+         * to make sure that no more event data arrives.
+         */
+        if (some_event_data_received && --MaxEmptyPollsAfterData == 0)
+          break;
+      }
+    }
+
+    {
+      while (pOp)
       {
         bool isDelete = (pOp->getEventType() == NdbDictionary::Event::TE_DELETE);
         Vector<NdbRecAttr*>* whichVersion =
@@ -2687,17 +2882,11 @@ int collectEvents(Ndb* ndb,
         ei.gci = gci;
 
         receivedEvents.push_back(ei);
-      }
-    }
-    else
-    {
-      if (--MaxTimeouts == 0)
-      {
-        break;
+        some_event_data_received = true;
+        pOp = ndb->nextEvent();
       }
     }
   }
-
   return NDBT_OK;
 }
 
@@ -3002,6 +3191,56 @@ int runRefreshTuple(NDBT_Context* ctx, NDBT_Step* step){
   return rc;
 };
 
+// Regression test for bug #14208924
+static int
+runLeakApiConnectObjects(NDBT_Context* ctx, NDBT_Step* step)
+{
+  NdbRestarter restarter;
+  /**
+   * This error insert inc ombination with bug #14208924 will 
+   * cause TC to leak ApiConnectRecord objects.
+   */
+  restarter.insertErrorInAllNodes(8094);
+
+  Ndb* const ndb = GETNDB(step);
+  Uint32 maxTrans = 0;
+  NdbConfig conf;
+  require(conf.getProperty(conf.getMasterNodeId(),
+                                 NODE_TYPE_DB,
+                                 CFG_DB_NO_TRANSACTIONS,
+                                 &maxTrans));
+  require(maxTrans > 0);
+
+  HugoOperations hugoOps(*ctx->getTab());
+  // One ApiConnectRecord object is leaked for each iteration.
+  for (uint i = 0; i < maxTrans+1; i++)
+  {
+    require(hugoOps.startTransaction(ndb) == 0);
+    require(hugoOps.pkInsertRecord(ndb, i) == 0);
+    NdbTransaction* const trans = hugoOps.getTransaction();
+    /**
+     * The error insert causes trans->execute(Commit) to fail with error code
+     * 286 even if the bug is fixed. Therefore, we ignore this error code.
+     */
+    if (trans->execute(Commit) != 0 && 
+        trans->getNdbError().code != 286)
+    {
+      g_err << "trans->execute() gave unexpected error : " 
+            << trans->getNdbError() << endl;
+      restarter.insertErrorInAllNodes(0);
+      return NDBT_FAILED;
+    }
+    require(hugoOps.closeTransaction(ndb) == 0);
+  }
+  restarter.insertErrorInAllNodes(0);
+
+  UtilTransactions utilTrans(*ctx->getTab());
+  if (utilTrans.clearTable(ndb) != 0){
+    return NDBT_FAILED;
+  }
+  return NDBT_OK;
+}
+
 enum PreRefreshOps
 {
   PR_NONE,
@@ -3218,6 +3457,386 @@ runRefreshLocking(NDBT_Context* ctx, NDBT_Step* step)
 
   return NDBT_OK;
 }
+
+int
+runBugXXX_init(NDBT_Context* ctx, NDBT_Step* step)
+{
+  return NDBT_OK;
+}
+
+int
+runBugXXX_trans(NDBT_Context* ctx, NDBT_Step* step)
+{
+  NdbRestarter res;
+  while (!ctx->isTestStopped())
+  {
+    runLoadTable(ctx, step);
+    ctx->getPropertyWait("CREATE_INDEX", 1);
+    ctx->setProperty("CREATE_INDEX", Uint32(0));
+    res.insertErrorInAllNodes(8105); // randomly abort trigger ops with 218
+    runClearTable2(ctx, step);
+    res.insertErrorInAllNodes(0);
+  }
+
+  return NDBT_OK;
+}
+
+int
+runBugXXX_createIndex(NDBT_Context* ctx, NDBT_Step* step)
+{
+  NdbRestarter res;
+  const int loops = ctx->getNumLoops();
+
+  Ndb* pNdb = GETNDB(step);
+  const NdbDictionary::Table* pTab = ctx->getTab();
+
+  BaseString name;
+  name.assfmt("%s_PK_IDX", pTab->getName());
+  NdbDictionary::Index pIdx(name.c_str());
+  pIdx.setTable(pTab->getName());
+  pIdx.setType(NdbDictionary::Index::UniqueHashIndex);
+  for (int c = 0; c < pTab->getNoOfColumns(); c++)
+  {
+    const NdbDictionary::Column * col = pTab->getColumn(c);
+    if(col->getPrimaryKey())
+    {
+      pIdx.addIndexColumn(col->getName());
+    }
+  }
+  pIdx.setStoredIndex(false);
+
+  for (int i = 0; i < loops; i++)
+  {
+    res.insertErrorInAllNodes(18000);
+    ctx->setProperty("CREATE_INDEX", 1);
+    pNdb->getDictionary()->createIndex(pIdx);
+    pNdb->getDictionary()->dropIndex(name.c_str(), pTab->getName());
+  }
+
+  ctx->stopTest();
+  return NDBT_OK;
+}
+
+int
+runBug16834333(NDBT_Context* ctx, NDBT_Step* step)
+{
+  Ndb* pNdb = GETNDB(step);
+  NdbDictionary::Dictionary* pDic = pNdb->getDictionary();
+  const int records = ctx->getNumRecords();
+  NdbRestarter restarter;
+  int result = NDBT_OK;
+
+  do
+  {
+    /*
+     * Drop the pre-created table before initial restart to avoid invalid
+     * dict cache.  One symptom would be running the test twice and getting
+     * abort() in final dict cache release due to non-existent version.
+     * Also use a copy of the pre-created table struct to avoid accessing
+     * invalid memory.
+     */
+    const NdbDictionary::Table tab(* ctx->getTab());
+    CHK2(pDic->dropTable(tab.getName()) == 0, pDic->getNdbError());
+
+    ndbout_c("restart initial");
+    restarter.restartAll(true, /* initial */
+                         true, /* nostart */
+                         true  /* abort */ );
+
+    ndbout_c("wait nostart");
+    restarter.waitClusterNoStart();
+    ndbout_c("startAll");
+    restarter.startAll();
+    ndbout_c("wait started");
+    restarter.waitClusterStarted();
+
+    ndbout_c("create tab");
+    CHK2(pDic->createTable(tab) == 0, pDic->getNdbError());
+    const NdbDictionary::Table* pTab = pDic->getTable(tab.getName());
+    CHK2(pTab != 0, pDic->getNdbError());
+
+    ndbout_c("load table");
+    HugoTransactions trans(* pTab);
+    CHK2(trans.loadTable(pNdb, records) == 0, trans.getNdbError());
+
+    int codes[] = { 5080, 5081 };
+    for (int i = 0, j = 0; i < restarter.getNumDbNodes(); i++, j++)
+    {
+      int code = codes[j % NDB_ARRAY_SIZE(codes)];
+      int nodeId = restarter.getDbNodeId(i);
+      ndbout_c("error %d node: %d", code, nodeId);
+      restarter.insertErrorInNode(nodeId, code);
+    }
+
+    ndbout_c("running big trans");
+    HugoOperations ops(* pTab);
+    CHK2(ops.startTransaction(pNdb) == 0, ops.getNdbError());
+    CHK2(ops.pkReadRecord(0, 16384) == 0, ops.getNdbError());
+    if (ops.execute_Commit(pNdb, AO_IgnoreError) != 0)
+    {
+      // XXX should this occur if AO_IgnoreError ?
+      CHK2(ops.getNdbError().code == 1223, ops.getNdbError());
+      g_info << ops.getNdbError() << endl;
+    }
+    ops.closeTransaction(pNdb);
+  }
+  while (0);
+
+  restarter.insertErrorInAllNodes(0);
+  return result;
+}
+
+// bug#19031389
+
+int
+runAccCommitOrder(NDBT_Context* ctx, NDBT_Step* step)
+{
+  Ndb* pNdb = GETNDB(step);
+  const NdbDictionary::Table* pTab = ctx->getTab();
+  const int loops = ctx->getNumLoops();
+  const int records = ctx->getNumRecords();
+  require(records > 0);
+  const int opsteps = ctx->getProperty("OPSTEPS");
+  int result = NDBT_OK;
+
+  for (int loop = 0; loop < loops; loop++)
+  {
+    g_info << "loop " << loop << endl;
+
+    {
+      g_info << "load table" << endl;
+      HugoTransactions trans(*pTab);
+      CHK2(trans.loadTable(pNdb, records) == 0, trans.getNdbError());
+    }
+
+    g_info << "start op steps" << endl;
+    require(ctx->getProperty("RUNNING", (Uint32)opsteps) == 0);
+    ctx->setProperty("RUN", (Uint32)1);
+
+    if (ctx->getPropertyWait("RUNNING", (Uint32)opsteps))
+      break;
+    g_info << "all op steps running" << endl;
+
+    int mssleep = 10 + ndb_rand() % records;
+    if (mssleep > 1000)
+      mssleep = 1000;
+    NdbSleep_MilliSleep(mssleep);
+
+    g_info << "stop op steps" << endl;
+    require(ctx->getProperty("RUNNING", (Uint32)0) == (Uint32)opsteps);
+    ctx->setProperty("RUN", (Uint32)0);
+
+    if (ctx->getPropertyWait("RUNNING", (Uint32)0))
+      break;
+    g_info << "all op steps stopped" << endl;
+
+    {
+      g_info << "clear table" << endl;
+      UtilTransactions trans(*pTab);
+      CHK1(trans.clearTable(pNdb, records) == 0);
+    }
+  }
+
+  g_info << "stop test" << endl;
+  ctx->stopTest();
+  return result;
+}
+
+int
+runAccCommitOrderOps(NDBT_Context* ctx, NDBT_Step* step)
+{
+  const int stepNo = step->getStepNo();
+  Ndb* pNdb = GETNDB(step);
+  const NdbDictionary::Table* pTab = ctx->getTab();
+  const int records = ctx->getNumRecords();
+  int result = NDBT_OK;
+
+  unsigned seed = (unsigned)(getpid() ^ stepNo);
+  ndb_srand(seed);
+
+  int loop = 0;
+  while (!ctx->isTestStopped())
+  {
+    if (ctx->getPropertyWait("RUN", (Uint32)1))
+      break;
+    g_info << "step " << stepNo << ": loop " << loop << endl;
+
+    ctx->incProperty("RUNNING");
+    g_info << "step " << stepNo << ": running" << endl;
+
+    int opscount = 0;
+    int n = 0; // steps should hit about same records
+    while (ctx->getProperty("RUN", (Uint32)0) == (Uint32)1)
+    {
+      HugoOperations ops(*pTab);
+      ops.setQuiet();
+      CHK2(ops.startTransaction(pNdb) == 0, ops.getNdbError());
+
+      const int numreads = 2 + ndb_rand_r(&seed) % 3;
+      for (int i = 0; i < numreads; i++)
+      {
+        NdbOperation::LockMode lm = NdbOperation::LM_Read;
+        CHK2(ops.pkReadRecord(pNdb, n, 1, lm) == 0, ops.getNdbError());
+        opscount++;
+      }
+      CHK1(result == NDBT_OK);
+
+      CHK2(ops.pkDeleteRecord(pNdb, n, 1) == 0, ops.getNdbError());
+
+      CHK2(ops.execute_Commit(pNdb) == 0 ||
+           ops.getNdbError().code == 626 ||
+           (
+             ops.getNdbError().status == NdbError::TemporaryError &&
+             ops.getNdbError().classification != NdbError::NodeRecoveryError
+           ),
+           ops.getNdbError());
+      ops.closeTransaction(pNdb);
+      n = (n + 1) % records;
+    }
+    CHK1(result == NDBT_OK);
+    g_info << "step " << stepNo << ": ops count " << opscount << endl;
+
+    ctx->decProperty("RUNNING");
+    g_info << "step " << stepNo << ": stopped" << endl;
+
+    loop++;
+  }
+
+  ctx->stopTest();
+  return result;
+}
+
+/**
+ * TESTCASE DeleteNdbWhilePoll: Delete an Ndb object while it(trp_clnt)
+ * is in poll q.
+ * runInsertOneTuple : inserts one tuple in table.
+ * runLockTuple : A thread runs transaction 1 (Txn1) which locks the
+ * tuple with exclusive lock and signals another thread running
+ * transaction 2 (Txn2).
+ * runReadLockedTuple : Txn2 issues an exclusive read of the tuple
+ * locked by Txn1 (and waits for lock), and signals the delete thread.
+ * deleteNdbWhileWaiting : deletes the ndb object used by Txn2.
+ * Tx1 commits and Tx2 commits and provokes consequences from deleted Ndb.
+ *
+ * The most probable consequence, is :
+ * TransporterFacade.cpp:1674: require((clnt->m_poll.m_locked == true)) failed
+ */
+// Candidate for deleteNdbWhileWaiting().
+static Ndb* ndbToDelete = NULL;
+
+int
+runInsertOneTuple(NDBT_Context *ctx, NDBT_Step* step)
+{
+  int result = NDBT_OK;
+  const NdbDictionary::Table *table= ctx->getTab();
+  HugoOperations hugoOp1(*table);
+  Ndb* pNdb = GETNDB(step);
+
+  CHECK2(hugoOp1.startTransaction(pNdb) == 0);
+  CHECK2(hugoOp1.pkInsertRecord(pNdb, 1, 1) == 0);
+  CHECK2(hugoOp1.execute_Commit(pNdb) == 0);
+  CHECK2(hugoOp1.closeTransaction(pNdb) == 0);
+
+  g_info << "Rec inserted, ndb " << pNdb <<endl <<endl;
+  return result;
+}
+
+int
+runLockTuple(NDBT_Context *ctx, NDBT_Step* step)
+{
+  int result = NDBT_OK;
+  const NdbDictionary::Table *table= ctx->getTab();
+  HugoOperations hugoOp1(*table);
+  Ndb* pNdb = GETNDB(step);
+
+  CHECK2(hugoOp1.startTransaction(pNdb) == 0);
+  // read the inserted tuple (Txn1).
+  CHECK2(hugoOp1.pkReadRecord(pNdb, 1, 1, NdbOperation::LM_Exclusive) == 0);
+
+  CHECK2(hugoOp1.execute_NoCommit(pNdb) == 0);
+
+  g_info << "Txn1 readlocked tuple, ndb "<<pNdb << endl;
+
+  // Flag Txn2 to read (which will be blocked due to Txn1's read lock).
+  ctx->setProperty("Txn1-LockedTuple", 1);
+
+  // Wait until ndb of Txn2 is deleted by deleteNdbWhileWaiting().
+  while(ctx->getProperty("NdbDeleted", (Uint32)0) == 0 &&
+	!ctx->isTestStopped()){
+    NdbSleep_MilliSleep(20);
+  }
+
+  // Now commit Txn1.
+  /* Intention is when this commits, Txn1's trp_clnt will relinquish the
+   * poll rights it had to trp_clnt to Txn2, which is deleted.
+   * However this is not determisnistic. Sometimes, the poll right
+   * is owned by Txn2's trp_clnt, causing test to assert-fail in do_poll.
+   */
+  g_info << "Txn1 commits, ndb " << pNdb << endl;
+
+  if (!ctx->isTestStopped())
+    CHECK2(hugoOp1.execute_Commit(pNdb) == 0);
+  g_info << "Txn1 commited, ndb " << pNdb << endl;
+
+  if (!ctx->isTestStopped())
+    CHECK2(hugoOp1.closeTransaction(pNdb) == 0);
+  return result;
+}
+
+// Read the tuple locked by Txn1, see runLockTuple().
+int
+runReadLockedTuple(NDBT_Context *ctx, NDBT_Step* step)
+{
+  int result = NDBT_OK;
+  const NdbDictionary::Table *table= ctx->getTab();
+  HugoOperations hugoOp2(*table);
+  Ndb* pNdb = GETNDB(step);
+
+  // Wait until the tuple is locked by Txn1
+  while(ctx->getProperty("Txn1-LockedTuple", (Uint32)0) == 0 &&
+	!ctx->isTestStopped()){
+    NdbSleep_MilliSleep(20);
+  }
+
+  CHECK2(hugoOp2.startTransaction(pNdb) == 0);
+  // Txn2 reads the locked tuple.
+  CHECK2(hugoOp2.pkReadRecord(pNdb, 1, 1, NdbOperation::LM_Exclusive) == 0);
+
+  // Flag deleteNdbWhileWaiting() to delete my ndb object
+  ndbToDelete = pNdb; // candidate for deleteNdbWhileWaiting()
+  ctx->setProperty("Txn2-SendCommit", 1);
+
+  // Now commit Txn2
+  g_info << "Txn2 commits, ndb " << pNdb
+	<< ", Ndb to delete " << ndbToDelete << endl << endl;
+
+  CHECK2(hugoOp2.execute_Commit(pNdb) == 0);
+
+  CHECK2(hugoOp2.closeTransaction(pNdb) == 0);
+
+  ctx->stopTest();
+  return result;
+}
+
+// Delete ndb of Txn2.
+int deleteNdbWhileWaiting(NDBT_Context* ctx, NDBT_Step* step)
+{
+  // Wait until Txn2 sends the read of the locked tuple.
+  while(ctx->getProperty("Txn2-SendCommit", (Uint32)0) == 0 &&
+    !ctx->isTestStopped()){
+    g_info << "|- Waiting for read" << endl;
+    NdbSleep_MilliSleep(20);
+  }
+
+  // Delete ndb of Txn2 while it is waiting in the poll queue.
+  g_info << "deleteNdbWhileWaiting deletes ndb " << ndbToDelete << endl << endl;
+  delete ndbToDelete;
+
+  // Signal Txn1 to commit
+  ctx->setProperty("NdbDeleted", 1);
+  return NDBT_OK;
+}
+/******* end TESTCASE DeleteNdbWhilePoll*******/
 
 
 NDBT_TESTSUITE(testBasic);
@@ -3563,6 +4182,12 @@ TESTCASE("Bug54986", "")
 }
 TESTCASE("Bug54944", "")
 {
+  TC_PROPERTY("DATABUFFER", (Uint32)0);
+  INITIALIZER(runBug54944);
+}
+TESTCASE("Bug54944DATABUFFER", "")
+{
+  TC_PROPERTY("DATABUFFER", (Uint32)1);
   INITIALIZER(runBug54944);
 }
 TESTCASE("Bug59496_case1", "")
@@ -3584,10 +4209,48 @@ TESTCASE("899", "")
   STEP(runTest899);
   FINALIZER(runEnd899);
 }
+TESTCASE("LeakApiConnectObjects", "")
+{
+  INITIALIZER(runLeakApiConnectObjects);
+}
 TESTCASE("RefreshLocking",
          "Test Refresh locking properties")
 {
   INITIALIZER(runRefreshLocking);
+}
+TESTCASE("BugXXX","")
+{
+  INITIALIZER(runBugXXX_init);
+  STEP(runBugXXX_createIndex);
+  STEP(runBugXXX_trans);
+}
+TESTCASE("Bug16834333","")
+{
+  INITIALIZER(runBug16834333);
+}
+TESTCASE("FillQueueREDOLog",
+         "Verify that we can handle a REDO log queue situation")
+{
+  INITIALIZER(insertError5083);
+  STEP(runLoadTableFail);
+  FINALIZER(clearError5083);
+}
+TESTCASE("AccCommitOrder",
+         "Bug19031389. MT kernel crash on deleted tuple in read*-delete.")
+{
+  TC_PROPERTY("OPSTEPS", (Uint32)2);
+  TC_PROPERTY("RUN", (Uint32)0);
+  TC_PROPERTY("RUNNING", (Uint32)0);
+  STEP(runAccCommitOrder);
+  STEPS(runAccCommitOrderOps, 2);
+}
+TESTCASE("DeleteNdbWhilePoll",
+	 "Delete an Ndb while it(trp_clnt) is in poll queue. Will crash the test, and thus not to be run in a regular test" ){
+  INITIALIZER(runInsertOneTuple);
+  STEP(runLockTuple);
+  STEP(runReadLockedTuple);
+  STEP(deleteNdbWhileWaiting);
+  FINALIZER(runClearTable2);
 }
 NDBT_TESTSUITE_END(testBasic);
 

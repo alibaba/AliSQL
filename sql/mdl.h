@@ -1,28 +1,26 @@
 #ifndef MDL_H
 #define MDL_H
-/* Copyright (c) 2009, 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2009, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
    51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
-
-#if defined(__IBMC__) || defined(__IBMCPP__)
-/* Further down, "next_in_lock" and "next_in_context" have the same type,
-   and in "sql_plist.h" this leads to an identical signature, which causes
-   problems in function overloading.
-*/
-#pragma namemangling(v5)
-#endif
-
 
 #include "sql_plist.h"
 #include <my_sys.h>
@@ -33,9 +31,11 @@
 
 class THD;
 
+struct MDL_key;
 class MDL_context;
 class MDL_lock;
 class MDL_ticket;
+typedef struct st_lf_pins LF_PINS;
 
 /**
   @def ENTER_COND(C, M, S, O)
@@ -68,8 +68,8 @@ public:
   /**
     Enter a condition wait.
     For @c enter_cond() / @c exit_cond() to work the mutex must be held before
-    @c enter_cond(); this mutex is then released by @c exit_cond().
-    Usage must be: lock mutex; enter_cond(); your code; exit_cond().
+    @c enter_cond(); this mutex must then be released before @c exit_cond().
+    Usage must be: lock mutex; enter_cond(); your code; unlock mutex; exit_cond().
     @param cond the condition to wait on
     @param mutex the associated mutex
     @param [in] stage the stage to enter, or NULL
@@ -104,16 +104,49 @@ public:
   virtual int  is_killed() = 0;
 
   /**
-     This one is only used for DEBUG_SYNC.
-     (Do not use it to peek/poke into other parts of THD.)
+    Does the owner still have connection to the client?
+  */
+  virtual bool is_connected() = 0;
+
+  /**
+     Within MDL subsystem this one is only used for DEBUG_SYNC.
+     Do not use it to peek/poke into other parts of THD from MDL.
+     However it is OK to use this method in callbacks provided
+     by SQL-layer to MDL subsystem (since SQL-layer has full
+     access to THD anyway).
    */
   virtual THD* get_thd() = 0;
 
   /**
      @see THD::notify_shared_lock()
    */
-  virtual bool notify_shared_lock(MDL_context_owner *in_use,
+  virtual void notify_shared_lock(MDL_context_owner *in_use,
                                   bool needs_thr_lock_abort) = 0;
+
+  /**
+    Notify/get permission from interested storage engines before acquiring
+    exclusive lock for the key.
+
+    The returned argument 'victimized' specify reason for lock
+    not granted. If 'true', lock was refused in an attempt to 
+    resolve a possible MDL->GSL deadlock. Locking may then be retried.
+
+    @return False if notification was successful and it is OK to acquire lock,
+            True if one of SEs asks to abort lock acquisition.
+  */
+  virtual bool notify_hton_pre_acquire_exclusive(const MDL_key *mdl_key,
+                                                 bool *victimized) = 0;
+  /**
+    Notify interested storage engines that we have just released exclusive
+    lock for the key.
+  */
+  virtual void notify_hton_post_release_exclusive(const MDL_key *mdl_key) = 0;
+
+  /**
+    Get random seed specific to this THD to be used for initialization
+    of PRNG for the MDL_context.
+  */
+  virtual uint get_rand_seed() = 0;
 };
 
 /**
@@ -194,14 +227,28 @@ enum enum_mdl_type {
   */
   MDL_SHARED_WRITE,
   /*
-    An upgradable shared metadata lock for cases when there is an intention
-    to modify (and not just read) data in the table.
-    Can be upgraded to MDL_SHARED_NO_WRITE and MDL_EXCLUSIVE.
-    A connection holding SU lock can read table metadata and modify or read
-    table data (after acquiring appropriate table and row-level locks).
+    A version of MDL_SHARED_WRITE lock which has lower priority than
+    MDL_SHARED_READ_ONLY locks. Used by DML statements modifying
+    tables and using the LOW_PRIORITY clause.
+  */
+  MDL_SHARED_WRITE_LOW_PRIO,
+  /*
+    An upgradable shared metadata lock which allows concurrent updates and
+    reads of table data.
+    A connection holding this kind of lock can read table metadata and read
+    table data. It should not modify data as this lock is compatible with
+    SRO locks.
+    Can be upgraded to SNW, SNRW and X locks. Once SU lock is upgraded to X
+    or SNRW lock data modification can happen freely.
     To be used for the first phase of ALTER TABLE.
   */
   MDL_SHARED_UPGRADABLE,
+  /*
+    A shared metadata lock for cases when we need to read data from table
+    and block all concurrent modifications to it (for both data and metadata).
+    Used by LOCK TABLES READ statement.
+  */
+  MDL_SHARED_READ_ONLY,
   /*
     An upgradable shared metadata lock which blocks all attempts to update
     table data, allowing reads.
@@ -275,7 +322,7 @@ enum enum_mdl_duration {
   or "name".
 */
 
-class MDL_key
+struct MDL_key
 {
 public:
 #ifdef HAVE_PSI_INTERFACE
@@ -288,16 +335,25 @@ public:
     update m_namespace_to_wait_state_name array in mdl.cc!
 
     Different types of objects exist in different namespaces
+     - GLOBAL is used for the global read lock.
+     - TABLESPACE is for tablespaces.
+     - SCHEMA is for schemas (aka databases).
      - TABLE is for tables and views.
      - FUNCTION is for stored functions.
      - PROCEDURE is for stored procedures.
      - TRIGGER is for triggers.
-     - EVENT is for event scheduler events
+     - EVENT is for event scheduler events.
+     - COMMIT is for enabling the global read lock to block commits.
+     - USER_LEVEL_LOCK is for user-level locks.
+     - LOCKING_SERVICE is for the name plugin RW-lock service
     Note that although there isn't metadata locking on triggers,
     it's necessary to have a separate namespace for them since
     MDL_key is also used outside of the MDL subsystem.
+    Also note that requests waiting for user-level locks get special
+    treatment - waiting is aborted if connection to client is lost.
   */
   enum enum_mdl_namespace { GLOBAL=0,
+                            TABLESPACE,
                             SCHEMA,
                             TABLE,
                             FUNCTION,
@@ -305,6 +361,8 @@ public:
                             TRIGGER,
                             EVENT,
                             COMMIT,
+                            USER_LEVEL_LOCK,
+                            LOCKING_SERVICE,
                             /* This should be the last ! */
                             NAMESPACE_END };
 
@@ -329,7 +387,6 @@ public:
     @param  mdl_namespace Id of namespace of object to be locked
     @param  db            Name of database to which the object belongs
     @param  name          Name of of the object
-    @param  key           Where to store the the MDL key.
   */
   void mdl_key_init(enum_mdl_namespace mdl_namespace,
                     const char *db, const char *name)
@@ -340,7 +397,7 @@ public:
       are not longer than NAME_LEN. Still we play safe and try to avoid
       buffer overruns.
     */
-    DBUG_ASSERT(strlen(db) <= NAME_LEN && strlen(name) <= NAME_LEN);
+    assert(strlen(db) <= NAME_LEN && strlen(name) <= NAME_LEN);
     m_db_name_length= static_cast<uint16>(strmake(m_ptr + 1, db, NAME_LEN) -
                                           m_ptr - 1);
     m_length= static_cast<uint16>(strmake(m_ptr + m_db_name_length + 2, name,
@@ -351,6 +408,12 @@ public:
     memcpy(m_ptr, rhs->m_ptr, rhs->m_length);
     m_length= rhs->m_length;
     m_db_name_length= rhs->m_db_name_length;
+  }
+  void reset()
+  {
+    m_ptr[0]= NAMESPACE_END;
+    m_db_name_length= 0;
+    m_length= 0;
   }
   bool is_equal(const MDL_key *rhs) const
   {
@@ -367,8 +430,7 @@ public:
       character set is utf-8, we can safely assume that no
       character starts with a zero byte.
     */
-    using std::min;
-    return memcmp(m_ptr, rhs->m_ptr, min(m_length, rhs->m_length));
+    return memcmp(m_ptr, rhs->m_ptr, std::min(m_length, rhs->m_length));
   }
 
   MDL_key(const MDL_key *rhs)
@@ -437,22 +499,46 @@ public:
   /** A lock is requested based on a fully qualified name and type. */
   MDL_key key;
 
+  const char *m_src_file;
+  uint m_src_line;
+
 public:
   static void *operator new(size_t size, MEM_ROOT *mem_root) throw ()
   { return alloc_root(mem_root, size); }
   static void operator delete(void *ptr, MEM_ROOT *mem_root) {}
 
-  void init(MDL_key::enum_mdl_namespace namespace_arg,
+  void init_with_source(MDL_key::enum_mdl_namespace namespace_arg,
             const char *db_arg, const char *name_arg,
             enum_mdl_type mdl_type_arg,
-            enum_mdl_duration mdl_duration_arg);
-  void init(const MDL_key *key_arg, enum_mdl_type mdl_type_arg,
-            enum_mdl_duration mdl_duration_arg);
+            enum_mdl_duration mdl_duration_arg,
+            const char *src_file, uint src_line);
+  void init_by_key_with_source(const MDL_key *key_arg, enum_mdl_type mdl_type_arg,
+            enum_mdl_duration mdl_duration_arg,
+            const char *src_file, uint src_line);
   /** Set type of lock request. Can be only applied to pending locks. */
   inline void set_type(enum_mdl_type type_arg)
   {
-    DBUG_ASSERT(ticket == NULL);
+    assert(ticket == NULL);
     type= type_arg;
+  }
+
+  /**
+    Is this a request for a lock which allow data to be updated?
+
+    @note This method returns true for MDL_SHARED_UPGRADABLE type of
+          lock. Even though this type of lock doesn't allow updates
+          it will always be upgraded to one that does.
+  */
+  bool is_write_lock_request() const
+  {
+    return (type >= MDL_SHARED_WRITE &&
+            type != MDL_SHARED_READ_ONLY);
+  }
+
+  /** Is this a request for a strong, DDL/LOCK TABLES-type, of lock? */
+  bool is_ddl_or_lock_tables_lock_request() const
+  {
+    return type >= MDL_SHARED_UPGRADABLE;
   }
 
   /*
@@ -485,8 +571,11 @@ public:
   {}
 };
 
+#define MDL_REQUEST_INIT(R, P1, P2, P3, P4, P5) \
+  (*R).init_with_source(P1, P2, P3, P4, P5, __FILE__, __LINE__)
 
-typedef void (*mdl_cached_object_release_hook)(void *);
+#define MDL_REQUEST_INIT_BY_KEY(R, P1, P2, P3) \
+  (*R).init_by_key_with_source(P1, P2, P3, __FILE__, __LINE__)
 
 
 /**
@@ -531,11 +620,10 @@ public:
   */
   virtual bool accept_visitor(MDL_wait_for_graph_visitor *gvisitor) = 0;
 
-  enum enum_deadlock_weight
-  {
-    DEADLOCK_WEIGHT_DML= 0,
-    DEADLOCK_WEIGHT_DDL= 100
-  };
+  static const uint DEADLOCK_WEIGHT_DML= 0;
+  static const uint DEADLOCK_WEIGHT_ULL= 50;
+  static const uint DEADLOCK_WEIGHT_DDL= 100;
+
   /* A helper used to determine which lock request should be aborted. */
   virtual uint get_deadlock_weight() const = 0;
 };
@@ -589,12 +677,7 @@ public:
   }
   enum_mdl_type get_type() const { return m_type; }
   MDL_lock *get_lock() const { return m_lock; }
-
-  bool get_autonomy() const { return m_autonomy; }
-  void set_autonomy(bool value)
-  {
-    m_autonomy= value;
-  }
+  const MDL_key *get_key() const;
   void downgrade_lock(enum_mdl_type type);
 
   bool has_stronger_or_equal_type(enum_mdl_type type) const;
@@ -605,25 +688,40 @@ public:
   /** Implement MDL_wait_for_subgraph interface. */
   virtual bool accept_visitor(MDL_wait_for_graph_visitor *dvisitor);
   virtual uint get_deadlock_weight() const;
+
+public:
+  /**
+    Status of lock request represented by the ticket as reflected in P_S.
+  */
+  enum enum_psi_status { PENDING = 0, GRANTED,
+                         PRE_ACQUIRE_NOTIFY, POST_RELEASE_NOTIFY };
+
 private:
   friend class MDL_context;
 
   MDL_ticket(MDL_context *ctx_arg, enum_mdl_type type_arg
-#ifndef DBUG_OFF
+#ifndef NDEBUG
              , enum_mdl_duration duration_arg
 #endif
             )
    : m_type(type_arg),
-#ifndef DBUG_OFF
+#ifndef NDEBUG
      m_duration(duration_arg),
 #endif
      m_ctx(ctx_arg),
      m_lock(NULL),
-     m_autonomy(false)
+     m_is_fast_path(false),
+     m_hton_notified(false),
+     m_psi(NULL)
   {}
 
+  virtual ~MDL_ticket()
+  {
+    assert(m_psi == NULL);
+  }
+
   static MDL_ticket *create(MDL_context *ctx_arg, enum_mdl_type type_arg
-#ifndef DBUG_OFF
+#ifndef NDEBUG
                             , enum_mdl_duration duration_arg
 #endif
                             );
@@ -631,7 +729,7 @@ private:
 private:
   /** Type of metadata lock. Externally accessible. */
   enum enum_mdl_type m_type;
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   /**
     Duration of lock represented by this ticket.
     Context private. Debug-only.
@@ -648,8 +746,22 @@ private:
   */
   MDL_lock *m_lock;
 
-  /* whether autonomous transaction lock. */
-  bool m_autonomy;
+  /**
+    Indicates that ticket corresponds to lock acquired using "fast path"
+    algorithm. Particularly this means that it was not included into
+    MDL_lock::m_granted bitmap/list and instead is accounted for by
+    MDL_lock::m_fast_path_locks_granted_counter
+  */
+  bool m_is_fast_path;
+
+  /**
+    Indicates that ticket corresponds to lock request which required
+    storage engine notification during its acquisition and requires
+    storage engine notification after its release.
+  */
+  bool m_hton_notified;
+
+  PSI_metadata_lock *m_psi;
 
 private:
   MDL_ticket(const MDL_ticket &);               /* not implemented */
@@ -710,6 +822,7 @@ public:
                               bool signal_timeout,
                               const PSI_stage_info *wait_state_name);
 private:
+
   /**
     Condvar which is used for waiting until this context's pending
     request can be satisfied or this thread has to perform actions
@@ -720,6 +833,38 @@ private:
   mysql_mutex_t m_LOCK_wait_status;
   mysql_cond_t m_COND_wait_status;
   enum_wait_status m_wait_status;
+};
+
+
+/**
+  Base class to find out if the lock represented by a given ticket
+  should be released. Users of release_locks() need to subclass
+  this and specify an implementation of release(). Only for locks
+  with explicit duration.
+*/
+
+class MDL_release_locks_visitor
+{
+public:
+  virtual ~MDL_release_locks_visitor() {}
+  /**
+    Check if the given ticket represents a lock that should be released.
+
+    @retval true if the lock should be released, false otherwise.
+  */
+  virtual bool release(MDL_ticket *ticket) = 0;
+};
+
+
+/**
+  Abstract visitor class for inspecting MDL_context.
+*/
+
+class MDL_context_visitor
+{
+public:
+  virtual ~MDL_context_visitor() {}
+  virtual void visit_context(const MDL_context *ctx) = 0;
 };
 
 
@@ -758,11 +903,14 @@ public:
   bool clone_ticket(MDL_request *mdl_request);
 
   void release_all_locks_for_name(MDL_ticket *ticket);
+  void release_locks(MDL_release_locks_visitor *visitor);
   void release_lock(MDL_ticket *ticket);
 
-  bool is_lock_owner(MDL_key::enum_mdl_namespace mdl_namespace,
-                     const char *db, const char *name,
-                     enum_mdl_type mdl_type);
+  bool owns_equal_or_stronger_lock(MDL_key::enum_mdl_namespace mdl_namespace,
+                                   const char *db, const char *name,
+                                   enum_mdl_type mdl_type);
+
+  bool find_lock_owner(const MDL_key *mdl_key, MDL_context_visitor *visitor);
 
   bool has_lock(const MDL_savepoint &mdl_savepoint, MDL_ticket *mdl_ticket);
 
@@ -773,10 +921,9 @@ public:
              m_tickets[MDL_EXPLICIT].is_empty());
   }
 
-  inline bool has_explicit_locks() const
-  {
-    return !m_tickets[MDL_EXPLICIT].is_empty();
-  }
+  bool has_locks(MDL_key::enum_mdl_namespace mdl_namespace) const;
+
+  bool has_locks_waited_for() const;
 
   MDL_savepoint mdl_savepoint()
   {
@@ -790,22 +937,18 @@ public:
 
   void release_statement_locks();
   void release_transactional_locks();
-  void release_autonomous_transactional_locks();
   void rollback_to_savepoint(const MDL_savepoint &mdl_savepoint);
 
-  MDL_context_owner *get_owner() { return m_owner; }
+  MDL_context_owner *get_owner() const { return m_owner; }
 
   /** @pre Only valid if we started waiting for lock. */
   inline uint get_deadlock_weight() const
-  { return m_waiting_for->get_deadlock_weight(); }
-  /**
-    Post signal to the context (and wake it up if necessary).
+  {
+    return m_force_dml_deadlock_weight ?
+           MDL_wait_for_subgraph::DEADLOCK_WEIGHT_DML :
+           m_waiting_for->get_deadlock_weight();
+  }
 
-    @retval FALSE - Success, signal was posted.
-    @retval TRUE  - Failure, signal was not posted since context
-                    already has received some signal or closed
-                    signal slot.
-  */
   void init(MDL_context_owner *arg) { m_owner= arg; }
 
   void set_needs_thr_lock_abort(bool needs_thr_lock_abort)
@@ -819,11 +962,66 @@ public:
             will see the new value eventually.
     */
     m_needs_thr_lock_abort= needs_thr_lock_abort;
+
+    if (m_needs_thr_lock_abort)
+    {
+      /*
+        For MDL_object_lock::notify_conflicting_locks() to work properly
+        all context requiring thr_lock aborts should not have any "fast
+        path" locks.
+      */
+      materialize_fast_path_locks();
+    }
   }
   bool get_needs_thr_lock_abort() const
   {
     return m_needs_thr_lock_abort;
   }
+
+  void set_force_dml_deadlock_weight(bool force_dml_deadlock_weight)
+  {
+    m_force_dml_deadlock_weight= force_dml_deadlock_weight;
+  }
+
+  /**
+    Get pseudo random value in [0 .. 2^31-1] range.
+
+    @note We use Linear Congruential Generator with venerable constant
+          parameters for this.
+          It is known to have problems with its lower bits are not being
+          very random so probably is not good enough for generic use.
+          However, we only use it to do random dives into MDL_lock objects
+          hash when searching for unused objects to be freed, and for this
+          purposes it is sufficient.
+          We rely on values of "get_random() % 2^k" expression having "2^k"
+          as a period to ensure that random dives eventually cover all hash
+          (the former can be proven to be true). This also means that there
+          is no bias towards any specific objects to be expelled (as hash
+          values don't repeat), which is nice for performance.
+  */
+  uint get_random()
+  {
+    if (m_rand_state > INT_MAX32)
+    {
+      /*
+        Perform lazy initialization of LCG. We can't initialize it at the
+        point when MDL_context is created since THD represented through
+        MDL_context_owner interface is not fully initialized at this point
+        itself.
+      */
+      m_rand_state= m_owner->get_rand_seed() & INT_MAX32;
+    }
+    m_rand_state= (m_rand_state * 1103515245 + 12345) & INT_MAX32;
+    return m_rand_state;
+  }
+
+  /**
+    Within MDL subsystem this one is only used for DEBUG_SYNC.
+    Do not use it to peek/poke into other parts of THD from MDL.
+    @sa MDL_context_owner::get_thd().
+  */
+  THD *get_thd() const { return m_owner->get_thd(); }
+
 public:
   /**
     If our request for a lock is scheduled, or aborted by the deadlock
@@ -837,9 +1035,9 @@ private:
     Lists of MDL tickets:
     ---------------------
     The entire set of locks acquired by a connection can be separated
-    in three subsets according to their: locks released at the end of
-    statement, at the end of transaction and locks are released
-    explicitly.
+    in three subsets according to their duration: locks released at
+    the end of statement, at the end of transaction and locks are
+    released explicitly.
 
     Statement and transactional locks are locks with automatic scope.
     They are accumulated in the course of a transaction, and released
@@ -848,11 +1046,12 @@ private:
     locks). They must not be (and never are) released manually,
     i.e. with release_lock() call.
 
-    Locks with explicit duration are taken for locks that span
+    Tickets with explicit duration are taken for locks that span
     multiple transactions or savepoints.
     These are: HANDLER SQL locks (HANDLER SQL is
     transaction-agnostic), LOCK TABLES locks (you can COMMIT/etc
-    under LOCK TABLES, and the locked tables stay locked), and
+    under LOCK TABLES, and the locked tables stay locked), user level
+    locks (GET_LOCK()/RELEASE_LOCK() functions) and
     locks implementing "global read lock".
 
     Statement/transactional locks are always prepended to the
@@ -861,29 +1060,13 @@ private:
     a savepoint, we start popping and releasing tickets from the
     front until we reach the last ticket acquired after the savepoint.
 
-    Locks with explicit duration stored are not stored in any
+    Locks with explicit duration are not stored in any
     particular order, and among each other can be split into
-    three sets:
-
-    [LOCK TABLES locks] [HANDLER locks] [GLOBAL READ LOCK locks]
-
-    The following is known about these sets:
-
-    * GLOBAL READ LOCK locks are always stored after LOCK TABLES
-      locks and after HANDLER locks. This is because one can't say
-      SET GLOBAL read_only=1 or FLUSH TABLES WITH READ LOCK
-      if one has locked tables. One can, however, LOCK TABLES
-      after having entered the read only mode. Note, that
-      subsequent LOCK TABLES statement will unlock the previous
-      set of tables, but not the GRL!
-      There are no HANDLER locks after GRL locks because
-      SET GLOBAL read_only performs a FLUSH TABLES WITH
-      READ LOCK internally, and FLUSH TABLES, in turn, implicitly
-      closes all open HANDLERs.
-      However, one can open a few HANDLERs after entering the
-      read only mode.
-    * LOCK TABLES locks include intention exclusive locks on
-      involved schemas and global intention exclusive lock.
+    four sets:
+    - LOCK TABLES locks
+    - User-level locks
+    - HANDLER locks
+    - GLOBAL READ LOCK locks
   */
   Ticket_list m_tickets[MDL_DURATION_END];
   MDL_context_owner *m_owner;
@@ -897,6 +1080,17 @@ private:
     FALSE - Otherwise.
   */
   bool m_needs_thr_lock_abort;
+
+  /**
+    Indicates that we need to use DEADLOCK_WEIGHT_DML deadlock
+    weight for this context and ignore the deadlock weight provided
+    by the MDL_wait_for_subgraph object which we are waiting for.
+
+    @note Can be changed only when there is a guarantee that this
+          MDL_context is not waiting for a metadata lock or table
+          definition entry.
+  */
+  bool m_force_dml_deadlock_weight;
 
   /**
     Read-write lock protecting m_waiting_for member.
@@ -914,14 +1108,28 @@ private:
     readily available to the wait-for graph iterator.
    */
   MDL_wait_for_subgraph *m_waiting_for;
+  /**
+    Thread's pins (a.k.a. hazard pointers) to be used by lock-free
+    implementation of MDL_map::m_locks container. NULL if pins are
+    not yet allocated from container's pinbox.
+  */
+  LF_PINS *m_pins;
+  /**
+    State for pseudo random numbers generator (PRNG) which output
+    is used to perform random dives into MDL_lock objects hash
+    when searching for unused objects to free.
+  */
+  uint m_rand_state;
+
 private:
-  THD *get_thd() const { return m_owner->get_thd(); }
   MDL_ticket *find_ticket(MDL_request *mdl_req,
                           enum_mdl_duration *duration);
   void release_locks_stored_before(enum_mdl_duration duration, MDL_ticket *sentinel);
   void release_lock(enum_mdl_duration duration, MDL_ticket *ticket);
   bool try_acquire_lock_impl(MDL_request *mdl_request,
                              MDL_ticket **out_ticket);
+  void materialize_fast_path_locks();
+  inline bool fix_pins();
 
 public:
   void find_deadlock();
@@ -931,6 +1139,18 @@ public:
   /** Inform the deadlock detector there is an edge in the wait-for graph. */
   void will_wait_for(MDL_wait_for_subgraph *waiting_for_arg)
   {
+    /*
+      Before starting wait for any resource we need to materialize
+      all "fast path" tickets belonging to this thread. Otherwise
+      locks acquired which are represented by these tickets won't
+      be present in wait-for graph and could cause missed deadlocks.
+
+      It is OK for context which doesn't wait for any resource to
+      have "fast path" tickets, as such context can't participate
+      in any deadlock.
+    */
+    materialize_fast_path_locks();
+
     mysql_prlock_wrlock(&m_LOCK_waiting_for);
     m_waiting_for=  waiting_for_arg;
     mysql_prlock_unlock(&m_LOCK_waiting_for);
@@ -961,30 +1181,36 @@ void mdl_init();
 void mdl_destroy();
 
 
-#ifndef DBUG_OFF
+#ifndef NDEBUG
 extern mysql_mutex_t LOCK_open;
 #endif
 
 
 /*
-  Start-up parameter for the maximum size of the unused MDL_lock objects cache
-  and a constant for its default value.
-*/
-extern ulong mdl_locks_cache_size;
-static const ulong MDL_LOCKS_CACHE_SIZE_DEFAULT = 1024;
-
-/*
-  Start-up parameter for the number of partitions of the hash
-  containing all the MDL_lock objects and a constant for
-  its default value.
-*/
-extern ulong mdl_locks_hash_partitions;
-static const ulong MDL_LOCKS_HASH_PARTITIONS_DEFAULT = 8;
-
-/*
   Metadata locking subsystem tries not to grant more than
-  max_write_lock_count high-prio, strong locks successively,
-  to avoid starving out weak, low-prio locks.
+  max_write_lock_count high priority, strong locks successively,
+  to avoid starving out weak, lower priority locks.
 */
 extern "C" ulong max_write_lock_count;
+
+extern int32 mdl_locks_unused_locks_low_water;
+
+/**
+  Default value for threshold for number of unused MDL_lock objects after
+  exceeding which we start considering freeing them. Only unit tests use
+  different threshold value.
+*/
+const int32 MDL_LOCKS_UNUSED_LOCKS_LOW_WATER_DEFAULT= 1000;
+
+/**
+  Ratio of unused/total MDL_lock objects after exceeding which we
+  start trying to free unused MDL_lock objects (assuming that
+  mdl_locks_unused_locks_low_water threshold is passed as well).
+  Note that this value should be high enough for our algorithm
+  using random dives into hash to work well.
+*/
+const double MDL_LOCKS_UNUSED_LOCKS_MIN_RATIO= 0.25;
+
+int32 mdl_get_unused_locks_count();
+
 #endif

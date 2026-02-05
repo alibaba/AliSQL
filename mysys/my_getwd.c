@@ -1,13 +1,25 @@
-/* Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -16,12 +28,11 @@
 /* my_setwd() and my_getwd() works with intern_filenames !! */
 
 #include "mysys_priv.h"
+#include "my_sys.h"
 #include <m_string.h>
 #include "mysys_err.h"
-#ifdef HAVE_GETWD
-#include <sys/param.h>
-#endif
-#if defined(__WIN__)
+#include "my_thread_local.h"
+#if defined(_WIN32)
 #include <m_ctype.h>
 #include <dos.h>
 #include <direct.h>
@@ -57,26 +68,16 @@ int my_getwd(char * buf, size_t size, myf MyFlags)
     (void) strmake(buf,&curr_dir[0],size-1);
   else
   {
-#if defined(HAVE_GETCWD)
     if (size < 2)
       DBUG_RETURN(-1);
     if (!getcwd(buf,(uint) (size-2)) && MyFlags & MY_WME)
     {
       char errbuf[MYSYS_STRERROR_SIZE];
-      my_errno=errno;
-      my_error(EE_GETWD, MYF(ME_BELL+ME_WAITTANG),
+      set_my_errno(errno);
+      my_error(EE_GETWD, MYF(0),
                errno, my_strerror(errbuf, sizeof(errbuf), errno));
       DBUG_RETURN(-1);
     }
-#elif defined(HAVE_GETWD)
-    {
-      char pathname[MAXPATHLEN];
-      getwd(pathname);
-      strmake(buf,pathname,size-1);
-    }
-#else
-#error "No way to get current directory"
-#endif
     if (*((pos=strend(buf))-1) != FN_LIBCHAR)  /* End with FN_LIBCHAR */
     {
       pos[0]= FN_LIBCHAR;
@@ -103,11 +104,11 @@ int my_setwd(const char *dir, myf MyFlags)
     dir=FN_ROOTDIR;
   if ((res=chdir((char*) dir)) != 0)
   {
-    my_errno=errno;
+    set_my_errno(errno);
     if (MyFlags & MY_WME)
     {
       char errbuf[MYSYS_STRERROR_SIZE];
-      my_error(EE_SETWD, MYF(ME_BELL+ME_WAITTANG), start,
+      my_error(EE_SETWD, MYF(0), start,
                errno, my_strerror(errbuf, sizeof(errbuf), errno));
     }
   }
@@ -134,7 +135,7 @@ int my_setwd(const char *dir, myf MyFlags)
 	/* Test if hard pathname */
 	/* Returns 1 if dirname is a hard path */
 
-int test_if_hard_path(register const char *dir_name)
+int test_if_hard_path(const char *dir_name)
 {
   if (dir_name[0] == FN_HOMELIB && dir_name[1] == FN_LIBCHAR)
     return (home_dir != NullS && test_if_hard_path(home_dir));

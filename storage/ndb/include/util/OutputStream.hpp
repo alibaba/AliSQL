@@ -1,15 +1,22 @@
 /*
-   Copyright (C) 2003-2008 MySQL AB, 2008 Sun Microsystems, Inc.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
     All rights reserved. Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -33,6 +40,7 @@ public:
     ATTRIBUTE_FORMAT(printf, 2, 3) = 0;
   virtual int println(const char * fmt, ...)
     ATTRIBUTE_FORMAT(printf, 2, 3) = 0;
+  virtual int write(const void * buf, size_t len) = 0;
   virtual void flush() {};
   virtual void reset_timeout() {};
 };
@@ -48,6 +56,7 @@ public:
     ATTRIBUTE_FORMAT(printf, 2, 3);
   int println(const char * fmt, ...)
     ATTRIBUTE_FORMAT(printf, 2, 3);
+  int write(const void * buf, size_t len);
   void flush() { fflush(f); }
 };
 
@@ -67,6 +76,7 @@ public:
     ATTRIBUTE_FORMAT(printf, 2, 3);
   int println(const char * fmt, ...)
     ATTRIBUTE_FORMAT(printf, 2, 3);
+  int write(const void * buf, size_t len);
 };
 
 
@@ -82,6 +92,7 @@ public:
   int println(const char * fmt, ...)
     ATTRIBUTE_FORMAT(printf, 2, 3);
 
+  int write(const void * buf, size_t len);
   void flush();
 };
 
@@ -92,6 +103,7 @@ public:
   virtual ~NullOutputStream() {}
   int print(const char * /* unused */, ...) { return 1;}
   int println(const char * /* unused */, ...) { return 1;}
+  int write(const void * buf, size_t len) { return 1;}
 };
 
 #endif

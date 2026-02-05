@@ -1,14 +1,21 @@
 /*
- Copyright (c) 2010, Oracle and/or its affiliates. All rights reserved.
+ Copyright (c) 2010, 2021, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
- it under the terms of the GNU General Public License as published by
- the Free Software Foundation; version 2 of the License.
+ it under the terms of the GNU General Public License, version 2.0,
+ as published by the Free Software Foundation.
+
+ This program is also distributed with certain software (including
+ but not limited to OpenSSL) that is licensed under separate terms,
+ as designated in a particular file or component or in included license
+ documentation.  The authors of MySQL hereby grant you an additional
+ permission to link the program and your derivative works with the
+ separately licensed software that they have included with MySQL.
 
  This program is distributed in the hope that it will be useful,
  but WITHOUT ANY WARRANTY; without even the implied warranty of
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- GNU General Public License for more details.
+ GNU General Public License, version 2.0, for more details.
 
  You should have received a copy of the GNU General Public License
  along with this program; if not, write to the Free Software
@@ -18,6 +25,7 @@
  * myapi.cpp
  */
 
+#include <my_config.h>
 #include <stdio.h> // not using namespaces yet
 #include <string.h> // not using namespaces yet
 
@@ -193,110 +201,86 @@ void f0()
 
 // ---------------------------------------------------------------------------
 
-static const char * ABC = "ABC";
-static char abc[4] = { 'a', 'b', 'c', '\0' };
+static const char * XYZ = "XYZ";
+static char xyz[4] = { 'x', 'y', 'z', '\0' };
 
 const void * s010()
 {
     TRACE("const void * s010()");
-    return ABC;
+    return XYZ;
 }
 
 const char * s012()
 {
     TRACE("const char * s012()");
-    return ABC;
+    return XYZ;
 }
 
 void * s030()
 {
     TRACE("void * s030()");
-    return abc;
+    return xyz;
 }
 
 char * s032()
 {
     TRACE("char * s032()");
-    return abc;
-}
-
-const void * const s050()
-{
-    TRACE("const void * const s050()");
-    return ABC;
-}
-
-const char * const s052()
-{
-    TRACE("const char * const s052()");
-    return ABC;
-}
-
-void * const s070()
-{
-    TRACE("void * const s070()");
-    return abc;
-}
-
-char * const s072()
-{
-    TRACE("char * const s072()");
-    return abc;
+    return xyz;
 }
 
 void s110(const void * p0)
 {
     TRACE("void s110(const void *)");
-    CHECK((strcmp((const char*)p0, abc) != 0 && strcmp((const char*)p0, ABC) != 0),
+    CHECK((strcmp((const char*)p0, xyz) != 0 && strcmp((const char*)p0, XYZ) != 0),
           "void s110(const void *)");
 }
 
 void s112(const char * p0)
 {
     TRACE("void s112(const char *)");
-    CHECK((strcmp(p0, abc) != 0 && strcmp(p0, ABC) != 0),
+    CHECK((strcmp(p0, xyz) != 0 && strcmp(p0, XYZ) != 0),
           "void s112(const char *)");
 }
 
 void s130(void * p0)
 {
     TRACE("void s130(void *)");
-    CHECK((strcmp((const char*)p0, abc) != 0 && strcmp((const char*)p0, ABC) != 0),
+    CHECK((strcmp((const char*)p0, xyz) != 0 && strcmp((const char*)p0, XYZ) != 0),
           "void s130(void *)");
 }
 
 void s132(char * p0)
 {
     TRACE("void s132(char *)");
-    CHECK((strcmp(p0, abc) != 0 && strcmp(p0, ABC) != 0),
+    CHECK((strcmp(p0, xyz) != 0 && strcmp(p0, XYZ) != 0),
           "void s132(char *)");
 }
 
 void s150(const void * const p0)
 {
     TRACE("void s150(const void * const)");
-    CHECK((strcmp((const char*)p0, abc) != 0 && strcmp((const char*)p0, ABC) != 0),
+    CHECK((strcmp((const char*)p0, xyz) != 0 && strcmp((const char*)p0, XYZ) != 0),
           "void s150(const void * const)");
 }
 
 void s152(const char * const p0)
 {
     TRACE("void s152(const char * const)");
-    CHECK((strcmp(p0, abc) != 0 && strcmp(p0, ABC) != 0),
+    CHECK((strcmp(p0, xyz) != 0 && strcmp(p0, XYZ) != 0),
           "void s152(const char * const)");
 }
 
 void s170(void * const p0)
 {
     TRACE("void s170(void * const)");
-    CHECK((strcmp((const char*)p0, abc) != 0 && strcmp((const char*)p0, ABC) != 0),
+    CHECK((strcmp((const char*)p0, xyz) != 0 && strcmp((const char*)p0, XYZ) != 0),
           "void s170(void * const)");
 }
 
 void s172(char * const p0)
 {
     TRACE("void s172(char * const)");
-    CHECK((strcmp(p0, abc) != 0 && strcmp(p0, ABC) != 0),
+    CHECK((strcmp(p0, xyz) != 0 && strcmp(p0, XYZ) != 0),
           "void s172(char * const)");
 }
 
@@ -323,30 +307,6 @@ void * s230()
 char * s232()
 {
     TRACE("char * s232()");
-    return NULL;
-}
-
-const void * const s250()
-{
-    TRACE("const void * const s250()");
-    return NULL;
-}
-
-const char * const s252()
-{
-    TRACE("const char * const s252()");
-    return NULL;
-}
-
-void * const s270()
-{
-    TRACE("void * const s270()");
-    return NULL;
-}
-
-char * const s272()
-{
-    TRACE("char * const s272()");
     return NULL;
 }
 
@@ -399,96 +359,6 @@ void s372(char * const p0)
 }
 
 // ---------------------------------------------------------------------------
-
-const bool f11(const bool p0)
-{
-    TRACE("const bool f11(const bool)");
-    return p0;
-}
-
-const char f12(const char p0)
-{
-    TRACE("const char f12(const char)");
-    return p0;
-}
-
-const signed char f13(const signed char p0)
-{
-    TRACE("const signed char f13(const signed char)");
-    return p0;
-}
-
-const unsigned char f14(const unsigned char p0)
-{
-    TRACE("const unsigned char f14(const unsigned char)");
-    return p0;
-}
-
-const signed short f15(const signed short p0)
-{
-    TRACE("const signed short f15(const signed short)");
-    return p0;
-}
-
-const unsigned short f16(const unsigned short p0)
-{
-    TRACE("const unsigned short f16(const unsigned short)");
-    return p0;
-}
-
-const signed int f17(const signed int p0)
-{
-    TRACE("const signed int f17(const signed int)");
-    return p0;
-}
-
-const unsigned int f18(const unsigned int p0)
-{
-    TRACE("const unsigned int f18(const unsigned int)");
-    return p0;
-}
-
-const signed long f19(const signed long p0)
-{
-    TRACE("const signed long f19(const signed long)");
-    return p0;
-}
-
-const unsigned long f20(const unsigned long p0)
-{
-    TRACE("const unsigned long f20(const unsigned long)");
-    return p0;
-}
-
-const signed long long f21(const signed long long p0)
-{
-    TRACE("const signed long long f21(const signed long long)");
-    return p0;
-}
-
-const unsigned long long f22(const unsigned long long p0)
-{
-    TRACE("const unsigned long long f22(const unsigned long long)");
-    return p0;
-}
-
-const float f23(const float p0)
-{
-    TRACE("const float f23(const float)");
-    return p0;
-}
-
-const double f24(const double p0)
-{
-    TRACE("const double f24(const double)");
-    return p0;
-}
-
-const long double f25(const long double p0)
-{
-    TRACE("const long double f25(const long double)");
-    return p0;
-}
 
 bool f31(bool p0)
 {
@@ -581,102 +451,6 @@ long double f45(long double p0)
 }
 
 // ---------------------------------------------------------------------------
-
-const bool f011()
-{
-    TRACE("const bool f011()");
-    static bool _f011 = 0;
-    _f011 = !_f011;
-    return _f011;
-}
-
-const char f012()
-{
-    TRACE("const char f012()");
-    static char _f012 = 0;
-    _f012++;
-    return _f012;
-}
-
-const int8_t f013()
-{
-    TRACE("const int8_t f013()");
-    static int8_t _f013 = 0;
-    _f013++;
-    return _f013;
-}
-
-const uint8_t f014()
-{
-    TRACE("const uint8_t f014()");
-    static uint8_t _f014 = 0;
-    _f014++;
-    return _f014;
-}
-
-const int16_t f015()
-{
-    TRACE("const int16_t f015()");
-    static int16_t _f015 = 0;
-    _f015++;
-    return _f015;
-}
-
-const uint16_t f016()
-{
-    TRACE("const uint16_t f016()");
-    static uint16_t _f016 = 0;
-    _f016++;
-    return _f016;
-}
-
-const int32_t f017()
-{
-    TRACE("const int32_t f017()");
-    static int32_t _f017 = 0;
-    _f017++;
-    return _f017;
-}
-
-const uint32_t f018()
-{
-    TRACE("const uint32_t f018()");
-    static uint32_t _f018 = 0;
-    _f018++;
-    return _f018;
-}
-
-const int64_t f021()
-{
-    TRACE("const int64_t f021()");
-    static int64_t _f021 = 0;
-    _f021++;
-    return _f021;
-}
-
-const uint64_t f022()
-{
-    TRACE("const uint64_t f022()");
-    static uint64_t _f022 = 0;
-    _f022++;
-    return _f022;
-}
-
-const float f023()
-{
-    TRACE("const float f023()");
-    static float _f023 = 0;
-    _f023++;
-    return _f023;
-}
-
-const double f024()
-{
-    TRACE("const double f024()");
-    static double _f024 = 0;
-    _f024++;
-    return _f024;
-}
 
 bool f031()
 {
@@ -1622,198 +1396,6 @@ double * f444()
     return &_f444;
 }
 
-const bool * const f451()
-{
-    TRACE("const bool * const f451()");
-    static bool _f451 = 0;
-    _f451 = !_f451;
-    return &_f451;
-}
-
-const char * const f452()
-{
-    TRACE("const char * const f452()");
-    static char _f452 = 0;
-    _f452++;
-    return &_f452;
-}
-
-const int8_t * const f453()
-{
-    TRACE("const int8_t * const f453()");
-    static int8_t _f453 = 0;
-    _f453++;
-    return &_f453;
-}
-
-const uint8_t * const f454()
-{
-    TRACE("const uint8_t * const f454()");
-    static uint8_t _f454 = 0;
-    _f454++;
-    return &_f454;
-}
-
-const int16_t * const f455()
-{
-    TRACE("const int16_t * const f455()");
-    static int16_t _f455 = 0;
-    _f455++;
-    return &_f455;
-}
-
-const uint16_t * const f456()
-{
-    TRACE("const uint16_t * const f456()");
-    static uint16_t _f456 = 0;
-    _f456++;
-    return &_f456;
-}
-
-const int32_t * const f457()
-{
-    TRACE("const int32_t * const f457()");
-    static int32_t _f457 = 0;
-    _f457++;
-    return &_f457;
-}
-
-const uint32_t * const f458()
-{
-    TRACE("const uint32_t * const f458()");
-    static uint32_t _f458 = 0;
-    _f458++;
-    return &_f458;
-}
-
-const int64_t * const f461()
-{
-    TRACE("const int64_t * const f461()");
-    static int64_t _f461 = 0;
-    _f461++;
-    return &_f461;
-}
-
-const uint64_t * const f462()
-{
-    TRACE("const uint64_t * const f462()");
-    static uint64_t _f462 = 0;
-    _f462++;
-    return &_f462;
-}
-
-const float * const f463()
-{
-    TRACE("const * float const f463()");
-    static float _f463 = 0;
-    _f463++;
-    return &_f463;
-}
-
-const double * const f464()
-{
-    TRACE("const double * const f464()");
-    static double _f464 = 0;
-    _f464++;
-    return &_f464;
-}
-
-bool * const f471()
-{
-    TRACE("bool * const f471()");
-    static bool _f471 = 0;
-    _f471 = !_f471;
-    return &_f471;
-}
-
-char * const f472()
-{
-    TRACE("char * const f472()");
-    static char _f472 = 0;
-    _f472++;
-    return &_f472;
-}
-
-int8_t * const f473()
-{
-    TRACE("int8_t * const f473()");
-    static int8_t _f473 = 0;
-    _f473++;
-    return &_f473;
-}
-
-uint8_t * const f474()
-{
-    TRACE("uint8_t * const f474()");
-    static uint8_t _f474 = 0;
-    _f474++;
-    return &_f474;
-}
-
-int16_t * const f475()
-{
-    TRACE("int16_t * const f475()");
-    static int16_t _f475 = 0;
-    _f475++;
-    return &_f475;
-}
-
-uint16_t * const f476()
-{
-    TRACE("uint16_t * const f476()");
-    static uint16_t _f476 = 0;
-    _f476++;
-    return &_f476;
-}
-
-int32_t * const f477()
-{
-    TRACE("int32_t * const f477()");
-    static int32_t _f477 = 0;
-    _f477++;
-    return &_f477;
-}
-
-uint32_t * const f478()
-{
-    TRACE("uint32_t * const f478()");
-    static uint32_t _f478 = 0;
-    _f478++;
-    return &_f478;
-}
-
-int64_t * const f481()
-{
-    TRACE("int64_t * const f481()");
-    static int64_t _f481 = 0;
-    _f481++;
-    return &_f481;
-}
-
-uint64_t * const f482()
-{
-    TRACE("uint64_t * const f482()");
-    static uint64_t _f482 = 0;
-    _f482++;
-    return &_f482;
-}
-
-float * const f483()
-{
-    TRACE("float * const f483()");
-    static float _f483 = 0;
-    _f483++;
-    return &_f483;
-}
-
-double * const f484()
-{
-    TRACE("double * const f484()");
-    static double _f484 = 0;
-    _f484++;
-    return &_f484;
-}
-
 // ---------------------------------------------------------------------------
 
 void f511(const bool * p0)
@@ -2309,63 +1891,63 @@ const char * f612()
 {
     TRACE("const char * f612()");
     static char _f612 = 1;
-    return (((_f612 = (char)-_f612) != 1) ? NULL : &_f612);
+    return (((_f612 = (char)~_f612) != 1) ? NULL : &_f612);
 }
 
 const int8_t * f613()
 {
     TRACE("const int8_t * f613()");
     static int8_t _f613 = 1;
-    return (((_f613 = (int8_t)-_f613) != 1) ? NULL : &_f613);
+    return (((_f613 = (int8_t)~_f613) != 1) ? NULL : &_f613);
 }
 
 const uint8_t * f614()
 {
     TRACE("const uint8_t * f614()");
     static uint8_t _f614 = 1;
-    return (((_f614 = (uint8_t)-_f614) != 1) ? NULL : &_f614);
+    return (((_f614 = (uint8_t)~_f614) != 1) ? NULL : &_f614);
 }
 
 const int16_t * f615()
 {
     TRACE("const int16_t * f615()");
     static int16_t _f615 = 1;
-    return (((_f615 = (int16_t)-_f615) != 1) ? NULL : &_f615);
+    return (((_f615 = (int16_t)~_f615) != 1) ? NULL : &_f615);
 }
 
 const uint16_t * f616()
 {
     TRACE("const uint16_t * f616()");
     static uint16_t _f616 = 1;
-    return (((_f616 = (uint16_t)-_f616) != 1) ? NULL : &_f616);
+    return (((_f616 = (uint16_t)~_f616) != 1) ? NULL : &_f616);
 }
 
 const int32_t * f617()
 {
     TRACE("const int32_t * f617()");
     static int32_t _f617 = 1;
-    return (((_f617 = (int32_t)-_f617) != 1) ? NULL : &_f617);
+    return (((_f617 = (int32_t)~_f617) != 1) ? NULL : &_f617);
 }
 
 const uint32_t * f618()
 {
     TRACE("const uint32_t * f618()");
     static uint32_t _f618 = 1;
-    return (((_f618 = (uint32_t)-_f618) != 1) ? NULL : &_f618);
+    return (((_f618 = (uint32_t)~_f618) != 1) ? NULL : &_f618);
 }
 
 const int64_t * f621()
 {
     TRACE("const int64_t * f621()");
     static int64_t _f621 = 1;
-    return (((_f621 = (int64_t)-_f621) != 1) ? NULL : &_f621);
+    return (((_f621 = (int64_t)~_f621) != 1) ? NULL : &_f621);
 }
 
 const uint64_t * f622()
 {
     TRACE("const uint64_t * f622()");
     static uint64_t _f622 = 1;
-    return (((_f622 = (uint64_t)-_f622) != 1) ? NULL : &_f622);
+    return (((_f622 = (uint64_t)~_f622) != 1) ? NULL : &_f622);
 }
 
 const float * f623()
@@ -2393,63 +1975,63 @@ char * f632()
 {
     TRACE("char * f632()");
     static char _f632 = 1;
-    return (((_f632 = (char)-_f632) != 1) ? NULL : &_f632);
+    return (((_f632 = (char)~_f632) != 1) ? NULL : &_f632);
 }
 
 int8_t * f633()
 {
     TRACE("int8_t * f633()");
     static int8_t _f633 = 1;
-    return (((_f633 = (int8_t)-_f633) != 1) ? NULL : &_f633);
+    return (((_f633 = (int8_t)~_f633) != 1) ? NULL : &_f633);
 }
 
 uint8_t * f634()
 {
     TRACE("uint8_t * f634()");
     static uint8_t _f634 = 1;
-    return (((_f634 = (uint8_t)-_f634) != 1) ? NULL : &_f634);
+    return (((_f634 = (uint8_t)~_f634) != 1) ? NULL : &_f634);
 }
 
 int16_t * f635()
 {
     TRACE("int16_t * f635()");
     static int16_t _f635 = 1;
-    return (((_f635 = (int16_t)-_f635) != 1) ? NULL : &_f635);
+    return (((_f635 = (int16_t)~_f635) != 1) ? NULL : &_f635);
 }
 
 uint16_t * f636()
 {
     TRACE("uint16_t * f636()");
     static uint16_t _f636 = 1;
-    return (((_f636 = (uint16_t)-_f636) != 1) ? NULL : &_f636);
+    return (((_f636 = (uint16_t)~_f636) != 1) ? NULL : &_f636);
 }
 
 int32_t * f637()
 {
     TRACE("int32_t * f637()");
     static int32_t _f637 = 1;
-    return (((_f637 = (int32_t)-_f637) != 1) ? NULL : &_f637);
+    return (((_f637 = (int32_t)~_f637) != 1) ? NULL : &_f637);
 }
 
 uint32_t * f638()
 {
     TRACE("uint32_t * f638()");
     static uint32_t _f638 = 1;
-    return (((_f638 = (uint32_t)-_f638) != 1) ? NULL : &_f638);
+    return (((_f638 = (uint32_t)~_f638) != 1) ? NULL : &_f638);
 }
 
 int64_t * f641()
 {
     TRACE("int64_t * f641()");
     static int64_t _f641 = 1;
-    return (((_f641 = (int64_t)-_f641) != 1) ? NULL : &_f641);
+    return (((_f641 = (int64_t)~_f641) != 1) ? NULL : &_f641);
 }
 
 uint64_t * f642()
 {
     TRACE("uint64_t * f642()");
     static uint64_t _f642 = 1;
-    return (((_f642 = (uint64_t)-_f642) != 1) ? NULL : &_f642);
+    return (((_f642 = (uint64_t)~_f642) != 1) ? NULL : &_f642);
 }
 
 float * f643()
@@ -2466,174 +2048,6 @@ double * f644()
     return (((_f644 = (double)-_f644) != 1) ? NULL : &_f644);
 }
 
-const bool * const f651()
-{
-    TRACE("const bool * const f651()");
-    static bool _f651 = 1;
-    return (((_f651 = !_f651) == 0) ? NULL : &_f651);
-}
-
-const char * const f652()
-{
-    TRACE("const char * const f652()");
-    static char _f652 = 1;
-    return (((_f652 = (char)-_f652) != 1) ? NULL : &_f652);
-}
-
-const int8_t * const f653()
-{
-    TRACE("const int8_t * const f653()");
-    static int8_t _f653 = 1;
-    return (((_f653 = (int8_t)-_f653) != 1) ? NULL : &_f653);
-}
-
-const uint8_t * const f654()
-{
-    TRACE("const uint8_t * const f654()");
-    static uint8_t _f654 = 1;
-    return (((_f654 = (uint8_t)-_f654) != 1) ? NULL : &_f654);
-}
-
-const int16_t * const f655()
-{
-    TRACE("const int16_t * const f655()");
-    static int16_t _f655 = 1;
-    return (((_f655 = (int16_t)-_f655) != 1) ? NULL : &_f655);
-}
-
-const uint16_t * const f656()
-{
-    TRACE("const uint16_t * const f656()");
-    static uint16_t _f656 = 1;
-    return (((_f656 = (uint16_t)-_f656) != 1) ? NULL : &_f656);
-}
-
-const int32_t * const f657()
-{
-    TRACE("const int32_t * const f657()");
-    static int32_t _f657 = 1;
-    return (((_f657 = (int32_t)-_f657) != 1) ? NULL : &_f657);
-}
-
-const uint32_t * const f658()
-{
-    TRACE("const uint32_t * const f658()");
-    static uint32_t _f658 = 1;
-    return (((_f658 = (uint32_t)-_f658) != 1) ? NULL : &_f658);
-}
-
-const int64_t * const f661()
-{
-    TRACE("const int64_t * const f661()");
-    static int64_t _f661 = 1;
-    return (((_f661 = (int64_t)-_f661) != 1) ? NULL : &_f661);
-}
-
-const uint64_t * const f662()
-{
-    TRACE("const uint64_t * const f662()");
-    static uint64_t _f662 = 1;
-    return (((_f662 = (uint64_t)-_f662) != 1) ? NULL : &_f662);
-}
-
-const float * const f663()
-{
-    TRACE("const * float const f663()");
-    static float _f663 = 1;
-    return (((_f663 = (float)-_f663) != 1) ? NULL : &_f663);
-}
-
-const double * const f664()
-{
-    TRACE("const double * const f664()");
-    static double _f664 = 1;
-    return (((_f664 = (double)-_f664) != 1) ? NULL : &_f664);
-}
-
-bool * const f671()
-{
-    TRACE("bool * const f671()");
-    static bool _f671 = 1;
-    return (((_f671 = !_f671) == 0) ? NULL : &_f671);
-}
-
-char * const f672()
-{
-    TRACE("char * const f672()");
-    static char _f672 = 1;
-    return (((_f672 = (char)-_f672) != 1) ? NULL : &_f672);
-}
-
-int8_t * const f673()
-{
-    TRACE("int8_t * const f673()");
-    static int8_t _f673 = 1;
-    return (((_f673 = (int8_t)-_f673) != 1) ? NULL : &_f673);
-}
-
-uint8_t * const f674()
-{
-    TRACE("uint8_t * const f674()");
-    static uint8_t _f674 = 1;
-    return (((_f674 = (uint8_t)-_f674) != 1) ? NULL : &_f674);
-}
-
-int16_t * const f675()
-{
-    TRACE("int16_t * const f675()");
-    static int16_t _f675 = 1;
-    return (((_f675 = (int16_t)-_f675) != 1) ? NULL : &_f675);
-}
-
-uint16_t * const f676()
-{
-    TRACE("uint16_t * const f676()");
-    static uint16_t _f676 = 1;
-    return (((_f676 = (uint16_t)-_f676) != 1) ? NULL : &_f676);
-}
-
-int32_t * const f677()
-{
-    TRACE("int32_t * const f677()");
-    static int32_t _f677 = 1;
-    return (((_f677 = (int32_t)-_f677) != 1) ? NULL : &_f677);
-}
-
-uint32_t * const f678()
-{
-    TRACE("uint32_t * const f678()");
-    static uint32_t _f678 = 1;
-    return (((_f678 = (uint32_t)-_f678) != 1) ? NULL : &_f678);
-}
-
-int64_t * const f681()
-{
-    TRACE("int64_t * const f681()");
-    static int64_t _f681 = 1;
-    return (((_f681 = (int64_t)-_f681) != 1) ? NULL : &_f681);
-}
-
-uint64_t * const f682()
-{
-    TRACE("uint64_t * const f682()");
-    static uint64_t _f682 = 1;
-    return (((_f682 = (uint64_t)-_f682) != 1) ? NULL : &_f682);
-}
-
-float * const f683()
-{
-    TRACE("float * const f683()");
-    static float _f683 = 1;
-    return (((_f683 = (float)-_f683) != 1) ? NULL : &_f683);
-}
-
-double * const f684()
-{
-    TRACE("double * const f684()");
-    static double _f684 = 1;
-    return (((_f684 = (double)-_f684) != 1) ? NULL : &_f684);
-}
-
 // ---------------------------------------------------------------------------
 
 void f711(const bool * p0)
@@ -2648,7 +2062,7 @@ void f712(const char * p0)
 {
     TRACE("void f712(const char *)");
     static char _f712 = 1;
-    CHECK((((_f712 = (char)-_f712) != 1) ^ (p0 == NULL)),
+    CHECK((((_f712 = (char)~_f712) != 1) ^ (p0 == NULL)),
           "void f712(const char *)");
 }
 
@@ -2656,7 +2070,7 @@ void f713(const int8_t * p0)
 {
     TRACE("void f713(const int8_t *)");
     static int8_t _f713 = 1;
-    CHECK((((_f713 = (int8_t)-_f713) != 1) ^ (p0 == NULL)),
+    CHECK((((_f713 = (int8_t)~_f713) != 1) ^ (p0 == NULL)),
           "void f713(const int8_t *)");
 }
 
@@ -2664,7 +2078,7 @@ void f714(const uint8_t * p0)
 {
     TRACE("void f714(const uint8_t *)");
     static uint8_t _f714 = 1;
-    CHECK((((_f714 = (uint8_t)-_f714) != 1) ^ (p0 == NULL)),
+    CHECK((((_f714 = (uint8_t)~_f714) != 1) ^ (p0 == NULL)),
           "void f714(const uint8_t *)");
 }
 
@@ -2672,7 +2086,7 @@ void f715(const int16_t * p0)
 {
     TRACE("void f715(const int16_t *)");
     static int16_t _f715 = 1;
-    CHECK((((_f715 = (int16_t)-_f715) != 1) ^ (p0 == NULL)),
+    CHECK((((_f715 = (int16_t)~_f715) != 1) ^ (p0 == NULL)),
           "void f715(const int16_t *)");
 }
 
@@ -2680,7 +2094,7 @@ void f716(const uint16_t * p0)
 {
     TRACE("void f716(const uint16_t *)");
     static uint16_t _f716 = 1;
-    CHECK((((_f716 = (uint16_t)-_f716) != 1) ^ (p0 == NULL)),
+    CHECK((((_f716 = (uint16_t)~_f716) != 1) ^ (p0 == NULL)),
           "void f716(const uint16_t *)");
 }
 
@@ -2688,7 +2102,7 @@ void f717(const int32_t * p0)
 {
     TRACE("void f717(const int32_t *)");
     static int32_t _f717 = 1;
-    CHECK((((_f717 = (int32_t)-_f717) != 1) ^ (p0 == NULL)),
+    CHECK((((_f717 = (int32_t)~_f717) != 1) ^ (p0 == NULL)),
           "void f717(const int32_t *)");
 }
 
@@ -2696,7 +2110,7 @@ void f718(const uint32_t * p0)
 {
     TRACE("void f718(const uint32_t *)");
     static uint32_t _f718 = 1;
-    CHECK((((_f718 = (uint32_t)-_f718) != 1) ^ (p0 == NULL)),
+    CHECK((((_f718 = (uint32_t)~_f718) != 1) ^ (p0 == NULL)),
           "void f718(const uint32_t *)");
 }
 
@@ -2704,7 +2118,7 @@ void f721(const int64_t * p0)
 {
     TRACE("void f721(const int64_t *)");
     static int64_t _f721 = 1;
-    CHECK((((_f721 = (int64_t)-_f721) != 1) ^ (p0 == NULL)),
+    CHECK((((_f721 = (int64_t)~_f721) != 1) ^ (p0 == NULL)),
           "void f721(const int64_t *)");
 }
 
@@ -2712,7 +2126,7 @@ void f722(const uint64_t * p0)
 {
     TRACE("void f722(const uint64_t *)");
     static uint64_t _f722 = 1;
-    CHECK((((_f722 = (uint64_t)-_f722) != 1) ^ (p0 == NULL)),
+    CHECK((((_f722 = (uint64_t)~_f722) != 1) ^ (p0 == NULL)),
           "void f722(const uint64_t *)");
 }
 
@@ -2744,7 +2158,7 @@ void f732(char * p0)
 {
     TRACE("void f732(char *)");
     static char _f732 = 1;
-    CHECK((((_f732 = (char)-_f732) != 1) ^ (p0 == NULL)),
+    CHECK((((_f732 = (char)~_f732) != 1) ^ (p0 == NULL)),
           "void f732(char *)");
 }
 
@@ -2752,7 +2166,7 @@ void f733(int8_t * p0)
 {
     TRACE("void f733(int8_t *)");
     static int8_t _f733 = 1;
-    CHECK((((_f733 = (int8_t)-_f733) != 1) ^ (p0 == NULL)),
+    CHECK((((_f733 = (int8_t)~_f733) != 1) ^ (p0 == NULL)),
           "void f733(int8_t *)");
 }
 
@@ -2760,7 +2174,7 @@ void f734(uint8_t * p0)
 {
     TRACE("void f734(uint8_t *)");
     static uint8_t _f734 = 1;
-    CHECK((((_f734 = (uint8_t)-_f734) != 1) ^ (p0 == NULL)),
+    CHECK((((_f734 = (uint8_t)~_f734) != 1) ^ (p0 == NULL)),
           "void f734(uint8_t *)");
 }
 
@@ -2768,7 +2182,7 @@ void f735(int16_t * p0)
 {
     TRACE("void f735(int16_t *)");
     static int16_t _f735 = 1;
-    CHECK((((_f735 = (int16_t)-_f735) != 1) ^ (p0 == NULL)),
+    CHECK((((_f735 = (int16_t)~_f735) != 1) ^ (p0 == NULL)),
           "void f735(int16_t *)");
 }
 
@@ -2776,7 +2190,7 @@ void f736(uint16_t * p0)
 {
     TRACE("void f736(uint16_t *)");
     static uint16_t _f736 = 1;
-    CHECK((((_f736 = (uint16_t)-_f736) != 1) ^ (p0 == NULL)),
+    CHECK((((_f736 = (uint16_t)~_f736) != 1) ^ (p0 == NULL)),
           "void f736(uint16_t *)");
 }
 
@@ -2784,7 +2198,7 @@ void f737(int32_t * p0)
 {
     TRACE("void f737(int32_t *)");
     static int32_t _f737 = 1;
-    CHECK((((_f737 = (int32_t)-_f737) != 1) ^ (p0 == NULL)),
+    CHECK((((_f737 = (int32_t)~_f737) != 1) ^ (p0 == NULL)),
           "void f737(int32_t *)");
 }
 
@@ -2792,7 +2206,7 @@ void f738(uint32_t * p0)
 {
     TRACE("void f738(uint32_t *)");
     static uint32_t _f738 = 1;
-    CHECK((((_f738 = (uint32_t)-_f738) != 1) ^ (p0 == NULL)),
+    CHECK((((_f738 = (uint32_t)~_f738) != 1) ^ (p0 == NULL)),
           "void f738(uint32_t *)");
 }
 
@@ -2800,7 +2214,7 @@ void f741(int64_t * p0)
 {
     TRACE("void f741(int64_t *)");
     static int64_t _f741 = 1;
-    CHECK((((_f741 = (int64_t)-_f741) != 1) ^ (p0 == NULL)),
+    CHECK((((_f741 = (int64_t)~_f741) != 1) ^ (p0 == NULL)),
           "void f741(int64_t *)");
 }
 
@@ -2808,7 +2222,7 @@ void f742(uint64_t * p0)
 {
     TRACE("void f742(uint64_t *)");
     static uint64_t _f742 = 1;
-    CHECK((((_f742 = (uint64_t)-_f742) != 1) ^ (p0 == NULL)),
+    CHECK((((_f742 = (uint64_t)~_f742) != 1) ^ (p0 == NULL)),
           "void f742(uint64_t *)");
 }
 
@@ -2840,7 +2254,7 @@ void f752(const char * const p0)
 {
     TRACE("void f752(const char * const)");
     static char _f752 = 1;
-    CHECK((((_f752 = (char)-_f752) != 1) ^ (p0 == NULL)),
+    CHECK((((_f752 = (char)~_f752) != 1) ^ (p0 == NULL)),
           "void f752(const char * const)");
 }
 
@@ -2848,7 +2262,7 @@ void f753(const int8_t * const p0)
 {
     TRACE("void f753(const int8_t * const)");
     static int8_t _f753 = 1;
-    CHECK((((_f753 = (int8_t)-_f753) != 1) ^ (p0 == NULL)),
+    CHECK((((_f753 = (int8_t)~_f753) != 1) ^ (p0 == NULL)),
           "void f753(const int8_t * const)");
 }
 
@@ -2856,7 +2270,7 @@ void f754(const uint8_t * const p0)
 {
     TRACE("void f754(const uint8_t * const)");
     static uint8_t _f754 = 1;
-    CHECK((((_f754 = (uint8_t)-_f754) != 1) ^ (p0 == NULL)),
+    CHECK((((_f754 = (uint8_t)~_f754) != 1) ^ (p0 == NULL)),
           "void f754(const uint8_t * const)");
 }
 
@@ -2864,7 +2278,7 @@ void f755(const int16_t * const p0)
 {
     TRACE("void f755(const int16_t * const)");
     static int16_t _f755 = 1;
-    CHECK((((_f755 = (int16_t)-_f755) != 1) ^ (p0 == NULL)),
+    CHECK((((_f755 = (int16_t)~_f755) != 1) ^ (p0 == NULL)),
           "void f755(const int16_t * const)");
 }
 
@@ -2872,7 +2286,7 @@ void f756(const uint16_t * const p0)
 {
     TRACE("void f756(const uint16_t * const)");
     static uint16_t _f756 = 1;
-    CHECK((((_f756 = (uint16_t)-_f756) != 1) ^ (p0 == NULL)),
+    CHECK((((_f756 = (uint16_t)~_f756) != 1) ^ (p0 == NULL)),
           "void f756(const uint16_t * const)");
 }
 
@@ -2880,7 +2294,7 @@ void f757(const int32_t * const p0)
 {
     TRACE("void f757(const int32_t * const)");
     static int32_t _f757 = 1;
-    CHECK((((_f757 = (int32_t)-_f757) != 1) ^ (p0 == NULL)),
+    CHECK((((_f757 = (int32_t)~_f757) != 1) ^ (p0 == NULL)),
           "void f757(const int32_t * const)");
 }
 
@@ -2888,7 +2302,7 @@ void f758(const uint32_t * const p0)
 {
     TRACE("void f758(const uint32_t * const)");
     static uint32_t _f758 = 1;
-    CHECK((((_f758 = (uint32_t)-_f758) != 1) ^ (p0 == NULL)),
+    CHECK((((_f758 = (uint32_t)~_f758) != 1) ^ (p0 == NULL)),
           "void f758(const uint32_t * const)");
 }
 
@@ -2896,7 +2310,7 @@ void f761(const int64_t * const p0)
 {
     TRACE("void f761(const int64_t * const)");
     static int64_t _f761 = 1;
-    CHECK((((_f761 = (int64_t)-_f761) != 1) ^ (p0 == NULL)),
+    CHECK((((_f761 = (int64_t)~_f761) != 1) ^ (p0 == NULL)),
           "void f761(const int64_t * const)");
 }
 
@@ -2904,7 +2318,7 @@ void f762(const uint64_t * const p0)
 {
     TRACE("void f762(const uint64_t * const)");
     static uint64_t _f762 = 1;
-    CHECK((((_f762 = (uint64_t)-_f762) != 1) ^ (p0 == NULL)),
+    CHECK((((_f762 = (uint64_t)~_f762) != 1) ^ (p0 == NULL)),
           "void f762(const uint64_t * const)");
 }
 
@@ -2936,7 +2350,7 @@ void f772(char * const p0)
 {
     TRACE("void f772(char * const)");
     static char _f772 = 1;
-    CHECK((((_f772 = (char)-_f772) != 1) ^ (p0 == NULL)),
+    CHECK((((_f772 = (char)~_f772) != 1) ^ (p0 == NULL)),
           "void f772(char * const)");
 }
 
@@ -2944,7 +2358,7 @@ void f773(int8_t * const p0)
 {
     TRACE("void f773(int8_t * const)");
     static int8_t _f773 = 1;
-    CHECK((((_f773 = (int8_t)-_f773) != 1) ^ (p0 == NULL)),
+    CHECK((((_f773 = (int8_t)~_f773) != 1) ^ (p0 == NULL)),
           "void f773(int8_t * const)");
 }
 
@@ -2952,7 +2366,7 @@ void f774(uint8_t * const p0)
 {
     TRACE("void f774(uint8_t * const)");
     static uint8_t _f774 = 1;
-    CHECK((((_f774 = (uint8_t)-_f774) != 1) ^ (p0 == NULL)),
+    CHECK((((_f774 = (uint8_t)~_f774) != 1) ^ (p0 == NULL)),
           "void f774(uint8_t * const)");
 }
 
@@ -2960,7 +2374,7 @@ void f775(int16_t * const p0)
 {
     TRACE("void f775(int16_t * const)");
     static int16_t _f775 = 1;
-    CHECK((((_f775 = (int16_t)-_f775) != 1) ^ (p0 == NULL)),
+    CHECK((((_f775 = (int16_t)~_f775) != 1) ^ (p0 == NULL)),
           "void f775(int16_t * const)");
 }
 
@@ -2968,7 +2382,7 @@ void f776(uint16_t * const p0)
 {
     TRACE("void f776(uint16_t * const)");
     static uint16_t _f776 = 1;
-    CHECK((((_f776 = (uint16_t)-_f776) != 1) ^ (p0 == NULL)),
+    CHECK((((_f776 = (uint16_t)~_f776) != 1) ^ (p0 == NULL)),
           "void f776(uint16_t * const)");
 }
 
@@ -2976,7 +2390,7 @@ void f777(int32_t * const p0)
 {
     TRACE("void f777(int32_t * const)");
     static int32_t _f777 = 1;
-    CHECK((((_f777 = (int32_t)-_f777) != 1) ^ (p0 == NULL)),
+    CHECK((((_f777 = (int32_t)~_f777) != 1) ^ (p0 == NULL)),
           "void f777(int32_t * const)");
 }
 
@@ -2984,7 +2398,7 @@ void f778(uint32_t * const p0)
 {
     TRACE("void f778(uint32_t * const)");
     static uint32_t _f778 = 1;
-    CHECK((((_f778 = (uint32_t)-_f778) != 1) ^ (p0 == NULL)),
+    CHECK((((_f778 = (uint32_t)~_f778) != 1) ^ (p0 == NULL)),
           "void f778(uint32_t * const)");
 }
 
@@ -2992,7 +2406,7 @@ void f781(int64_t * const p0)
 {
     TRACE("void f781(int64_t * const)");
     static int64_t _f781 = 1;
-    CHECK((((_f781 = (int64_t)-_f781) != 1) ^ (p0 == NULL)),
+    CHECK((((_f781 = (int64_t)~_f781) != 1) ^ (p0 == NULL)),
           "void f781(int64_t * const)");
 }
 
@@ -3000,7 +2414,7 @@ void f782(uint64_t * const p0)
 {
     TRACE("void f782(uint64_t * const)");
     static uint64_t _f782 = 1;
-    CHECK((((_f782 = (uint64_t)-_f782) != 1) ^ (p0 == NULL)),
+    CHECK((((_f782 = (uint64_t)~_f782) != 1) ^ (p0 == NULL)),
           "void f782(uint64_t * const)");
 }
 

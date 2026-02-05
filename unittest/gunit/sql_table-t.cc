@@ -1,13 +1,20 @@
-/* Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
@@ -109,9 +116,6 @@ TEST_F(SqlTableTest, PromoteFirstTimestampColumn3)
 }
 
 
-/** Prefix used by MySQL to indicate pre-5.1 table name encoding */
-const char		srv_mysql50_table_name_prefix[10] = "#mysql50#";
-
 /*
   This is a test case based on innobase_init()
   There was an out-of-bounds read when converting "-@" to a table name.
@@ -131,14 +135,16 @@ TEST_F(SqlTableTest, FileNameToTableName)
 
   const char test_filename[] = "-@";
   char       test_tablename[sizeof test_filename
-                            + sizeof(srv_mysql50_table_name_prefix) - 1];
+                            + sizeof("#mysql50#") - 1];
+  //#mysql50# is prefix used by MySQL to indicate pre-5.1 table name encoding.
+
 
   // This one used to fail with AddressSanitizer
-  uint name_length;
+  size_t name_length;
   name_length= filename_to_tablename(test_filename,
                                      test_tablename,
                                      sizeof(test_tablename)
-#ifndef DBUG_OFF
+#ifndef NDEBUG
                                      , true
 #endif
                                      );
@@ -148,7 +154,7 @@ TEST_F(SqlTableTest, FileNameToTableName)
   name_length= filename_to_tablename(foo.str,
                                      test_tablename,
                                      sizeof(test_tablename)
-#ifndef DBUG_OFF
+#ifndef NDEBUG
                                      , true
 #endif
                                      );

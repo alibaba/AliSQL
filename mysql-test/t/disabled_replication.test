@@ -1,7 +1,10 @@
+
 #
 # Replication is disabled in embedded mode.
 #
 --source include/not_embedded.inc
+# Not GTIDs because it sets slave_sql_skip_counter
+--source include/not_gtid_enabled.inc
 
 #
 # Checks how replication commands behave when replication if OFF
@@ -27,6 +30,22 @@ CHANGE MASTER TO MASTER_CONNECT_RETRY = 1, MASTER_HEARTBEAT_PERIOD = 1.01;
 --exec $MYSQL_DUMP --compact --master-data=2 test
 FLUSH LOGS;
 FLUSH RELAY LOGS;
+
+# Commands associated with replication filters
+--error ER_SLAVE_CONFIGURATION
+CHANGE REPLICATION FILTER REPLICATE_DO_DB=(db1);
+--error ER_SLAVE_CONFIGURATION
+CHANGE REPLICATION FILTER REPLICATE_IGNORE_DB=(db1);
+--error ER_SLAVE_CONFIGURATION
+CHANGE REPLICATION FILTER REPLICATE_DO_TABLE=(db1.t1);
+--error ER_SLAVE_CONFIGURATION
+CHANGE REPLICATION FILTER REPLICATE_IGNORE_TABLE=(db1.t1);
+--error ER_SLAVE_CONFIGURATION
+CHANGE REPLICATION FILTER REPLICATE_WILD_DO_TABLE=('db1.t%');
+--error ER_SLAVE_CONFIGURATION
+CHANGE REPLICATION FILTER REPLICATE_WILD_IGNORE_TABLE=('db1.t%');
+--error ER_SLAVE_CONFIGURATION
+CHANGE REPLICATION FILTER REPLICATE_REWRITE_DB=((db1,db2));
 
 #
 # Configuration options associated with the SLAVE.
@@ -61,7 +80,6 @@ SET @@SESSION.sql_log_bin= 0;
 SHOW MASTER LOGS;
 SHOW MASTER STATUS;
 SHOW SLAVE HOSTS;
---error ER_FLUSH_MASTER_BINLOG_CLOSED
 RESET MASTER;
 SHOW BINLOG EVENTS;
 --error 2

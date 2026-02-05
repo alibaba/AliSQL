@@ -1,5 +1,8 @@
 drop table if exists t1,t2,t3;
 SET SQL_WARNINGS=1;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1 (
 auto int(5) unsigned NOT NULL auto_increment,
 string char(10) default "hello",
@@ -39,8 +42,8 @@ KEY (ulonglong,ulong),
 KEY (options,flags)
 );
 Warnings:
-Warning	1101	BLOB/TEXT column 'mediumblob_col' can't have a default value
-Warning	1101	BLOB/TEXT column 'longblob_col' can't have a default value
+Warning	1101	BLOB, TEXT, GEOMETRY or JSON column 'mediumblob_col' can't have a default value
+Warning	1101	BLOB, TEXT, GEOMETRY or JSON column 'longblob_col' can't have a default value
 show full fields from t1;
 Field	Type	Collation	Null	Key	Default	Extra	Privileges	Comment
 auto	int(5) unsigned	NULL	NO	PRI	NULL	auto_increment	#	
@@ -68,28 +71,28 @@ longblob_col	longblob	NULL	NO		NULL		#
 options	enum('one','two','tree')	latin1_swedish_ci	NO	MUL	NULL		#	
 flags	set('one','two','tree')	latin1_swedish_ci	NO				#	
 show keys from t1;
-Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible
-t1	0	PRIMARY	1	auto	A	0	NULL	NULL		BTREE			YES
-t1	1	utiny	1	utiny	A	NULL	NULL	NULL		BTREE			YES
-t1	1	tiny	1	tiny	A	NULL	NULL	NULL		BTREE			YES
-t1	1	short	1	short	A	NULL	NULL	NULL		BTREE			YES
-t1	1	any_name	1	medium	A	NULL	NULL	NULL		BTREE			YES
-t1	1	longlong	1	longlong	A	NULL	NULL	NULL		BTREE			YES
-t1	1	real_float	1	real_float	A	NULL	NULL	NULL		BTREE			YES
-t1	1	ushort	1	ushort	A	NULL	NULL	NULL		BTREE			YES
-t1	1	umedium	1	umedium	A	NULL	NULL	NULL		BTREE			YES
-t1	1	ulong	1	ulong	A	NULL	NULL	NULL		BTREE			YES
-t1	1	ulonglong	1	ulonglong	A	NULL	NULL	NULL		BTREE			YES
-t1	1	ulonglong	2	ulong	A	NULL	NULL	NULL		BTREE			YES
-t1	1	options	1	options	A	NULL	NULL	NULL		BTREE			YES
-t1	1	options	2	flags	A	NULL	NULL	NULL		BTREE			YES
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment
+t1	0	PRIMARY	1	auto	A	0	NULL	NULL		BTREE		
+t1	1	utiny	1	utiny	A	NULL	NULL	NULL		BTREE		
+t1	1	tiny	1	tiny	A	NULL	NULL	NULL		BTREE		
+t1	1	short	1	short	A	NULL	NULL	NULL		BTREE		
+t1	1	any_name	1	medium	A	NULL	NULL	NULL		BTREE		
+t1	1	longlong	1	longlong	A	NULL	NULL	NULL		BTREE		
+t1	1	real_float	1	real_float	A	NULL	NULL	NULL		BTREE		
+t1	1	ushort	1	ushort	A	NULL	NULL	NULL		BTREE		
+t1	1	umedium	1	umedium	A	NULL	NULL	NULL		BTREE		
+t1	1	ulong	1	ulong	A	NULL	NULL	NULL		BTREE		
+t1	1	ulonglong	1	ulonglong	A	NULL	NULL	NULL		BTREE		
+t1	1	ulonglong	2	ulong	A	NULL	NULL	NULL		BTREE		
+t1	1	options	1	options	A	NULL	NULL	NULL		BTREE		
+t1	1	options	2	flags	A	NULL	NULL	NULL		BTREE		
 CREATE UNIQUE INDEX test on t1 ( auto ) ;
 CREATE INDEX test2 on t1 ( ulonglong,ulong) ;
 Warnings:
-Note	1831	Duplicate index 'test2' defined on the table 'test.t1'. This is deprecated and will be disallowed in a future release.
+Warning	1831	Duplicate index 'test2' defined on the table 'test.t1'. This is deprecated and will be disallowed in a future release.
 CREATE INDEX test3 on t1 ( medium ) ;
 Warnings:
-Note	1831	Duplicate index 'test3' defined on the table 'test.t1'. This is deprecated and will be disallowed in a future release.
+Warning	1831	Duplicate index 'test3' defined on the table 'test.t1'. This is deprecated and will be disallowed in a future release.
 DROP INDEX test ON t1;
 insert into t1 values (10, 1,1,1,1,1,1,1,1,1,1,1,1,1,NULL,0,0,0,1,1,1,1,'one','one');
 insert into t1 values (NULL,2,2,2,2,2,2,2,2,2,2,2,2,2,NULL,NULL,NULL,NULL,NULL,NULL,2,2,'two','two,one');
@@ -275,7 +278,7 @@ drop table t2;
 create table t2 (primary key (auto)) select auto+1 as auto,1 as t1, 'a' as t2, repeat('a',256) as t3, binary repeat('b',256) as t4, repeat('a',4096) as t5, binary repeat('b',4096) as t6, '' as t7, binary '' as t8 from t1;
 show full columns from t2;
 Field	Type	Collation	Null	Key	Default	Extra	Privileges	Comment
-auto	int(11) unsigned	NULL	NO	PRI	0		#	
+auto	int(11) unsigned	NULL	NO	PRI	NULL		#	
 t1	int(1)	NULL	NO		0		#	
 t2	varchar(1)	latin1_swedish_ci	NO				#	
 t3	varchar(256)	latin1_swedish_ci	NO				#	
@@ -308,7 +311,7 @@ const	int(1)	NULL	NO		0		#
 drop table t1,t2,t3;
 create table t1 ( myfield INT NOT NULL, UNIQUE INDEX (myfield), unique (myfield), index(myfield));
 Warnings:
-Note	1831	Duplicate index 'myfield_2' defined on the table 'test.t1'. This is deprecated and will be disallowed in a future release.
+Warning	1831	Duplicate index 'myfield_2' defined on the table 'test.t1'. This is deprecated and will be disallowed in a future release.
 drop table t1;
 create table t1 ( id integer unsigned not null primary key );
 create table t2 ( id integer unsigned not null primary key );
@@ -347,3 +350,4 @@ id_A	id_B
 1	1
 2	NULL
 drop table t1,t2,t3;
+SET sql_mode = default;

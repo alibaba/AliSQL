@@ -1,13 +1,20 @@
-/* Copyright (c) 2001, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2001, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
@@ -16,35 +23,64 @@
 
 /* Execute DO statement */
 
-#include "sql_priv.h"
 #include "transaction.h"
-#include "unireg.h"
 #include "sql_do.h"
-#include "sql_base.h"                           // setup_fields
-#include "sql_select.h"                         // free_underlaid_joins
-
-bool mysql_do(THD *thd, List<Item> &values)
+#include "sql_base.h"                 // open_tables_for_query
+#include "sql_select.h"               // handle_query
+#include "auth_common.h"              // check_table_access
+ 
+bool mysql_do(THD *thd, LEX *lex)
 {
-  List_iterator<Item> li(values);
-  Item *value;
   DBUG_ENTER("mysql_do");
-  if (setup_fields(thd, Ref_ptr_array(), values, MARK_COLUMNS_NONE, 0, 0))
-    DBUG_RETURN(TRUE);
-  while ((value = li++))
-    value->val_int();
-  free_underlaid_joins(thd, &thd->lex->select_lex);
 
-  if (thd->is_error())
+  if (check_table_access(thd, SELECT_ACL, lex->query_tables, false, UINT_MAX,
+                         false))
+    DBUG_RETURN(true);
+
+  assert(!lex->unit->global_parameters()->explicit_limit);
+
+  if (open_tables_for_query(thd, lex->query_tables, 0))
+    DBUG_RETURN(true);
+
+  assert(!lex->describe);
+
+  Query_result *result= new Query_result_do(thd);
+  if (!result)
+    DBUG_RETURN(true);
+
+  if (handle_query(thd, lex, result, 0, 0))
+    DBUG_RETURN(true);
+
+  DBUG_RETURN(false);
+}
+
+bool Query_result_do::send_data(List<Item> &items)
+{
+  DBUG_ENTER("Query_result_do::send_data");
+
+  char buffer[MAX_FIELD_WIDTH];
+  String str_buffer(buffer, sizeof (buffer), &my_charset_bin);
+  List_iterator_fast<Item> it(items);
+
+  // Evaluate all fields, but do not send them
+  for (Item *item= it++; item; item= it++)
   {
-    /*
-      Rollback the effect of the statement, since next instruction
-      will clear the error and the rollback in the end of
-      mysql_execute_command() won't work.
-    */
-    if (! thd->in_sub_stmt)
-      trans_rollback_stmt(thd);
-    thd->clear_error(); // DO always is OK
+    if (item->evaluate(thd, &str_buffer))
+      DBUG_RETURN(true);
   }
-  my_ok(thd);
-  DBUG_RETURN(FALSE);
+
+  DBUG_RETURN(false);
+}
+
+
+bool Query_result_do::send_eof()
+{
+  /* 
+    Don't send EOF if we're in error condition (which implies we've already
+    sent or are sending an error)
+  */
+  if (thd->is_error())
+    return true;
+  ::my_ok(thd);
+  return false;
 }

@@ -1,20 +1,26 @@
-/* Copyright (c) 2002, 2013, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2002, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
    51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
 
-#include "sql_priv.h"
-#include "unireg.h"
+#include "my_global.h"
 #include "mysql.h"
 #include "sp.h"                                // sp_eval_expr
 #include "sql_cursor.h"
@@ -22,6 +28,7 @@
 #include "sp_pcontext.h"
 #include "sql_tmp_table.h"                     // create_virtual_tmp_table
 #include "sp_instr.h"
+#include "template_utils.h"
 
 extern "C" void sql_alloc_error_handler(void);
 
@@ -39,6 +46,8 @@ sp_rcontext::sp_rcontext(const sp_pcontext *root_parsing_ctx,
    m_return_value_fld(return_value_fld),
    m_return_value_set(false),
    m_in_sub_stmt(in_sub_stmt),
+   m_visible_handlers(PSI_INSTRUMENT_ME),
+   m_activated_handlers(PSI_INSTRUMENT_ME),
    m_ccount(0)
 {
 }
@@ -49,12 +58,8 @@ sp_rcontext::~sp_rcontext()
   if (m_var_table)
     free_blobs(m_var_table);
 
-  while (m_activated_handlers.elements())
-    delete m_activated_handlers.pop();
-
-  while (m_visible_handlers.elements())
-    delete m_visible_handlers.pop();
-   
+  delete_container_pointers(m_activated_handlers);
+  delete_container_pointers(m_visible_handlers);
   pop_all_cursors();
 
   // Leave m_var_items and m_case_expr_holders untouched.
@@ -99,7 +104,7 @@ bool sp_rcontext::alloc_arrays(THD *thd)
     size_t n= m_root_parsing_ctx->get_num_case_exprs();
     m_case_expr_holders.reset(
       static_cast<Item_cache **> (
-        thd->calloc(n * sizeof (Item_cache*))),
+        thd->mem_calloc(n * sizeof (Item_cache*))),
       n);
   }
 
@@ -116,7 +121,7 @@ bool sp_rcontext::init_var_table(THD *thd)
 
   m_root_parsing_ctx->retrieve_field_definitions(&field_def_lst);
 
-  DBUG_ASSERT(field_def_lst.elements == m_root_parsing_ctx->max_var_index());
+  assert(field_def_lst.elements == m_root_parsing_ctx->max_var_index());
 
   if (!(m_var_table= create_virtual_tmp_table(thd, field_def_lst)))
     return true;
@@ -152,7 +157,7 @@ bool sp_rcontext::init_var_items(THD *thd)
 
 bool sp_rcontext::set_return_value(THD *thd, Item **return_value_item)
 {
-  DBUG_ASSERT(m_return_value_fld);
+  assert(m_return_value_fld);
 
   m_return_value_set = true;
 
@@ -184,7 +189,7 @@ bool sp_rcontext::push_cursor(sp_instr_cpush *i)
 
 void sp_rcontext::pop_cursors(uint count)
 {
-  DBUG_ASSERT(m_ccount >= count);
+  assert(m_ccount >= count);
 
   while (count--)
     delete m_cstack[--m_ccount];
@@ -195,13 +200,12 @@ bool sp_rcontext::push_handler(sp_handler *handler, uint first_ip)
 {
   /*
     We should create handler entries on the system heap because:
-      - they could be (and usually are) used in several instructions,
-        thus they can not be stored on an execution mem-root;
-      - a handler can be pushed/popped many times in a loop, having these
-        objects on callers' mem-root would lead to a memory leak in every
-        iteration.
+     - they could be (and usually are) used in several instructions,
+       thus they can not be stored on an execution mem-root;
+     - a handler can be pushed/popped many times in a loop, having these
+       objects on callers' mem-root would lead to a memory leak in every
+       iteration.
   */
-
   sp_handler_entry *he=
     new (std::nothrow) sp_handler_entry(handler, first_ip);
 
@@ -211,43 +215,71 @@ bool sp_rcontext::push_handler(sp_handler *handler, uint first_ip)
     return true;
   }
 
-  return m_visible_handlers.append(he);
+  return m_visible_handlers.push_back(he);
 }
 
 
 void sp_rcontext::pop_handlers(sp_pcontext *current_scope)
 {
-  for (int i= m_visible_handlers.elements() - 1; i >= 0; --i)
+  for (int i= static_cast<int>(m_visible_handlers.size()) - 1; i >= 0; --i)
   {
     int handler_level= m_visible_handlers.at(i)->handler->scope->get_level();
 
     if (handler_level >= current_scope->get_level())
-      delete m_visible_handlers.pop();
+    {
+      delete m_visible_handlers.back();
+      m_visible_handlers.pop_back();
+    }
   }
 }
 
 
-void sp_rcontext::exit_handler(sp_pcontext *target_scope)
+void sp_rcontext::pop_handler_frame(THD *thd)
 {
-  // Pop the current handler frame.
+  Handler_call_frame *frame= m_activated_handlers.back();
+  m_activated_handlers.pop_back();
 
-  delete m_activated_handlers.pop();
+  // Also pop matching DA and copy new conditions.
+  assert(thd->get_stmt_da() == &frame->handler_da);
+  thd->pop_diagnostics_area();
+  // Out with the old, in with the new!
+  thd->get_stmt_da()->reset_condition_info(thd);
+  thd->get_stmt_da()->copy_new_sql_conditions(thd, &frame->handler_da);
+
+  delete frame;
+}
+
+
+void sp_rcontext::exit_handler(THD *thd, sp_pcontext *target_scope)
+{
+  /*
+    The handler has successfully completed. We should now pop the current
+    handler frame and pop the diagnostics area which was pushed when the
+    handler was activated.
+
+    The diagnostics area of the caller should then contain only any
+    conditions pushed during handler execution. The conditions present
+    when the handler was activated should be removed since they have
+    been successfully handled.
+  */
+  pop_handler_frame(thd);
 
   // Pop frames below the target scope level.
-
-  for (int i= m_activated_handlers.elements() - 1; i >= 0; --i)
+  for (int i= static_cast<int>(m_activated_handlers.size()) - 1; i >= 0; --i)
   {
     int handler_level= m_activated_handlers.at(i)->handler->scope->get_level();
 
-    /*
-      Only pop until we hit the first handler with appropriate scope level.
-      Otherwise we can end up popping handlers from separate scopes.
-    */
-    if (handler_level > target_scope->get_level())
-      delete m_activated_handlers.pop();
-    else
+    if (handler_level <= target_scope->get_level())
       break;
+
+    pop_handler_frame(thd);
   }
+
+  /*
+    Condition was successfully handled, reset condition count
+    so we don't trigger the handler again for the same warning.
+  */
+  thd->get_stmt_da()->reset_statement_cond_count();
 }
 
 
@@ -268,73 +300,74 @@ bool sp_rcontext::handle_sql_condition(THD *thd,
 
   Diagnostics_area *da= thd->get_stmt_da();
   const sp_handler *found_handler= NULL;
+  Sql_condition *found_condition= NULL;
 
-  uint condition_sql_errno= 0;
-  Sql_condition::enum_warning_level condition_level=  
-                                    Sql_condition::WARN_LEVEL_NOTE;
-  const char *condition_sqlstate= NULL;
-  const char *condition_message= NULL;
- 
   if (thd->is_error())
   {
     sp_pcontext *cur_pctx= cur_spi->get_parsing_ctx();
 
-    found_handler= cur_pctx->find_handler(da->get_sqlstate(),
-                                          da->sql_errno(),
-                                          Sql_condition::WARN_LEVEL_ERROR);
+    found_handler= cur_pctx->find_handler(da->returned_sqlstate(),
+                                          da->mysql_errno(),
+                                          Sql_condition::SL_ERROR);
 
-    if (!found_handler)
-      DBUG_RETURN(false);
+    if (found_handler)
+    {
+      found_condition= da->error_condition();
 
-    if (da->get_error_condition())
-    {
-      const Sql_condition *c= da->get_error_condition();
-      condition_sql_errno= c->get_sql_errno();
-      condition_level= c->get_level();
-      condition_sqlstate= c->get_sqlstate();
-      condition_message= c->get_message_text();
-    }
-    else
-    {
       /*
-        SQL condition can be NULL if the diagnostics area was full
+        error_condition can be NULL if the Diagnostics Area was full
         when the error was raised. It can also be NULL if
         Diagnostics_area::set_error_status(uint sql_error) was used.
+        In these cases, make a temporary Sql_condition here so the
+        error can be handled.
       */
-
-      condition_sql_errno= da->sql_errno();
-      condition_level= Sql_condition::WARN_LEVEL_ERROR;
-      condition_sqlstate= da->get_sqlstate();
-      condition_message= da->message();
+      if (!found_condition)
+      {
+        found_condition= new (callers_arena->mem_root)
+          Sql_condition(callers_arena->mem_root,
+                        da->mysql_errno(),
+                        da->returned_sqlstate(),
+                        Sql_condition::SL_ERROR,
+                        da->message_text());
+      }
     }
   }
-  else if (da->current_statement_warn_count())
+  else if (da->current_statement_cond_count())
   {
     Diagnostics_area::Sql_condition_iterator it= da->sql_conditions();
     const Sql_condition *c;
 
-    // Here we need to find the last warning/note from the stack.
-    // In MySQL most substantial warning is the last one.
-    // (We could have used a reverse iterator here if one existed)
+    /*
+      Here we need to find the last warning/note from the stack.
+      In MySQL most substantial warning is the last one.
+      (We could have used a reverse iterator here if one existed.)
+      We ignore preexisting conditions so we don't throw for them
+      again if the next statement isn't one that pre-clears the
+      DA. (Critically, that includes hpush_jump, i.e. any handlers
+      declared within the one we're calling. At that point, the
+      catcher for our throw would become very hard to predict!)
+      One benefit of not simply clearing the DA as we enter a handler
+      (instead of resetting the condition cound further down in this
+      exact function as we do now) and forcing the user to utilize
+      GET STACKED DIAGNOSTICS is that this way, we can make
+      SHOW WARNINGS|ERRORS work.
+    */
 
     while ((c= it++))
     {
-      if (c->get_level() == Sql_condition::WARN_LEVEL_WARN ||
-          c->get_level() == Sql_condition::WARN_LEVEL_NOTE)
+      if (c->severity() == Sql_condition::SL_WARNING ||
+          c->severity() == Sql_condition::SL_NOTE)
       {
         sp_pcontext *cur_pctx= cur_spi->get_parsing_ctx();
 
-        const sp_handler *handler= cur_pctx->find_handler(c->get_sqlstate(),
-                                                          c->get_sql_errno(),
-                                                          c->get_level());
+        const sp_handler *handler=
+          cur_pctx->find_handler(c->returned_sqlstate(),
+                                 c->mysql_errno(),
+                                 c->severity());
         if (handler)
         {
           found_handler= handler;
-
-          condition_sql_errno= c->get_sql_errno();
-          condition_level= c->get_level();
-          condition_sqlstate= c->get_sqlstate();
-          condition_message= c->get_message_text();
+          found_condition= const_cast<Sql_condition*>(c);
         }
       }
     }
@@ -347,10 +380,10 @@ bool sp_rcontext::handle_sql_condition(THD *thd,
   //  - there is a pending SQL-condition (error or warning);
   //  - there is an SQL-handler for it.
 
-  DBUG_ASSERT(condition_sql_errno != 0);
+  assert(found_condition);
 
   sp_handler_entry *handler_entry= NULL;
-  for (int i= 0; i < m_visible_handlers.elements(); ++i)
+  for (size_t i= 0; i < m_visible_handlers.size(); ++i)
   {
     sp_handler_entry *h= m_visible_handlers.at(i);
 
@@ -380,37 +413,40 @@ bool sp_rcontext::handle_sql_condition(THD *thd,
   if (!handler_entry)
     DBUG_RETURN(false);
 
-  // Mark active conditions so that they can be deleted when the handler exits.
-  da->mark_sql_conditions_for_removal();
-
   uint continue_ip= handler_entry->handler->type == sp_handler::CONTINUE ?
     cur_spi->get_cont_dest() : 0;
 
-  /* End aborted result set. */
-  if (end_partial_result_set)
-    thd->protocol->end_partial_result_set(thd);
-
   /* Add a frame to handler-call-stack. */
-  Handler_call_frame *frame=
+  Handler_call_frame *frame= 
     new (std::nothrow) Handler_call_frame(found_handler,
-                                          condition_sql_errno,
-                                          condition_sqlstate,
-                                          condition_level,
-                                          condition_message,
+                                          found_condition,
                                           continue_ip);
-
-  /* Reset error state. */
-  thd->clear_error();
-  thd->killed= THD::NOT_KILLED; // Some errors set thd->killed
-                                // (e.g. "bad data").
-
   if (!frame)
   {
     sql_alloc_error_handler();
     DBUG_RETURN(false);
   }
 
-  m_activated_handlers.append(frame);
+  m_activated_handlers.push_back(frame);
+
+  /* End aborted result set. */
+  if (end_partial_result_set)
+    thd->get_protocol()->end_partial_result_set();
+
+  /* Reset error state. */
+  thd->clear_error();
+  thd->killed= THD::NOT_KILLED; // Some errors set thd->killed
+                                // (e.g. "bad data").
+
+  thd->push_diagnostics_area(&frame->handler_da);
+
+  /*
+    Mark current conditions so we later will know which conditions
+    were added during handler execution (if any).
+  */
+  frame->handler_da.mark_preexisting_sql_conditions();
+
+  frame->handler_da.reset_statement_cond_count();
 
   *ip= handler_entry->first_ip;
 
@@ -530,7 +566,7 @@ bool sp_cursor::fetch(THD *thd, List<sp_variable> *vars)
   }
 
   DBUG_EXECUTE_IF("bug23032_emit_warning",
-                  push_warning(thd, Sql_condition::WARN_LEVEL_WARN,
+                  push_warning(thd, Sql_condition::SL_WARNING,
                                ER_UNKNOWN_ERROR,
                                ER(ER_UNKNOWN_ERROR)););
 
@@ -538,7 +574,10 @@ bool sp_cursor::fetch(THD *thd, List<sp_variable> *vars)
 
   /* Attempt to fetch one row */
   if (m_server_side_cursor->is_open())
-    m_server_side_cursor->fetch(1);
+  {
+    if (m_server_side_cursor->fetch(1))
+      return true;
+  }
 
   /*
     If the cursor was pointing after the last row, the fetch will
@@ -555,23 +594,23 @@ bool sp_cursor::fetch(THD *thd, List<sp_variable> *vars)
 
 
 ///////////////////////////////////////////////////////////////////////////
-// sp_cursor::Select_fetch_into_spvars implementation.
+// sp_cursor::Query_fetch_into_spvars implementation.
 ///////////////////////////////////////////////////////////////////////////
 
 
-int sp_cursor::Select_fetch_into_spvars::prepare(List<Item> &fields,
-                                                 SELECT_LEX_UNIT *u)
+int sp_cursor::Query_fetch_into_spvars::prepare(List<Item> &fields,
+                                                SELECT_LEX_UNIT *u)
 {
   /*
     Cache the number of columns in the result set in order to easily
     return an error if column count does not match value count.
   */
   field_count= fields.elements;
-  return select_result_interceptor::prepare(fields, u);
+  return Query_result_interceptor::prepare(fields, u);
 }
 
 
-bool sp_cursor::Select_fetch_into_spvars::send_data(List<Item> &items)
+bool sp_cursor::Query_fetch_into_spvars::send_data(List<Item> &items)
 {
   List_iterator_fast<sp_variable> spvar_iter(*spvar_list);
   List_iterator_fast<Item> item_iter(items);
@@ -579,7 +618,7 @@ bool sp_cursor::Select_fetch_into_spvars::send_data(List<Item> &items)
   Item *item;
 
   /* Must be ensured by the caller */
-  DBUG_ASSERT(spvar_list->elements == items.elements);
+  assert(spvar_list->elements == items.elements);
 
   /*
     Assign the row fetched from a server side cursor to stored

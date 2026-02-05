@@ -1,13 +1,20 @@
-/* Copyright (c) 2003, 2013, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2003, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
@@ -30,6 +37,7 @@ template <uint default_width> class Bitmap
   MY_BITMAP map;
   uint32 buffer[(default_width+31)/32];
 public:
+  enum { ALL_BITS= default_width };
   Bitmap() { init(); }
   Bitmap(const Bitmap& from) { *this=from; }
   explicit Bitmap(uint prefix_to_set) { init(prefix_to_set); }
@@ -50,8 +58,24 @@ public:
   void intersect(const Bitmap& map2) { bitmap_intersect(&map, &map2.map); }
   void intersect(ulonglong map2buff)
   {
+    // Use a spearate temporary buffer, as bitmap_init() clears all the bits.
+    ulonglong buf2;
     MY_BITMAP map2;
-    bitmap_init(&map2, (uint32 *)&map2buff, sizeof(ulonglong)*8, 0);
+
+    bitmap_init(&map2, (uint32 *) &buf2, sizeof(ulonglong) * 8, 0);
+
+    // Store the original bits.
+    if (sizeof(ulonglong) >= 8) {
+      int8store(const_cast<uchar *>(static_cast<uchar *>
+                                    (static_cast<void *>(&buf2))),
+                map2buff);
+    } else {
+      assert(sizeof(buffer) >= 4);
+      int4store(const_cast<uchar *>(static_cast<uchar *>
+                                    (static_cast<void *>(&buf2))),
+                static_cast<uint32>(map2buff));
+    }
+
     bitmap_intersect(&map, &map2);
   }
   /* Use highest bit for all bits above sizeof(ulonglong)*8. */
@@ -60,7 +84,7 @@ public:
     intersect(map2buff);
     if (map.n_bits > sizeof(ulonglong) * 8)
       bitmap_set_above(&map, sizeof(ulonglong),
-                       MY_TEST(map2buff & (LL(1) << (sizeof(ulonglong) * 8 - 1))));
+                       MY_TEST(map2buff & (1LL << (sizeof(ulonglong) * 8 - 1))));
   }
   void subtract(const Bitmap& map2) { bitmap_subtract(&map, &map2.map); }
   void merge(const Bitmap& map2) { bitmap_union(&map, &map2.map); }
@@ -92,9 +116,12 @@ public:
   ulonglong to_ulonglong() const
   {
     if (sizeof(buffer) >= 8)
-      return uint8korr(buffer);
-    DBUG_ASSERT(sizeof(buffer) >= 4);
-    return (ulonglong) uint4korr(buffer);
+      return uint8korr(static_cast<const uchar *>
+                       (static_cast<const void *>(buffer)));
+    assert(sizeof(buffer) >= 4);
+    return (ulonglong)
+      uint4korr(static_cast<const uchar *>
+                (static_cast<const void *>(buffer)));
   }
   uint bits_set() const { return bitmap_bits_set(&map); }
 };
@@ -106,21 +133,12 @@ public:
   Bitmap<64>() { init(); }
   enum { ALL_BITS = 64 };
 
-#if defined(__NETWARE__) || defined(__MWERKS__)
-  /*
-    Metwork compiler gives error on Bitmap<64>
-    Changed to Bitmap, since in this case also it will proper construct
-    this class
-  */
-  explicit Bitmap(uint prefix_to_set) { set_prefix(prefix_to_set); }
-#else
   explicit Bitmap<64>(uint prefix_to_set) { set_prefix(prefix_to_set); }
-#endif
   void init() { clear_all(); }
   void init(uint prefix_to_set) { set_prefix(prefix_to_set); }
   uint length() const { return 64; }
-  void set_bit(uint n) { map|= ((ulonglong)1) << n; }
-  void clear_bit(uint n) { map&= ~(((ulonglong)1) << n); }
+  void set_bit(uint n) { assert(n < 64); map|= ((ulonglong)1) << n; }
+  void clear_bit(uint n) { assert(n < 64); map&= ~(((ulonglong)1) << n); }
   void set_prefix(uint n)
   {
     if (n >= length())
@@ -135,12 +153,21 @@ public:
   void intersect_extended(ulonglong map2) { map&= map2; }
   void subtract(const Bitmap<64>& map2) { map&= ~map2.map; }
   void merge(const Bitmap<64>& map2) { map|= map2.map; }
-  my_bool is_set(uint n) const { return MY_TEST(map & (((ulonglong)1) << n)); }
-  my_bool is_prefix(uint n) const { return map == (((ulonglong)1) << n)-1; }
+  my_bool is_set(uint n) const
+  { assert(n < 64); return MY_TEST(map & (((ulonglong)1) << n)); }
+  my_bool is_prefix(uint n) const
+  {
+    assert(n <= 64);
+    if (n < 64)
+      return map == (((ulonglong)1) << n)-1;
+    else
+      return map == ~(ulonglong)1;
+  }
   my_bool is_clear_all() const { return map == (ulonglong)0; }
   my_bool is_set_all() const { return map == ~(ulonglong)0; }
   my_bool is_subset(const Bitmap<64>& map2) const { return !(map & ~map2.map); }
-  my_bool is_overlapping(const Bitmap<64>& map2) const { return (map & map2.map)!= 0; }
+  my_bool is_overlapping(const Bitmap<64>& map2) const
+  { return (map & map2.map)!= 0; }
   my_bool operator==(const Bitmap<64>& map2) const { return map == map2.map; }
   my_bool operator!=(const Bitmap<64>& map2) const { return !(*this == map2); }
   char *print(char *buf) const { longlong2str(map,buf,16); return buf; }

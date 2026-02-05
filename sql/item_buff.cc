@@ -1,13 +1,20 @@
-/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
@@ -21,14 +28,9 @@
   Buffers to save and compare item values
 */
 
-#include "sql_priv.h"
-/*
-  It is necessary to include set_var.h instead of item.h because there
-  are dependencies on include order for set_var.h and item.h. This
-  will be resolved later.
-*/
 #include "sql_class.h"          // THD
-#include "set_var.h"            // Cached_item, Cached_item_field, ...
+#include "item.h"               // Cached_item, Cached_item_field, ...
+#include "json_dom.h"           // Json_wrapper
 
 using std::min;
 using std::max;
@@ -51,6 +53,8 @@ Cached_item *new_Cached_item(THD *thd, Item *item, bool use_result_field)
   case STRING_RESULT:
     if (item->is_temporal())
       return new Cached_item_temporal((Item_field *) item);
+    if (item->field_type() == MYSQL_TYPE_JSON)
+      return new Cached_item_json(item);
     return new Cached_item_str(thd, (Item_field *) item);
   case INT_RESULT:
     return new Cached_item_int((Item_field *) item);
@@ -60,7 +64,7 @@ Cached_item *new_Cached_item(THD *thd, Item *item, bool use_result_field)
     return new Cached_item_decimal(item);
   case ROW_RESULT:
   default:
-    DBUG_ASSERT(0);
+    assert(0);
     return 0;
   }
 }
@@ -86,9 +90,10 @@ bool Cached_item_str::cmp(void)
   bool tmp;
 
   DBUG_ENTER("Cached_item_str::cmp");
-  DBUG_ASSERT(!item->is_temporal());
+  assert(!item->is_temporal());
+  assert(item->field_type() != MYSQL_TYPE_JSON);
   if ((res=item->val_str(&tmp_value)))
-    res->length(min(res->length(), value_max_length));
+    res->length(min(res->length(), static_cast<size_t>(value_max_length)));
   DBUG_PRINT("info", ("old: %s, new: %s",
                       value.c_ptr_safe(), res ? res->c_ptr_safe() : ""));
   if (null_value != item->null_value)
@@ -110,6 +115,64 @@ Cached_item_str::~Cached_item_str()
 {
   item=0;					// Safety
 }
+
+
+Cached_item_json::Cached_item_json(Item *item)
+  : m_item(item), m_value(new Json_wrapper())
+{}
+
+
+Cached_item_json::~Cached_item_json()
+{
+  delete m_value;
+}
+
+
+/**
+  Compare the new JSON value in m_item with the previous value.
+  @retval true   if the new value is different from the previous value,
+                 or if there is no previously cached value
+  @retval false  if the new value is the same as the already cached value
+*/
+bool Cached_item_json::cmp()
+{
+  Json_wrapper wr;
+  if (m_item->val_json(&wr))
+  {
+    null_value= true;                         /* purecov: inspected */
+    return true;                              /* purecov: inspected */
+  }
+  if (null_value != m_item->null_value)
+  {
+    null_value= m_item->null_value;
+    if (null_value)
+      return true;                              // New value is null.
+  }
+  else if (null_value)
+  {
+    return false;                               // New and old are null.
+  }
+  else if (!m_value->empty() && m_value->compare(wr) == 0)
+  {
+    return false;                               // New and old are equal.
+  }
+
+  /*
+    Otherwise, old and new are not equal, and new is not null.
+    Remember the current value till the next time we're called.
+  */
+  m_value->steal(&wr);
+
+  /*
+    The row buffer may change, which would garble the JSON binary
+    representation pointed to by m_value. Convert to DOM so that we
+    own the copy.
+  */
+  m_value->to_dom();
+
+  return true;
+}
+
 
 bool Cached_item_real::cmp(void)
 {

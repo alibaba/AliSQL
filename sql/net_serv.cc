@@ -1,13 +1,25 @@
-/* Copyright (c) 2000, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -39,16 +51,20 @@
 #include <mysqld_error.h>
 #include <my_sys.h>
 #include <m_string.h>
-#include <my_net.h>
 #include <violite.h>
 #include <signal.h>
 #include <errno.h>
 #include "probes_mysql.h"
+/* key_memory_NET_buff */
+#include "mysqld.h"
 
 #include <algorithm>
 
 using std::min;
 using std::max;
+
+PSI_memory_key key_memory_NET_buff;
+PSI_memory_key key_memory_NET_compress_packet;
 
 #ifdef EMBEDDED_LIBRARY
 #undef MYSQL_SERVER
@@ -56,6 +72,16 @@ using std::max;
 #define MYSQL_CLIENT
 #endif /*EMBEDDED_LIBRARY */
 
+// Workaround for compiler bug
+// ld.so.1: mysqld: fatal: relocation error: file sql/mysqld:
+//          symbol OPENSSL_sk_new_null: referenced symbol not found
+// openssl/safestack.h has lots of pragma weak <function>
+// Taking the address of the function solves the problem.
+// (note, do not make it static, it may be optimized away)
+#if defined(HAVE_TLSv13) && defined(__SUNPRO_CC)
+#include <openssl/ssl.h>
+void *address_of_sk_new_null = &OPENSSL_sk_new_null;
+#endif
 
 /*
   The following handles the differences when this is linked between the
@@ -69,29 +95,21 @@ using std::max;
 #ifdef MYSQL_SERVER
 /*
   The following variables/functions should really not be declared
-  extern, but as it's hard to include sql_priv.h here, we have to
+  extern, but as it's hard to include sql_class.h here, we have to
   live with this for a while.
 */
-#ifdef HAVE_QUERY_CACHE
-#define USE_QUERY_CACHE
 extern void query_cache_insert(const char *packet, ulong length,
                                unsigned pkt_nr);
-#endif /* HAVE_QUERY_CACHE */
-#define update_statistics(A) A
-#else /* MYSQL_SERVER */
-#define update_statistics(A)
-#define thd_increment_bytes_sent(N)
-#endif
+extern void thd_increment_bytes_sent(size_t length);
+extern void thd_increment_bytes_received(size_t length);
 
-#ifdef MYSQL_SERVER
 /* Additional instrumentation hooks for the server */
 #include "mysql_com_server.h"
 #endif
 
 #define VIO_SOCKET_ERROR  ((size_t) -1)
-#define MAX_PACKET_LENGTH (256L*256L*256L-1)
 
-static my_bool net_write_buff(NET *, const uchar *, ulong);
+static my_bool net_write_buff(NET *, const uchar *, size_t);
 
 /** Init with packet info. */
 
@@ -100,7 +118,8 @@ my_bool my_net_init(NET *net, Vio* vio)
   DBUG_ENTER("my_net_init");
   net->vio = vio;
   my_net_local_init(net);			/* Set some limits */
-  if (!(net->buff=(uchar*) my_malloc((size_t) net->max_packet+
+  if (!(net->buff=(uchar*) my_malloc(key_memory_NET_buff,
+                                     (size_t) net->max_packet+
              NET_HEADER_SIZE + COMP_HEADER_SIZE,
              MYF(MY_WME))))
     DBUG_RETURN(1);
@@ -135,6 +154,10 @@ void net_end(NET *net)
   DBUG_VOID_RETURN;
 }
 
+void net_claim_memory_ownership(NET *net)
+{
+  my_claim(net->buff);
+}
 
 /** Realloc the packet buffer. */
 
@@ -160,12 +183,13 @@ my_bool net_realloc(NET *net, size_t length)
   pkt_length = (length+IO_SIZE-1) & ~(IO_SIZE-1); 
   /*
     We must allocate some extra bytes for the end 0 and to be able to
-    read big compressed blocks + 1 safety byte since uint3korr() in
+    read big compressed blocks in
     net_read_packet() may actually read 4 bytes depending on build flags and
     platform.
   */
-  if (!(buff= (uchar*) my_realloc((char*) net->buff, pkt_length +
-                                  NET_HEADER_SIZE + COMP_HEADER_SIZE + 1,
+  if (!(buff= (uchar*) my_realloc(key_memory_NET_buff,
+                                  (char*) net->buff, pkt_length +
+                                  NET_HEADER_SIZE + COMP_HEADER_SIZE,
                                   MYF(MY_WME))))
   {
     /* @todo: 1 and 2 codes are identical. */
@@ -195,9 +219,19 @@ void net_clear(NET *net,
 {
   DBUG_ENTER("net_clear");
 
+  DBUG_EXECUTE_IF("simulate_bad_field_length_1", {
+    net->pkt_nr= net->compress_pkt_nr= 0;
+    net->write_pos= net->buff;
+    DBUG_VOID_RETURN;
+  });
+  DBUG_EXECUTE_IF("simulate_bad_field_length_2", {
+    net->pkt_nr= net->compress_pkt_nr= 0;
+    net->write_pos= net->buff;
+    DBUG_VOID_RETURN;
+  });
 #if !defined(EMBEDDED_LIBRARY)
   /* Ensure the socket buffer is empty, except for an EOF (at least 1). */
-  DBUG_ASSERT(!check_buffer || (vio_pending(net->vio) <= 1));
+  assert(!check_buffer || (vio_pending(net->vio) <= 1));
 #endif
 
   /* Ready for new command */
@@ -242,17 +276,15 @@ net_should_retry(NET *net, uint *retry_count MY_ATTRIBUTE((unused)))
 {
   my_bool retry;
 
-#if !defined(MYSQL_SERVER) && defined(THREAD_SAFE_CLIENT)
+#ifndef MYSQL_SERVER
   /*
-    In the thread safe client library, interrupted I/O operations
-    are always retried.  Otherwise, its either a timeout or a
-    unrecoverable error.
+    In the  client library, interrupted I/O operations are always retried.
+    Otherwise, it's either a timeout or an unrecoverable error.
   */
   retry= vio_should_retry(net->vio);
 #else
   /*
-    In the non-thread safe client library, or in the server,
-    interrupted I/O operations are retried up to a limit.
+    In the server, interrupted I/O operations are retried up to a limit.
     In this scenario, pthread_kill can be used to wake up
     (interrupt) threads waiting for I/O.
   */
@@ -312,7 +344,7 @@ my_bool my_net_write(NET *net, const uchar *packet, size_t len)
     len-=     z_size;
   }
   /* Write last packet */
-  int3store(buff,len);
+  int3store(buff, static_cast<uint>(len));
   buff[3]= (uchar) net->pkt_nr++;
   if (net_write_buff(net, buff, NET_HEADER_SIZE))
   {
@@ -394,7 +426,7 @@ net_write_command(NET *net,uchar command,
     } while (length >= MAX_PACKET_LENGTH);
     len=length;         /* Data left to be written */
   }
-  int3store(buff,length);
+  int3store(buff, static_cast<uint>(length));
   buff[3]= (uchar) net->pkt_nr++;
   rc= MY_TEST(net_write_buff(net, buff, header_size) ||
               (head_len && net_write_buff(net, header, head_len)) ||
@@ -431,7 +463,7 @@ net_write_command(NET *net,uchar command,
 */
 
 static my_bool
-net_write_buff(NET *net, const uchar *packet, ulong len)
+net_write_buff(NET *net, const uchar *packet, size_t len)
 {
   ulong left_length;
   if (net->compress && net->max_packet > MAX_PACKET_LENGTH)
@@ -511,7 +543,9 @@ net_write_raw_loop(NET *net, const uchar *buf, size_t count)
 
     count-= sentcnt;
     buf+= sentcnt;
-    update_statistics(thd_increment_bytes_sent(sentcnt));
+#ifdef MYSQL_SERVER
+    thd_increment_bytes_sent(sentcnt);
+#endif
   }
 
   /* On failure, propagate the error code. */
@@ -556,7 +590,8 @@ compress_packet(NET *net, const uchar *packet, size_t *length)
   size_t compr_length;
   const uint header_length= NET_HEADER_SIZE + COMP_HEADER_SIZE;
 
-  compr_packet= (uchar *) my_malloc(*length + header_length, MYF(MY_WME));
+  compr_packet= (uchar *) my_malloc(key_memory_NET_compress_packet,
+                                    *length + header_length, MYF(MY_WME));
 
   if (compr_packet == NULL)
     return NULL;
@@ -574,9 +609,9 @@ compress_packet(NET *net, const uchar *packet, size_t *length)
   }
 
   /* Length of the compressed (original) packet. */
-  int3store(&compr_packet[NET_HEADER_SIZE], compr_length);
+  int3store(&compr_packet[NET_HEADER_SIZE], static_cast<uint>(compr_length));
   /* Length of this packet. */
-  int3store(compr_packet, *length);
+  int3store(compr_packet, static_cast<uint>(*length));
   /* Packet number. */
   compr_packet[3]= (uchar) (net->compress_pkt_nr++);
 
@@ -604,7 +639,7 @@ net_write_packet(NET *net, const uchar *packet, size_t length)
   my_bool res;
   DBUG_ENTER("net_write_packet");
 
-#if defined(MYSQL_SERVER) && defined(USE_QUERY_CACHE)
+#if defined(MYSQL_SERVER)
   query_cache_insert((char*) packet, length, net->pkt_nr);
 #endif
 
@@ -663,6 +698,16 @@ static my_bool net_read_raw_loop(NET *net, size_t count)
   bool eof= false;
   unsigned int retry_count= 0;
   uchar *buf= net->buff + net->where_b;
+  my_bool timeout_on_full_packet = FALSE;
+  my_bool is_packet_timeout = FALSE;
+
+#ifdef MYSQL_SERVER
+  NET_SERVER* server_ext = static_cast<NET_SERVER*>(net->extension);
+  if (server_ext) timeout_on_full_packet = server_ext->timeout_on_full_packet;
+#endif
+
+  time_t start_time = 0;
+  if (timeout_on_full_packet) start_time = time(&start_time);
 
   while (count)
   {
@@ -686,7 +731,18 @@ static my_bool net_read_raw_loop(NET *net, size_t count)
 
     count-= recvcnt;
     buf+= recvcnt;
-    update_statistics(thd_increment_bytes_received(recvcnt));
+#ifdef MYSQL_SERVER
+    thd_increment_bytes_received(recvcnt);
+#endif
+
+    if (timeout_on_full_packet) {
+        time_t current_time = time(&current_time);
+        if (static_cast<unsigned int>(current_time - start_time) >
+            net->read_timeout) {
+            is_packet_timeout = TRUE;
+            break;
+        }
+    }
   }
 
   /* On failure, propagate the error code. */
@@ -696,7 +752,7 @@ static my_bool net_read_raw_loop(NET *net, size_t count)
     net->error= 2;
 
     /* Interrupted by a timeout? */
-    if (!eof && vio_was_timeout(net->vio))
+    if (!eof && (vio_was_timeout(net->vio) || is_packet_timeout))
       net->last_errno= ER_NET_READ_INTERRUPTED;
     else
       net->last_errno= ER_NET_READ_ERROR;
@@ -744,8 +800,8 @@ static my_bool net_read_packet_header(NET *net)
   if (server_extension != NULL)
   {
     void *user_data= server_extension->m_user_data;
-    DBUG_ASSERT(server_extension->m_before_header != NULL);
-    DBUG_ASSERT(server_extension->m_after_header != NULL);
+    assert(server_extension->m_before_header != NULL);
+    assert(server_extension->m_after_header != NULL);
 
     server_extension->m_before_header(net, user_data, count);
     rc= net_read_raw_loop(net, count);
@@ -780,9 +836,10 @@ static my_bool net_read_packet_header(NET *net)
       the server expects the client to send a file, but the client
       may reply with a new command instead.
     */
-    fprintf(stderr, "Error: packets out of order (found %u, expected %u)\n",
-            (uint) pkt_nr, net->pkt_nr);
-    DBUG_ASSERT(pkt_nr == net->pkt_nr);
+    my_message_local(ERROR_LEVEL,
+                     "packets out of order (found %u, expected %u)",
+                     (uint) pkt_nr, net->pkt_nr);
+    assert(pkt_nr == net->pkt_nr);
 #endif
     return TRUE;
   }
@@ -804,7 +861,7 @@ static my_bool net_read_packet_header(NET *net)
   @return The length of the packet, or @packet_error on error.
 */
 
-static ulong net_read_packet(NET *net, size_t *complen)
+static size_t net_read_packet(NET *net, size_t *complen)
 {
   size_t pkt_len, pkt_data_len;
 
@@ -822,12 +879,11 @@ static ulong net_read_packet(NET *net, size_t *complen)
   if (net->compress)
   {
     /*
-      The following uint3korr() may read 4 bytes, so make sure we don't
-      read unallocated or uninitialized memory. The right-hand expression
+      The right-hand expression
       must match the size of the buffer allocated in net_realloc().
     */
-    DBUG_ASSERT(net->where_b + NET_HEADER_SIZE + sizeof(uint32) <=
-                net->max_packet + NET_HEADER_SIZE + COMP_HEADER_SIZE + 1);
+    assert(net->where_b + NET_HEADER_SIZE + sizeof(uint32) <=
+           net->max_packet + NET_HEADER_SIZE + COMP_HEADER_SIZE);
 
     /*
       If the packet is compressed then complen > 0 and contains the
@@ -911,14 +967,14 @@ my_net_read(NET *net)
     if (len != packet_error)
       net->read_pos[len]=0;		/* Safeguard for mysql_use_result */
     MYSQL_NET_READ_DONE(0, len);
-    return len;
+    return static_cast<ulong>(len);
 #ifdef HAVE_COMPRESS
   }
   else
   {
     /* We are using the compressed protocol */
 
-    ulong buf_length;
+    size_t buf_length;
     ulong start_of_packet;
     ulong first_packet_offset;
     uint read_length, multi_byte_packet=0;
@@ -938,7 +994,7 @@ my_net_read(NET *net)
     }
     for (;;)
     {
-      ulong packet_len;
+      size_t packet_len;
 
       if (buf_length - start_of_packet >= NET_HEADER_SIZE)
       {
@@ -953,11 +1009,16 @@ my_net_read(NET *net)
         {
           if (multi_byte_packet)
           {
+            /* 
+              It's never the buffer on the first loop iteration that will have
+              multi_byte_packet on.
+              Thus there shall never be a non-zero first_packet_offset here.
+            */
+            assert(first_packet_offset == 0);
             /* Remove packet header for second packet */
-            memmove(net->buff + first_packet_offset + start_of_packet,
-              net->buff + first_packet_offset + start_of_packet +
-              NET_HEADER_SIZE,
-              buf_length - start_of_packet);
+            memmove(net->buff + start_of_packet,
+              net->buff + start_of_packet + NET_HEADER_SIZE,
+              buf_length - start_of_packet - NET_HEADER_SIZE);
             start_of_packet += read_length;
             buf_length -= NET_HEADER_SIZE;
           }
@@ -1022,7 +1083,7 @@ my_net_read(NET *net)
   }
 #endif /* HAVE_COMPRESS */
   MYSQL_NET_READ_DONE(0, len);
-  return len;
+  return static_cast<ulong>(len);
 }
 
 
@@ -1047,17 +1108,3 @@ void my_net_set_write_timeout(NET *net, uint timeout)
   DBUG_VOID_RETURN;
 }
 
-#if defined(EXPORT_SYMVER16)
-#ifndef EMBEDDED_LIBRARY
-C_MODE_START
-
-// Hack to provide Fedora symbols
-
-my_bool mysql_net_realloc(NET *net, size_t length)
-{
-  return net_realloc(net, length);
-}
-
-C_MODE_END
-#endif
-#endif  // EXPORT_SYMVER16

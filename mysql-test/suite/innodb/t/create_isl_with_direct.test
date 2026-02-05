@@ -3,10 +3,12 @@
 --source include/not_windows.inc
 
 --disable_query_log
-CALL mtr.add_suppression("\\[Warning\\] InnoDB: Failed to set O_DIRECT on file ./ibdata1: OPEN: Invalid argument, continuing anyway. O_DIRECT is known to result in 'Invalid argument' on Linux on tmpfs, see MySQL Bug#26662.");
+CALL mtr.add_suppression("\\[Warning\\] InnoDB: Failed to set O_DIRECT on file\./ibdata1;OPEN: Invalid argument, continuing anyway. O_DIRECT is known to result in 'Invalid argument' on Linux on tmpfs, see MySQL Bug#26662.");
 
 # The below mtr suppression to avoid failure in solaris platform.
 CALL mtr.add_suppression("\\[ERROR\\] InnoDB: Failed to set DIRECTIO_ON on file.*");
+
+CALL mtr.add_suppression("\\[ERROR\\] InnoDB: Failed to create check sector file*");
 --enable_query_log
 
 SHOW VARIABLES LIKE 'innodb_flush_method';
@@ -25,3 +27,4 @@ EVAL CREATE TABLE t1 (x INT) ENGINE=INNODB, DATA DIRECTORY='$MYSQL_TMP_DIR';
 --list_files $MYSQLD_DATADIR/test
 
 DROP TABLE t1;
+--rmdir $MYSQL_TMP_DIR/test

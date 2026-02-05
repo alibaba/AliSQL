@@ -1,15 +1,22 @@
 /*
-   Copyright (C) 2007, 2008 MySQL AB, 2008, 2009 Sun Microsystems, Inc.
+   Copyright (c) 2007, 2021, Oracle and/or its affiliates.
     All rights reserved. Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -65,7 +72,7 @@ bool
 DbUtil::isConnected(){
   if (m_connected == true)
   {
-    assert(m_mysql);
+    require(m_mysql);
     return true;
   }
   return connect();
@@ -188,7 +195,7 @@ DbUtil::connect()
   }
   selectDb();
   m_connected= true;
-  assert(m_mysql);
+  require(m_mysql);
   return true;
 }
 
@@ -215,7 +222,7 @@ DbUtil::mysqlSimplePrepare(const char *query)
     printf("Inside DbUtil::mysqlSimplePrepare\n");
   #endif
   MYSQL_STMT *my_stmt= mysql_stmt_init(this->getMysql());
-  if (my_stmt && mysql_stmt_prepare(my_stmt, query, strlen(query))){
+  if (my_stmt && mysql_stmt_prepare(my_stmt, query, (unsigned long)strlen(query))){
     this->printStError(my_stmt,"Prepare Statement Failed");
     mysql_stmt_close(my_stmt);
     return NULL;
@@ -346,14 +353,14 @@ DbUtil::runQuery(const char* sql,
   rows.clear();
   if (!isConnected())
     return false;
-  assert(m_mysql);
+  require(m_mysql);
 
   g_debug << "runQuery: " << endl
           << " sql: '" << sql << "'" << endl;
 
 
   MYSQL_STMT *stmt= mysql_stmt_init(m_mysql);
-  if (mysql_stmt_prepare(stmt, sql, strlen(sql)))
+  if (mysql_stmt_prepare(stmt, sql, (unsigned long)strlen(sql)))
   {
     report_error("Failed to prepare: ", m_mysql);
     return false;
@@ -373,7 +380,7 @@ DbUtil::runQuery(const char* sql,
     if (!args.contains(name.c_str()))
     {
       g_err << "param " << i << " missing" << endl;
-      assert(false);
+      require(false);
     }
     PropertiesType t;
     Uint32 val_i;
@@ -390,11 +397,11 @@ DbUtil::runQuery(const char* sql,
       args.get(name.c_str(), &val_s);
       bind_param[i].buffer_type= MYSQL_TYPE_STRING;
       bind_param[i].buffer= (char*)val_s;
-      bind_param[i].buffer_length= strlen(val_s);
+      bind_param[i].buffer_length= (unsigned long)strlen(val_s);
       g_debug << " param" << name.c_str() << ": " << val_s << endl;
       break;
     default:
-      assert(false);
+      require(false);
       break;
     }
   }
@@ -666,7 +673,7 @@ const char* SqlResultSet::column(const char* col_name){
     g_err << "ERROR: SqlResultSet::column("<< col_name << ")" << endl
           << "There is no row loaded, call next() before "
           << "acessing the column values" << endl;
-    assert(m_curr_row);
+    require(m_curr_row);
   }
   if (!m_curr_row->get(col_name, &value))
     return NULL;
@@ -680,7 +687,7 @@ uint SqlResultSet::columnAsInt(const char* col_name){
     g_err << "ERROR: SqlResultSet::columnAsInt("<< col_name << ")" << endl
           << "There is no row loaded, call next() before "
           << "acessing the column values" << endl;
-    assert(m_curr_row);
+    require(m_curr_row);
   }
   if (!m_curr_row->get(col_name, &value))
     return (uint)-1;
@@ -693,7 +700,7 @@ unsigned long long SqlResultSet::columnAsLong(const char* col_name){
     g_err << "ERROR: SqlResultSet::columnAsLong("<< col_name << ")" << endl
           << "There is no row loaded, call next() before "
           << "acessing the column values" << endl;
-    assert(m_curr_row);
+    require(m_curr_row);
   }
   if (!m_curr_row->get(col_name, &value))
     return (uint)-1;

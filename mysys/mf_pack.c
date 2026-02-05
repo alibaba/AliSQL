@@ -1,13 +1,25 @@
-/* Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -15,6 +27,7 @@
 */
 
 #include "mysys_priv.h"
+#include "my_sys.h"
 #include <m_string.h>
 #ifdef HAVE_PWD_H
 #include <pwd.h>
@@ -29,7 +42,7 @@ static char * expand_tilde(char **path);
 void pack_dirname(char * to, const char *from)
 {
   int cwd_err;
-  size_t d_length,length,UNINIT_VAR(buff_length);
+  size_t d_length, length, buff_length= 0;
   char * start;
   char buff[FN_REFLEN];
   DBUG_ENTER("pack_dirname");
@@ -69,7 +82,7 @@ void pack_dirname(char * to, const char *from)
       if (memcmp(to,home_dir,length) == 0 && to[length] == FN_LIBCHAR)
       {
 	to[0]=FN_HOMELIB;			/* Filename begins with ~ */
-	(void) strmov_overlapp(to+1,to+length);
+	(void) my_stpmov(to+1,to+length);
       }
     }
     if (! cwd_err)
@@ -79,14 +92,14 @@ void pack_dirname(char * to, const char *from)
 	if (memcmp(buff,home_dir,length) == 0 && buff[length] == FN_LIBCHAR)
 	{
 	  buff[0]=FN_HOMELIB;
-	  (void) strmov_overlapp(buff+1,buff+length);
+	  (void) my_stpmov(buff+1,buff+length);
 	}
       }
       if (is_prefix(to,buff))
       {
 	length= strlen(buff);
 	if (to[length])
-	  (void) strmov_overlapp(to,to+length);	/* Remove everything before */
+	  (void) my_stpmov(to,to+length);	/* Remove everything before */
 	else
 	{
 	  to[0]= FN_CURLIB;			/* Put ./ instead of cwd */
@@ -121,15 +134,15 @@ void pack_dirname(char * to, const char *from)
     #  length of new name   
 */
 
-size_t cleanup_dirname(register char *to, const char *from)
+size_t cleanup_dirname(char *to, const char *from)
 {
-  reg5 size_t length;
-  reg2 char * pos;
-  reg3 char * from_ptr;
-  reg4 char * start;
+  size_t length;
+  char *pos;
+  char *from_ptr;
+  char *start;
   char parent[5],				/* for "FN_PARENTDIR" */
        buff[FN_REFLEN+1],*end_parentdir;
-#ifdef BACKSLASH_MBTAIL
+#ifdef _WIN32
   CHARSET_INFO *fs= fs_character_set();
 #endif
   DBUG_ENTER("cleanup_dirname");
@@ -141,15 +154,15 @@ size_t cleanup_dirname(register char *to, const char *from)
   if ((pos=strrchr(from_ptr,FN_DEVCHAR)) != 0)
   {						/* Skip device part */
     length=(size_t) (pos-from_ptr)+1;
-    start=strnmov(buff,from_ptr,length); from_ptr+=length;
+    start=my_stpnmov(buff,from_ptr,length); from_ptr+=length;
   }
 #endif
 
   parent[0]=FN_LIBCHAR;
-  length=(size_t) (strmov(parent+1,FN_PARENTDIR)-parent);
+  length=(size_t) (my_stpcpy(parent+1,FN_PARENTDIR)-parent);
   for (pos=start ; (*pos= *from_ptr++) != 0 ; pos++)
   {
-#ifdef BACKSLASH_MBTAIL
+#ifdef _WIN32
     uint l;
     if (use_mb(fs) && (l= my_ismbchar(fs, from_ptr - 1, from_ptr + 2)))
     {
@@ -175,7 +188,7 @@ size_t cleanup_dirname(register char *to, const char *from)
 	      pos+=length+1;			/* Don't unpack ~/.. */
 	      continue;
 	    }
-	    pos=strmov(buff,home_dir)-1;	/* Unpacks ~/.. */
+	    pos=my_stpcpy(buff,home_dir)-1;	/* Unpacks ~/.. */
 	    if (*pos == FN_LIBCHAR)
 	      pos--;				/* home ended with '/' */
 	  }
@@ -186,7 +199,7 @@ size_t cleanup_dirname(register char *to, const char *from)
 	      pos+=length+1;			/* Don't unpack ./.. */
 	      continue;
 	    }
-	    pos=strmov(buff,curr_dir)-1;	/* Unpacks ./.. */
+	    pos=my_stpcpy(buff,curr_dir)-1;	/* Unpacks ./.. */
 	    if (*pos == FN_LIBCHAR)
 	      pos--;				/* home ended with '/' */
 	  }
@@ -196,7 +209,7 @@ size_t cleanup_dirname(register char *to, const char *from)
           if (pos[1] == FN_HOMELIB ||
               (pos >= start && memcmp(pos, parent, length) == 0))
 	  {					/* Don't remove ~user/ */
-	    pos=strmov(end_parentdir+1,parent);
+	    pos=my_stpcpy(end_parentdir+1,parent);
 	    *pos=FN_LIBCHAR;
 	    continue;
 	  }
@@ -222,57 +235,10 @@ size_t cleanup_dirname(register char *to, const char *from)
       }
     }
   }
-  (void) strmov(to,buff);
+  (void) my_stpcpy(to,buff);
   DBUG_PRINT("exit",("to: '%s'",to));
   DBUG_RETURN((size_t) (pos-buff));
 } /* cleanup_dirname */
-
-
-/*
-  On system where you don't have symbolic links, the following
-  code will allow you to create a file: 
-  directory-name.sym that should contain the real path
-  to the directory.  This will be used if the directory name
-  doesn't exists
-*/
-
-
-my_bool my_use_symdir=0;	/* Set this if you want to use symdirs */
-
-#ifdef USE_SYMDIR
-void symdirget(char *dir, my_bool *is_symdir)
-{
-  char buff[FN_REFLEN+1];
-  char *pos=strend(dir);
-  if (dir[0] && pos[-1] != FN_DEVCHAR && my_access(dir, F_OK))
-  {
-    File file;
-    size_t length;
-    char temp= *(--pos);            /* May be "/" or "\" */
-    strmov(pos,".sym");
-    file= my_open(dir, O_RDONLY, MYF(0));
-    *pos++=temp; *pos=0;	  /* Restore old filename */
-    if (file >= 0)
-    {
-      if ((length= my_read(file, buff, sizeof(buff) - 1, MYF(0))) > 0)
-      {
-	for (pos= buff + length ;
-	     pos > buff && (iscntrl(pos[-1]) || isspace(pos[-1])) ;
-	     pos --);
-
-	/* Ensure that the symlink ends with the directory symbol */
-	if (pos == buff || pos[-1] != FN_LIBCHAR)
-	  *pos++=FN_LIBCHAR;
-
-	strmake(dir,buff, (size_t) (pos-buff));
-
-        *is_symdir= TRUE;
-      }
-      my_close(file, MYF(0));
-    }
-  }
-}
-#endif /* USE_SYMDIR */
 
 
 /**
@@ -327,27 +293,21 @@ size_t normalize_dirname(char *to, const char *from)
 
   @param to     Result buffer, FN_REFLEN characters. May be == from
   @param from   'Packed' directory name (may contain ~)
-  @param[out] is_symdir  Indicates that directory in question turned
-                         out to be fake .sym symbolic link, which was
-                         resolved to real directory it points to.
 
   @details
   - Uses normalize_dirname()
   - Expands ~/... to home_dir/...
-  - Resolves MySQL's fake "foo.sym" symbolic directory names (if USE_SYMDIR)
   - Changes a UNIX filename to system filename (replaces / with \ on windows)
 
   @returns
    Length of new directory name (= length of to)
 */
 
-size_t unpack_dirname(char * to, const char *from, my_bool *is_symdir)
+size_t unpack_dirname(char * to, const char *from)
 {
   size_t length, h_length;
   char buff[FN_REFLEN+1+4],*suffix,*tilde_expansion;
   DBUG_ENTER("unpack_dirname");
-
-  *is_symdir= FALSE;
 
   length= normalize_dirname(buff, from);
 
@@ -361,18 +321,11 @@ size_t unpack_dirname(char * to, const char *from, my_bool *is_symdir)
       {
 	if ((h_length > 0) && (tilde_expansion[h_length-1] == FN_LIBCHAR))
 	  h_length--;
-	if (buff+h_length < suffix)
-	  bmove(buff+h_length,suffix,length);
-	else
-	  bmove_upp((uchar*) buff+h_length+length, (uchar*) suffix+length, length);
-	bmove(buff,tilde_expansion,h_length);
+        memmove(buff + h_length, suffix, length);
+	memmove(buff, tilde_expansion, h_length);
       }
     }
   }
-#ifdef USE_SYMDIR
-  if (my_use_symdir)
-    symdirget(buff, is_symdir);
-#endif
   DBUG_RETURN(system_filename(to,buff));	/* Fix for open */
 } /* unpack_dirname */
 
@@ -427,14 +380,13 @@ size_t unpack_filename(char * to, const char *from)
 {
   size_t length, n_length, buff_length;
   char buff[FN_REFLEN];
-  my_bool not_used;
   DBUG_ENTER("unpack_filename");
 
   length=dirname_part(buff, from, &buff_length);/* copy & convert dirname */
-  n_length=unpack_dirname(buff, buff, &not_used);
+  n_length=unpack_dirname(buff,buff);
   if (n_length+strlen(from+length) < FN_REFLEN)
   {
-    (void) strmov(buff+n_length,from+length);
+    (void) my_stpcpy(buff+n_length,from+length);
     length= system_filename(to,buff);		/* Fix to usably filename */
   }
   else
@@ -460,10 +412,10 @@ char *intern_filename(char *to, const char *from)
   char buff[FN_REFLEN];
   if (from == to)
   {						/* Dirname may destroy from */
-    (void) strnmov(buff, from, FN_REFLEN);
+    (void) my_stpnmov(buff, from, FN_REFLEN);
     from=buff;
   }
   length= dirname_part(to, from, &to_length);	/* Copy dirname & fix chars */
-  (void) strnmov(to + to_length, from + length, FN_REFLEN - to_length);
+  (void) my_stpnmov(to + to_length, from + length, FN_REFLEN - to_length);
   return (to);
 } /* intern_filename */

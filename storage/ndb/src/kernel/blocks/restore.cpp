@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2005, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -31,13 +38,23 @@
 #include <dblqh/Dblqh.hpp>
 #include <dbtup/Dbtup.hpp>
 #include <KeyDescriptor.hpp>
+#include <signaldata/DumpStateOrd.hpp>
+
+#include <NdbTick.h>
+#include <EventLogger.hpp>
+extern EventLogger * g_eventLogger;
+
+#define JAM_FILE_ID 453
 
 #define PAGES LCP_RESTORE_BUFFER
 
 Restore::Restore(Block_context& ctx, Uint32 instanceNumber) :
   SimulatedBlock(RESTORE, ctx, instanceNumber),
   m_file_list(m_file_pool),
-  m_file_hash(m_file_pool)
+  m_file_hash(m_file_pool),
+  m_rows_restored(0),
+  m_millis_spent(0),
+  m_frags_restored(0)
 {
   BLOCK_CONSTRUCTOR(Restore);
   
@@ -191,8 +208,7 @@ void
 Restore::sendSTTORRY(Signal* signal){
   signal->theData[0] = 0;
   signal->theData[3] = 1;
-  signal->theData[4] = 3;
-  signal->theData[5] = 255; // No more start phases from missra
+  signal->theData[4] = 255; // No more start phases from missra
   BlockReference cntrRef = !isNdbMtLqh() ? NDBCNTR_REF : RESTORE_REF;
   sendSignal(cntrRef, GSN_STTORRY, signal, 6, JBB);
 }
@@ -224,6 +240,29 @@ Restore::execCONTINUEB(Signal* signal){
 void
 Restore::execDUMP_STATE_ORD(Signal* signal){
   jamEntry();
+
+  if (signal->theData[0] == DumpStateOrd::RestoreRates)
+  {
+    jam();
+    Uint64 rate = m_rows_restored * 1000 /
+      (m_millis_spent == 0? 1: m_millis_spent);
+    
+    g_eventLogger->info("LDM instance %u: Restored LCP : %u fragments,"
+                        " %llu rows, " 
+                        "%llu millis, %llu rows/s",
+                        instance(),
+                        m_frags_restored, 
+                        m_rows_restored,
+                        m_millis_spent,
+                        rate);
+    infoEvent("LDM instance %u: Restored LCP : %u fragments, %llu rows, " 
+              "%llu millis, %llu rows/s",
+              instance(),
+              m_frags_restored, 
+              m_rows_restored,
+              m_millis_spent,
+              rate);
+  }
 }
 
 void
@@ -237,7 +276,7 @@ Restore::execRESTORE_LCP_REQ(Signal* signal){
   do
   {
     FilePtr file_ptr;
-    if(!m_file_list.seize(file_ptr))
+    if (!m_file_list.seizeFirst(file_ptr))
     {
       err= RestoreLcpRef::NoFileRecord;
       break;
@@ -284,6 +323,7 @@ Restore::init_file(const RestoreLcpReq* req, FilePtr file_ptr)
   file_ptr.p->m_outstanding_reads = 0;
   file_ptr.p->m_outstanding_operations = 0;
   file_ptr.p->m_rows_restored = 0;
+  file_ptr.p->m_restore_start_time = NdbTick_CurrentMillisecond();;
   LocalDataBuffer<15> pages(m_databuffer_pool, file_ptr.p->m_pages);
   LocalDataBuffer<15> columns(m_databuffer_pool, file_ptr.p->m_columns);
 
@@ -342,16 +382,33 @@ Restore::release_file(FilePtr file_ptr)
   LocalDataBuffer<15> columns(m_databuffer_pool, file_ptr.p->m_columns);
 
   List::Iterator it;
-  for(pages.first(it); !it.isNull(); pages.next(it))
+  for (pages.first(it); !it.isNull(); pages.next(it))
   {
-    if(* it.data == RNIL)
+    if (* it.data == RNIL)
       continue;
     m_global_page_pool.release(* it.data);
   }
 
-  ndbout_c("RESTORE table: %d %lld rows applied", 
-	   file_ptr.p->m_table_id,
-	   file_ptr.p->m_rows_restored);
+  {
+    Uint64 millis = NdbTick_CurrentMillisecond() -
+                   file_ptr.p->m_restore_start_time;
+    if (millis == 0)
+      millis = 1;
+    Uint64 rows_per_sec = file_ptr.p->m_rows_restored * 1000 / millis;
+
+    g_eventLogger->info("LDM instance %u: Restored T%dF%u LCP %llu rows, "
+                        "%llu millis, %llu rows/s)", 
+                        instance(),
+                        file_ptr.p->m_table_id,
+                        file_ptr.p->m_fragment_id,
+                        file_ptr.p->m_rows_restored,
+                        millis,
+                        rows_per_sec);
+
+    m_rows_restored+= file_ptr.p->m_rows_restored;
+    m_millis_spent+= millis;
+    m_frags_restored++;
+  }
   
   columns.release();
   pages.release();
@@ -434,32 +491,37 @@ Restore::restore_next(Signal* signal, FilePtr file_ptr)
   do 
   {
     Uint32 left= file_ptr.p->m_bytes_left;
-    if(left < 8)
+    if (left < 8)
     {
+      jam();
       /**
-       * Not enought bytes to read header
+       * Not enough bytes to read header
        */
       break;
     }
-    Ptr<GlobalPage> page_ptr, next_page_ptr = { 0, 0 };
+    Ptr<GlobalPage> page_ptr(0,0), next_page_ptr(0,0);
     m_global_page_pool.getPtr(page_ptr, file_ptr.p->m_current_page_ptr_i);
     List::Iterator it;
     
     Uint32 pos= file_ptr.p->m_current_page_pos;
     if(status & File::READING_RECORDS)
     {
+      jam();
       /**
        * We are reading records
        */
       len= ntohl(* (page_ptr.p->data + pos)) + 1;
+      ndbrequire(len < GLOBAL_PAGE_SIZE_WORDS);
     }
     else
     {
+      jam();
       /**
        * Section length is in 2 word
        */
       if(pos + 1 == GLOBAL_PAGE_SIZE_WORDS)
       {
+        jam();
 	/**
 	 * But that's stored on next page...
 	 *   and since we have atleast 8 bytes left in buffer
@@ -473,24 +535,25 @@ Restore::restore_next(Signal* signal, FilePtr file_ptr)
       }
       else
       {
+        jam();
 	len= ntohl(* (page_ptr.p->data + pos + 1));
       }
     }
 
-    if(file_ptr.p->m_status & File::FIRST_READ)
+    if (file_ptr.p->m_status & File::FIRST_READ)
     {
+      jam();
       len= 3;
       file_ptr.p->m_status &= ~(Uint32)File::FIRST_READ;
     }
     
-    if(4 * len > left)
+    if (4 * len > left)
     {
+      jam();
+
       /**
        * Not enought bytes to read "record"
        */
-      ndbout_c("records: %d len: %x left: %d", 
-	       status & File::READING_RECORDS, 4*len, left);
-      
       if (unlikely((status & File:: FILE_THREAD_RUNNING) == 0))
       {
         crash_during_restore(file_ptr, __LINE__, 0);
@@ -505,6 +568,7 @@ Restore::restore_next(Signal* signal, FilePtr file_ptr)
 
     if(pos + len >= GLOBAL_PAGE_SIZE_WORDS)
     {
+      jam();
       /**
        * But it's split over pages
        */
@@ -519,13 +583,73 @@ Restore::restore_next(Signal* signal, FilePtr file_ptr)
       file_ptr.p->m_current_page_pos = (pos + len) - GLOBAL_PAGE_SIZE_WORDS;
       file_ptr.p->m_current_page_index = 
 	(file_ptr.p->m_current_page_index + 1) % page_count;
-      
-      Uint32 first = (GLOBAL_PAGE_SIZE_WORDS - pos);
-      // wl4391_todo removing valgrind overlap warning for now
-      memmove(page_ptr.p, page_ptr.p->data+pos, 4 * first);
-      memcpy(page_ptr.p->data+first, next_page_ptr.p, 4 * (len - first));
-      data= page_ptr.p->data;
-    } 
+
+      if (len <= GLOBAL_PAGE_SIZE_WORDS)
+      {
+        jam();
+        Uint32 first = (GLOBAL_PAGE_SIZE_WORDS - pos);
+        // wl4391_todo removing valgrind overlap warning for now
+        memmove(page_ptr.p, page_ptr.p->data+pos, 4 * first);
+        memcpy(page_ptr.p->data+first, next_page_ptr.p, 4 * (len - first));
+        data= page_ptr.p->data;
+      }
+      else
+      {
+        jam();
+        /**
+         * A table definition can be larger than one page...
+         * when that happens copy it out to side buffer
+         *
+         * First copy part belonging to page_ptr
+         * Then copy full middle pages (moving forward in page-list)
+         * Last copy last part
+         */
+        Uint32 save = len;
+        assert(len <= NDB_ARRAY_SIZE(m_table_buf));
+        Uint32 * dst = m_table_buf;
+
+        /**
+         * First
+         */
+        Uint32 first = (GLOBAL_PAGE_SIZE_WORDS - pos);
+        memcpy(dst, page_ptr.p->data+pos, 4 * first);
+        len -= first;
+        dst += first;
+
+        /**
+         * Middle
+         */
+        while (len > GLOBAL_PAGE_SIZE_WORDS)
+        {
+          jam();
+          memcpy(dst, next_page_ptr.p, 4 * GLOBAL_PAGE_SIZE_WORDS);
+          len -= GLOBAL_PAGE_SIZE_WORDS;
+          dst += GLOBAL_PAGE_SIZE_WORDS;
+
+          {
+            LocalDataBuffer<15> pages(m_databuffer_pool, file_ptr.p->m_pages);
+            Uint32 next_page = (file_ptr.p->m_current_page_index + 1) % page_count;
+            pages.position(it, next_page % page_count);
+            m_global_page_pool.getPtr(next_page_ptr, * it.data);
+
+            file_ptr.p->m_current_page_ptr_i = next_page_ptr.i;
+            file_ptr.p->m_current_page_index = next_page;
+          }
+        }
+
+        /**
+         * last
+         */
+        memcpy(dst, next_page_ptr.p, 4 * len);
+        file_ptr.p->m_current_page_pos = len;
+
+        /**
+         * Set pointer and len
+         */
+        len = save;
+        data = m_table_buf;
+      }
+    }
     else
     {
       file_ptr.p->m_current_page_pos = pos + len;
@@ -591,13 +715,16 @@ Restore::restore_next(Signal* signal, FilePtr file_ptr)
     return;
   }
   
+  /**
+   * We send an immediate signal to continue the restore, at times this
+   * could lead to burning some extra CPU since we might still wait for
+   * input from the disk reading. This code is however only executed
+   * as part of restarts, so it should be ok to spend some extra CPU
+   * to ensure that restarts are quick.
+   */
   signal->theData[0] = RestoreContinueB::RESTORE_NEXT;
   signal->theData[1] = file_ptr.i;
-
-  if(len)
-    sendSignal(reference(), GSN_CONTINUEB, signal, 2, JBB);
-  else
-    sendSignalWithDelay(reference(), GSN_CONTINUEB, signal, 100, 2);
+  sendSignal(reference(), GSN_CONTINUEB, signal, 2, JBB);
 }
 
 void

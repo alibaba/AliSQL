@@ -1,9 +1,13 @@
+
+ #Get deafult engine value
+--let $DEFAULT_ENGINE = `select @@global.default_storage_engine`
+
 --disable_warnings
 DROP TABLE IF EXISTS t1, t2;
 --enable_warnings
 
 SET NAMES latin1;
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 
 --echo #
 --echo # Testing DATE literals
@@ -28,11 +32,17 @@ SELECT DATE'01-01-01';
 SELECT DATE'2010-01-01';
 SELECT DATE '2010-01-01';
 CREATE TABLE t1 AS SELECT DATE'2010-01-01';
+
+#Replace default engine value with static engine string 
+--replace_result $DEFAULT_ENGINE ENGINE
 SHOW CREATE TABLE t1;
 DROP TABLE t1;
 CREATE TABLE t1 AS SELECT
   {d'2001-01-01'},
   {d'2001-01-01 10:10:10'};
+
+#Replace default engine value with static engine string 
+--replace_result $DEFAULT_ENGINE ENGINE
 SHOW CREATE TABLE t1;
 DROP TABLE t1;
 EXPLAIN EXTENDED SELECT {d'2010-01-01'};
@@ -41,16 +51,14 @@ EXPLAIN EXTENDED SELECT DATE'2010-01-01';
 --echo #
 --echo # Testing DATE literals in non-default sql_mode
 --echo #
-SET sql_mode=no_zero_in_date;
+SET sql_mode='NO_ZERO_IN_DATE';
 --error ER_WRONG_VALUE
 SELECT DATE'2001-00-00';
 --error ER_WRONG_VALUE
 SELECT DATE'2001-01-00';
+SET sql_mode = '';
 SELECT DATE'0000-00-00';
 
-SET sql_mode=no_zero_date;
---error ER_WRONG_VALUE
-SELECT DATE'0000-00-00';
 SET sql_mode=default;
 
 --echo #
@@ -90,6 +98,9 @@ CREATE TABLE t1 AS SELECT
   TIME'10:10:10.1234',
   TIME'10:10:10.12345',
   TIME'10:10:10.123456';
+
+#Replace default engine value with static engine string 
+--replace_result $DEFAULT_ENGINE ENGINE
 SHOW CREATE TABLE t1;
 DROP TABLE t1;
 CREATE TABLE t1 AS SELECT
@@ -97,6 +108,9 @@ CREATE TABLE t1 AS SELECT
   {t'10:10:10.'},
   {t'10:10:10.123456'},
   {t'2001-01-01'};
+
+#Replace default engine value with static engine string 
+--replace_result $DEFAULT_ENGINE ENGINE
 SHOW CREATE TABLE t1;
 DROP TABLE t1;
 EXPLAIN EXTENDED SELECT {t'10:01:01'};
@@ -134,6 +148,9 @@ CREATE TABLE t1 AS SELECT
   TIMESTAMP'2010-01-01 10:10:10.1234',
   TIMESTAMP'2010-01-01 10:10:10.12345',
   TIMESTAMP'2010-01-01 10:10:10.123456';
+
+#Replace default engine value with static engine string 
+--replace_result $DEFAULT_ENGINE ENGINE
 SHOW CREATE TABLE t1;
 DROP TABLE t1;
 CREATE TABLE t1 AS SELECT
@@ -141,6 +158,9 @@ CREATE TABLE t1 AS SELECT
   {ts'2001-01-01 10:10:10.'},
   {ts'2001-01-01 10:10:10.123456'},
   {ts'2001-01-01'};
+
+#Replace default engine value with static engine string 
+--replace_result $DEFAULT_ENGINE ENGINE
 SHOW CREATE TABLE t1;
 DROP TABLE t1;
 EXPLAIN EXTENDED SELECT {ts'2010-01-01 10:10:10'};
@@ -149,6 +169,7 @@ EXPLAIN EXTENDED SELECT TIMESTAMP'2010-01-01 10:10:10';
 --echo #
 --echo # Testing nanosecond rounding for TIMESTAMP literals with bad dates
 --echo #
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 SELECT TIMESTAMP'2001-00-00 00:00:00.999999';
 SELECT TIMESTAMP'2001-00-01 00:00:00.999999';
 SELECT TIMESTAMP'2001-01-00 00:00:00.999999';
@@ -189,6 +210,7 @@ INSERT INTO t1 VALUES ('2001-01-01'),('2003-01-01');
 SELECT * FROM t1 WHERE a BETWEEN DATE'2001-01-01' AND DATE'2002-01-01';
 SELECT DATE'2001-01-01' FROM t1 GROUP BY DATE'2001-01-01';
 DROP TABLE t1;
+SET sql_mode = default;
 
 --echo #
 --echo # BUG #16812821: INCONSISTANT RESULTS WHEN ODBC DATE FORMAT IS USED
@@ -218,3 +240,4 @@ SELECT * FROM t1 LEFT JOIN t2 ON c1 = c11
                AND TIMESTAMP'2014-01-05 01:01:01';
 
 DROP TABLE t1, t2;
+

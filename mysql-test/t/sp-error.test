@@ -1763,8 +1763,8 @@ CREATE PROCEDURE bug20953() CREATE VIEW v AS SELECT 1 INTO OUTFILE "file";
 --error ER_VIEW_SELECT_CLAUSE
 CREATE PROCEDURE bug20953()
   CREATE VIEW v AS SELECT i FROM t1 PROCEDURE ANALYSE();
---error ER_VIEW_SELECT_DERIVED
 CREATE PROCEDURE bug20953() CREATE VIEW v AS SELECT 1 FROM (SELECT 1) AS d1;
+DROP PROCEDURE bug20953;
 --error ER_VIEW_SELECT_VARIABLE
 CREATE PROCEDURE bug20953(i INT) CREATE VIEW v AS SELECT i;
 delimiter |;
@@ -2136,12 +2136,13 @@ DROP DATABASE IF EXISTS mysqltest;
 CREATE DATABASE mysqltest;
 USE mysqltest;
 DROP DATABASE mysqltest;
-# Both ER_SP_DOES_NOT_EXIST and ER_PARSE_ERROR are valid here,
-# the result is implementation dependent:
-# See Bug#29816 for details
---error ER_SP_DOES_NOT_EXIST
+# Both ER_SP_DOES_NOT_EXIST and ER_PARSE_ERROR are valid here, the result is
+# implementation dependent: See Bug#29816 for details.  
+# ER_SP_DOES_NOT_EXIST has been replaced by ER_NO_DB_ERROR since it is valid in
+# this scenario. See Bug# 13864485 for details.
+--error ER_PARSE_ERROR
 SELECT inexistent(), 1 + ,;
---error ER_SP_DOES_NOT_EXIST
+--error ER_NO_DB_ERROR
 SELECT inexistent();
 --error ER_PARSE_ERROR
 SELECT .inexistent();
@@ -2158,13 +2159,13 @@ delimiter |;
 --error ER_SP_CANT_SET_AUTOCOMMIT
 create function f1() returns int
 begin
-  set @test = 1, password = password('foo');
+ set password = 'foo';
   return 1;
 end|
 
 --error ER_SP_CANT_SET_AUTOCOMMIT
 create trigger t1
-  before insert on t2 for each row set password = password('foo');|
+  before insert on t2 for each row set password = 'foo';|
 
 delimiter ;|
 
@@ -2316,7 +2317,7 @@ drop procedure if exists p1;
 delimiter |;
 create procedure p1()
 begin
-  create table t1 (a int) engine=MyISAM;
+  create table t1 (a int);
   drop table t1;
 end|
 delimiter ;|
@@ -2525,7 +2526,7 @@ DROP PROCEDURE IF EXISTS p4;
 DROP PROCEDURE IF EXISTS p5;
 DROP PROCEDURE IF EXISTS p6;
 --enable_warnings
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 delimiter |;
 
 CREATE PROCEDURE p1()
@@ -2583,7 +2584,7 @@ CREATE PROCEDURE p2()
 CREATE PROCEDURE p3()
   BEGIN
     SELECT CAST('3 ' as unsigned integer);
-    SELECT 1; # does not clear the warning
+    GET DIAGNOSTICS @n = NUMBER; # does not clear the warning
   END| # 1 warning is passed to the caller
 
 CREATE PROCEDURE p4()
@@ -2635,7 +2636,7 @@ DROP PROCEDURE p6;
 DROP PROCEDURE p7;
 
 DROP TABLE t1;
-
+SET sql_mode = default;
 --echo
 --echo # - Case 3: check that "Exception trumps No Data".
 --echo
@@ -2711,7 +2712,7 @@ DROP PROCEDURE p1;
 --echo #
 --echo # Bug#5889: Exit handler for a warning doesn't hide the warning in trigger
 --echo #
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 CREATE TABLE t1(a INT, b INT);
 INSERT INTO t1 VALUES (1, 2);
 
@@ -2735,11 +2736,13 @@ SELECT * FROM t1;
 
 DROP TRIGGER t1_bu;
 DROP TABLE t1;
-
+SET sql_mode = default;
 --echo #
 --echo # Bug#9857: Stored procedures: handler for sqlwarning ignored
 --echo #
 
+CREATE TABLE t1(a INT PRIMARY KEY);
+INSERT INTO t1 VALUES(1);
 SET @sql_mode_saved = @@sql_mode;
 SET sql_mode = traditional;
 
@@ -2750,7 +2753,7 @@ BEGIN
   DECLARE CONTINUE HANDLER FOR SQLWARNING
     SELECT 'warning caught (expected)';
   
-  SELECT 5 / 0;
+  INSERT IGNORE INTO t1 VALUES (1);
 END|
 
 CREATE PROCEDURE p2()
@@ -2758,7 +2761,7 @@ BEGIN
   DECLARE CONTINUE HANDLER FOR SQLEXCEPTION
     SELECT 'error caught (unexpected)';
   
-  SELECT 5 / 0;
+  INSERT IGNORE INTO t1 VALUES (1);
 END|
 
 delimiter ;|
@@ -2771,12 +2774,13 @@ SHOW WARNINGS;
 
 DROP PROCEDURE p1;
 DROP PROCEDURE p2;
+DROP TABLE t1;
 SET sql_mode = @sql_mode_saved;
 
 --echo #
 --echo # Bug#55850: Trigger warnings not cleared.
 --echo #
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 --disable_warnings
 DROP TABLE IF EXISTS t1;
 DROP TABLE IF EXISTS t2;
@@ -2852,7 +2856,7 @@ SHOW WARNINGS;
 DROP TABLE t1;
 DROP TABLE t2;
 DROP PROCEDURE p1;
-
+SET sql_mode = default;
 --echo
 --echo ###################################################################
 --echo # Tests for the following bugs:
@@ -3449,7 +3453,7 @@ DROP PROCEDURE p13;
 --echo
 --echo # Bug#12731619: NESTED SP HANDLERS CAN TRIGGER ASSERTION
 --echo
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 --disable_warnings
 DROP FUNCTION IF EXISTS f1;
 DROP TABLE IF EXISTS t1;
@@ -3636,10 +3640,9 @@ CREATE PROCEDURE p5()
 BEGIN
   DECLARE EXIT HANDLER FOR 1292
   BEGIN
-    SELECT 'Handler for 1292 (1)' AS Msg;
+    SELECT 'Handler for 1292' AS Msg;
     SIGNAL SQLSTATE '01000' SET MYSQL_ERRNO = 1234;
     SHOW WARNINGS;
-    SELECT 'Handler for 1292 (2)' AS Msg;
   END;
 
   INSERT INTO t2
@@ -3686,13 +3689,13 @@ DROP PROCEDURE p5;
 DROP PROCEDURE p6;
 DROP TABLE t1;
 DROP TABLE t2;
-
+SET sql_mode = default;
 --echo
 --echo # Bug#13059316: ASSERTION FAILURE IN SP_RCONTEXT.CC 
 --echo # Check DECLARE statements that raise conditions before handlers
 --echo # are declared.
 --echo
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 --disable_warnings
 DROP PROCEDURE IF EXISTS p1;
 DROP PROCEDURE IF EXISTS p2;
@@ -3724,7 +3727,7 @@ delimiter ;|
 --echo
 DROP PROCEDURE p1;
 DROP PROCEDURE p2;
-
+SET sql_mode = default;
 
 --echo #
 --echo # Bug#13113222 RQG_SIGNAL_RESIGNAL FAILED WITH ASSERTION.
@@ -3822,3 +3825,40 @@ SELECT @msg;
 DROP FUNCTION f1;
 DROP FUNCTION f2;
 DROP TABLE t1;
+
+
+--echo #
+--echo # Bug #17903490 "ASSERT FAILURE IN MDL.H WHEN DROP FUNCTION CALLED
+--echo #                WITH INVALID FUNCTION NAME".
+--echo #
+--error ER_TOO_LONG_IDENT
+drop function f111111111122222222223333333333444444444455555555556666666666777777777788888888889999999999aaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiiiiiiijjjjjjjjjjkk;
+--error ER_TOO_LONG_IDENT
+drop function test.f111111111122222222223333333333444444444455555555556666666666777777777788888888889999999999aaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiiiiiiijjjjjjjjjjkk;
+--error ER_WRONG_DB_NAME 
+drop function mysqltest111111111122222222223333333333444444444455555555556666666666777777777788888888889999999999aaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiiiiiiijjjj.test;
+
+
+--echo #
+--echo # Bug #24357244: CANNOT CREATE A STORED FUNCTION IF A DATABASE IS NOT
+--echo #                SELECTED
+--echo #
+
+CREATE DATABASE mysqltest;
+USE mysqltest;
+DROP DATABASE mysqltest;
+
+# Should return NULL
+SELECT DATABASE();
+
+CREATE DATABASE mysqltest;
+CREATE FUNCTION mysqltest.f1() RETURNS INT RETURN 0;
+CREATE FUNCTION mysqltest.f2() RETURNS INT RETURN f1();
+
+USE mysqltest;
+SELECT f1();
+SELECT f2();
+
+DROP FUNCTION IF EXISTS f2;
+DROP FUNCTION IF EXISTS f1;
+DROP DATABASE mysqltest;

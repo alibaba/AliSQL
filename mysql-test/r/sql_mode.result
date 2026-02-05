@@ -5,9 +5,11 @@ a int not null auto_increment,
 `pseudo` varchar(35) character set latin2 NOT NULL default '',
 `email` varchar(60) character set latin2 NOT NULL default '',
 PRIMARY KEY  (a),
-UNIQUE KEY `email` USING BTREE (`email`) 
+UNIQUE KEY `email` USING BTREE (`email`)
 ) ENGINE=HEAP CHARSET=latin1 ROW_FORMAT DYNAMIC;
 set @@sql_mode="";
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 show variables like 'sql_mode';
 Variable_name	Value
 sql_mode	
@@ -34,6 +36,8 @@ t1	CREATE TABLE "t1" (
   UNIQUE KEY "email" ("email") USING BTREE
 ) ENGINE=MEMORY DEFAULT CHARSET=latin1 ROW_FORMAT=DYNAMIC
 set @@sql_mode="no_table_options";
+Warnings:
+Warning	3090	Changing sql mode 'NO_TABLE_OPTIONS' is deprecated. It will be removed in a future release.
 show variables like 'sql_mode';
 Variable_name	Value
 sql_mode	NO_TABLE_OPTIONS
@@ -47,6 +51,8 @@ t1	CREATE TABLE `t1` (
   UNIQUE KEY `email` (`email`) USING BTREE
 )
 set @@sql_mode="no_key_options";
+Warnings:
+Warning	3090	Changing sql mode 'NO_KEY_OPTIONS' is deprecated. It will be removed in a future release.
 show variables like 'sql_mode';
 Variable_name	Value
 sql_mode	NO_KEY_OPTIONS
@@ -60,6 +66,8 @@ t1	CREATE TABLE `t1` (
   UNIQUE KEY `email` (`email`)
 ) ENGINE=MEMORY DEFAULT CHARSET=latin1 ROW_FORMAT=DYNAMIC
 set @@sql_mode="no_field_options,mysql323,mysql40";
+Warnings:
+Warning	3090	Changing sql mode 'NO_FIELD_OPTIONS,MYSQL323,MYSQL40' is deprecated. It will be removed in a future release.
 show variables like 'sql_mode';
 Variable_name	Value
 sql_mode	NO_FIELD_OPTIONS,MYSQL323,MYSQL40,HIGH_NOT_PRECEDENCE
@@ -73,6 +81,9 @@ t1	CREATE TABLE `t1` (
   UNIQUE KEY `email` (`email`)
 ) TYPE=HEAP ROW_FORMAT=DYNAMIC
 set sql_mode="postgresql,oracle,mssql,db2,maxdb";
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+Warning	3090	Changing sql mode 'POSTGRESQL,ORACLE,MSSQL,DB2,MAXDB,NO_KEY_OPTIONS,NO_TABLE_OPTIONS,NO_FIELD_OPTIONS' is deprecated. It will be removed in a future release.
 select @@sql_mode;
 @@sql_mode
 PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,POSTGRESQL,ORACLE,MSSQL,DB2,MAXDB,NO_KEY_OPTIONS,NO_TABLE_OPTIONS,NO_FIELD_OPTIONS,NO_AUTO_CREATE_USER
@@ -92,29 +103,35 @@ b char(10) collate latin1_bin,
 c binary(10)
 ) character set latin1;
 set @@sql_mode="";
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `a` char(10) DEFAULT NULL,
   `b` char(10) CHARACTER SET latin1 COLLATE latin1_bin DEFAULT NULL,
   `c` binary(10) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=latin1
 set @@sql_mode="mysql323";
+Warnings:
+Warning	3090	Changing sql mode 'MYSQL323' is deprecated. It will be removed in a future release.
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `a` char(10) DEFAULT NULL,
   `b` char(10) binary DEFAULT NULL,
   `c` binary(10) DEFAULT NULL
-) TYPE=MyISAM
+) TYPE=ENGINE
 set @@sql_mode="mysql40";
+Warnings:
+Warning	3090	Changing sql mode 'MYSQL40' is deprecated. It will be removed in a future release.
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `a` char(10) DEFAULT NULL,
   `b` char(10) binary DEFAULT NULL,
   `c` binary(10) DEFAULT NULL
-) TYPE=MyISAM
+) TYPE=ENGINE
 drop table t1;
 set session sql_mode = '';
 create table t1 ( min_num   dec(6,6)     default .000001);
@@ -122,7 +139,7 @@ show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `min_num` decimal(6,6) DEFAULT '0.000001'
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=latin1
 drop table t1 ;
 set session sql_mode = 'IGNORE_SPACE';
 create table t1 ( min_num   dec(6,6)     default 0.000001);
@@ -130,14 +147,14 @@ show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `min_num` decimal(6,6) DEFAULT '0.000001'
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=latin1
 drop table t1 ;
 create table t1 ( min_num   dec(6,6)     default .000001);
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `min_num` decimal(6,6) DEFAULT '0.000001'
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=latin1
 drop table t1 ;
 set @@SQL_MODE=NULL;
 ERROR 42000: Variable 'sql_mode' can't be set to the value of 'NULL'
@@ -153,20 +170,22 @@ t1	CREATE TABLE "t1" (
   PRIMARY KEY ("f1")
 )
 set session sql_mode=no_field_options;
+Warnings:
+Warning	3090	Changing sql mode 'NO_FIELD_OPTIONS' is deprecated. It will be removed in a future release.
 show create table t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `f1` int(11) NOT NULL,
   `f2` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`f1`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=ENGINE DEFAULT CHARSET=latin1
 drop table t1;
 SET @OLD_SQL_MODE=@@SQL_MODE, @@SQL_MODE='';
 show local variables like 'SQL_MODE';
 Variable_name	Value
 sql_mode	
 CREATE TABLE t1 (p int not null auto_increment, a varchar(20), primary key(p));
-INSERT t1 (a) VALUES 
+INSERT t1 (a) VALUES
 ('\\'),
 ('\n'),
 ('\b'),
@@ -289,7 +308,7 @@ show local variables like 'SQL_MODE';
 Variable_name	Value
 sql_mode	NO_BACKSLASH_ESCAPES
 CREATE TABLE t1 (p int not null auto_increment, a varchar(20), primary key(p));
-INSERT t1 (a) VALUES 
+INSERT t1 (a) VALUES
 ('\\'),
 ('\n'),
 ('\b'),
@@ -334,7 +353,7 @@ p	hex(a)
 19	5C5C5C25
 20	5C5C5C5C25
 delete from t1 where a in ('\n','\r','\t', '\b');
-select 
+select
 masks.p,
 masks.a as mask,
 examples.a as example
@@ -464,22 +483,28 @@ select @@sql_mode;
 @@sql_mode
 ANSI_QUOTES
 set sql_mode=2097152;
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
 select @@sql_mode;
 @@sql_mode
 STRICT_TRANS_TABLES
 set sql_mode=4194304;
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
 select @@sql_mode;
 @@sql_mode
 STRICT_ALL_TABLES
 set sql_mode=16384+(65536*4);
+Warnings:
+Warning	3090	Changing sql mode 'NO_TABLE_OPTIONS' is deprecated. It will be removed in a future release.
 select @@sql_mode;
 @@sql_mode
-REAL_AS_FLOAT,PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,NO_TABLE_OPTIONS,ANSI
+REAL_AS_FLOAT,PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,NO_TABLE_OPTIONS,ANSI
 set sql_mode=2147483648*2;
 ERROR 42000: Variable 'sql_mode' can't be set to the value of '4294967296'
 select @@sql_mode;
 @@sql_mode
-REAL_AS_FLOAT,PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,NO_TABLE_OPTIONS,ANSI
+REAL_AS_FLOAT,PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,NO_TABLE_OPTIONS,ANSI
 set sql_mode=PAD_CHAR_TO_FULL_LENGTH;
 create table t1 (a int auto_increment primary key, b char(5));
 insert into t1 (b) values('a'),('b\t'),('c ');
@@ -496,6 +521,8 @@ xb	x
 xcx
 drop table t1;
 SET @@SQL_MODE=@OLD_SQL_MODE;
+Warnings:
+Warning	3090	Changing sql mode 'NO_FIELD_OPTIONS' is deprecated. It will be removed in a future release.
 create user mysqltest_32753@localhost;
 set @OLD_SQL_MODE=@@SESSION.SQL_MODE;
 set session sql_mode='PAD_CHAR_TO_FULL_LENGTH';
@@ -504,14 +531,21 @@ select current_user();
 current_user()
 mysqltest_32753@localhost
 set session sql_mode=@OLD_SQL_MODE;
+Warnings:
+Warning	3090	Changing sql mode 'NO_FIELD_OPTIONS' is deprecated. It will be removed in a future release.
 flush privileges;
 drop user mysqltest_32753@localhost;
 SET @org_mode=@@sql_mode;
 SET @@sql_mode='traditional';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SELECT @@sql_mode LIKE '%NO_ENGINE_SUBSTITUTION%';
 @@sql_mode LIKE '%NO_ENGINE_SUBSTITUTION%'
 1
 SET sql_mode=@org_mode;
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+Warning	3090	Changing sql mode 'NO_FIELD_OPTIONS' is deprecated. It will be removed in a future release.
 DROP TABLE IF EXISTS t1,t2;
 CREATE USER 'user_PCTFL'@'localhost' identified by 'PWD';
 CREATE USER 'user_no_PCTFL'@'localhost' identified by 'PWD';
@@ -523,6 +557,8 @@ SET @OLD_SQL_MODE = @@SESSION.SQL_MODE;
 SET SESSION SQL_MODE = 'PAD_CHAR_TO_FULL_LENGTH';
 DROP USER 'user_PCTFL'@'localhost';
 SET SESSION SQL_MODE = @OLD_SQL_MODE;
+Warnings:
+Warning	3090	Changing sql mode 'NO_FIELD_OPTIONS' is deprecated. It will be removed in a future release.
 DROP USER 'user_no_PCTFL'@'localhost';
 FLUSH PRIVILEGES;
 SELECT * FROM mysql.db WHERE Host = 'localhost' AND User LIKE 'user_%PCTFL';
@@ -735,5 +771,68 @@ wxyz\_ef
 DROP TABLE test_table;
 DROP FUNCTION test_function;
 SET @@sql_mode= @org_mode;
+Warnings:
+Warning	3090	Changing sql mode 'NO_FIELD_OPTIONS' is deprecated. It will be removed in a future release.
 
-#End of Test for Bug#12601974 
+#End of Test for Bug#12601974
+#
+# BUG#18311187 - SQL_MODE IS CHANGED TO WRONG VALUE AFTER DUMP/DATA
+#                UPGRADE FOR TRIGGERS
+#
+SET @org_mode= @@sql_mode;
+# NO_ZERO_DATE, NO_ZERO_IN_DATE and ERROR_FOR_DIVISION_BY_ZERO modes
+# are removed in 5.7 and their functionality is merged with STRICT mode.
+# Setting these modes in 5.7 will give warning and have no effect.
+SET sql_mode= 'NO_ZERO_DATE';
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+SELECT @@sql_mode;
+@@sql_mode
+NO_ZERO_DATE
+SET sql_mode= 'NO_ZERO_IN_DATE';
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+SELECT @@sql_mode;
+@@sql_mode
+NO_ZERO_IN_DATE
+SET sql_mode= 'ERROR_FOR_DIVISION_BY_ZERO';
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+SELECT @@sql_mode;
+@@sql_mode
+ERROR_FOR_DIVISION_BY_ZERO
+#
+# Restore sql mode
+#
+SET sql_mode= @org_mode;
+Warnings:
+Warning	3090	Changing sql mode 'NO_FIELD_OPTIONS' is deprecated. It will be removed in a future release.
+#
+# Check that NO_ZERO_DATE, NO_ZERO_IN_DATE and ERROR_FOR_DIVISION_BY_ZERO modes
+# are removed in triggers after upgrading to 5.7.
+#
+CREATE TABLE account (acct_num INT, amount DECIMAL(10,2));
+SHOW CREATE TRIGGER ins_sum;
+Trigger	sql_mode	SQL Original Statement	character_set_client	collation_connection	Database Collation	Created
+ins_sum	STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO	CREATE DEFINER=`root`@`localhost` TRIGGER ins_sum BEFORE INSERT ON account FOR EACH ROW SET @sum = @sum + NEW.amount	utf8	utf8_general_ci	latin1_swedish_ci	NULL
+# Clean-up
+DROP TABLE account;
+#
+# Check that Inserting NO_ZERO_DATE, NO_ZERO_IN_DATE and ERROR_FOR_DIVISION_BY_ZERO modes
+# manually into mysql.proc table do not show up in SHOW CREATE procs/funcs OUTPUT.
+#
+INSERT INTO mysql.proc VALUES ('test','p1','PROCEDURE','p1','SQL','CONTAINS_SQL','NO','DEFINER','','','begin end','root@localhost',now(), now(),'NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,STRICT_ALL_TABLES','', 'utf8', 'utf8_general_ci', 'latin1_swedish_ci', 'begin end');
+# NO_ZERO_* modes should not show up in the output.
+SHOW CREATE PROCEDURE p1;
+Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
+p1	STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO	CREATE DEFINER=`root`@`localhost` PROCEDURE `p1`()
+begin end	utf8	utf8_general_ci	latin1_swedish_ci
+INSERT INTO mysql.proc VALUES ('test','f1','FUNCTION','f1','SQL','CONTAINS_SQL','NO','DEFINER','','int(11)','begin return 1; end','root@localhost',now(), now(),'NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,STRICT_ALL_TABLES','', 'utf8', 'utf8_general_ci', 'latin1_swedish_ci', 'begin return 1; end');
+# NO_ZERO_* modes should not show up in the output.
+SHOW CREATE FUNCTION f1;
+Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
+f1	STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO	CREATE DEFINER=`root`@`localhost` FUNCTION `f1`() RETURNS int(11)
+begin return 1; end	utf8	utf8_general_ci	latin1_swedish_ci
+# Clean-up.
+DROP PROCEDURE p1;
+DROP FUNCTION f1;

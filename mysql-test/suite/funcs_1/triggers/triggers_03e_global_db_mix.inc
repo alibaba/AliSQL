@@ -27,13 +27,13 @@ let $message= #### Testcase for mix of user(global) and db level: ####;
         eval create table t1 (f1 char(20)) engine= $engine_type;
 
 	create User test_yesprivs@localhost;
-	set password for test_yesprivs@localhost = password('PWD');
+	set password for test_yesprivs@localhost = 'PWD';
 	revoke ALL PRIVILEGES, GRANT OPTION FROM test_yesprivs@localhost;
 	grant ALL  on *.* to test_yesprivs@localhost;
 	show grants for test_yesprivs@localhost;
 
         create User test_noprivs@localhost;
-        set password for test_noprivs@localhost = password('PWD');
+        set password for test_noprivs@localhost = 'PWD';
         revoke ALL PRIVILEGES, GRANT OPTION FROM test_noprivs@localhost;
         grant SELECT,INSERT  on *.* to test_noprivs@localhost;
         show grants for test_noprivs@localhost;
@@ -84,7 +84,9 @@ let $message= trigger privilege on user level for create:;
         connect (yes_privs,localhost,test_yesprivs,PWD,test,$MASTER_MYPORT,$MASTER_MYSOCK);
 	select current_user;
         use priv_db;
+--replace_column 6 #
         show triggers;
+--replace_column 17 #
 	select * from information_schema.triggers;
 	--error ER_TABLEACCESS_DENIED_ERROR
         drop trigger trg1_1;

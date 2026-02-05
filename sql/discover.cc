@@ -1,13 +1,20 @@
-/* Copyright (c) 2004, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2004, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
@@ -21,10 +28,14 @@
   Functions for discover of frm file from handler
 */
 
-#include "sql_priv.h"
-#include "unireg.h"
 #include "discover.h"
+#include "mysqld.h"
+#include "table.h"
 #include <my_dir.h>
+#include "my_sys.h"
+
+#include "pfs_file_provider.h"
+#include "mysql/psi/mysql_file.h"
 
 /**
   Read the contents of a .frm file.
@@ -70,7 +81,7 @@ int readfrm(const char *name, uchar **frmdata, size_t *len)
   error= 2;
   if (mysql_file_fstat(file, &state, MYF(0)))
     goto err;
-  read_len= state.st_size;  
+  read_len= static_cast<size_t>(state.st_size);
 
   // Read whole frm file
   error= 3;
@@ -79,7 +90,7 @@ int readfrm(const char *name, uchar **frmdata, size_t *len)
     goto err;
 
   // Setup return data
-  *frmdata= (uchar*) read_data;
+  *frmdata= read_data;
   *len= read_len;
   error= 0;
   

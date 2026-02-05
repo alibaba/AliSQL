@@ -1,14 +1,22 @@
 /*****************************************************************************
 
-Copyright (c) 1996, 2011, Oracle and/or its affiliates. All Rights Reserved.
+Copyright (c) 1996, 2023, Oracle and/or its affiliates.
 
-This program is free software; you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation; version 2 of the License.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License, version 2.0,
+as published by the Free Software Foundation.
 
-This program is distributed in the hope that it will be useful, but WITHOUT
-ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+This program is also distributed with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have included with MySQL.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License, version 2.0, for more details.
 
 You should have received a copy of the GNU General Public License along with
 this program; if not, write to the Free Software Foundation, Inc.,
@@ -23,6 +31,8 @@ Data types
 Created 1/16/1996 Heikki Tuuri
 *******************************************************/
 
+#include "ha_prototypes.h"
+
 #include "data0type.h"
 
 #ifdef UNIV_NONINL
@@ -30,21 +40,18 @@ Created 1/16/1996 Heikki Tuuri
 #endif
 
 #ifndef UNIV_HOTBACKUP
-# include "ha_prototypes.h"
-
 /* At the database startup we store the default-charset collation number of
 this MySQL installation to this global variable. If we have < 4.1.2 format
 column definitions, or records in the insert buffer, we use this
 charset-collation code for them. */
 
-UNIV_INTERN ulint	data_mysql_default_charset_coll;
+ulint	data_mysql_default_charset_coll;
 
 /*********************************************************************//**
 Determine how many bytes the first n characters of the given string occupy.
 If the string is shorter than n characters, returns the number of bytes
 the characters in the string occupy.
-@return	length of the prefix, in bytes */
-UNIV_INTERN
+@return length of the prefix, in bytes */
 ulint
 dtype_get_at_most_n_mbchars(
 /*========================*/
@@ -84,8 +91,7 @@ dtype_get_at_most_n_mbchars(
 /*********************************************************************//**
 Checks if a data main type is a string type. Also a BLOB is considered a
 string type.
-@return	TRUE if string type */
-UNIV_INTERN
+@return TRUE if string type */
 ibool
 dtype_is_string_type(
 /*=================*/
@@ -105,8 +111,7 @@ dtype_is_string_type(
 Checks if a type is a binary string type. Note that for tables created with
 < 4.0.14, we do not know if a DATA_BLOB column is a BLOB or a TEXT column. For
 those DATA_BLOB columns this function currently returns FALSE.
-@return	TRUE if binary string type */
-UNIV_INTERN
+@return TRUE if binary string type */
 ibool
 dtype_is_binary_string_type(
 /*========================*/
@@ -128,8 +133,7 @@ Checks if a type is a non-binary string type. That is, dtype_is_string_type is
 TRUE and dtype_is_binary_string_type is FALSE. Note that for tables created
 with < 4.0.14, we do not know if a DATA_BLOB column is a BLOB or a TEXT column.
 For those DATA_BLOB columns this function currently returns TRUE.
-@return	TRUE if non-binary string type */
-UNIV_INTERN
+@return TRUE if non-binary string type */
 ibool
 dtype_is_non_binary_string_type(
 /*============================*/
@@ -149,7 +153,6 @@ dtype_is_non_binary_string_type(
 Forms a precise type from the < 4.1.2 format precise type plus the
 charset-collation code.
 @return precise type, including the charset-collation code */
-UNIV_INTERN
 ulint
 dtype_form_prtype(
 /*==============*/
@@ -165,8 +168,7 @@ dtype_form_prtype(
 
 /*********************************************************************//**
 Validates a data type structure.
-@return	TRUE if ok */
-UNIV_INTERN
+@return TRUE if ok */
 ibool
 dtype_validate(
 /*===========*/
@@ -174,7 +176,7 @@ dtype_validate(
 {
 	ut_a(type);
 	ut_a(type->mtype >= DATA_VARCHAR);
-	ut_a(type->mtype <= DATA_MYSQL);
+	ut_a(type->mtype <= DATA_MTYPE_MAX);
 
 	if (type->mtype == DATA_SYS) {
 		ut_a((type->prtype & DATA_MYSQL_TYPE_MASK) < DATA_N_SYS_COLS);
@@ -190,7 +192,6 @@ dtype_validate(
 #ifndef UNIV_HOTBACKUP
 /*********************************************************************//**
 Prints a data type structure. */
-UNIV_INTERN
 void
 dtype_print(
 /*========*/
@@ -224,6 +225,18 @@ dtype_print(
 
 	case DATA_BLOB:
 		fputs("DATA_BLOB", stderr);
+		break;
+
+	case DATA_POINT:
+		fputs("DATA_POINT", stderr);
+		break;
+
+	case DATA_VAR_POINT:
+		fputs("DATA_VAR_POINT", stderr);
+		break;
+
+	case DATA_GEOMETRY:
+		fputs("DATA_GEOMETRY", stderr);
 		break;
 
 	case DATA_INT:

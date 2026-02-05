@@ -1,3 +1,8 @@
+# The include statement below is a temp one for tests that are yet to
+#be ported to run with InnoDB,
+#but needs to be kept for tests that would need MyISAM in future.
+--source include/force_myisam_default.inc
+
 #
 # test variables
 #
@@ -8,6 +13,7 @@ drop table if exists t1,t2;
 #
 # Bug#19263: variables.test doesn't clean up after itself (I/II -- save)
 #
+set @my_log_error_verbosity       =@@global.log_error_verbosity;
 set @my_connect_timeout           =@@global.connect_timeout;
 set @my_delayed_insert_timeout    =@@global.delayed_insert_timeout;
 set @my_delayed_queue_size        =@@global.delayed_queue_size;
@@ -34,7 +40,6 @@ set @my_query_cache_size          =@@global.query_cache_size;
 set @my_server_id                 =@@global.server_id;
 set @my_slow_launch_time          =@@global.slow_launch_time;
 set @my_storage_engine            =@@global.default_storage_engine;
-set @my_thread_cache_size         =@@global.thread_cache_size;
 set @my_max_allowed_packet        =@@global.max_allowed_packet;
 set @my_join_buffer_size          =@@global.join_buffer_size;
 # case insensitivity tests (new in 5.0)
@@ -84,24 +89,34 @@ drop table t1;
 set GLOBAL max_join_size=10;
 set max_join_size=100;
 show variables like 'max_join_size';
+--disable_warnings
 select * from information_schema.session_variables where variable_name like 'max_join_size';
+--enable_warnings
 --replace_result 18446744073709551615 HA_POS_ERROR 4294967295 HA_POS_ERROR
 show global variables like 'max_join_size';
+--disable_warnings
 --replace_result 18446744073709551615 HA_POS_ERROR 4294967295 HA_POS_ERROR
 select * from information_schema.global_variables where variable_name like 'max_join_size';
+--enable_warnings
 set GLOBAL max_join_size=2000;
 show global variables like 'max_join_size';
+--disable_warnings
 select * from information_schema.global_variables where variable_name like 'max_join_size';
+--enable_warnings
 set max_join_size=DEFAULT;
 --replace_result 18446744073709551615 HA_POS_ERROR 4294967295 HA_POS_ERROR
 show variables like 'max_join_size';
 --replace_result 18446744073709551615 HA_POS_ERROR 4294967295 HA_POS_ERROR
+--disable_warnings
 select * from information_schema.session_variables where variable_name like 'max_join_size';
+--enable_warnings
 set GLOBAL max_join_size=DEFAULT;
 --replace_result 18446744073709551615 HA_POS_ERROR 4294967295 HA_POS_ERROR
 show global variables like 'max_join_size';
+--disable_warnings
 --replace_result 18446744073709551615 HA_POS_ERROR 4294967295 HA_POS_ERROR
 select * from information_schema.global_variables where variable_name like 'max_join_size';
+--enable_warnings
 set @@max_join_size=1000, @@global.max_join_size=2000;
 select @@local.max_join_size, @@global.max_join_size;
 select @@identity,  length(@@version)>0;
@@ -115,60 +130,79 @@ set big_tables=OFF, big_tables=ON, big_tables=0, big_tables=1, big_tables="OFF",
 
 set global concurrent_insert=2;
 show variables like 'concurrent_insert';
+--disable_warnings
 select * from information_schema.session_variables where variable_name like 'concurrent_insert';
+--enable_warnings
 set global concurrent_insert=1;
 show variables like 'concurrent_insert';
+--disable_warnings
 select * from information_schema.session_variables where variable_name like 'concurrent_insert';
+--enable_warnings
 set global concurrent_insert=0;
 show variables like 'concurrent_insert';
+--disable_warnings
 select * from information_schema.session_variables where variable_name like 'concurrent_insert';
+--enable_warnings
 set global concurrent_insert=DEFAULT;
 select @@concurrent_insert;
 
-set global timed_mutexes=ON;
-show variables like 'timed_mutexes';
-select * from information_schema.session_variables where variable_name like 'timed_mutexes';
-set global timed_mutexes=0;
-show variables like 'timed_mutexes';
-select * from information_schema.session_variables where variable_name like 'timed_mutexes';
-
 set default_storage_engine=MYISAM, default_storage_engine="HEAP", global default_storage_engine="MERGE";
 show local variables like 'default_storage_engine';
+--disable_warnings
 select * from information_schema.session_variables where variable_name like 'default_storage_engine';
+--enable_warnings
 show global variables like 'default_storage_engine';
+--disable_warnings
 select * from information_schema.global_variables where variable_name like 'default_storage_engine';
+--enable_warnings
 set GLOBAL query_cache_size=102400;
 
 set GLOBAL myisam_max_sort_file_size=2000000;
 show global variables like 'myisam_max_sort_file_size';
+--disable_warnings
 select * from information_schema.global_variables where variable_name like 'myisam_max_sort_file_size';
+--enable_warnings
 set GLOBAL myisam_max_sort_file_size=default;
 --replace_result 9223372036853727232 FILE_SIZE 2146435072 FILE_SIZE
 show global variables like 'myisam_max_sort_file_size';
+--disable_warnings
 --replace_result 9223372036853727232 FILE_SIZE 2146435072 FILE_SIZE
 select * from information_schema.global_variables where variable_name like 'myisam_max_sort_file_size';
+--enable_warnings
 
 # bug#22891: modified to take read-only SESSION net_buffer_length into account
 set global net_retry_count=10, session net_retry_count=10;
 set global net_buffer_length=1024, net_write_timeout=200, net_read_timeout=300;
 show global variables like 'net_%';
+--disable_warnings
 select * from information_schema.global_variables where variable_name like 'net_%' order by 1;
+--enable_warnings
 show session variables like 'net_%';
+--disable_warnings
 select * from information_schema.session_variables where variable_name like 'net_%' order by 1;
+--enable_warnings
 set global net_buffer_length=8000, global net_read_timeout=900, net_write_timeout=1000;
 show global variables like 'net_%';
+--disable_warnings
 select * from information_schema.global_variables where variable_name like 'net_%' order by 1;
+--enable_warnings
 set global net_buffer_length=1;
 show global variables like 'net_buffer_length';
+--disable_warnings
 select * from information_schema.global_variables where variable_name like 'net_buffer_length';
+--enable_warnings
 #warning 1292
 set global net_buffer_length=2000000000;
 show global variables like 'net_buffer_length';
+--disable_warnings
 select * from information_schema.global_variables where variable_name like 'net_buffer_length';
+--enable_warnings
 
 set character set cp1251_koi8;
 show variables like "character_set_client";
+--disable_warnings
 select * from information_schema.session_variables where variable_name like 'character_set_client';
+--enable_warnings
 select @@timestamp>0;
 
 set @@rand_seed1=10000000,@@rand_seed2=1000000;
@@ -181,15 +215,19 @@ select ROUND(RAND(),5);
 --echo ==+ Other values will be rounded down to nearest multiple +==
 --echo
 --echo ==+ Show initial values +==
+--disable_warnings
 SHOW VARIABLES WHERE variable_name IN ('range_alloc_block_size',
 'query_alloc_block_size', 'query_prealloc_size',
 'transaction_alloc_block_size', 'transaction_prealloc_size');
+--enable_warnings
 
 --echo ==+ information_schema data +==
+--disable_warnings
 SELECT * FROM information_schema.session_variables 
 WHERE variable_name IN ('range_alloc_block_size',
 'query_alloc_block_size', 'query_prealloc_size',
 'transaction_alloc_block_size', 'transaction_prealloc_size') ORDER BY 1;
+--enable_warnings
 --echo Testing values that are multiples of 1024
 set @@range_alloc_block_size=1024*15+1024;
 set @@query_alloc_block_size=1024*15+1024*2;
@@ -198,14 +236,18 @@ set @@transaction_alloc_block_size=1024*21-1024*1;
 set @@transaction_prealloc_size=1024*21-2048;
 --echo ==+ Check manipulated values ==+
 select @@query_alloc_block_size;
+--disable_warnings
 SHOW VARIABLES WHERE variable_name IN ('range_alloc_block_size',
 'query_alloc_block_size', 'query_prealloc_size',
 'transaction_alloc_block_size', 'transaction_prealloc_size');
+--enable_warnings
 --echo ==+ information_schema data +==
+--disable_warnings
 SELECT * FROM information_schema.session_variables
 WHERE variable_name IN ('range_alloc_block_size',
 'query_alloc_block_size', 'query_prealloc_size',
 'transaction_alloc_block_size', 'transaction_prealloc_size') ORDER BY 1;
+--enable_warnings
 --echo ==+ Manipulate variable values +==
 --echo Testing values that are not 1024 multiples
 set @@range_alloc_block_size=1024*16+1023;
@@ -214,22 +256,28 @@ set @@query_prealloc_size=1024*18-1023;
 set @@transaction_alloc_block_size=1024*20-1;
 set @@transaction_prealloc_size=1024*21-1;
 --echo ==+ Check manipulated values ==+
+--disable_warnings
 SHOW VARIABLES WHERE variable_name IN ('range_alloc_block_size',
 'query_alloc_block_size', 'query_prealloc_size',
 'transaction_alloc_block_size', 'transaction_prealloc_size');
+--enable_warnings
 --echo ==+ information_schema data +==
+--disable_warnings
 SELECT * FROM information_schema.session_variables 
 WHERE variable_name IN ('range_alloc_block_size',
 'query_alloc_block_size', 'query_prealloc_size',
 'transaction_alloc_block_size', 'transaction_prealloc_size') ORDER BY 1;
+--enable_warnings
 --echo ==+ Set values back to the default values +==
 set @@range_alloc_block_size=default;
 set @@query_alloc_block_size=default, @@query_prealloc_size=default;
 set transaction_alloc_block_size=default, @@transaction_prealloc_size=default;
 --echo ==+ Check the values now that they are reset +==
+--disable_warnings
 SHOW VARIABLES WHERE variable_name IN ('range_alloc_block_size',
 'query_alloc_block_size', 'query_prealloc_size',
 'transaction_alloc_block_size', 'transaction_prealloc_size');
+--enable_warnings
 
 #
 # Bug #10904 Illegal mix of collations between
@@ -352,7 +400,6 @@ set sql_select_limit=default;
 set sql_warnings=1;
 set global table_open_cache=100;
 set default_storage_engine=myisam;
-set global thread_cache_size=100;
 set timestamp=1, timestamp=default;
 set tmp_table_size=100;
 set tx_isolation="READ-COMMITTED";
@@ -423,8 +470,10 @@ set global ft_boolean_syntax = @@init_connect;
 set global myisam_max_sort_file_size=4294967296;
 --replace_result 4294967296 MAX_FILE_SIZE 2146435072 MAX_FILE_SIZE
 show global variables like 'myisam_max_sort_file_size';
+--disable_warnings
 --replace_result 4294967296 MAX_FILE_SIZE 2146435072 MAX_FILE_SIZE
 select * from information_schema.global_variables where variable_name like 'myisam_max_sort_file_size';
+--enable_warnings
 set global myisam_max_sort_file_size=default;
 
 #
@@ -460,16 +509,24 @@ SELECT @@global.local.key_buffer_size;
 # BUG#5135: cannot turn on log_warnings with SET in 4.1 (and 4.0)
 set @tstlw = @@log_warnings;
 show global variables like 'log_warnings';
+--disable_warnings
 select * from information_schema.global_variables where variable_name like 'log_warnings';
+--enable_warnings
 set global log_warnings = 0;
 show global variables like 'log_warnings';
+--disable_warnings
 select * from information_schema.global_variables where variable_name like 'log_warnings';
+--enable_warnings
 set global log_warnings = 42;
 show global variables like 'log_warnings';
+--disable_warnings
 select * from information_schema.global_variables where variable_name like 'log_warnings';
+--enable_warnings
 set global log_warnings = @tstlw;
 show global variables like 'log_warnings';
+--disable_warnings
 select * from information_schema.global_variables where variable_name like 'log_warnings';
+--enable_warnings
 
 #
 # BUG#4788 show create table provides incorrect statement
@@ -501,7 +558,9 @@ drop table t1;
 
 SET GLOBAL MYISAM_DATA_POINTER_SIZE= 7;
 SHOW VARIABLES LIKE 'MYISAM_DATA_POINTER_SIZE';
+--disable_warnings
 SELECT * FROM INFORMATION_SCHEMA.SESSION_VARIABLES WHERE VARIABLE_NAME LIKE 'MYISAM_DATA_POINTER_SIZE';
+--enable_warnings
 
 #
 # Bug #6958: negative arguments to integer options wrap around
@@ -509,7 +568,9 @@ SELECT * FROM INFORMATION_SCHEMA.SESSION_VARIABLES WHERE VARIABLE_NAME LIKE 'MYI
 
 SET GLOBAL table_open_cache=-1;
 SHOW VARIABLES LIKE 'table_open_cache';
+--disable_warnings
 SELECT * FROM INFORMATION_SCHEMA.SESSION_VARIABLES WHERE VARIABLE_NAME LIKE 'table_open_cache';
+--enable_warnings
 SET GLOBAL table_open_cache=DEFAULT;
 
 #
@@ -664,7 +725,9 @@ select @@global.character_set_filesystem;
 set @old_sql_big_selects = @@sql_big_selects;
 set @@sql_big_selects = 1;
 show variables like 'sql_big_selects';
+--disable_warnings
 select * from information_schema.session_variables where variable_name like 'sql_big_selects';
+--enable_warnings
 set @@sql_big_selects = @old_sql_big_selects;
 
 #
@@ -673,14 +736,22 @@ set @@sql_big_selects = @old_sql_big_selects;
 # 
 set @@sql_notes = 0, @@sql_warnings = 0;
 show variables like 'sql_notes';
+--disable_warnings
 select * from information_schema.session_variables where variable_name like 'sql_notes';
+--enable_warnings
 show variables like 'sql_warnings';
+--disable_warnings
 select * from information_schema.session_variables where variable_name like 'sql_warnings';
+--enable_warnings
 set @@sql_notes = 1, @@sql_warnings = 1;
 show variables like 'sql_notes';
+--disable_warnings
 select * from information_schema.session_variables where variable_name like 'sql_notes';
+--enable_warnings
 show variables like 'sql_warnings';
+--disable_warnings
 select * from information_schema.session_variables where variable_name like 'sql_warnings';
+--enable_warnings
 
 #
 # Bug #12792: @@system_time_zone is not SELECTable.
@@ -706,16 +777,22 @@ select @@version, @@version_comment, @@version_compile_machine,
 select @@basedir, @@datadir, @@tmpdir;
 --replace_column 2 #
 show variables like 'basedir';
+--disable_warnings
 --replace_column 2 #
 select * from information_schema.session_variables where variable_name like 'basedir';
+--enable_warnings
 --replace_column 2 #
 show variables like 'datadir';
+--disable_warnings
 --replace_column 2 #
 select * from information_schema.session_variables where variable_name like 'datadir';
+--enable_warnings
 --replace_column 2 #
 show variables like 'tmpdir';
+--disable_warnings
 --replace_column 2 #
 select * from information_schema.session_variables where variable_name like 'tmpdir';
+--enable_warnings
 
 #
 # Bug #19606: make ssl settings available via SHOW VARIABLES and @@variables
@@ -725,8 +802,10 @@ select * from information_schema.session_variables where variable_name like 'tmp
 select @@ssl_ca, @@ssl_capath, @@ssl_cert, @@ssl_cipher, @@ssl_key;
 --replace_column 2 #
 show variables like 'ssl%';
+--disable_warnings
 --replace_column 2 #
 select * from information_schema.session_variables where variable_name like 'ssl%' order by 1;
+--enable_warnings
 
 #
 # Bug #19616: make log_queries_not_using_indexes available in SHOW VARIABLES
@@ -734,7 +813,9 @@ select * from information_schema.session_variables where variable_name like 'ssl
 #
 select @@log_queries_not_using_indexes;
 show variables like 'log_queries_not_using_indexes';
+--disable_warnings
 select * from information_schema.session_variables where variable_name like 'log_queries_not_using_indexes';
+--enable_warnings
 
 #
 # Bug#20908: Crash if select @@""
@@ -826,15 +907,17 @@ set global query_cache_size          =@my_query_cache_size;
 set global server_id                 =@my_server_id;
 set global slow_launch_time          =@my_slow_launch_time;
 set global default_storage_engine            =@my_storage_engine;
-set global thread_cache_size         =@my_thread_cache_size;
 set global max_allowed_packet        =@my_max_allowed_packet;
 set global join_buffer_size          =@my_join_buffer_size;
+set global log_error_verbosity       =@my_log_error_verbosity;
 
 #
 # Bug#28580 Repeatation of status variables
 #
+--disable_warnings
 --replace_column 2 #
 show global variables where Variable_name='table_definition_cache';
+--enable_warnings
 # Note: table_lock_wait_timeout no longer exists. See bug#45225.
 
 ###########################################################################
@@ -1546,9 +1629,18 @@ SET @@sql_mode= 4294967296;
 show variables like 'log_slow%';
 set global log_slow_admin_statements = on;
 show global variables like 'log_slow_admin_statements';
+--disable_warnings
 select * from information_schema.global_variables where variable_name like 'log_slow_admin_statements';
+--enable_warnings
 set global log_slow_slave_statements = on;
 show global variables like 'log_slow_slave_statements';
+--disable_warnings
 select * from information_schema.global_variables where variable_name like 'log_slow_slave_statements';
+--enable_warnings
 set global log_slow_admin_statements = default;
 set global log_slow_slave_statements = default;
+
+--echo #
+--echo # WL#7764 - Make STRICT mode for transactional SEs default in 5.7
+--echo #
+SHOW VARIABLES LIKE 'sql_mode';

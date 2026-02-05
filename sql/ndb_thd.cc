@@ -1,20 +1,32 @@
 /*
-   Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2011, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
+#ifndef MYSQL_SERVER
+#define MYSQL_SERVER
+#endif
+
+#include "ha_ndbcluster_glue.h"
 #include "ndb_thd.h"
 #include "ndb_thd_ndb.h"
 
@@ -37,9 +49,53 @@ Ndb* check_ndb_in_thd(THD* thd, bool validate_ndb)
 
   else if (validate_ndb && !thd_ndb->valid_ndb())
   {
-    if (!thd_ndb->recycle_ndb(thd))
+    if (!thd_ndb->recycle_ndb())
       return NULL;
   }
 
+  assert(thd_ndb->is_slave_thread() == thd->slave_thread);
+
   return thd_ndb->ndb;
+}
+
+#include <sql_class.h>
+
+void
+thd_print_warning_list(THD* thd, const char* prefix)
+{
+  Diagnostics_area::Sql_condition_iterator
+   it(thd->get_stmt_da()->sql_conditions());
+
+  const Sql_condition *err;
+  while ((err= it++))
+  {
+    sql_print_warning("%s: (%d)%s",
+                      prefix,
+                      err->mysql_errno(),
+                      err->message_text());
+  }
+}
+
+
+bool
+applying_binlog(const THD* thd)
+{
+  if (thd->slave_thread)
+  {
+    DBUG_PRINT("info", ("THD is slave thread"));
+    return true;
+  }
+
+  if (thd->rli_fake)
+  {
+    /*
+      Thread is in "pseudo_slave_mode" which is entered implicitly when the
+      first BINLOG statement is executed (see 'mysql_client_binlog_statement')
+      and explicitly ended when SET @pseudo_slave_mode=0 is finally executed.
+    */
+    DBUG_PRINT("info", ("THD is in pseduo slave mode"));
+    return true;
+  }
+
+  return false;
 }

@@ -1,15 +1,21 @@
 /*
-   Copyright (C) 2003-2008 MySQL AB, 2008, 2009 Sun Microsystems, Inc.
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -61,8 +67,8 @@ UtilTransactions::clearTable(Ndb* pNdb,
   while (true){
   restart:
     if (retryAttempt++ >= retryMax){
-      g_info << "ERROR: has retried this operation " << retryAttempt 
-	     << " times, failing!" << endl;
+      g_err << "ERROR: has retried this operation " << retryAttempt 
+	     << " times, failing!, line: " << __LINE__ << endl;
       return NDBT_FAILED;
     }
     
@@ -70,10 +76,11 @@ UtilTransactions::clearTable(Ndb* pNdb,
     if (pTrans == NULL) {
       err = pNdb->getNdbError();
       if (err.status == NdbError::TemporaryError){
-	ERR(err);
+	NDB_ERR(err);
 	NdbSleep_MilliSleep(50);
 	continue;
       }
+      NDB_ERR(err);
       goto failed;
     }
 
@@ -81,34 +88,38 @@ UtilTransactions::clearTable(Ndb* pNdb,
     if (pOp == NULL) {
       err = pTrans->getNdbError();
       if(err.status == NdbError::TemporaryError){
-	ERR(err);
+	NDB_ERR(err);
 	closeTransaction(pNdb);
 	NdbSleep_MilliSleep(50);
 	par = 1;
 	goto restart;
       }
+      NDB_ERR(err);
       goto failed;
     }
     
     if( pOp->readTuples(NdbOperation::LM_Exclusive, flags, par) ) {
       err = pTrans->getNdbError();
+      NDB_ERR(err);
       goto failed;
     }
     
     if(pTrans->execute(NoCommit, AbortOnError) != 0){
       err = pTrans->getNdbError();    
       if(err.status == NdbError::TemporaryError){
-	ERR(err);
+	NDB_ERR(err);
 	closeTransaction(pNdb);
 	NdbSleep_MilliSleep(50);
 	continue;
       }
+      NDB_ERR(err);
       goto failed;
     }
     
     while((check = pOp->nextResult(true)) == 0){
       do {
 	if (pOp->deleteCurrentTuple() != 0){
+          NDB_ERR(err);
 	  goto failed;
 	}
 	deletedRows++;
@@ -122,34 +133,36 @@ UtilTransactions::clearTable(Ndb* pNdb,
       err = pTrans->getNdbError();    
       if(check == -1){
 	if(err.status == NdbError::TemporaryError){
-	  ERR(err);
+	  NDB_ERR(err);
 	  closeTransaction(pNdb);
 	  NdbSleep_MilliSleep(50);
 	  par = 1;
 	  goto restart;
 	}
+        NDB_ERR(err);
 	goto failed;
       }
     }
     if(check == -1){
       err = pTrans->getNdbError();    
       if(err.status == NdbError::TemporaryError){
-	ERR(err);
+	NDB_ERR(err);
 	closeTransaction(pNdb);
 	NdbSleep_MilliSleep(50);
 	par = 1;
 	goto restart;
       }
+      NDB_ERR(err);
       goto failed;
     }
     closeTransaction(pNdb);
     return NDBT_OK;
   }
+  abort(); /* Should never happen */
   return NDBT_FAILED;
   
  failed:
   if(pTrans != 0) closeTransaction(pNdb);
-  ERR(err);
   return (err.code != 0 ? err.code : NDBT_FAILED);
 }
 
@@ -206,8 +219,8 @@ UtilTransactions::copyTableData(Ndb* pNdb,
   while (true){
     
     if (retryAttempt >= retryMax){
-      g_info << "ERROR: has retried this operation " << retryAttempt 
-	     << " times, failing!" << endl;
+      g_err << "ERROR: has retried this operation " << retryAttempt 
+	     << " times, failing!, line: " << __LINE__ << endl;
       return NDBT_FAILED;
     }
 
@@ -217,24 +230,24 @@ UtilTransactions::copyTableData(Ndb* pNdb,
       const NdbError err = pNdb->getNdbError();
 
       if (err.status == NdbError::TemporaryError){
-	ERR(err);
+	NDB_ERR(err);
 	NdbSleep_MilliSleep(50);
 	retryAttempt++;
 	continue;
       }
-      ERR(err);
+      NDB_ERR(err);
       return NDBT_FAILED;
     }
 
     pOp = pTrans->getNdbScanOperation(tab.getName());	
     if (pOp == NULL) {
-      ERR(pTrans->getNdbError());
+      NDB_ERR(pTrans->getNdbError());
       closeTransaction(pNdb);
       return NDBT_FAILED;
     }
 
     if( pOp->readTuples(NdbScanOperation::LM_Read, parallelism) ) {
-      ERR(pTrans->getNdbError());
+      NDB_ERR(pTrans->getNdbError());
       closeTransaction(pNdb);
       return NDBT_FAILED;
     }
@@ -243,7 +256,7 @@ UtilTransactions::copyTableData(Ndb* pNdb,
     for (int a = 0; a < tab.getNoOfColumns(); a++){
       if ((row.attributeStore(a) =  
 	   pOp->getValue(tab.getColumn(a)->getName())) == 0) {
-	ERR(pTrans->getNdbError());
+	NDB_ERR(pTrans->getNdbError());
 	closeTransaction(pNdb);
 	return NDBT_FAILED;
       }
@@ -251,7 +264,7 @@ UtilTransactions::copyTableData(Ndb* pNdb,
     
     check = pTrans->execute(NoCommit, AbortOnError);
     if( check == -1 ) {
-      ERR(pTrans->getNdbError());
+      NDB_ERR(pTrans->getNdbError());
       closeTransaction(pNdb);
       return NDBT_FAILED;
     }
@@ -262,6 +275,7 @@ UtilTransactions::copyTableData(Ndb* pNdb,
 	insertedRows++;
 	if (addRowToInsert(pNdb, pTrans, row, destName) != 0){
 	  closeTransaction(pNdb);
+          g_err << "Line: " << __LINE__ << " failed to add row" << endl;
 	  return NDBT_FAILED;
 	}
       } while((eof = pOp->nextResult(false)) == 0);
@@ -270,7 +284,7 @@ UtilTransactions::copyTableData(Ndb* pNdb,
       pTrans->restart();
       if( check == -1 ) {
 	const NdbError err = pTrans->getNdbError();    
-	ERR(err);
+	NDB_ERR(err);
 	closeTransaction(pNdb);
 	return NDBT_FAILED;
       }
@@ -279,7 +293,7 @@ UtilTransactions::copyTableData(Ndb* pNdb,
       const NdbError err = pTrans->getNdbError();
       
       if (err.status == NdbError::TemporaryError){
-	ERR(err);
+	NDB_ERR(err);
 	closeTransaction(pNdb);
 	NdbSleep_MilliSleep(50);
 	// If error = 488 there should be no limit on number of retry attempts
@@ -287,7 +301,7 @@ UtilTransactions::copyTableData(Ndb* pNdb,
 	  retryAttempt++;
 	continue;
       }
-      ERR(err);
+      NDB_ERR(err);
       closeTransaction(pNdb);
       return NDBT_FAILED;
     }
@@ -298,6 +312,7 @@ UtilTransactions::copyTableData(Ndb* pNdb,
     
     return NDBT_OK;
   }
+  abort(); /* Should never happen */
   return NDBT_FAILED;
 }
 
@@ -312,13 +327,13 @@ UtilTransactions::addRowToInsert(Ndb* pNdb,
 
   pInsOp = pInsTrans->getNdbOperation(insertTabName);	
   if (pInsOp == NULL) {
-    ERR(pInsTrans->getNdbError());
+    NDB_ERR(pInsTrans->getNdbError());
     return NDBT_FAILED;
   }
   
   check = pInsOp->insertTuple();
   if( check == -1 ) {
-    ERR(pInsTrans->getNdbError());
+    NDB_ERR(pInsTrans->getNdbError());
     return NDBT_FAILED;
   }
 
@@ -329,7 +344,7 @@ UtilTransactions::addRowToInsert(Ndb* pNdb,
     if (pInsOp->setValue(tab.getColumn(a)->getName(),
 			 r->aRef(),
 			 sz) != 0) {
-      ERR(pInsTrans->getNdbError());
+      NDB_ERR(pInsTrans->getNdbError());
       return NDBT_FAILED;
     }
   }
@@ -356,8 +371,8 @@ UtilTransactions::scanReadRecords(Ndb* pNdb,
   while (true){
 
     if (retryAttempt >= retryMax){
-      g_info << "ERROR: has retried this operation " << retryAttempt 
-	     << " times, failing!" << endl;
+      g_err << "ERROR: has retried this operation " << retryAttempt 
+	     << " times, failing!, line: " << __LINE__ << endl;
       return NDBT_FAILED;
     }
 
@@ -366,12 +381,12 @@ UtilTransactions::scanReadRecords(Ndb* pNdb,
       const NdbError err = pNdb->getNdbError();
 
       if (err.status == NdbError::TemporaryError){
-	ERR(err);
+	NDB_ERR(err);
 	NdbSleep_MilliSleep(50);
 	retryAttempt++;
 	continue;
       }
-      ERR(err);
+      NDB_ERR(err);
       return NDBT_FAILED;
     }
 
@@ -381,17 +396,17 @@ UtilTransactions::scanReadRecords(Ndb* pNdb,
       closeTransaction(pNdb);
 
       if (err.status == NdbError::TemporaryError){
-	ERR(err);
+	NDB_ERR(err);
 	NdbSleep_MilliSleep(50);
 	retryAttempt++;
 	continue;
       }
-      ERR(err);
+      NDB_ERR(err);
       return NDBT_FAILED;
     }
 
     if( pOp->readTuples(lm, 0, parallelism) ) {
-      ERR(pTrans->getNdbError());
+      NDB_ERR(pTrans->getNdbError());
       closeTransaction(pNdb);
       return NDBT_FAILED;
     }
@@ -403,7 +418,7 @@ UtilTransactions::scanReadRecords(Ndb* pNdb,
 	g_info << "getValue(" << attrib_list[a] << ")" << endl;
 	if ((row.attributeStore(attrib_list[a]) =  
 	     pOp->getValue(tab.getColumn(attrib_list[a])->getName())) == 0) {
-	  ERR(pTrans->getNdbError());
+	  NDB_ERR(pTrans->getNdbError());
 	  closeTransaction(pNdb);
 	  return NDBT_FAILED;
 	}
@@ -416,13 +431,13 @@ UtilTransactions::scanReadRecords(Ndb* pNdb,
       const NdbError err = pTrans->getNdbError();
 
       if (err.status == NdbError::TemporaryError){
-	ERR(err);
+	NDB_ERR(err);
 	closeTransaction(pNdb);
 	NdbSleep_MilliSleep(50);
 	retryAttempt++;
 	continue;
       }
-      ERR(err);
+      NDB_ERR(err);
       closeTransaction(pNdb);
       return NDBT_FAILED;
     }
@@ -442,13 +457,13 @@ UtilTransactions::scanReadRecords(Ndb* pNdb,
       const NdbError err = pTrans->getNdbError();
       
       if (err.status == NdbError::TemporaryError){
-	ERR(err);
+	NDB_ERR(err);
 	closeTransaction(pNdb);
 	NdbSleep_MilliSleep(50);
 	retryAttempt++;
 	continue;
       }
-      ERR(err);
+      NDB_ERR(err);
       closeTransaction(pNdb);
       return NDBT_FAILED;
     }
@@ -456,7 +471,7 @@ UtilTransactions::scanReadRecords(Ndb* pNdb,
     closeTransaction(pNdb);
     g_info << rows << " rows have been read" << endl;
     if (records != 0 && rows != records){
-      g_info << "Check expected number of records failed" << endl 
+      g_err << "Check expected number of records failed" << endl 
 	     << "  expected=" << records <<", " << endl
 	     << "  read=" << rows << endl;
       return NDBT_FAILED;
@@ -464,6 +479,7 @@ UtilTransactions::scanReadRecords(Ndb* pNdb,
     
     return NDBT_OK;
   }
+  abort(); /* Should never happen */
   return NDBT_FAILED;
 }
 
@@ -481,8 +497,8 @@ UtilTransactions::selectCount(Ndb* pNdb,
   while (true){
 
     if (retryAttempt >= retryMax){
-      g_info << "ERROR: has retried this operation " << retryAttempt 
-	     << " times, failing!" << endl;
+      g_err << "ERROR: has retried this operation " << retryAttempt 
+	     << " times, failing!, line: " << __LINE__ << endl;
       return NDBT_FAILED;
     }
 
@@ -495,7 +511,7 @@ UtilTransactions::selectCount(Ndb* pNdb,
 	retryAttempt++;
 	continue;
       }
-      ERR(pNdb->getNdbError());
+      NDB_ERR(pNdb->getNdbError());
       return NDBT_FAILED;
     }
 
@@ -511,13 +527,13 @@ UtilTransactions::selectCount(Ndb* pNdb,
 	retryAttempt++;
 	continue;
       }
-      ERR(err);
+      NDB_ERR(err);
       return NDBT_FAILED;
     }
 
     if( pOp->readTuples(lm) )
     {
-      ERR(pTrans->getNdbError());
+      NDB_ERR(pTrans->getNdbError());
       closeTransaction(pNdb);
       return NDBT_FAILED;
     }
@@ -540,7 +556,7 @@ UtilTransactions::selectCount(Ndb* pNdb,
         retryAttempt++;
         continue;
       }
-      ERR(err);
+      NDB_ERR(err);
       return NDBT_FAILED;
     }
 
@@ -563,7 +579,7 @@ UtilTransactions::selectCount(Ndb* pNdb,
 	retryAttempt++;
 	continue;
       }
-      ERR(err);
+      NDB_ERR(err);
       closeTransaction(pNdb);
       return NDBT_FAILED;
     }
@@ -576,6 +592,7 @@ UtilTransactions::selectCount(Ndb* pNdb,
     
     return NDBT_OK;
   }
+  abort(); /* Should never happen */
   return NDBT_FAILED;
 }
   
@@ -650,8 +667,8 @@ UtilTransactions::scanAndCompareUniqueIndex(Ndb* pNdb,
   while (true){
 restart:
     if (retryAttempt >= retryMax){
-      g_info << "ERROR: has retried this operation " << retryAttempt 
-	     << " times, failing!" << endl;
+      g_err << "ERROR: has retried this operation " << retryAttempt 
+	     << " times, failing!, line: " << __LINE__ << endl;
       return NDBT_FAILED;
     }
 
@@ -660,12 +677,12 @@ restart:
       const NdbError err = pNdb->getNdbError();
 
       if (err.status == NdbError::TemporaryError){
-	ERR(err);
+	NDB_ERR(err);
 	NdbSleep_MilliSleep(50);
 	retryAttempt++;
 	continue;
       }
-      ERR(err);
+      NDB_ERR(err);
       return NDBT_FAILED;
     }
 
@@ -673,7 +690,7 @@ restart:
     if (pOp == NULL) {
       const NdbError err = pNdb->getNdbError();
       closeTransaction(pNdb);
-      ERR(err);
+      NDB_ERR(err);
       
       if (err.status == NdbError::TemporaryError){
 	NdbSleep_MilliSleep(50);
@@ -691,7 +708,7 @@ restart:
     }
     
     if( rs != 0 ) {
-      ERR(pTrans->getNdbError());
+      NDB_ERR(pTrans->getNdbError());
       closeTransaction(pNdb);
       return NDBT_FAILED;
     }
@@ -700,7 +717,7 @@ restart:
     for (int a = 0; a < tab.getNoOfColumns(); a++){
       if ((row.attributeStore(a) =  
 	   pOp->getValue(tab.getColumn(a)->getName())) == 0) {
-	ERR(pTrans->getNdbError());
+	NDB_ERR(pTrans->getNdbError());
 	closeTransaction(pNdb);
 	return NDBT_FAILED;
       }
@@ -711,13 +728,13 @@ restart:
       const NdbError err = pTrans->getNdbError();
       
       if (err.status == NdbError::TemporaryError){
-	ERR(err);
+	NDB_ERR(err);
 	closeTransaction(pNdb);
 	NdbSleep_MilliSleep(50);
 	retryAttempt++;
 	continue;
       }
-      ERR(err);
+      NDB_ERR(err);
       closeTransaction(pNdb);
       return NDBT_FAILED;
     }
@@ -744,7 +761,7 @@ restart:
 	  const NdbError err = pTrans->getNdbError();
 	  
 	  if (err.status == NdbError::TemporaryError){
-	    ERR(err);
+	    NDB_ERR(err);
 	    closeTransaction(pNdb);
 	    NdbSleep_MilliSleep(50);
 	    retryAttempt++;
@@ -752,6 +769,7 @@ restart:
 	  }
 	}
 	closeTransaction(pNdb);
+        g_err << "Line: " << __LINE__ << " next result failed" << endl;
 	return NDBT_FAILED;
       }
     }
@@ -759,13 +777,13 @@ restart:
       const NdbError err = pTrans->getNdbError();
       
       if (err.status == NdbError::TemporaryError){
-	ERR(err);
+	NDB_ERR(err);
 	closeTransaction(pNdb);
 	NdbSleep_MilliSleep(50);
 	retryAttempt++;
 	continue;
       }
-      ERR(err);
+      NDB_ERR(err);
       closeTransaction(pNdb);
       return NDBT_FAILED;
     }
@@ -774,6 +792,7 @@ restart:
     
     return NDBT_OK;
   }
+  abort(); /* Should never happen */
   return NDBT_FAILED;
 }
 int 
@@ -801,9 +820,9 @@ UtilTransactions::readRowFromTableAndIndex(Ndb* pNdb,
     if(retryAttempt)
       ndbout_c("retryAttempt %d", retryAttempt);
     if (retryAttempt >= retryMax){
-      g_info << "ERROR: has retried this operation " << retryAttempt 
-	     << " times, failing!" << endl;
-	goto close_all;
+      g_err << "ERROR: has retried this operation " << retryAttempt 
+	     << " times, failing!, line: " << __LINE__ << endl;
+      goto close_all;
     }
 
     pTrans1 = pNdb->hupp(scanTrans); //startTransaction();
@@ -811,10 +830,13 @@ UtilTransactions::readRowFromTableAndIndex(Ndb* pNdb,
       const NdbError err = pNdb->getNdbError();
       
       if (err.code == 4006)
+      {
+        g_err << "Line: " << __LINE__ << " err: 4006" << endl;
         goto close_all;
+      }
 
       if (err.status == NdbError::TemporaryError){
-	ERR(err);
+	NDB_ERR(err);
 	NdbSleep_MilliSleep(50);
 	retryAttempt++;
 	continue;
@@ -824,7 +846,7 @@ UtilTransactions::readRowFromTableAndIndex(Ndb* pNdb,
 	return_code = NDBT_OK;
 	goto close_all;
       }
-      ERR(err);
+      NDB_ERR(err);
       goto close_all;
     }
 
@@ -833,13 +855,13 @@ UtilTransactions::readRowFromTableAndIndex(Ndb* pNdb,
      */
     pOp = pTrans1->getNdbOperation(tab.getName());	
     if (pOp == NULL) {
-      ERR(pTrans1->getNdbError());
+      NDB_ERR(pTrans1->getNdbError());
       goto close_all;
     }
     
     check = pOp->readTuple();
     if( check == -1 ) {
-      ERR(pTrans1->getNdbError());
+      NDB_ERR(pTrans1->getNdbError());
       goto close_all;
     }
     
@@ -851,7 +873,7 @@ UtilTransactions::readRowFromTableAndIndex(Ndb* pNdb,
       const NdbDictionary::Column* attr = tab.getColumn(a);
       if (attr->getPrimaryKey() == true){
 	if (pOp->equal(attr->getName(), row.attributeStore(a)->aRef()) != 0){
-	  ERR(pTrans1->getNdbError());
+	  NDB_ERR(pTrans1->getNdbError());
 	  goto close_all;
 	}
 #if VERBOSE
@@ -869,7 +891,7 @@ UtilTransactions::readRowFromTableAndIndex(Ndb* pNdb,
     for(a = 0; a<tab.getNoOfColumns(); a++){
       if((tabRow.attributeStore(a) = 
 	  pOp->getValue(tab.getColumn(a)->getName())) == 0) {
-	ERR(pTrans1->getNdbError());
+	NDB_ERR(pTrans1->getNdbError());
 	goto close_all;
       }
 #if VERBOSE
@@ -908,7 +930,7 @@ UtilTransactions::readRowFromTableAndIndex(Ndb* pNdb,
       }
       
       if (pIOp == NULL) {
-	ERR(pTrans1->getNdbError());
+	NDB_ERR(pTrans1->getNdbError());
 	goto close_all;
       }
     
@@ -921,7 +943,7 @@ UtilTransactions::readRowFromTableAndIndex(Ndb* pNdb,
 	}
 	
 	if( not_ok ) {
-	  ERR(pTrans1->getNdbError());
+	  NDB_ERR(pTrans1->getNdbError());
 	  goto close_all;
 	}
       }
@@ -936,7 +958,7 @@ UtilTransactions::readRowFromTableAndIndex(Ndb* pNdb,
 	if ( !row.attributeStore(col->getName())->isNULL() ) {
 	  if(pIOp->equal(col->getName(), 
 			 row.attributeStore(col->getName())->aRef()) != 0){
-	    ERR(pTrans1->getNdbError());
+	    NDB_ERR(pTrans1->getNdbError());
 	    goto close_all;
 	  }
 	}
@@ -959,7 +981,7 @@ UtilTransactions::readRowFromTableAndIndex(Ndb* pNdb,
 	  pIOp->getValue(tab.getColumn(a)->getName());
 	
 	if(pCheck == NULL) {
-	  ERR(pTrans1->getNdbError());
+	  NDB_ERR(pTrans1->getNdbError());
 	  goto close_all;
 	}
 #if VERBOSE
@@ -976,14 +998,14 @@ UtilTransactions::readRowFromTableAndIndex(Ndb* pNdb,
       const NdbError err = pTrans1->getNdbError();
       
       if (err.status == NdbError::TemporaryError){
-	ERR(err);
+	NDB_ERR(err);
 	pNdb->closeTransaction(pTrans1);
 	NdbSleep_MilliSleep(50);
 	retryAttempt++;
 	continue;
       }
       ndbout << "Error when comparing records - normal op" << endl;
-      ERR(err);
+      NDB_ERR(err);
       ndbout << "row: " << row.c_str().c_str() << endl;
       goto close_all;
     } 
@@ -995,7 +1017,7 @@ UtilTransactions::readRowFromTableAndIndex(Ndb* pNdb,
       if (pScanOp) {
 	if (pScanOp->nextResult() != 0){
 	  const NdbError err = pTrans1->getNdbError();
-	  ERR(err);
+	  NDB_ERR(err);
 	  ndbout << "Error when comparing records - index op next_result missing" << endl;
 	  ndbout << "row: " << row.c_str().c_str() << endl;
 	  goto close_all;
@@ -1035,8 +1057,8 @@ UtilTransactions::verifyOrderedIndex(Ndb* pNdb,
   int                  retryAttempt = 0;
   const int            retryMax = 100;
   int                  check;
-  NdbScanOperation     *pOp;
-  NdbIndexScanOperation * iop = 0;
+  NdbScanOperation     *pOp = NULL;
+  NdbIndexScanOperation *iop = NULL;
 
   NDBT_ResultRow       scanRow(tab);
   NDBT_ResultRow       pkRow(tab);
@@ -1049,8 +1071,8 @@ UtilTransactions::verifyOrderedIndex(Ndb* pNdb,
   while (true){
 
     if (retryAttempt >= retryMax){
-      g_info << "ERROR: has retried this operation " << retryAttempt 
-	     << " times, failing!" << endl;
+      g_err << "ERROR: has retried this operation " << retryAttempt 
+	     << " times, failing!, line: " << __LINE__ << endl;
       return NDBT_FAILED;
     }
 
@@ -1059,24 +1081,24 @@ UtilTransactions::verifyOrderedIndex(Ndb* pNdb,
       const NdbError err = pNdb->getNdbError();
 
       if (err.status == NdbError::TemporaryError){
-	ERR(err);
+	NDB_ERR(err);
 	NdbSleep_MilliSleep(50);
 	retryAttempt++;
 	continue;
       }
-      ERR(err);
+      NDB_ERR(err);
       return NDBT_FAILED;
     }
 
     pOp = pTrans->getNdbScanOperation(tab.getName());	
     if (pOp == NULL) {
-      ERR(pTrans->getNdbError());
+      NDB_ERR(pTrans->getNdbError());
       closeTransaction(pNdb);
       return NDBT_FAILED;
     }
 
     if( pOp->readTuples(NdbScanOperation::LM_Read, 0, parallelism) ) {
-      ERR(pTrans->getNdbError());
+      NDB_ERR(pTrans->getNdbError());
       closeTransaction(pNdb);
       return NDBT_FAILED;
     }
@@ -1091,13 +1113,13 @@ UtilTransactions::verifyOrderedIndex(Ndb* pNdb,
       const NdbError err = pTrans->getNdbError();
       
       if (err.status == NdbError::TemporaryError){
-	ERR(err);
+	NDB_ERR(err);
 	closeTransaction(pNdb);
 	NdbSleep_MilliSleep(50);
 	retryAttempt++;
 	continue;
       }
-      ERR(err);
+      NDB_ERR(err);
       closeTransaction(pNdb);
       return NDBT_FAILED;
     }
@@ -1127,7 +1149,7 @@ UtilTransactions::verifyOrderedIndex(Ndb* pNdb,
       if(!null_found)
       {
 	if((iop= pTrans->getNdbIndexScanOperation(indexName, 
-                                                  tab.getName())) != 0)
+                                                  tab.getName())) != NULL)
 	{
 	  if(iop->readTuples(NdbScanOperation::LM_CommittedRead, 
 			     parallelism))
@@ -1157,10 +1179,9 @@ UtilTransactions::verifyOrderedIndex(Ndb* pNdb,
 
       if(!null_found)
       {
-	
 	if((res= iop->nextResult()) != 0){
 	  g_err << "Failed to find row using index: " << res << endl;
-	  ERR(pTrans->getNdbError());
+	  NDB_ERR(pTrans->getNdbError());
 	  closeTransaction(pNdb);
 	  return NDBT_FAILED;
 	}
@@ -1179,15 +1200,19 @@ UtilTransactions::verifyOrderedIndex(Ndb* pNdb,
 	  closeTransaction(pNdb);
 	  return NDBT_FAILED;
 	}
+        iop->close(false,true);  // Close, and release 'iop'
+        iop = NULL;
       }
-    }
+    } // while 'pOp->nextResult()'
     
+    pOp->close();
+    pOp = NULL;
     if (eof == -1 || check == -1) {
   error:
       const NdbError err = pTrans->getNdbError();
       
       if (err.status == NdbError::TemporaryError){
-	ERR(err);
+	NDB_ERR(err);
 	iop = 0;
 	closeTransaction(pNdb);
 	NdbSleep_MilliSleep(50);
@@ -1195,7 +1220,7 @@ UtilTransactions::verifyOrderedIndex(Ndb* pNdb,
 	rows--;
 	continue;
       }
-      ERR(err);
+      NDB_ERR(err);
       closeTransaction(pNdb);
       return NDBT_FAILED;
     }
@@ -1204,6 +1229,7 @@ UtilTransactions::verifyOrderedIndex(Ndb* pNdb,
     
     return NDBT_OK;
   }
+  abort(); /* Should never happen */
   return NDBT_FAILED;
 }
 
@@ -1214,6 +1240,7 @@ UtilTransactions::get_values(NdbOperation* op, NDBT_ResultRow& dst)
     NdbRecAttr*& ref= dst.attributeStore(a);
     if ((ref= op->getValue(a)) == 0)
     {
+      g_err << "Line: " << __LINE__ << " getValue failed" << endl;
       return NDBT_FAILED;
     }
   }
@@ -1228,6 +1255,7 @@ UtilTransactions::equal(const NdbDictionary::Index* pIndex,
     const NdbDictionary::Column *  col = pIndex->getColumn(a);
     if(op->equal(col->getName(), 
 		 src.attributeStore(col->getName())->aRef()) != 0){
+      g_err << "Line: " << __LINE__ << " equal failed" << endl;
       return NDBT_FAILED;
     }
   }
@@ -1242,6 +1270,7 @@ UtilTransactions::equal(const NdbDictionary::Table* pTable,
     const NdbDictionary::Column* attr = tab.getColumn(a);
     if (attr->getPrimaryKey() == true){
       if (op->equal(attr->getName(), src.attributeStore(a)->aRef()) != 0){
+        g_err << "Line: " << __LINE__ << " equal failed" << endl;
 	return NDBT_FAILED;
       }
     }
@@ -1368,12 +1397,12 @@ loop:
 
     pOp= pTrans->getNdbScanOperation(tab.getName());	
     if (pOp == NULL) {
-      ERR(err= pTrans->getNdbError());
+      NDB_ERR(err= pTrans->getNdbError());
       goto error;
     }
 
     if( pOp->readTuples(NdbScanOperation::LM_Read) ) {
-      ERR(err= pTrans->getNdbError());
+      NDB_ERR(err= pTrans->getNdbError());
       goto error;
     }
 
@@ -1382,14 +1411,14 @@ loop:
       for (int a = 0; a < tab.getNoOfColumns(); a++){
 	if ((row.attributeStore(a) = 
 	     pOp->getValue(tab.getColumn(a)->getName())) == 0) {
-	  ERR(err= pTrans->getNdbError());
+	  NDB_ERR(err= pTrans->getNdbError());
 	  goto error;
 	}
       }
     }
     
     if( pTrans->execute(NoCommit, AbortOnError) == -1 ) {
-      ERR(err= pTrans->getNdbError());
+      NDB_ERR(err= pTrans->getNdbError());
       goto error;
     }
   
@@ -1402,19 +1431,19 @@ loop:
 	  row_count++;
 	  if(cmp.startTransaction(pNdb) != NDBT_OK)
 	  {
-	    ERR(err= pNdb->getNdbError());
+	    NDB_ERR(err= pNdb->getNdbError());
 	    goto error;
 	  }
 	  int rowNo= calc.getIdValue(&row);
 	  if(cmp.pkReadRecord(pNdb, rowNo, 1) != NDBT_OK)
 	  {
-	    ERR(err= cmp.getTransaction()->getNdbError());
+	    NDB_ERR(err= cmp.getTransaction()->getNdbError());
 	    goto error;
 	  }
 	  if(cmp.execute_Commit(pNdb) != NDBT_OK ||
 	     cmp.getTransaction()->getNdbError().code)
 	  {
-	    ERR(err= cmp.getTransaction()->getNdbError());
+	    NDB_ERR(err= cmp.getTransaction()->getNdbError());
 	    goto error;
 	  }
 	  if(row != cmp.get_row(0))

@@ -1,13 +1,20 @@
-/* Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2012, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -57,10 +64,13 @@ void test_store_string(Field_temporal *field,
                        const int expected_error_no,
                        const type_conversion_status expected_status)
 {
+  THD *thd= field->table->in_use;
+  sql_mode_t save_mode= thd->variables.sql_mode;
+  thd->variables.sql_mode= MODE_NO_ENGINE_SUBSTITUTION;
   char buff[MAX_FIELD_WIDTH];
   String str(buff, sizeof(buff), &my_charset_bin);
   String unused;
-  
+
   Mock_error_handler error_handler(field->table->in_use, expected_error_no);
   type_conversion_status err= field->store(store_value, length,
                                            &my_charset_latin1);
@@ -70,6 +80,7 @@ void test_store_string(Field_temporal *field,
   EXPECT_FALSE(field->is_null());
   EXPECT_EQ(expected_status, err);
   EXPECT_EQ((expected_error_no == 0 ? 0 : 1), error_handler.handle_called());
+  thd->variables.sql_mode= save_mode;
 }
 
 

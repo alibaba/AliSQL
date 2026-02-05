@@ -1,15 +1,21 @@
 /*
-   Copyright (C) 2003-2006 MySQL AB
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -18,6 +24,8 @@
 
 #ifndef TransporterInternalDefinitions_H
 #define TransporterInternalDefinitions_H
+
+#include <Checksum.hpp>
 
 #if defined DEBUG_TRANSPORTER || defined VM_TRACE
 #include <NdbOut.hpp>
@@ -49,10 +57,7 @@
 inline
 Uint32
 computeChecksum(const Uint32 * const startOfData, int nWords) {
-  Uint32 chksum = startOfData[0];
-  for (int i=1; i < nWords; i++)
-    chksum ^= startOfData[i];
-  return chksum;
+  return computeXorChecksum(startOfData+1, nWords-1, startOfData[0]);
 }
 
 struct Protocol6 {
@@ -113,6 +118,8 @@ struct Protocol6 {
   static Uint32 getCheckSumIncluded(const Uint32 & word1);
   static Uint32 getPrio            (const Uint32 & word1);
   static Uint32 getMessageLength   (const Uint32 & word1);
+
+  static bool verifyByteOrder       (const Uint32 & word1, Uint32 byteOrder);
 
   static void setByteOrder       (Uint32 & word1, Uint32 byteOrder);
   static void setCompressed      (Uint32 & word1, Uint32 compressed);
@@ -197,6 +204,16 @@ inline
 Uint32
 Protocol6::getPrio(const Uint32 & word1){
   return (word1 & WORD1_PRIO_MASK) >> WORD1_PRIO_SHIFT;
+}
+
+inline
+bool
+Protocol6::verifyByteOrder(const Uint32 & word1, Uint32 byteOrder)
+{
+  Uint32 tmp = byteOrder;
+  tmp |= (tmp << 7);
+  tmp |= (tmp << 24);
+  return (word1 & WORD1_BYTEORDER_MASK) == tmp;
 }
 
 inline

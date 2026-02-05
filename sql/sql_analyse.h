@@ -1,16 +1,23 @@
 #ifndef SQL_ANALYSE_INCLUDED
 #define SQL_ANALYSE_INCLUDED
 
-/* Copyright (c) 2000, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
@@ -19,7 +26,12 @@
 
 /* Analyse database */
 
-#include "procedure.h"                          /* Procedure */
+#include "my_global.h"
+#include "my_tree.h"          // TREE
+#include "sql_class.h"        // Query_result_send
+
+class Item_proc;
+
 
 #define my_thd_charset	default_charset_info
 
@@ -62,8 +74,8 @@ int compare_ulonglong(const ulonglong *s, const ulonglong *t);
 int compare_ulonglong2(void* cmp_arg MY_ATTRIBUTE((unused)),
 		       const ulonglong *s, const ulonglong *t);
 int compare_decimal2(int* len, const char *s, const char *t);
-void free_string(String*);
-class select_analyse;
+void free_string(void*, TREE_FREE, const void*);
+class Query_result_analyse;
 
 class field_info :public Sql_alloc
 {
@@ -73,10 +85,10 @@ protected:
   my_bool found;
   TREE	  tree;
   Item	  *item;
-  select_analyse *pc;
+  Query_result_analyse *pc;
 
 public:
-  field_info(Item* a, select_analyse* b)
+  field_info(Item* a, Query_result_analyse* b)
   : treemem(0), tree_elements(0), empty(0),
     nulls(0), min_length(0), max_length(0), room_in_tree(1),
     found(0),item(a), pc(b) {};
@@ -90,7 +102,7 @@ public:
   virtual String *std(String*, ha_rows) = 0;
   virtual tree_walk_action collect_enum() = 0;
   virtual uint decimals() { return 0; }
-  friend  class select_analyse;
+  friend  class Query_result_analyse;
 };
 
 
@@ -110,13 +122,13 @@ class field_str :public field_info
   EV_NUM_INFO ev_num_info;
 
 public:
-  field_str(Item* a, select_analyse* b) :field_info(a,b), 
+  field_str(Item* a, Query_result_analyse* b) :field_info(a,b),
     min_arg("",default_charset_info),
     max_arg("",default_charset_info), sum(0),
     must_be_blob(0), was_zero_fill(0),
     was_maybe_zerofill(0), can_be_still_num(1)
     { init_tree(&tree, 0, 0, sizeof(String), (qsort_cmp2) sortcmp2,
-		0, (tree_element_free) free_string, NULL); };
+		0, free_string, NULL); };
 
   void	 add();
   void	 get_opt_type(String*, ha_rows);
@@ -127,7 +139,7 @@ public:
   String *avg(String *s, ha_rows rows)
   {
     if (!(rows - nulls))
-      s->set_real((double) 0.0, 1,my_thd_charset);
+      s->set_real(0.0, 1,my_thd_charset);
     else
       s->set_real((ulonglong2double(sum) / ulonglong2double(rows - nulls)),
 	     DEC_IN_AVG,my_thd_charset);
@@ -153,7 +165,7 @@ class field_decimal :public field_info
   int cur_sum;
   int bin_size;
 public:
-  field_decimal(Item* a, select_analyse* b) :field_info(a,b)
+  field_decimal(Item* a, Query_result_analyse* b) :field_info(a,b)
   {
     bin_size= my_decimal_get_binary_size(a->max_length, a->decimals);
     init_tree(&tree, 0, 0, bin_size, (qsort_cmp2)compare_decimal2,
@@ -182,7 +194,7 @@ class field_real: public field_info
   uint	 max_notzero_dec_len;
 
 public:
-  field_real(Item* a, select_analyse* b) :field_info(a,b),
+  field_real(Item* a, Query_result_analyse* b) :field_info(a,b),
     min_arg(0), max_arg(0),  sum(0), sum_sqr(0), max_notzero_dec_len(0)
     { init_tree(&tree, 0, 0, sizeof(double),
 		(qsort_cmp2) compare_double2, 0, NULL, NULL); }
@@ -202,21 +214,21 @@ public:
   String *avg(String *s, ha_rows rows)
   {
     if (!(rows - nulls))
-      s->set_real((double) 0.0, 1,my_thd_charset);
+      s->set_real(0.0, 1,my_thd_charset);
     else
-      s->set_real(((double)sum / (double) (rows - nulls)), item->decimals,my_thd_charset);
+      s->set_real((sum / (double) (rows - nulls)), item->decimals,my_thd_charset);
     return s;
   }
   String *std(String *s, ha_rows rows)
   {
     double tmp = ulonglong2double(rows);
     if (!(tmp - nulls))
-      s->set_real((double) 0.0, 1,my_thd_charset);
+      s->set_real(0.0, 1,my_thd_charset);
     else
     {
       double tmp2 = ((sum_sqr - sum * sum / (tmp - nulls)) /
 		     (tmp - nulls));
-      s->set_real(((double) tmp2 <= 0.0 ? 0.0 : sqrt(tmp2)), item->decimals,my_thd_charset);
+      s->set_real((tmp2 <= 0.0 ? 0.0 : sqrt(tmp2)), item->decimals,my_thd_charset);
     }
     return s;
   }
@@ -236,7 +248,7 @@ class field_longlong: public field_info
   longlong sum, sum_sqr;
 
 public:
-  field_longlong(Item* a, select_analyse* b) :field_info(a,b), 
+  field_longlong(Item* a, Query_result_analyse* b) :field_info(a,b),
     min_arg(0), max_arg(0), sum(0), sum_sqr(0)
     { init_tree(&tree, 0, 0, sizeof(longlong),
 		(qsort_cmp2) compare_longlong2, 0, NULL, NULL); }
@@ -248,7 +260,7 @@ public:
   String *avg(String *s, ha_rows rows)
   {
     if (!(rows - nulls))
-      s->set_real((double) 0.0, 1,my_thd_charset);
+      s->set_real(0.0, 1,my_thd_charset);
     else
       s->set_real(((double) sum / (double) (rows - nulls)), DEC_IN_AVG,my_thd_charset);
     return s;
@@ -257,12 +269,12 @@ public:
   {
     double tmp = ulonglong2double(rows);
     if (!(tmp - nulls))
-      s->set_real((double) 0.0, 1,my_thd_charset);
+      s->set_real(0.0, 1,my_thd_charset);
     else
     {
       double tmp2 = ((sum_sqr - sum * sum / (tmp - nulls)) /
 		    (tmp - nulls));
-      s->set_real(((double) tmp2 <= 0.0 ? 0.0 : sqrt(tmp2)), DEC_IN_AVG,my_thd_charset);
+      s->set_real((tmp2 <= 0.0 ? 0.0 : sqrt(tmp2)), DEC_IN_AVG,my_thd_charset);
     }
     return s;
   }
@@ -281,7 +293,7 @@ class field_ulonglong: public field_info
   ulonglong sum, sum_sqr;
 
 public:
-  field_ulonglong(Item* a, select_analyse * b) :field_info(a,b),
+  field_ulonglong(Item* a, Query_result_analyse * b) :field_info(a,b),
     min_arg(0), max_arg(0), sum(0),sum_sqr(0)
     { init_tree(&tree, 0, 0, sizeof(ulonglong),
 		(qsort_cmp2) compare_ulonglong2, 0, NULL, NULL); }
@@ -292,7 +304,7 @@ public:
   String *avg(String *s, ha_rows rows)
   {
     if (!(rows - nulls))
-      s->set_real((double) 0.0, 1,my_thd_charset);
+      s->set_real(0.0, 1,my_thd_charset);
     else
       s->set_real((ulonglong2double(sum) / ulonglong2double(rows - nulls)),
 	     DEC_IN_AVG,my_thd_charset);
@@ -302,13 +314,13 @@ public:
   {
     double tmp = ulonglong2double(rows);
     if (!(tmp - nulls))
-      s->set_real((double) 0.0, 1,my_thd_charset);
+      s->set_real(0.0, 1,my_thd_charset);
     else
     {
       double tmp2 = ((ulonglong2double(sum_sqr) - 
 		     ulonglong2double(sum * sum) / (tmp - nulls)) /
 		     (tmp - nulls));
-      s->set_real(((double) tmp2 <= 0.0 ? 0.0 : sqrt(tmp2)), DEC_IN_AVG,my_thd_charset);
+      s->set_real((tmp2 <= 0.0 ? 0.0 : sqrt(tmp2)), DEC_IN_AVG,my_thd_charset);
     }
     return s;
   }
@@ -323,29 +335,29 @@ public:
   Interceptor class to form SELECT ... PROCEDURE ANALYSE() output rows
 */
 
-class select_analyse : public select_send
+class Query_result_analyse : public Query_result_send
 {
-  select_result *result; //< real output stream
+  Query_result *result; //< real output stream
   
   Item_proc    *func_items[10]; //< items for output metadata and column data
   List<Item>   result_fields; //< same as func_items but capable for send_data()
   field_info   **f_info, **f_end; //< bounds for column data accumulator array
   
   ha_rows      rows; //< counter of original SELECT query output rows
-  uint	       output_str_length; //< max.width for the Optimal_fieldtype column
+  size_t       output_str_length; //< max.width for the Optimal_fieldtype column
 
 public:
   const uint max_tree_elements; //< maximum number of distinct values per column
   const uint max_treemem; //< maximum amount of memory to allocate per column
 
 public:
-  select_analyse(select_result *result, const Proc_analyse_params *params)
+  Query_result_analyse(Query_result *result, const Proc_analyse_params *params)
   : result(result), f_info(NULL), f_end(NULL), rows(0), output_str_length(0),
     max_tree_elements(params->max_tree_elements),
     max_treemem(params->max_treemem)
   {}
 
-  ~select_analyse() { cleanup(); }
+  ~Query_result_analyse() { cleanup(); }
 
   virtual void cleanup();
   virtual uint field_count(List<Item> &) const

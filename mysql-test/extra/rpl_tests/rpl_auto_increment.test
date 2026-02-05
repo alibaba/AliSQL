@@ -3,6 +3,7 @@
 #
 -- source include/not_ndb_default.inc
 -- source include/master-slave.inc
+-- source include/have_myisam.inc
 
 eval create table t1 (a int not null auto_increment,b int, primary key (a)) engine=$engine_type2 auto_increment=3;
 insert into t1 values (NULL,1),(NULL,2),(NULL,3);
@@ -105,6 +106,7 @@ select * from t1;
 
 connection master;
 drop table t1;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 create table t1 (a tinyint not null auto_increment primary key) engine=myisam;
 insert into t1 values(103);
 set auto_increment_increment=11;
@@ -137,6 +139,7 @@ select * from t3 order by a;
 connection master;
 
 drop table t1,t2,t3;
+SET sql_mode = default;
 --source include/sync_slave_sql_with_master.inc
 
 #
@@ -216,7 +219,7 @@ DROP TABLE t2;
 connection master;
 let $MYSQLD_DATADIR= `SELECT @@DATADIR`;
 # Keep original binlog file
---copy_file $MYSQLD_DATADIR/master-bin.000001 $MYSQLD_DATADIR/master-bin.saved
+--copy_file $MYSQLD_DATADIR/master-bin.000001 $MYSQLD_DATADIR/master-bin-rpl-auto-increment.saved
 # Stop slave
 connection slave;
 source include/stop_slave.inc;
@@ -229,7 +232,8 @@ FLUSH LOGS;
 connection slave;
 source include/start_slave.inc;
 connection master;
---exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.saved | $MYSQL test
+--exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin-rpl-auto-increment.saved | $MYSQL test
+--remove_file $MYSQLD_DATADIR/master-bin-rpl-auto-increment.saved
 --source include/sync_slave_sql_with_master.inc
 
 let $diff_tables= master:t1, slave:t1;

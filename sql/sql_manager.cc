@@ -1,13 +1,20 @@
-/* Copyright (c) 2000, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
@@ -18,62 +25,30 @@
  * This thread manages various maintenance tasks.
  *
  *   o Flushing the tables every flush_time seconds.
- *   o Berkeley DB: removing unneeded log files.
  */
 
-#include "sql_priv.h"
 #include "sql_manager.h"
-#include "unireg.h"                    // REQUIRED: for other includes
-#include "sql_base.h"                           // flush_tables
+
+#include "my_thread.h"         // my_thread_t
+#include "log.h"               // sql_print_warning
+#include "sql_base.h"          // tdc_flush_unused_tables
 
 static bool volatile manager_thread_in_use;
 static bool abort_manager;
 
-pthread_t manager_thread;
+my_thread_t manager_thread;
 mysql_mutex_t LOCK_manager;
 mysql_cond_t COND_manager;
 
-struct handler_cb {
-   struct handler_cb *next;
-   void (*action)(void);
-};
-
-static struct handler_cb * volatile cb_list;
-
-bool mysql_manager_submit(void (*action)())
-{
-  bool result= FALSE;
-  struct handler_cb * volatile *cb;
-  mysql_mutex_lock(&LOCK_manager);
-  cb= &cb_list;
-  while (*cb && (*cb)->action != action)
-    cb= &(*cb)->next;
-  if (!*cb)
-  {
-    *cb= (struct handler_cb *)my_malloc(sizeof(struct handler_cb), MYF(MY_WME));
-    if (!*cb)
-      result= TRUE;
-    else
-    {
-      (*cb)->next= NULL;
-      (*cb)->action= action;
-    }
-  }
-  mysql_mutex_unlock(&LOCK_manager);
-  return result;
-}
-
-pthread_handler_t handle_manager(void *arg MY_ATTRIBUTE((unused)))
+extern "C" void *handle_manager(void *arg MY_ATTRIBUTE((unused)))
 {
   int error = 0;
   struct timespec abstime;
   bool reset_flush_time = TRUE;
-  struct handler_cb *cb= NULL;
   my_thread_init();
   DBUG_ENTER("handle_manager");
 
-  pthread_detach_this_thread();
-  manager_thread = pthread_self();
+  manager_thread= my_thread_self();
   manager_thread_in_use = 1;
 
   for (;;)
@@ -85,7 +60,7 @@ pthread_handler_t handle_manager(void *arg MY_ATTRIBUTE((unused)))
     {
       if (reset_flush_time)
       {
-	set_timespec(abstime, flush_time);
+	set_timespec(&abstime, flush_time);
         reset_flush_time = FALSE;
       }
       while ((!error || error == EINTR) && !abort_manager)
@@ -95,11 +70,6 @@ pthread_handler_t handle_manager(void *arg MY_ATTRIBUTE((unused)))
     {
       while ((!error || error == EINTR) && !abort_manager)
         error= mysql_cond_wait(&COND_manager, &LOCK_manager);
-    }
-    if (cb == NULL)
-    {
-      cb= cb_list;
-      cb_list= NULL;
     }
     mysql_mutex_unlock(&LOCK_manager);
 
@@ -113,13 +83,6 @@ pthread_handler_t handle_manager(void *arg MY_ATTRIBUTE((unused)))
       reset_flush_time = TRUE;
     }
 
-    while (cb)
-    {
-      struct handler_cb *next= cb->next;
-      cb->action();
-      my_free(cb);
-      cb= next;
-    }
   }
   manager_thread_in_use = 0;
   DBUG_LEAVE; // Can't use DBUG_RETURN after my_thread_end
@@ -135,7 +98,7 @@ void start_handle_manager()
   abort_manager = false;
   if (flush_time && flush_time != ~(ulong) 0L)
   {
-    pthread_t hThread;
+    my_thread_handle hThread;
     int error;
     if ((error= mysql_thread_create(key_thread_handle_manager,
                                     &hThread, &connection_attrib,

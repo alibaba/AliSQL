@@ -1,15 +1,22 @@
 /*
-   Copyright 2010 Sun Microsystems, Inc.
+   Copyright (c) 2010, 2021, Oracle and/or its affiliates.
    All rights reserved. Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -125,16 +132,16 @@ public class OneToManyRelationshipTest extends AbstractJPABaseTest {
             B0 b = em.find(B0.class, i);
             print(b.toString());
             if (0 == i%2) {
-                assertEquals("Mismatch in relationship a", as.get(0), b.getA());
-                assertTrue("A.b0s should contain b", as.get(0).getB0s().contains(b));
+                errorIfNotEqual("Mismatch in relationship a", as.get(0), b.getA());
+                errorIfNotEqual("A.b0s should contain b", true, as.get(0).getB0s().contains(b));
             } else {
-                assertEquals("Mismatch in relationship a", as.get(1), b.getA());
-                assertTrue("A.b0s should contain b", as.get(1).getB0s().contains(b));
+                errorIfNotEqual("Mismatch in relationship a", as.get(1), b.getA());
+                errorIfNotEqual("A.b0s should contain b", true, as.get(1).getB0s().contains(b));
             }
         }
         commit();
         em.close();
-
+        failOnError();
     }
 
     private void print(String string) {

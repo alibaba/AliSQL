@@ -18,7 +18,7 @@ count(*)= @@global.max_connections + 1
 
 # -- Take LOCK_thd_remove and close one connection then
 # attempt new one [should fail]...
-SET DEBUG_SYNC='fill_schema_processlist_after_copying_threads SIGNAL disconnect_connection WAIT_FOR continue';
+SET DEBUG_SYNC='inside_do_for_all_thd_copy SIGNAL disconnect_connection WAIT_FOR continue';
 SELECT user FROM INFORMATION_SCHEMA.PROCESSLIST GROUP BY user;;
 connection default;
 SET DEBUG_SYNC='now WAIT_FOR disconnect_connection';

@@ -25,10 +25,14 @@
 #   In step iv), before the bug was fixed, the test case would fail
 #   with mysqlbinlog reporting that it was unable to succeed in
 #   reading the event.
-
--- source include/master-slave.inc
+-- source include/not_group_replication_plugin.inc
 -- source include/have_innodb.inc
 -- source include/have_binlog_format_row.inc
+-- source include/master-slave.inc
+
+--disable_query_log
+call mtr.add_suppression("InnoDB: Cannot add field");
+--enable_query_log
 
 -- disable_warnings
 DROP TABLE IF EXISTS `t1`;
@@ -340,7 +344,7 @@ while($ntables)
 -- echo ###            detect failure. Before the patch mysqlbinlog would find 
 -- echo ###            a corrupted event, thence would fail.
 -- let $MYSQLD_DATADIR= `SELECT @@datadir`
--- exec $MYSQL_BINLOG -v --hex $MYSQLD_DATADIR/master-bin.000001 > $MYSQLTEST_VARDIR/tmp/mysqlbinlog_bug50018.binlog
+-- exec $MYSQL_BINLOG -v --hexdump $MYSQLD_DATADIR/master-bin.000001 > $MYSQLTEST_VARDIR/tmp/mysqlbinlog_bug50018.binlog
 
 ## clean up
 ## For debugging purposes you might want not to remove these

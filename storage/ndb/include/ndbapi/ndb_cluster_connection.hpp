@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2004, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2004, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -34,6 +41,7 @@ private:
 };
 
 class Ndb;
+class NdbWaitGroup;
 
 /**
  * @class Ndb_cluster_connection
@@ -116,7 +124,7 @@ public:
    *         1 = recoverable error,
    *        -1 = non-recoverable error
    */
-  int connect(int no_retries=0, int retry_delay_in_seconds=1, int verbose=0);
+  int connect(int no_retries=30, int retry_delay_in_seconds=1, int verbose=0);
 
 #ifndef DOXYGEN_SHOULD_SKIP_INTERNAL
   int start_connect_thread(int (*connect_callback)(void)= 0);
@@ -180,6 +188,42 @@ public:
    */
   Uint32 collect_client_stats(Uint64* statsArr, Uint32 sz);
 
+ /**
+  * Get/set the minimum time in milliseconds that can lapse until the adaptive 
+  * send mechanism forces all pending signals to be sent. 
+  * The default value is 10, and the allowed range is from 1 to 10.
+  */
+ void set_max_adaptive_send_time(Uint32 milliseconds);
+ Uint32 get_max_adaptive_send_time();
+
+  /**
+   * Configuration handling of the receiver thread(s).
+   * We can set the number of receiver threads, we can set the cpu to bind
+   * the receiver thread to. We can also set the level of when we activate
+   * the receiver thread as the receiver, before this level the normal
+   * user threads are used to receive signals. If we set the level to
+   * 16 or higher we will never use receive threads as receivers.
+   *
+   * By default we have one receiver thread, this thread is not locked to
+   * any specific CPU and the level is 8.
+   * 
+   * The number of receive threads can only be set at a time before the
+   * connect call is made to connect to the other nodes in the cluster.
+   * The other methods can be called at any time.
+   * Currently we don't support setting number of receive threads to anything
+   * else than 1 and no config variable for setting is implemented yet.
+   *
+   * All methods return -1 as an error indication
+   */
+  int set_num_recv_threads(Uint32 num_recv_threads);
+  int get_num_recv_threads() const;
+  int unset_recv_thread_cpu(Uint32 recv_thread_id);
+  int set_recv_thread_cpu(Uint16 *cpuid_array,
+                          Uint32 array_len,
+                          Uint32 recv_thread_id = 0);
+  int set_recv_thread_activation_threshold(Uint32 threshold);
+  int get_recv_thread_activation_threshold() const;
+
 #ifndef DOXYGEN_SHOULD_SKIP_INTERNAL
   int get_no_ready();
   const char *get_connectstring(char *buf, int buf_sz) const;
@@ -198,8 +242,16 @@ public:
   unsigned int get_next_node(Ndb_cluster_connection_node_iter &iter);
   unsigned int get_next_alive_node(Ndb_cluster_connection_node_iter &iter);
   unsigned get_active_ndb_objects() const;
-  
+
   Uint64 *get_latest_trans_gci();
+  NdbWaitGroup * create_ndb_wait_group(int size);
+  bool release_ndb_wait_group(NdbWaitGroup *);
+
+  /**
+   * wait for nodes in list to get connected...
+   * @return #nodes connected, or -1 on error
+   */
+  int wait_until_ready(const int * nodes, int cnt, int timeout);
 #endif
 
 private:
@@ -207,6 +259,8 @@ private:
   friend class NdbImpl;
   friend class Ndb_cluster_connection_impl;
   friend class SignalSender;
+  friend class NdbWaitGroup;
+  friend class NDBT_Context;
   class Ndb_cluster_connection_impl & m_impl;
   Ndb_cluster_connection(Ndb_cluster_connection_impl&);
 

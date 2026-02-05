@@ -1,0 +1,71 @@
+
+#########################################################################
+# 0) Setup group of 2 members (M1 and M2).
+#########################################################################
+
+include/group_replication.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection server1]
+include/start_and_bootstrap_group_replication.inc
+[connection server2]
+
+#########################################################################
+# 1) Simulate a group of 10 members when member 2 joins. Member 2  will
+# be unable to join.
+#########################################################################
+
+# restart:--group_replication_local_address=GROUP_REPLICATION_LOCAL_ADDRESS --group_replication_group_seeds=GROUP_REPLICATION_GROUP_SEEDS --group-replication-group-name=GROUP_REPLICATION_GROUP_NAME --group_replication_start_on_boot=1 --loose-debug=+d,group_replication_set_number_of_members_on_view_changed_to_10 --group_replication_ip_whitelist=GROUP_REPLICATION_GROUP_WHITELIST
+include/rpl_reconnect.inc
+
+#########################################################################
+# 2) M2 super_read_only mode shall be OFF and in OFFLINE state
+#    (since it failed to join the group).
+#########################################################################
+
+[connection server2]
+include/rpl_gr_wait_for_number_of_members.inc
+include/gr_wait_for_member_state.inc
+include/assert_grep.inc [GR reported expected excess of members in group]
+[connection server1]
+include/rpl_gr_wait_for_number_of_members.inc
+
+#########################################################################
+# 3) Set the exit_state_action to ABORT_SERVER and simulate again a
+# group of 10 members when member 2 joins. Member 2 will be unable to
+# join again.
+#########################################################################
+
+[connection server2]
+# restart:--group_replication_local_address=GROUP_REPLICATION_LOCAL_ADDRESS --group_replication_group_seeds=GROUP_REPLICATION_GROUP_SEEDS --group-replication-group-name=GROUP_REPLICATION_GROUP_NAME --group_replication_start_on_boot=1 --loose-debug=+d,group_replication_set_number_of_members_on_view_changed_to_10 --group_replication_exit_state_action=ABORT_SERVER --group_replication_ip_whitelist=GROUP_REPLICATION_GROUP_WHITELIST
+
+#########################################################################
+# 4) M2 super_read_only mode shall be OFF and in OFFLINE state
+#    (since it failed to join the group).
+#########################################################################
+
+[connection server1]
+include/rpl_gr_wait_for_number_of_members.inc
+include/rpl_reconnect.inc
+[connection server2]
+include/assert_grep.inc [GR reported expected excess of members in group]
+
+#########################################################################
+# 5) Restart M2 again without group_replication_start_on_boot enabled.
+# The server should start normally and be able to join the group.
+#########################################################################
+
+[connection server2]
+# restart:--group_replication_local_address=GROUP_REPLICATION_LOCAL_ADDRESS --group_replication_group_seeds=GROUP_REPLICATION_GROUP_SEEDS --group-replication-group-name=GROUP_REPLICATION_GROUP_NAME --group_replication_ip_whitelist=GROUP_REPLICATION_GROUP_WHITELIST
+include/rpl_reconnect.inc
+include/start_group_replication.inc
+include/rpl_gr_wait_for_number_of_members.inc
+[connection server1]
+include/rpl_gr_wait_for_number_of_members.inc
+
+#########################################################################
+# 6) Cleanup.
+#########################################################################
+
+include/group_replication_end.inc

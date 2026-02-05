@@ -91,6 +91,9 @@ SET @@global.key_cache_division_limit = 200;
 SELECT @@global.key_cache_division_limit;
 SET @@global.key_cache_division_limit = 65535;
 SELECT @@global.key_cache_division_limit;
+--Error ER_WRONG_TYPE_FOR_VAR
+SET @@global.key_cache_division_limit = ' ';
+SELECT @@global.key_cache_division_limit;
 
 --Error ER_WRONG_TYPE_FOR_VAR
 SET @@global.key_cache_division_limit = ON;
@@ -116,6 +119,7 @@ SELECT @@session.key_cache_division_limit;
 # Check if the value in GLOBAL & SESSION Tables matches values in variable   #
 ##############################################################################
 
+--disable_warnings
 SELECT @@global.key_cache_division_limit = VARIABLE_VALUE 
 FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
 WHERE VARIABLE_NAME='key_cache_division_limit';
@@ -123,6 +127,7 @@ WHERE VARIABLE_NAME='key_cache_division_limit';
 SELECT @@key_cache_division_limit = VARIABLE_VALUE 
 FROM INFORMATION_SCHEMA.SESSION_VARIABLES 
 WHERE VARIABLE_NAME='key_cache_division_limit';
+--enable_warnings
 
 
 --echo '#---------------------FN_DYNVARS_058_07----------------------#'

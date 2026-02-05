@@ -1,13 +1,20 @@
-/* Copyright (c) 2006, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2006, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
@@ -18,16 +25,17 @@
 
 #ifdef HAVE_REPLICATION
 
-#include <my_global.h>
-#include <sql_priv.h>
-
-#define DEFAULT_CONNECT_RETRY 60
-
-#include "rpl_rli.h"
-#include "my_sys.h"
+#include "my_global.h"
+#include "binlog_event.h"            // enum_binlog_checksum_alg
+#include "log_event.h"               // Format_description_log_event
+#include "rpl_gtid.h"                // Gtid
+#include "rpl_info.h"                // Rpl_info
+#include "rpl_trx_boundary_parser.h" // Transaction_boundary_parser
 
 typedef struct st_mysql MYSQL;
 class Rpl_info_factory;
+
+#define DEFAULT_CONNECT_RETRY 60
 
 /*****************************************************************************
   Replication IO Thread
@@ -184,11 +192,9 @@ public:
     is specified.
 
     @param password_arg is user's password.
-    @param password_arg_size is password's size.
 
-    @return false if there is no error, otherwise true is returned.
   */
-  bool set_password(const char* password_arg, int password_arg_size);
+  void set_password(const char* password_arg);
   /**
     Returns either user's password in the master.info repository or
     user's password used in START SLAVE.
@@ -197,7 +203,7 @@ public:
 
     @return false if there is no error, otherwise true is returned.
   */
-  bool get_password(char *password_arg, int *password_arg_size);
+  bool get_password(char *password_arg, size_t *password_arg_size);
   /**
     Cleans in-memory password defined by START SLAVE.
   */
@@ -243,7 +249,7 @@ public:
 
   my_bool ssl; // enables use of SSL connection if true
   char ssl_ca[FN_REFLEN], ssl_capath[FN_REFLEN], ssl_cert[FN_REFLEN];
-  char ssl_cipher[FN_REFLEN], ssl_key[FN_REFLEN];
+  char ssl_cipher[FN_REFLEN], ssl_key[FN_REFLEN], tls_version[FN_REFLEN];
   char ssl_crl[FN_REFLEN], ssl_crlpath[FN_REFLEN];
   my_bool ssl_verify_server_cert;
 
@@ -267,7 +273,7 @@ public:
 
   time_t last_heartbeat;
 
-  Dynamic_ids *ignore_server_ids;
+  Server_ids *ignore_server_ids;
 
   ulong master_id;
   /*
@@ -275,12 +281,10 @@ public:
     Initialized to novalue, then set to the queried from master
     @@global.binlog_checksum and deactivated once FD has been received.
   */
-  uint8 checksum_alg_before_fd;
+  binary_log::enum_binlog_checksum_alg checksum_alg_before_fd;
   ulong retry_count;
   char master_uuid[UUID_LENGTH+1];
   char bind_addr[HOSTNAME_LENGTH+1];
-
-  ulong master_gtid_mode;
 
   int mi_init_info();
   void end_info();
@@ -289,6 +293,13 @@ public:
 
   bool shall_ignore_server_id(ulong s_id);
 
+  /*
+     A buffer to hold " for channel <channel_name>
+     used in error messages per channel
+   */
+  char for_channel_str[CHANNEL_NAME_LENGTH+15];
+  char for_channel_uppercase_str[CHANNEL_NAME_LENGTH+15];
+
   virtual ~Master_info();
 
 protected:
@@ -296,8 +307,6 @@ protected:
   my_off_t master_log_pos;
 
 public:
-  void clear_in_memory_info(bool all);
-
   inline const char* get_master_log_name() { return master_log_name; }
   inline ulonglong get_master_log_pos() { return master_log_pos; }
   inline void set_master_log_name(const char *log_file_name)
@@ -313,6 +322,25 @@ public:
     return (master_log_name[0] ? master_log_name : "FIRST");
   }
   static size_t get_number_info_mi_fields();
+
+  /**
+     returns the column number of a channel in the TABLE repository.
+     Mainly used during server startup to load the information required
+     from the slave repostiory tables. See rpl_info_factory.cc
+  */
+  static uint get_channel_field_num();
+
+  /**
+     Returns an array with the expected column names of the primary key
+     fields of the table repository.
+  */
+  static const char **get_table_pk_field_names();
+
+  /**
+     Returns an array with the expected column numbers of the primary key
+     fields of the table repository.
+  */
+  static const uint *get_table_pk_field_indexes();
 
   bool is_auto_position()
   {
@@ -357,11 +385,17 @@ public:
     mi_description_event= fdle;
   }
 
-  /*semi_ack is used to identify if the current binlog event needs an ACK
-  from slave, or if delay_master is enabled; */
-  int semi_ack;
-private:
+  bool set_info_search_keys(Rpl_info_handler *to);
+
+  virtual const char* get_for_channel_str(bool upper_case= false) const
+  {
+    return reinterpret_cast<const char *>(upper_case ?
+                                          for_channel_uppercase_str
+                                          : for_channel_str);
+  }
+
   void init_master_log_pos();
+private:
 
   bool read_info(Rpl_info_handler *from);
   bool write_info(Rpl_info_handler *to);
@@ -373,16 +407,110 @@ private:
               PSI_mutex_key *param_key_info_run_lock,
               PSI_mutex_key *param_key_info_data_lock,
               PSI_mutex_key *param_key_info_sleep_lock,
+              PSI_mutex_key *param_key_info_thd_lock,
               PSI_mutex_key *param_key_info_data_cond,
               PSI_mutex_key *param_key_info_start_cond,
               PSI_mutex_key *param_key_info_stop_cond,
               PSI_mutex_key *param_key_info_sleep_cond,
 #endif
-              uint param_id
+              uint param_id, const char* param_channel
              );
 
   Master_info(const Master_info& info);
   Master_info& operator=(const Master_info& info);
+
+  /*
+    Last GTID queued by IO thread. This may contain a GTID of non-fully
+    replicated transaction and will be used when the last event of the
+    transaction be queued to add the GTID to the Retrieved_Gtid_Set.
+  */
+  Gtid last_gtid_queued;
+public:
+  Gtid *get_last_gtid_queued() { return &last_gtid_queued; }
+  void set_last_gtid_queued(Gtid &gtid) { last_gtid_queued= gtid; }
+  void set_last_gtid_queued(rpl_sidno sno, rpl_gno gtidno)
+  {
+    last_gtid_queued.set(sno, gtidno);
+  }
+  void clear_last_gtid_queued() { last_gtid_queued.clear(); }
+
+  /*
+    This will be used to verify transactions boundaries of events sent by the
+    master server.
+    It will also be used to verify transactions boundaries on the relay log
+    while collecting the Retrieved_Gtid_Set to make sure of only adding GTIDs
+    of fully retrieved transactions.
+  */
+  Transaction_boundary_parser transaction_parser;
+
+private:
+  /*
+    This is the channel lock. It is a rwlock used to serialize all replication
+    administrative commands that cannot be performed concurrently for a given
+    replication channel:
+    - START SLAVE;
+    - STOP SLAVE;
+    - CHANGE MASTER;
+    - RESET SLAVE;
+    - end_slave() (when mysqld stops)).
+    Any of these commands must hold the wrlock from the start till the end.
+  */
+  Checkable_rwlock *m_channel_lock;
+
+  /* References of the channel, the channel can only be deleted when it is 0. */
+  Atomic_int32 references;
+public:
+  /**
+    Acquire the channel read lock.
+  */
+  void channel_rdlock();
+
+  /**
+    Acquire the channel write lock.
+  */
+  void channel_wrlock();
+
+  /**
+    Release the channel lock (whether it is a write or read lock).
+  */
+  inline void channel_unlock()
+  { m_channel_lock->unlock(); }
+
+  /**
+    Assert that some thread holds either the read or the write lock.
+  */
+  inline void channel_assert_some_lock() const
+  { m_channel_lock->assert_some_lock(); }
+
+  /**
+    Assert that some thread holds the write lock.
+  */
+  inline void channel_assert_some_wrlock() const
+  { m_channel_lock->assert_some_wrlock(); }
+
+  /**
+    Increase the references to prohibit deleting a channel. This function
+    must be protected by channel_map.rdlock(). dec_reference have to be
+    called with inc_reference() together.
+  */
+  void inc_reference() { references.atomic_add(1); }
+
+  /**
+    Decrease the references. It doesn't need the protection of
+    channel_map.rdlock.
+  */
+  void dec_reference() { references.atomic_add(-1); }
+
+  /**
+    It mush be called before deleting a channel and protected by
+    channel_map_lock.wrlock().
+
+    @param THD thd the THD object of current thread
+  */
+  void wait_until_no_reference(THD *thd);
+
+  /* Set true when the Master_info object was cleared by a RESET SLAVE */
+  bool reset;
 };
 int change_master_server_id_cmp(ulong *id1, ulong *id2);
 

@@ -1,13 +1,20 @@
-/* Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2012, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -61,10 +68,10 @@ INSTANTIATE_TEST_CASE_P(Foo, Float4Test,
 TEST_P(Float4Test, PutAndGet)
 {
   float4store(buf, input);
-  float4get(output, buf);
+  float4get(&output, buf);
   EXPECT_EQ(input, output);
   floatstore(buf, input);
-  floatget(output, buf);
+  floatget(&output, buf);
   EXPECT_EQ(input, output);
 }
 
@@ -93,10 +100,10 @@ INSTANTIATE_TEST_CASE_P(Foo, Float8Test,
 TEST_P(Float8Test, PutAndGet)
 {
   float8store(buf, input);
-  float8get(output, buf);
+  float8get(&output, buf);
   EXPECT_EQ(input, output);
   doublestore(buf, input);
-  doubleget(output, buf);
+  doubleget(&output, buf);
   EXPECT_EQ(input, output);
 }
 
@@ -186,23 +193,23 @@ template<typename T> void get_integral(T &val, uchar *buf)
 { ADD_FAILURE() << "unknown type in get_integral"; }
 
 template<> void put_integral(uchar *buf, short val)  { shortstore(buf, val); }
-template<> void get_integral(short &val, uchar *buf) { shortget(val, buf); }
+template<> void get_integral(short &val, uchar *buf) { shortget(&val, buf); }
 
 // Hmm, there's no ushortstore...
 template<> void put_integral(uchar *buf, ushort val)  { shortstore(buf, val); }
-template<> void get_integral(ushort &val, uchar *buf) { ushortget(val, buf); }
+template<> void get_integral(ushort &val, uchar *buf) { ushortget(&val, buf); }
 
 template<> void put_integral(uchar *buf, int val)  { longstore(buf, val); }
-template<> void get_integral(int &val, uchar *buf) { longget(val, buf); }
+template<> void get_integral(int &val, uchar *buf) { longget(&val, buf); }
 
 // Hmm, there's no ulongstore...
 template<> void put_integral(uchar *buf, unsigned val)  { longstore(buf, val); }
-template<> void get_integral(unsigned &val, uchar *buf) { ulongget(val, buf); }
+template<> void get_integral(unsigned &val, uchar *buf) { ulongget(&val, buf); }
 
 template<> void put_integral(uchar *buf, longlong val)
 { longlongstore(buf, val); }
 template<> void get_integral(longlong &val, uchar *buf)
-{ longlongget(val, buf); }
+{ longlongget(&val, buf); }
 
 // Reading ulonglong is different from all the above ....
 template<> void put_integral(uchar *buf, ulonglong val)
@@ -211,7 +218,7 @@ template<> void get_integral(ulonglong &val, uchar *buf)
 { val= uint8korr(buf); }
 
 template<> void put_integral(uchar *buf, sizeNint<3> val)
-{ int3store(buf, val.value); }
+{ int3store(buf, static_cast<uint>(val.value)); }
 template<> void get_integral(sizeNint<3> &val, uchar *buf)
 { val.value= uint3korr(buf); }
 

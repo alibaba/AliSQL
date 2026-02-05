@@ -1,86 +1,85 @@
-/* Copyright (c) 2000, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "vio_priv.h"
+#include "my_openssl.h"
 
 #ifdef HAVE_OPENSSL
 
 #define TLS_VERSION_OPTION_SIZE 256
 #define SSL_CIPHER_LIST_SIZE 4096
 
-#ifdef HAVE_YASSL
-static const char tls_ciphers_list[]="DHE-RSA-AES256-SHA:DHE-RSA-AES128-SHA:"
-  "AES128-RMD:DES-CBC3-RMD:DHE-RSA-AES256-RMD:"
-  "DHE-RSA-AES128-RMD:DHE-RSA-DES-CBC3-RMD:"
-  "AES256-SHA:RC4-SHA:RC4-MD5:DES-CBC3-SHA:"
-  "DES-CBC-SHA:EDH-RSA-DES-CBC3-SHA:"
-  "EDH-RSA-DES-CBC-SHA:AES128-SHA:AES256-RMD";
-static const char tls_cipher_blocked[]= "!aNULL:!eNULL:!EXPORT:!LOW:!MD5:!DES:!RC2:!RC4:!PSK:";
-#else
 static const char tls_ciphers_list[]="ECDHE-ECDSA-AES128-GCM-SHA256:"
-  "ECDHE-ECDSA-AES256-GCM-SHA384:"
-  "ECDHE-RSA-AES128-GCM-SHA256:"
-  "ECDHE-RSA-AES256-GCM-SHA384:"
-  "ECDHE-ECDSA-AES128-SHA256:"
-  "ECDHE-RSA-AES128-SHA256:"
-  "ECDHE-ECDSA-AES256-SHA384:"
-  "ECDHE-RSA-AES256-SHA384:"
-  "DHE-RSA-AES128-GCM-SHA256:"
-  "DHE-DSS-AES128-GCM-SHA256:"
-  "DHE-RSA-AES128-SHA256:"
-  "DHE-DSS-AES128-SHA256:"
-  "DHE-DSS-AES256-GCM-SHA384:"
-  "DHE-RSA-AES256-SHA256:"
-  "DHE-DSS-AES256-SHA256:"
-  "ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:"
-  "ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:"
-  "DHE-DSS-AES128-SHA:DHE-RSA-AES128-SHA:"
-  "TLS_DHE_DSS_WITH_AES_256_CBC_SHA:DHE-RSA-AES256-SHA:"
-  "AES128-GCM-SHA256:DH-DSS-AES128-GCM-SHA256:"
-  "ECDH-ECDSA-AES128-GCM-SHA256:AES256-GCM-SHA384:"
-  "DH-DSS-AES256-GCM-SHA384:ECDH-ECDSA-AES256-GCM-SHA384:"
-  "AES128-SHA256:DH-DSS-AES128-SHA256:ECDH-ECDSA-AES128-SHA256:AES256-SHA256:"
-  "DH-DSS-AES256-SHA256:ECDH-ECDSA-AES256-SHA384:AES128-SHA:"
-  "DH-DSS-AES128-SHA:ECDH-ECDSA-AES128-SHA:AES256-SHA:"
-  "DH-DSS-AES256-SHA:ECDH-ECDSA-AES256-SHA:DHE-RSA-AES256-GCM-SHA384:"
-  "DH-RSA-AES128-GCM-SHA256:ECDH-RSA-AES128-GCM-SHA256:DH-RSA-AES256-GCM-SHA384:"
-  "ECDH-RSA-AES256-GCM-SHA384:DH-RSA-AES128-SHA256:"
-  "ECDH-RSA-AES128-SHA256:DH-RSA-AES256-SHA256:"
-  "ECDH-RSA-AES256-SHA384:ECDHE-RSA-AES128-SHA:"
-  "ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA:"
-  "ECDHE-ECDSA-AES256-SHA:DHE-DSS-AES128-SHA:DHE-RSA-AES128-SHA:"
-  "TLS_DHE_DSS_WITH_AES_256_CBC_SHA:DHE-RSA-AES256-SHA:"
-  "AES128-SHA:DH-DSS-AES128-SHA:ECDH-ECDSA-AES128-SHA:AES256-SHA:"
-  "DH-DSS-AES256-SHA:ECDH-ECDSA-AES256-SHA:DH-RSA-AES128-SHA:"
-  "ECDH-RSA-AES128-SHA:DH-RSA-AES256-SHA:ECDH-RSA-AES256-SHA:DES-CBC3-SHA";
+                                     "ECDHE-ECDSA-AES256-GCM-SHA384:"
+                                     "ECDHE-RSA-AES128-GCM-SHA256:"
+                                     "ECDHE-RSA-AES256-GCM-SHA384:"
+                                     "ECDHE-ECDSA-AES128-SHA256:"
+                                     "ECDHE-RSA-AES128-SHA256:"
+                                     "ECDHE-ECDSA-AES256-SHA384:"
+                                     "ECDHE-RSA-AES256-SHA384:"
+                                     "DHE-RSA-AES128-GCM-SHA256:"
+                                     "DHE-DSS-AES128-GCM-SHA256:"
+                                     "DHE-RSA-AES128-SHA256:"
+                                     "DHE-DSS-AES128-SHA256:"
+                                     "DHE-DSS-AES256-GCM-SHA384:"
+                                     "DHE-RSA-AES256-SHA256:"
+                                     "DHE-DSS-AES256-SHA256:"
+                                     "ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:"
+                                     "ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:"
+                                     "DHE-DSS-AES128-SHA:DHE-RSA-AES128-SHA:"
+                                     "TLS_DHE_DSS_WITH_AES_256_CBC_SHA:DHE-RSA-AES256-SHA:"
+                                     "AES128-GCM-SHA256:DH-DSS-AES128-GCM-SHA256:"
+                                     "ECDH-ECDSA-AES128-GCM-SHA256:AES256-GCM-SHA384:"
+                                     "DH-DSS-AES256-GCM-SHA384:ECDH-ECDSA-AES256-GCM-SHA384:"
+                                     "AES128-SHA256:DH-DSS-AES128-SHA256:ECDH-ECDSA-AES128-SHA256:AES256-SHA256:"
+                                     "DH-DSS-AES256-SHA256:ECDH-ECDSA-AES256-SHA384:AES128-SHA:"
+                                     "DH-DSS-AES128-SHA:ECDH-ECDSA-AES128-SHA:AES256-SHA:"
+                                     "DH-DSS-AES256-SHA:ECDH-ECDSA-AES256-SHA:DHE-RSA-AES256-GCM-SHA384:"
+                                     "DH-RSA-AES128-GCM-SHA256:ECDH-RSA-AES128-GCM-SHA256:DH-RSA-AES256-GCM-SHA384:"
+                                     "ECDH-RSA-AES256-GCM-SHA384:DH-RSA-AES128-SHA256:"
+                                     "ECDH-RSA-AES128-SHA256:DH-RSA-AES256-SHA256:"
+                                     "ECDH-RSA-AES256-SHA384:ECDHE-RSA-AES128-SHA:"
+                                     "ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA:"
+                                     "ECDHE-ECDSA-AES256-SHA:DHE-DSS-AES128-SHA:DHE-RSA-AES128-SHA:"
+                                     "TLS_DHE_DSS_WITH_AES_256_CBC_SHA:DHE-RSA-AES256-SHA:"
+                                     "AES128-SHA:DH-DSS-AES128-SHA:ECDH-ECDSA-AES128-SHA:AES256-SHA:"
+                                     "DH-DSS-AES256-SHA:ECDH-ECDSA-AES256-SHA:DH-RSA-AES128-SHA:"
+                                     "ECDH-RSA-AES128-SHA:DH-RSA-AES256-SHA:ECDH-RSA-AES256-SHA:DES-CBC3-SHA";
 static const char tls_cipher_blocked[]= "!aNULL:!eNULL:!EXPORT:!LOW:!MD5:!DES:!RC2:!RC4:!PSK:"
-  "!DHE-DSS-DES-CBC3-SHA:!DHE-RSA-DES-CBC3-SHA:"
-  "!ECDH-RSA-DES-CBC3-SHA:!ECDH-ECDSA-DES-CBC3-SHA:"
-  "!ECDHE-RSA-DES-CBC3-SHA:!ECDHE-ECDSA-DES-CBC3-SHA:";
-#endif
+                                        "!DHE-DSS-DES-CBC3-SHA:!DHE-RSA-DES-CBC3-SHA:"
+                                        "!ECDH-RSA-DES-CBC3-SHA:!ECDH-ECDSA-DES-CBC3-SHA:"
+                                        "!ECDHE-RSA-DES-CBC3-SHA:!ECDHE-ECDSA-DES-CBC3-SHA:";
 
-
-
-
-static my_bool     ssl_algorithms_added    = FALSE;
-static my_bool     ssl_error_strings_loaded= FALSE;
+static my_bool     ssl_initialized         = FALSE;
 
 /*
   Diffie-Hellman key.
   Generated using: >openssl dhparam -5 -C 2048
-
+ 
   -----BEGIN DH PARAMETERS-----
   MIIBCAKCAQEAil36wGZ2TmH6ysA3V1xtP4MKofXx5n88xq/aiybmGnReZMviCPEJ
   46+7VCktl/RZ5iaDH1XNG1dVQmznt9pu2G3usU+k1/VB4bQL4ZgW4u0Wzxh9PyXD
@@ -125,13 +124,21 @@ static DH *get_dh2048(void)
   DH *dh;
   if ((dh=DH_new()))
   {
-    dh->p=BN_bin2bn(dh2048_p,sizeof(dh2048_p),NULL);
-    dh->g=BN_bin2bn(dh2048_g,sizeof(dh2048_g),NULL);
-    if (! dh->p || ! dh->g)
-    {
+    BIGNUM *p= BN_bin2bn(dh2048_p, sizeof(dh2048_p), NULL);
+    BIGNUM *g= BN_bin2bn(dh2048_g, sizeof(dh2048_g), NULL);
+    if (!p || !g
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+        || !DH_set0_pqg(dh, p, NULL, g)
+#endif /* OPENSSL_VERSION_NUMBER >= 0x10100000L */
+    ) {
+      /* DH_free() will free 'p' and 'g' at once. */
       DH_free(dh);
-      dh=0;
+      return NULL;
     }
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+    dh->p= p;
+    dh->g= g;
+#endif /* OPENSSL_VERSION_NUMBER < 0x10100000L */
   }
   return(dh);
 }
@@ -149,7 +156,7 @@ report_errors()
 
   while ((l=ERR_get_error_line_data(&file,&line,&data,&flags)) != 0)
   {
-#ifndef DBUG_OFF				/* Avoid warning */
+#ifndef NDEBUG				/* Avoid warning */
     char buf[200];
     DBUG_PRINT("error", ("OpenSSL: %s:%s:%d:%s\n", ERR_error_string(l,buf),
 			 file,line,(flags & ERR_TXT_STRING) ? data : "")) ;
@@ -168,6 +175,7 @@ ssl_error_string[] =
   "SSL_CTX_set_default_verify_paths failed",
   "Failed to set ciphers to use",
   "SSL_CTX_new failed",
+  "SSL context is not usable without certificate and private key",
   "SSL_CTX_set_tmp_dh failed",
   "TLS version is invalid"
 };
@@ -175,7 +183,7 @@ ssl_error_string[] =
 const char*
 sslGetErrString(enum enum_ssl_init_error e)
 {
-  DBUG_ASSERT(SSL_INITERR_NOERROR < e && e < SSL_INITERR_LASTERR);
+  assert(SSL_INITERR_NOERROR < e && e < SSL_INITERR_LASTERR);
   return ssl_error_string[e];
 }
 
@@ -199,9 +207,8 @@ vio_set_cert_stuff(SSL_CTX *ctx, const char *cert_file, const char *key_file,
     *error= SSL_INITERR_CERT;
     DBUG_PRINT("error",("%s from file '%s'", sslGetErrString(*error), cert_file));
     DBUG_EXECUTE("error", ERR_print_errors_fp(DBUG_FILE););
-    fprintf(stderr, "SSL error: %s from '%s'\n", sslGetErrString(*error),
-            cert_file);
-    fflush(stderr);
+    my_message_local(ERROR_LEVEL, "SSL error: %s from '%s'",
+                     sslGetErrString(*error), cert_file);
     DBUG_RETURN(1);
   }
 
@@ -211,9 +218,8 @@ vio_set_cert_stuff(SSL_CTX *ctx, const char *cert_file, const char *key_file,
     *error= SSL_INITERR_KEY;
     DBUG_PRINT("error", ("%s from file '%s'", sslGetErrString(*error), key_file));
     DBUG_EXECUTE("error", ERR_print_errors_fp(DBUG_FILE););
-    fprintf(stderr, "SSL error: %s from '%s'\n", sslGetErrString(*error),
-            key_file);
-    fflush(stderr);
+    my_message_local(ERROR_LEVEL, "SSL error: %s from '%s'",
+                     sslGetErrString(*error), key_file);
     DBUG_RETURN(1);
   }
 
@@ -226,29 +232,221 @@ vio_set_cert_stuff(SSL_CTX *ctx, const char *cert_file, const char *key_file,
     *error= SSL_INITERR_NOMATCH;
     DBUG_PRINT("error", ("%s",sslGetErrString(*error)));
     DBUG_EXECUTE("error", ERR_print_errors_fp(DBUG_FILE););
-    fprintf(stderr, "SSL error: %s\n", sslGetErrString(*error));
-    fflush(stderr);
+    my_message_local(ERROR_LEVEL, "SSL error: %s", sslGetErrString(*error));
     DBUG_RETURN(1);
   }
 
   DBUG_RETURN(0);
 }
 
+/*
+  OpenSSL 1.1 supports native platform threads,
+  so we don't need the following callback functions.
+*/
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+/* OpenSSL specific */
+
+#ifdef HAVE_PSI_INTERFACE
+static PSI_rwlock_key key_rwlock_openssl;
+
+static PSI_rwlock_info openssl_rwlocks[]=
+{
+  { &key_rwlock_openssl, "CRYPTO_dynlock_value::lock", 0}
+};
+#endif
+
+
+typedef struct CRYPTO_dynlock_value
+{
+  mysql_rwlock_t lock;
+} openssl_lock_t;
+
+
+/* Array of locks used by openssl internally for thread synchronization.
+   The number of locks is equal to CRYPTO_num_locks.
+*/
+static openssl_lock_t *openssl_stdlocks;
+
+/*OpenSSL callback functions for multithreading. We implement all the functions
+  as we are using our own locking mechanism.
+*/
+static void openssl_lock(int mode, openssl_lock_t *lock,
+                         const char *file MY_ATTRIBUTE((unused)),
+                         int line MY_ATTRIBUTE((unused)))
+{
+  int err;
+  char const *what;
+
+  switch (mode) {
+    case CRYPTO_LOCK|CRYPTO_READ:
+      what = "read lock";
+      err= mysql_rwlock_rdlock(&lock->lock);
+      break;
+    case CRYPTO_LOCK|CRYPTO_WRITE:
+      what = "write lock";
+      err= mysql_rwlock_wrlock(&lock->lock);
+      break;
+    case CRYPTO_UNLOCK|CRYPTO_READ:
+    case CRYPTO_UNLOCK|CRYPTO_WRITE:
+      what = "unlock";
+      err= mysql_rwlock_unlock(&lock->lock);
+      break;
+    default:
+      /* Unknown locking mode. */
+      DBUG_PRINT("error",
+        ("Fatal OpenSSL: %s:%d: interface problem (mode=0x%x)\n",
+          file, line, mode));
+
+      fprintf(stderr, "Fatal: OpenSSL interface problem (mode=0x%x)", mode);
+      fflush(stderr);
+      abort();
+  }
+  if (err)
+  {
+    DBUG_PRINT("error",
+      ("Fatal OpenSSL: %s:%d: can't %s OpenSSL lock\n",
+        file, line, what));
+
+    fprintf(stderr, "Fatal: can't %s OpenSSL lock", what);
+    fflush(stderr);
+    abort();
+  }
+}
+
+static void openssl_lock_function(int mode, int n,
+                                  const char *file MY_ATTRIBUTE((unused)),
+                                  int line MY_ATTRIBUTE((unused)))
+{
+  if (n < 0 || n > CRYPTO_num_locks())
+  {
+    /* Lock number out of bounds. */
+    DBUG_PRINT("error",
+      ("Fatal OpenSSL: %s:%d: interface problem (n = %d)", file, line, n));
+
+    fprintf(stderr, "Fatal: OpenSSL interface problem (n = %d)", n);
+    fflush(stderr);
+    abort();
+  }
+  openssl_lock(mode, &openssl_stdlocks[n], file, line);
+}
+
+static openssl_lock_t *openssl_dynlock_create(const char *file
+                                              MY_ATTRIBUTE((unused)),
+                                              int line MY_ATTRIBUTE((unused)))
+{
+  openssl_lock_t *lock;
+
+  DBUG_PRINT("info", ("openssl_dynlock_create: %s:%d", file, line));
+
+  lock= (openssl_lock_t*)
+    my_malloc(PSI_NOT_INSTRUMENTED,sizeof(openssl_lock_t),MYF(0));
+
+#ifdef HAVE_PSI_INTERFACE
+  mysql_rwlock_init(key_rwlock_openssl, &lock->lock);
+#else
+  mysql_rwlock_init(0, &lock->lock);
+#endif
+  return lock;
+}
+
+
+static void openssl_dynlock_destroy(openssl_lock_t *lock,
+                                    const char *file MY_ATTRIBUTE((unused)),
+                                    int line MY_ATTRIBUTE((unused)))
+{
+  DBUG_PRINT("info", ("openssl_dynlock_destroy: %s:%d", file, line));
+
+  mysql_rwlock_destroy(&lock->lock);
+  my_free(lock);
+}
+
+static unsigned long openssl_id_function()
+{
+  return (unsigned long) my_thread_self();
+}
+
+//End of mutlithreading callback functions
+
+static void init_ssl_locks()
+{
+  int i= 0;
+#ifdef HAVE_PSI_INTERFACE
+  const char* category= "sql";
+  int count= array_elements(openssl_rwlocks);
+  mysql_rwlock_register(category, openssl_rwlocks, count);
+#endif
+
+  openssl_stdlocks= (openssl_lock_t*) OPENSSL_malloc(CRYPTO_num_locks() *
+    sizeof(openssl_lock_t));
+  for (i= 0; i < CRYPTO_num_locks(); ++i)
+#ifdef HAVE_PSI_INTERFACE
+    mysql_rwlock_init(key_rwlock_openssl, &openssl_stdlocks[i].lock);
+#else
+    mysql_rwlock_init(0, &openssl_stdlocks[i].lock);
+#endif
+}
+
+static void set_lock_callback_functions(my_bool init)
+{
+  CRYPTO_set_locking_callback(init ? openssl_lock_function : NULL);
+  CRYPTO_set_id_callback(init ? openssl_id_function : NULL);
+  CRYPTO_set_dynlock_create_callback(init ? openssl_dynlock_create : NULL);
+  CRYPTO_set_dynlock_destroy_callback(init ? openssl_dynlock_destroy : NULL);
+  CRYPTO_set_dynlock_lock_callback(init ? openssl_lock : NULL);
+}
+
+static void init_lock_callback_functions()
+{
+  set_lock_callback_functions(TRUE);
+}
+
+static void deinit_lock_callback_functions()
+{
+  set_lock_callback_functions(FALSE);
+}
+
+#endif /* OPENSSL_VERSION_NUMBER < 0x10100000L */
+
+void vio_ssl_end()
+{
+  if (ssl_initialized) {
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+    int i;
+
+    ERR_remove_thread_state(0);
+#endif /* OPENSSL_VERSION_NUMBER < 0x10100000L */
+    ERR_free_strings();
+    EVP_cleanup();
+
+    CRYPTO_cleanup_all_ex_data();
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+    deinit_lock_callback_functions();
+
+    for (i= 0; i < CRYPTO_num_locks(); ++i)
+      mysql_rwlock_destroy(&openssl_stdlocks[i].lock);
+    OPENSSL_free(openssl_stdlocks);
+
+#endif /* OPENSSL_VERSION_NUMBER < 0x10100000L */
+    ssl_initialized= FALSE;
+  }
+}
 
 void ssl_start()
 {
-  if (!ssl_algorithms_added)
+  if (!ssl_initialized)
   {
-    ssl_algorithms_added= TRUE;
-    SSL_library_init();
+    ssl_initialized= TRUE;
+
+    mysql_OPENSSL_init();
+
     OpenSSL_add_all_algorithms();
-
-  }
-
-  if (!ssl_error_strings_loaded)
-  {
-    ssl_error_strings_loaded= TRUE;
     SSL_load_error_strings();
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+    init_ssl_locks();
+    init_lock_callback_functions();
+#endif /* OPENSSL_VERSION_NUMBER < 0x10100000L */
   }
 }
 
@@ -256,61 +454,28 @@ long process_tls_version(const char *tls_version)
 {
   const char *separator= ",";
   char *token, *lasts= NULL;
-
-  const char *tls_version_name_list[]= {"TLSv1"
-#ifdef SSL_OP_NO_TLSv1_1
-                                        ,"TLSv1.1"
-#endif
-#ifdef SSL_OP_NO_TLSv1_2
-                                        ,"TLSv1.2"
-#endif
-                                       };
-
-  const char ctx_flag_default[]=
-#ifdef SSL_OP_NO_TLSv1_2
-    "TLSv1,TLSv1.1,TLSv1.2";
-#elif defined(SSL_OP_NO_TLSv1_1)
-    "TLSv1,TLSv1.1";
-#else
-    "TLSv1";
-#endif
-
-  const long tls_ctx_list[]= {
-                              SSL_OP_NO_TLSv1
-#ifdef SSL_OP_NO_TLSv1_1
-                              ,SSL_OP_NO_TLSv1_1
-#endif
-#ifdef SSL_OP_NO_TLSv1_2
-                              ,SSL_OP_NO_TLSv1_2
-#endif
-                              };
-
-
-  size_t tls_versions_count= sizeof(tls_ctx_list) / sizeof(tls_ctx_list[0]);
-  long tls_ctx_flag= 0;
+  unsigned int tls_versions_count= 3;
+  const char *tls_version_name_list[3]= {"TLSv1", "TLSv1.1", "TLSv1.2"};
+  const char ctx_flag_default[]= "TLSv1,TLSv1.1,TLSv1.2";
+  const long tls_ctx_list[3]= {SSL_OP_NO_TLSv1, SSL_OP_NO_TLSv1_1, SSL_OP_NO_TLSv1_2};
+  long tls_ctx_flag= SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_1|SSL_OP_NO_TLSv1_2;
   unsigned int index= 0;
   char tls_version_option[TLS_VERSION_OPTION_SIZE]= "";
   int tls_found= 0;
 
-  for (index= 0; index < tls_versions_count; index++)
-    tls_ctx_flag|= tls_ctx_list[index];
-
-  if (!tls_version || !my_strcasecmp(&my_charset_latin1, tls_version,
-                                        ctx_flag_default))
+  if (!tls_version || !my_strcasecmp(&my_charset_latin1, tls_version, ctx_flag_default))
     return 0;
 
-
-  if (strlen(tls_version) - 1 > sizeof(tls_version_option))
+  if (strlen(tls_version)-1 > sizeof(tls_version_option))
     return -1;
 
   strncpy(tls_version_option, tls_version, sizeof(tls_version_option));
   token= my_strtok_r(tls_version_option, separator, &lasts);
   while (token)
   {
-    for (index= 0; index < tls_versions_count; index++)
+    for (index=0; index < tls_versions_count; index++)
     {
-      if (!my_strcasecmp(&my_charset_latin1, tls_version_name_list[index],
-            token))
+      if (!my_strcasecmp(&my_charset_latin1, tls_version_name_list[index], token))
       {
         tls_found= 1;
         tls_ctx_flag= tls_ctx_flag & (~tls_ctx_list[index]);
@@ -326,34 +491,36 @@ long process_tls_version(const char *tls_version)
     return tls_ctx_flag;
 }
 
-
-
-
 /************************ VioSSLFd **********************************/
 static struct st_VioSSLFd *
 new_VioSSLFd(const char *key_file, const char *cert_file,
              const char *ca_file, const char *ca_path,
              const char *cipher, my_bool is_client,
              enum enum_ssl_init_error *error,
-             const char *crl_file, const char *crl_path,
-             const long ssl_ctx_flags)
+             const char *crl_file, const char *crl_path, const long ssl_ctx_flags)
 {
   DH *dh;
   struct st_VioSSLFd *ssl_fd;
-  long ssl_ctx_options= SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3;
+  /* MySQL 5.7 supports TLS up to v1.2, explicitly disable TLSv1.3. */
+  long ssl_ctx_options= SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3
+#ifdef HAVE_TLSv13
+                        | SSL_OP_NO_TLSv1_3
+#endif /* HAVE_TLSv13 */
+                        ;
   int ret_set_cipherlist= 0;
   char cipher_list[SSL_CIPHER_LIST_SIZE]= {0};
   DBUG_ENTER("new_VioSSLFd");
   DBUG_PRINT("enter",
              ("key_file: '%s'  cert_file: '%s'  ca_file: '%s'  ca_path: '%s'  "
-              "cipher: '%s' crl_file: '%s' crl_path: '%s' ",
+              "cipher: '%s' crl_file: '%s' crl_path: '%s' ssl_ctx_flags: '%ld' ",
               key_file ? key_file : "NULL",
               cert_file ? cert_file : "NULL",
               ca_file ? ca_file : "NULL",
               ca_path ? ca_path : "NULL",
               cipher ? cipher : "NULL",
               crl_file ? crl_file : "NULL",
-              crl_path ? crl_path : "NULL"));
+              crl_path ? crl_path : "NULL",
+              ssl_ctx_flags));
 
   if (ssl_ctx_flags < 0)
   {
@@ -364,22 +531,19 @@ new_VioSSLFd(const char *key_file, const char *cert_file,
   }
 
   ssl_ctx_options= (ssl_ctx_options | ssl_ctx_flags) &
-    (SSL_OP_NO_SSLv2 |
-     SSL_OP_NO_SSLv3 |
-     SSL_OP_NO_TLSv1
-#ifdef SSL_OP_NO_TLSv1_1
-     | SSL_OP_NO_TLSv1_1
-#endif
-#ifdef SSL_OP_NO_TLSv1_2
-     | SSL_OP_NO_TLSv1_2
-#endif
-     );
-
-
-  ssl_start();
-
+                   (SSL_OP_NO_SSLv2 |
+                    SSL_OP_NO_SSLv3 |
+                    SSL_OP_NO_TLSv1 |
+                    SSL_OP_NO_TLSv1_1
+                    | SSL_OP_NO_TLSv1_2
+#ifdef HAVE_TLSv13
+                    | SSL_OP_NO_TLSv1_3
+#endif /* HAVE_TLSv13 */
+                    | SSL_OP_NO_TICKET
+                   );
   if (!(ssl_fd= ((struct st_VioSSLFd*)
-                 my_malloc(sizeof(struct st_VioSSLFd),MYF(0)))))
+                 my_malloc(key_memory_vio_ssl_fd,
+                           sizeof(struct st_VioSSLFd),MYF(0)))))
     DBUG_RETURN(0);
 
   if (!(ssl_fd->ssl_context= SSL_CTX_new(is_client ?
@@ -395,35 +559,40 @@ new_VioSSLFd(const char *key_file, const char *cert_file,
 
   SSL_CTX_set_options(ssl_fd->ssl_context, ssl_ctx_options);
 
+#ifdef HAVE_TLSv13
   /*
-    Set the ciphers that can be used
+    MySQL 5.7 doesn't support TLSv1.3 - set empty TLSv1.3 ciphersuites.
+  */
+  if (0 == SSL_CTX_set_ciphersuites(ssl_fd->ssl_context, ""))
+  {
+    *error = SSL_INITERR_CIPHERS;
+    DBUG_PRINT("error", ("%s", sslGetErrString(*error)));
+    report_errors();
+    SSL_CTX_free(ssl_fd->ssl_context);
+    my_free(ssl_fd);
+    DBUG_RETURN(0);
+  }
+#endif /* HAVE_TLSv13 */
+
+  /*
+    We explicitly prohibit weak ciphers.
     NOTE: SSL_CTX_set_cipher_list will return 0 if
     none of the provided ciphers could be selected
   */
+  strncpy(cipher_list, tls_cipher_blocked, SSL_CIPHER_LIST_SIZE - 1);
 
-  DBUG_ASSERT(strlen(tls_cipher_blocked) + 1 <= sizeof(cipher_list));
-  strcat(cipher_list, tls_cipher_blocked);
-  if (cipher)
-  {
-    if (strlen(cipher_list) + strlen(cipher) + 1 > sizeof(cipher_list))
-    {
-      *error= SSL_INITERR_CIPHERS;
-      DBUG_PRINT("error", ("User specified cipher too long"));
-      SSL_CTX_free(ssl_fd->ssl_context);
-      my_free(ssl_fd);
-      DBUG_RETURN(0);
-    }
-    strcat(cipher_list, cipher);
-  }
-  else
-  {
-    DBUG_ASSERT(strlen(cipher_list) + strlen(tls_ciphers_list) + 1
-                <= sizeof(cipher_list));
-    strcat(cipher_list, tls_ciphers_list);
-  }
+  /*
+    If ciphers are specified explicitly by caller, use them.
+    Otherwise, fallback to the default list.
 
-  if (ret_set_cipherlist == SSL_CTX_set_cipher_list(ssl_fd->ssl_context,
-                                                    cipher_list))
+    In either case, we make sure we stay within the valid bounds.
+    Note that we have already consumed tls_cipher_blocked
+    worth of space.
+  */
+  strncat(cipher_list, cipher == 0 ? tls_ciphers_list : cipher,
+          SSL_CIPHER_LIST_SIZE - strlen(cipher_list) - 1);
+
+  if (ret_set_cipherlist == SSL_CTX_set_cipher_list(ssl_fd->ssl_context, cipher_list))
   {
     *error= SSL_INITERR_CIPHERS;
     DBUG_PRINT("error", ("%s", sslGetErrString(*error)));
@@ -464,10 +633,6 @@ new_VioSSLFd(const char *key_file, const char *cert_file,
 
   if (crl_file || crl_path)
   {
-#ifdef HAVE_YASSL
-    DBUG_PRINT("warning", ("yaSSL doesn't support CRL"));
-    DBUG_ASSERT(0);
-#else
     X509_STORE *store= SSL_CTX_get_cert_store(ssl_fd->ssl_context);
     /* Load crls from the trusted ca */
     if (X509_STORE_load_locations(store, crl_file, crl_path) == 0 ||
@@ -483,12 +648,22 @@ new_VioSSLFd(const char *key_file, const char *cert_file,
       my_free(ssl_fd);
       DBUG_RETURN(0);
     }
-#endif
   }
 
   if (vio_set_cert_stuff(ssl_fd->ssl_context, cert_file, key_file, error))
   {
     DBUG_PRINT("error", ("vio_set_cert_stuff failed"));
+    report_errors();
+    SSL_CTX_free(ssl_fd->ssl_context);
+    my_free(ssl_fd);
+    DBUG_RETURN(0);
+  }
+
+  /* Server specific check : Must have certificate and key file */
+  if (!is_client && !key_file && !cert_file)
+  {
+    *error= SSL_INITERR_NO_USABLE_CTX;
+    DBUG_PRINT("error", ("%s", sslGetErrString(*error)));
     report_errors();
     SSL_CTX_free(ssl_fd->ssl_context);
     my_free(ssl_fd);
@@ -520,8 +695,7 @@ struct st_VioSSLFd *
 new_VioSSLConnectorFd(const char *key_file, const char *cert_file,
                       const char *ca_file, const char *ca_path,
                       const char *cipher, enum enum_ssl_init_error* error,
-                      const char *crl_file, const char *crl_path,
-                      const long ssl_ctx_flags)
+                      const char *crl_file, const char *crl_path, const long ssl_ctx_flags)
 {
   struct st_VioSSLFd *ssl_fd;
   int verify= SSL_VERIFY_PEER;
@@ -535,8 +709,7 @@ new_VioSSLConnectorFd(const char *key_file, const char *cert_file,
 
   if (!(ssl_fd= new_VioSSLFd(key_file, cert_file, ca_file,
                              ca_path, cipher, TRUE, error,
-                             crl_file, crl_path,
-                             ssl_ctx_flags)))
+                             crl_file, crl_path, ssl_ctx_flags)))
   {
     return 0;
   }
@@ -554,15 +727,13 @@ struct st_VioSSLFd *
 new_VioSSLAcceptorFd(const char *key_file, const char *cert_file,
 		     const char *ca_file, const char *ca_path,
 		     const char *cipher, enum enum_ssl_init_error* error,
-                     const char *crl_file, const char *crl_path,
-                     const long ssl_ctx_flags)
+                     const char *crl_file, const char * crl_path, const long ssl_ctx_flags)
 {
   struct st_VioSSLFd *ssl_fd;
   int verify= SSL_VERIFY_PEER | SSL_VERIFY_CLIENT_ONCE;
   if (!(ssl_fd= new_VioSSLFd(key_file, cert_file, ca_file,
                              ca_path, cipher, FALSE, error,
-                             crl_file, crl_path,
-                             ssl_ctx_flags)))
+                             crl_file, crl_path, ssl_ctx_flags)))
   {
     return 0;
   }

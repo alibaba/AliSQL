@@ -1,21 +1,26 @@
-/* Copyright (c) 2011, 2013, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "vio_priv.h"
-
-#ifdef _WIN32
 
 static size_t wait_overlapped_result(Vio *vio, int timeout)
 {
@@ -59,7 +64,7 @@ size_t vio_read_pipe(Vio *vio, uchar *buf, size_t count)
   DBUG_ENTER("vio_read_pipe");
 
   /* Attempt to read from the pipe (overlapped I/O). */
-  if (ReadFile(vio->hPipe, buf, count, &transferred, &vio->overlapped))
+  if (ReadFile(vio->hPipe, buf, (DWORD)count, &transferred, &vio->overlapped))
   {
     /* The operation completed immediately. */
     ret= transferred;
@@ -79,7 +84,7 @@ size_t vio_write_pipe(Vio *vio, const uchar *buf, size_t count)
   DBUG_ENTER("vio_write_pipe");
 
   /* Attempt to write to the pipe (overlapped I/O). */
-  if (WriteFile(vio->hPipe, buf, count, &transferred, &vio->overlapped))
+  if (WriteFile(vio->hPipe, buf, (DWORD)count, &transferred, &vio->overlapped))
   {
     /* The operation completed immediately. */
     ret= transferred;
@@ -103,13 +108,16 @@ my_bool vio_is_connected_pipe(Vio *vio)
 
 int vio_shutdown_pipe(Vio *vio)
 {
-  BOOL ret;
+  BOOL ret= FALSE;
   DBUG_ENTER("vio_shutdown_pipe");
 
-  CancelIo(vio->hPipe);
-  CloseHandle(vio->overlapped.hEvent);
-  DisconnectNamedPipe(vio->hPipe);
-  ret= CloseHandle(vio->hPipe);
+  if (vio->inactive == FALSE)
+  {
+    CancelIo(vio->hPipe);
+    CloseHandle(vio->overlapped.hEvent);
+    DisconnectNamedPipe(vio->hPipe);
+    ret= CloseHandle(vio->hPipe);
+  }
 
   vio->inactive= TRUE;
   vio->hPipe= NULL;
@@ -117,18 +125,3 @@ int vio_shutdown_pipe(Vio *vio)
 
   DBUG_RETURN(ret);
 }
-
-int vio_cancel_pipe(Vio *vio, int how)
-{
-  DBUG_ENTER("vio_cancel_pipe");
-
-  CancelIo(vio->hPipe);
-  CloseHandle(vio->overlapped.hEvent);
-  DisconnectNamedPipe(vio->hPipe);
-
-  vio->inactive= TRUE;
-  DBUG_RETURN(0);
-}
-
-#endif
-

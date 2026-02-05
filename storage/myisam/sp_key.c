@@ -1,22 +1,26 @@
-/* Copyright (c) 2000, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
    
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
-   
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-   
+   GNU General Public License, version 2.0, for more details.
+
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "myisamdef.h"
-
-#ifdef HAVE_SPATIAL
-
 #include "sp_defs.h"
 
 static int sp_add_point_to_mbr(uchar *(*wkb), uchar *end, uint n_dims, 
@@ -31,7 +35,7 @@ static int sp_get_geometry_mbr(uchar *(*wkb), uchar *end, uint n_dims,
                               double *mbr, int top);
 static int sp_mbr_from_wkb(uchar (*wkb), uint size, uint n_dims, double *mbr);
 
-uint sp_make_key(register MI_INFO *info, uint keynr, uchar *key,
+uint sp_make_key(MI_INFO *info, uint keynr, uchar *key,
 		 const uchar *record, my_off_t filepos)
 {
   HA_KEYSEG *keyseg;
@@ -50,7 +54,7 @@ uint sp_make_key(register MI_INFO *info, uint keynr, uchar *key,
   memcpy(&dptr, pos + keyseg->bit_start, sizeof(char*));
   if (!dptr)
   {
-    my_errno= HA_ERR_NULL_IN_SPATIAL;
+    set_my_errno(HA_ERR_NULL_IN_SPATIAL);
     return 0;
   }
   sp_mbr_from_wkb(dptr + 4, dlen - 4, SPDIMS, mbr);	/* SRID */
@@ -60,13 +64,12 @@ uint sp_make_key(register MI_INFO *info, uint keynr, uchar *key,
     uint length = keyseg->length, start= keyseg->start;
     double val;
 
-    DBUG_ASSERT(length == sizeof(double));
-    DBUG_ASSERT(!(start % sizeof(double)));
-    DBUG_ASSERT(start < sizeof(mbr));
-    DBUG_ASSERT(keyseg->type == HA_KEYTYPE_DOUBLE);
+    assert(length == sizeof(double));
+    assert(!(start % sizeof(double)));
+    assert(start < sizeof(mbr));
+    assert(keyseg->type == HA_KEYTYPE_DOUBLE);
     
     val= mbr[start / sizeof (double)];
-#ifdef HAVE_ISNAN
     if (my_isnan(val))
     {
       memset(key, 0, length);
@@ -74,7 +77,6 @@ uint sp_make_key(register MI_INFO *info, uint keynr, uchar *key,
       len+= length;
       continue;
     }
-#endif
 
     if (keyseg->flag & HA_SWAP_KEY)
     {
@@ -128,7 +130,7 @@ static int sp_add_point_to_mbr(uchar *(*wkb), uchar *end, uint n_dims,
   {
     if ((*wkb) > end - 8)
       return -1;
-    float8get(ord, (const uchar*) *wkb);
+    float8get(&ord, (const uchar*) *wkb);
     (*wkb)+= 8;
     if (ord < *mbr)
       *mbr= ord;
@@ -282,5 +284,3 @@ static int sp_get_geometry_mbr(uchar *(*wkb), uchar *end, uint n_dims,
   }
   return res;
 }
-
-#endif /*HAVE_SPATIAL*/

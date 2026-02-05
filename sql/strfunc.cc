@@ -1,13 +1,20 @@
-/* Copyright (c) 2003, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2003, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -15,8 +22,6 @@
 
 /* Some useful string utility functions used by the MySQL server */
 
-#include "sql_priv.h"
-#include "unireg.h"
 #include "strfunc.h"
 #include "sql_class.h"
 #include "typelib.h"                            // TYPELIB
@@ -44,7 +49,7 @@
 
 static const char field_separator=',';
 
-ulonglong find_set(TYPELIB *lib, const char *str, uint length,
+ulonglong find_set(TYPELIB *lib, const char *str, size_t length,
                    const CHARSET_INFO *cs,
                    char **err_pos, uint *err_len, bool *set_warning)
 {
@@ -111,7 +116,7 @@ ulonglong find_set(TYPELIB *lib, const char *str, uint length,
   > 0 position in TYPELIB->type_names +1
 */
 
-uint find_type(const TYPELIB *lib, const char *find, uint length,
+uint find_type(const TYPELIB *lib, const char *find, size_t length,
                bool part_match)
 {
   uint found_count=0, found_pos=0;
@@ -152,13 +157,14 @@ uint find_type(const TYPELIB *lib, const char *find, uint length,
     >0  Offset+1 in typelib for matched string
 */
 
-uint find_type2(const TYPELIB *typelib, const char *x, uint length,
+uint find_type2(const TYPELIB *typelib, const char *x, size_t length,
                 const CHARSET_INFO *cs)
 {
   int pos;
   const char *j;
   DBUG_ENTER("find_type2");
-  DBUG_PRINT("enter",("x: '%.*s'  lib: 0x%lx", length, x, (long) typelib));
+  DBUG_PRINT("enter",("x: '%.*s'  lib: 0x%p",
+                      static_cast<int>(length), x, typelib));
 
   if (!typelib->count)
   {
@@ -265,8 +271,8 @@ uint check_word(TYPELIB *lib, const char *val, const char *end,
 */
 
 
-uint strconvert(CHARSET_INFO *from_cs, const char *from,
-                CHARSET_INFO *to_cs, char *to, uint to_length, uint *errors)
+size_t strconvert(CHARSET_INFO *from_cs, const char *from,
+                  CHARSET_INFO *to_cs, char *to, size_t to_length, uint *errors)
 {
   int cnvres;
   my_wc_t wc;
@@ -315,7 +321,7 @@ outp:
   }
   *to= '\0';
   *errors= error_count;
-  return (uint32) (to - to_start);
+  return static_cast<size_t>(to - to_start);
 
 }
 
@@ -344,7 +350,7 @@ int find_string_in_array(LEX_STRING * const haystack, LEX_STRING * const needle,
     if (!cs->coll->strnncollsp(cs, (uchar *) pos->str, pos->length,
                                (uchar *) needle->str, needle->length, 0))
     {
-      return (pos - haystack);
+      return static_cast<int>(pos - haystack);
     }
   return -1;
 }

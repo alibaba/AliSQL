@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -321,11 +328,25 @@ RestoreMetaData::readMetaTableList() {
   const Uint32 tabCount = sectionInfo[1] - 2;
 
   void *tmp;
-  if (buffer_get_ptr(&tmp, 4, tabCount) != tabCount){
-    err << "readMetaTableList read tabCount error" << endl;
+  Uint32 tabsRead = 0;
+  while (tabsRead < tabCount){
+    int count = buffer_get_ptr(&tmp, 4, tabCount - tabsRead);
+    if(count == 0)
+      break;
+    tabsRead += count;
+  }
+  if (tabsRead != tabCount){
+    err << "readMetaTableList read tabCount error, expected count = " << tabCount << ", actual count =" << tabsRead << endl;
     return 0;
   }
-  
+#ifdef ERROR_INSERT
+  if(m_error_insert == NDB_RESTORE_ERROR_INSERT_SMALL_BUFFER)
+  {
+    // clear error insert
+    m_error_insert = 0;
+    m_buffer_sz = 64*1024;
+  }
+#endif  
   return tabCount;
 }
 
@@ -450,6 +471,19 @@ RestoreMetaData::readMetaTableDesc() {
 
     m_objects.push(obj, 0); // Put first
     return true;
+    break;
+  }
+  case DictTabInfo::ForeignKey:
+  {
+    NdbDictionary::ForeignKey * dst = new NdbDictionary::ForeignKey;
+    errcode =
+      NdbDictInterface::parseForeignKeyInfo(NdbForeignKeyImpl::getImpl(* dst),
+                                            (const Uint32*)ptr, len);
+    if (errcode)
+      delete dst;
+    obj.m_objPtr = dst;
+    debug << hex << obj.m_objPtr << " " 
+	   << dec << dst->getObjectId() << " " << dst->getName() << endl;
     break;
   }
   default:
@@ -724,6 +758,10 @@ TableS::TableS(Uint32 version, NdbTableImpl* tableImpl)
   
   for (int i = 0; i < tableImpl->getNoOfColumns(); i++)
     createAttr(tableImpl->getColumn(i));
+
+  m_staging = false;
+  m_stagingTable = NULL;
+  m_stagingFlags = 0;
 }
 
 TableS::~TableS()
@@ -1281,8 +1319,7 @@ RestoreDataIterator::readVarData_drop6(Uint32 *buf_ptr, Uint32 *ptr,
     typedef BackupFormat::DataFile::VariableData VarData;
     VarData * data = (VarData *)ptr;
     Uint32 sz = ntohl(data->Sz);
-    Uint32 id = ntohl(data->Id);
-    assert(id == attrId);
+    assert(ntohl(data->Id) == attrId);
 
     attr_data->null = false;
     attr_data->void_value = &data->Data[0];
@@ -1312,6 +1349,9 @@ BackupFile::BackupFile(void (* _free_data_callback)())
   m_file_size = 0;
   m_file_pos = 0;
   m_is_undolog = false;
+#ifdef ERROR_INSERT
+  m_error_insert = 0;
+#endif
 }
 
 BackupFile::~BackupFile()
@@ -1655,6 +1695,20 @@ BackupFile::validateFooter(){
   return true;
 }
 
+#ifdef ERROR_INSERT
+void BackupFile::error_insert(unsigned int code)
+{
+  if(code == NDB_RESTORE_ERROR_INSERT_SMALL_BUFFER)
+  {
+    // Reduce size of buffer to test buffer overflow
+    // handling. The buffer must still be large enough to
+    // accommodate the file header.
+    m_buffer_sz = 256;
+    m_error_insert = NDB_RESTORE_ERROR_INSERT_SMALL_BUFFER;
+  }
+}
+#endif
+
 bool RestoreDataIterator::readFragmentHeader(int & ret, Uint32 *fragmentId)
 {
   BackupFormat::DataFile::FragmentHeader Header;
@@ -1757,6 +1811,8 @@ AttributeDesc::AttributeDesc(NdbDictionary::Column *c)
 {
   size = 8*NdbColumnImpl::getImpl(* c).m_attrSize;
   arraySize = NdbColumnImpl::getImpl(* c).m_arraySize;
+  staging = false;
+  parameterSz = 0;
 }
 
 void TableS::createAttr(NdbDictionary::Column *column)
@@ -2009,13 +2065,15 @@ RestoreLogIterator::getNextLogEntry(int & res) {
     attr->Desc = tab->getAttributeDesc(ah->getAttributeId());
     assert(attr->Desc != 0);
 
-    const Uint32 sz = ah->getDataSize();
+    const Uint32 sz = ah->getByteSize();
     if(sz == 0){
       attr->Data.null = true;
       attr->Data.void_value = NULL;
+      attr->Data.size = 0;
     } else {
       attr->Data.null = false;
       attr->Data.void_value = ah->getDataPtr();
+      attr->Data.size = sz;
       Twiddle(attr->Desc, &(attr->Data));
     }
     
@@ -2041,8 +2099,16 @@ operator<<(NdbOut& ndbout, const AttributeS& attr){
   
   NdbRecAttr tmprec(0);
   tmprec.setup(desc.m_column, 0);
-  Uint32 length = (desc.size)/8 * (desc.arraySize);
-  tmprec.receive_data((Uint32*)data.void_value, length);
+
+  assert(desc.size % 8 == 0);
+#ifndef NDEBUG
+  const Uint32 length = (desc.size)/8 * (desc.arraySize);
+#endif
+  assert((desc.m_column->getArrayType() == NdbDictionary::Column::ArrayTypeFixed)
+         ? (data.size == length)
+         : (data.size <= length));
+
+  tmprec.receive_data((Uint32*)data.void_value, data.size);
 
   ndbrecattr_print_formatted(ndbout, tmprec, g_ndbrecord_print_format);
 

@@ -1,13 +1,20 @@
-/* Copyright (c) 2002, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2002, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
@@ -18,9 +25,10 @@
   NOTE: These functions assumes that the string is end \0 terminated!
 */
 
-#include "sql_priv.h"
 #include "gstream.h"
-#include "m_string.h"                           // LEX_STRING
+#include "mysql/mysql_lex_string.h"              // LEX_STRING
+/* key_memory_Gis_read_stream_err_msg */
+#include "mysqld.h"
 
 enum Gis_read_stream::enum_tok_types Gis_read_stream::get_next_toc_type()
 {
@@ -99,7 +107,7 @@ bool Gis_read_stream::check_next_symbol(char symbol)
   if ((m_cur >= m_limit) || (*m_cur != symbol))
   {
     char buff[32];
-    strmov(buff, "'?' expected");
+    my_stpcpy(buff, "'?' expected");
     buff[2]= symbol;
     set_error_msg(buff);
     return 1;
@@ -116,6 +124,7 @@ bool Gis_read_stream::check_next_symbol(char symbol)
 void Gis_read_stream::set_error_msg(const char *msg)
 {
   size_t len= strlen(msg);			// ok in this context
-  m_err_msg= (char *) my_realloc(m_err_msg, (uint) len + 1, MYF(MY_ALLOW_ZERO_PTR));
+  m_err_msg= (char *) my_realloc(key_memory_Gis_read_stream_err_msg,
+                                 m_err_msg, (uint) len + 1, MYF(MY_ALLOW_ZERO_PTR));
   memcpy(m_err_msg, msg, len + 1);
 }

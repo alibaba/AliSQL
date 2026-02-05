@@ -1,14 +1,22 @@
 /*****************************************************************************
 
-Copyright (c) 1996, 2011, Oracle and/or its affiliates. All Rights Reserved.
+Copyright (c) 1996, 2023, Oracle and/or its affiliates.
 
-This program is free software; you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation; version 2 of the License.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License, version 2.0,
+as published by the Free Software Foundation.
 
-This program is distributed in the hope that it will be useful, but WITHOUT
-ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+This program is also distributed with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have included with MySQL.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License, version 2.0, for more details.
 
 You should have received a copy of the GNU General Public License along with
 this program; if not, write to the Free Software Foundation, Inc.,
@@ -30,7 +38,7 @@ Created 4/20/1996 Heikki Tuuri
 /*********************************************************************//**
 Gets the offset of the DB_TRX_ID field, in bytes relative to the origin of
 a clustered index record.
-@return	offset of DATA_TRX_ID */
+@return offset of DATA_TRX_ID */
 UNIV_INLINE
 ulint
 row_get_trx_id_offset(
@@ -56,7 +64,7 @@ row_get_trx_id_offset(
 
 /*********************************************************************//**
 Reads the trx id field from a clustered index record.
-@return	value of the field */
+@return value of the field */
 UNIV_INLINE
 trx_id_t
 row_get_rec_trx_id(
@@ -81,7 +89,7 @@ row_get_rec_trx_id(
 
 /*********************************************************************//**
 Reads the roll pointer field from a clustered index record.
-@return	value of the field */
+@return value of the field */
 UNIV_INLINE
 roll_ptr_t
 row_get_rec_roll_ptr(
@@ -126,21 +134,8 @@ row_build_index_entry(
 	dtuple_t*	entry;
 
 	ut_ad(dtuple_check_typed(row));
-	entry = row_build_index_entry_low(row, ext, index, heap);
-
-	/*If comfort format table and cluster_index. dtuple add comfort flag.
-	it will apply the node_ptr and ordinary record except of infimum and
-	supremum.*/
-	if (dict_index_need_comfort(index)) {
-		ut_ad((dtuple_get_info_bits(row)
-			& REC_INFO_REC_COMFORT_FLAG));
-		ut_ad(!(dtuple_get_info_bits(entry)
-			& REC_INFO_REC_COMFORT_FLAG));
-
-		dtuple_set_info_bits(entry,
-			(dtuple_get_info_bits(entry)
-			| REC_INFO_REC_COMFORT_FLAG));
-	}
+	entry = row_build_index_entry_low(row, ext, index, heap,
+					  ROW_BUILD_NORMAL);
 	ut_ad(!entry || dtuple_check_typed(entry));
 	return(entry);
 }

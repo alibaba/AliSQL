@@ -1,20 +1,28 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
+#include <ndb_global.h>
 #include <NdbRestarts.hpp>
 #include <NDBT.hpp>
 #include <string.h>
@@ -24,7 +32,7 @@
 #include <NdbEnv.h>
 #include <NDBT_Test.hpp>
 
-#define F_ARGS NDBT_Context* ctx, NdbRestarter& _restarter, const NdbRestarts::NdbRestart* _restart
+#define F_ARGS NDBT_Context* ctx, NdbRestarter& _restarter, const NdbRestarts::NdbRestart* _restart, int
 
 int restartRandomNodeGraceful(F_ARGS);
 int restartRandomNodeAbort(F_ARGS);
@@ -242,10 +250,11 @@ const NdbRestarts::NdbRestart* NdbRestarts::getRestart(const char* _name){
 
 int NdbRestarts::executeRestart(NDBT_Context* ctx,
                                 const NdbRestarts::NdbRestart* _restart,
-				unsigned int _timeout){
+				unsigned int _timeout,
+                                int safety){
   // Check that there are enough nodes in the cluster
   // for this test
-  NdbRestarter restarter;
+  NdbRestarter restarter(0, &ctx->m_cluster_connection);
   if (_restart->m_numRequiredNodes > restarter.getNumDbNodes()){
     g_err << "This test requires " << _restart->m_numRequiredNodes << " nodes "
 	  << "there are only "<< restarter.getNumDbNodes() <<" nodes in cluster" 
@@ -255,10 +264,11 @@ int NdbRestarts::executeRestart(NDBT_Context* ctx,
   if (restarter.waitClusterStarted(120) != 0){
     // If cluster is not started when we shall peform restart
     // the restart can not be executed and the test fails
+    g_err << "Wait cluster start 120 secs failed" << endl;
     return NDBT_FAILED;
   }
   
-  int res = _restart->m_restartFunc(ctx, restarter, _restart);
+  int res = _restart->m_restartFunc(ctx, restarter, _restart, safety);
 
   // Sleep a little waiting for nodes to react to command
   NdbSleep_SecSleep(2);
@@ -270,7 +280,7 @@ int NdbRestarts::executeRestart(NDBT_Context* ctx,
 	    << endl;
   } else {
     if (restarter.waitClusterStarted(_timeout) != 0){
-      g_err<<"Cluster failed to start" << endl;
+      g_err << "Cluster failed to start, timeout = " << _timeout << endl;
       res = NDBT_FAILED; 
     }
   }
@@ -280,23 +290,33 @@ int NdbRestarts::executeRestart(NDBT_Context* ctx,
 
 int NdbRestarts::executeRestart(NDBT_Context* ctx,
                                 int _num,
-				unsigned int _timeout){
+				unsigned int _timeout,
+                                int safety){
   const NdbRestarts::NdbRestart* r = getRestart(_num);
   if (r == NULL)
+  {
+    g_err << "No such restart variant, line: " << __LINE__;
+    g_err << " num: " << _num << endl;
     return NDBT_FAILED;
+  }
 
-  int res = executeRestart(ctx, r, _timeout);
+  int res = executeRestart(ctx, r, _timeout, safety);
   return res;
 }
 
 int NdbRestarts::executeRestart(NDBT_Context* ctx,
                                 const char* _name,
-				unsigned int _timeout){
+				unsigned int _timeout,
+                                int safety){
   const NdbRestarts::NdbRestart* r = getRestart(_name);
   if (r == NULL)
+  {
+    g_err << "No such restart variant, line: " << __LINE__;
+    g_err << " variant: " << _name << endl;
     return NDBT_FAILED;
+  }
 
-  int res = executeRestart(ctx, r, _timeout);
+  int res = executeRestart(ctx, r, _timeout, safety);
   return res;
 }
 
@@ -513,7 +533,7 @@ int get50PercentOfNodes(NdbRestarter& restarter,
   // TODO Check nodegroup and return one node from each 
 
   int num50Percent = restarter.getNumDbNodes() / 2;
-  assert(num50Percent <= MAX_NDB_NODES);
+  require(num50Percent <= MAX_NDB_NODES);
 
   // Calculate which nodes to stop, select all even nodes
   for (int i = 0; i < num50Percent; i++){
@@ -658,12 +678,12 @@ NFDuringNR_codes[] = {
   5002
 };
 
-int restartNFDuringNR(F_ARGS){
+int restartNFDuringNR(F_ARGS safety){
 
   myRandom48Init((long)NdbTick_CurrentMillisecond());
   int i;
   const int sz = sizeof(NFDuringNR_codes)/sizeof(NFDuringNR_codes[0]);
-  for(i = 0; i<sz; i++){
+  for(i = 0; i<sz && !ctx->closeToTimeout(safety); i++){
     int randomId = myRandom48(_restarter.getNumDbNodes());
     int nodeId = _restarter.getDbNodeId(randomId);
     int error = NFDuringNR_codes[i];
@@ -704,11 +724,12 @@ int restartNFDuringNR(F_ARGS){
   if(_restarter.getNumDbNodes() < 4)
     return NDBT_OK;
 
+#ifdef NDB_USE_GET_ENV
   char buf[256];
   if(NdbEnv_GetEnv("USER", buf, 256) == 0 || strcmp(buf, "ejonore") != 0)
     return NDBT_OK;
   
-  for(i = 0; i<sz && !ctx->isTestStopped(); i++){
+  for(i = 0; i<sz && !ctx->isTestStopped() && !ctx->closeToTimeout(safety);i++){
     const int randomId = myRandom48(_restarter.getNumDbNodes());
     int nodeId = _restarter.getDbNodeId(randomId);
     const int error = NFDuringNR_codes[i];
@@ -746,7 +767,7 @@ int restartNFDuringNR(F_ARGS){
     CHECK(_restarter.waitClusterStarted() == 0,
 	  "waitClusterStarted failed");
   }
-
+#endif
   return NDBT_OK;
 }
 
@@ -786,7 +807,7 @@ NRDuringLCP_NonMaster_codes[] = {
   7018  // Crash in !master when changing state to LCP_TAB_SAVED
 };
 
-int restartNodeDuringLCP(F_ARGS) {
+int restartNodeDuringLCP(F_ARGS safety) {
   int i;
   // Master
   int val = DumpStateOrd::DihMinTimeBetweenLCP;
@@ -794,8 +815,8 @@ int restartNodeDuringLCP(F_ARGS) {
 	"Failed to set LCP to min value"); // Set LCP to min val
   int sz = sizeof(NRDuringLCP_Master_codes)/
            sizeof(NRDuringLCP_Master_codes[0]);
-  for(i = 0; i<sz; i++) {
-
+  for(i = 0; i<sz && !ctx->closeToTimeout(safety); i++)
+  {
     int error = NRDuringLCP_Master_codes[i];
     int masterNodeId = _restarter.getMasterNodeId();
 
@@ -832,7 +853,7 @@ int restartNodeDuringLCP(F_ARGS) {
   // NON-Master
   sz = sizeof(NRDuringLCP_NonMaster_codes)/
        sizeof(NRDuringLCP_NonMaster_codes[0]);
-  for(i = 0; i<sz; i++) {
+  for(i = 0; i<sz && !ctx->closeToTimeout(safety) ; i++) {
 
     int error = NRDuringLCP_NonMaster_codes[i];
     int nodeId = getRandomNodeId(_restarter);

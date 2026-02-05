@@ -1,15 +1,22 @@
 
 /*
-   Copyright (c) 2000, 2016, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -28,6 +35,7 @@
 #include <m_string.h>
 #include <my_getopt.h>
 #include "my_default.h"
+#include <welcome_copyright_notice.h> /* ORACLE_WELCOME_COPYRIGHT_NOTICE */
 
 
 const char *config_file="my";			/* Default config file */
@@ -56,7 +64,7 @@ static struct my_option my_long_options[] =
    "extension (e.g., .ini or .cnf) will be added",
    &config_file, &config_file, 0, GET_STR, REQUIRED_ARG,
    0, 0, 0, 0, 0, 0},
-#ifdef DBUG_OFF
+#ifdef NDEBUG
   {"debug", '#', "This is a non-debug version. Catch this and exit",
    0,0, 0, GET_DISABLED, OPT_ARG, 0, 0, 0, 0, 0, 0},
 #else
@@ -107,7 +115,7 @@ static void usage(my_bool version)
 	 MACHINE_TYPE);
   if (version)
     return;
-  puts("This software comes with ABSOLUTELY NO WARRANTY. This is free software,\nand you are welcome to modify and redistribute it under the GPL license\n");
+  puts(ORACLE_WELCOME_COPYRIGHT_NOTICE("2000"));
   puts("Prints all arguments that is give to some program using the default files");
   printf("Usage: %s [OPTIONS] groups\n", my_progname);
   my_print_help(my_long_options);
@@ -181,7 +189,8 @@ int main(int argc, char **argv)
   arguments[count]= 0;
 
   /* Check out the args */
-  if (!(load_default_groups=(char**) my_malloc((argc+1)*sizeof(char*),
+  if (!(load_default_groups=(char**) my_malloc(PSI_NOT_INSTRUMENTED,
+                                               (argc+1)*sizeof(char*),
 					       MYF(MY_WME))))
     exit(1);
   if (get_options(&argc,&argv))

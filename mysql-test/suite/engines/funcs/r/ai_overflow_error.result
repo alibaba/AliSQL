@@ -1,113 +1,5 @@
 DROP TABLE IF EXISTS t1;
 SET SQL_MODE='TRADITIONAL';
-CREATE TABLE t1(c1 TINYINT   AUTO_INCREMENT NULL KEY );
-SHOW CREATE TABLE t1;
-Table	Create Table
-t1	CREATE TABLE `t1` (
-  `c1` tinyint(4) NOT NULL AUTO_INCREMENT,
-  PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
-INSERT INTO t1 VALUES(111111111111111111111111111111111111);
-ERROR 22003: Out of range value for column 'c1' at row 1
-INSERT INTO t1 VALUES(-1111111111111111111111111111111111111);
-ERROR 22003: Out of range value for column 'c1' at row 1
-SELECT * FROM t1;
-c1
-DROP TABLE t1;
-SHOW TABLES;
-Tables_in_test
-SET SQL_MODE='';
-SET SQL_MODE='TRADITIONAL';
-CREATE TABLE t1(c1 SMALLINT   AUTO_INCREMENT NULL KEY );
-SHOW CREATE TABLE t1;
-Table	Create Table
-t1	CREATE TABLE `t1` (
-  `c1` smallint(6) NOT NULL AUTO_INCREMENT,
-  PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
-INSERT INTO t1 VALUES(111111111111111111111111111111111111);
-ERROR 22003: Out of range value for column 'c1' at row 1
-INSERT INTO t1 VALUES(-1111111111111111111111111111111111111);
-ERROR 22003: Out of range value for column 'c1' at row 1
-SELECT * FROM t1;
-c1
-DROP TABLE t1;
-SHOW TABLES;
-Tables_in_test
-SET SQL_MODE='';
-SET SQL_MODE='TRADITIONAL';
-CREATE TABLE t1(c1 MEDIUMINT   AUTO_INCREMENT NULL KEY );
-SHOW CREATE TABLE t1;
-Table	Create Table
-t1	CREATE TABLE `t1` (
-  `c1` mediumint(9) NOT NULL AUTO_INCREMENT,
-  PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
-INSERT INTO t1 VALUES(111111111111111111111111111111111111);
-ERROR 22003: Out of range value for column 'c1' at row 1
-INSERT INTO t1 VALUES(-1111111111111111111111111111111111111);
-ERROR 22003: Out of range value for column 'c1' at row 1
-SELECT * FROM t1;
-c1
-DROP TABLE t1;
-SHOW TABLES;
-Tables_in_test
-SET SQL_MODE='';
-SET SQL_MODE='TRADITIONAL';
-CREATE TABLE t1(c1 INT   AUTO_INCREMENT NULL KEY );
-SHOW CREATE TABLE t1;
-Table	Create Table
-t1	CREATE TABLE `t1` (
-  `c1` int(11) NOT NULL AUTO_INCREMENT,
-  PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
-INSERT INTO t1 VALUES(111111111111111111111111111111111111);
-ERROR 22003: Out of range value for column 'c1' at row 1
-INSERT INTO t1 VALUES(-1111111111111111111111111111111111111);
-ERROR 22003: Out of range value for column 'c1' at row 1
-SELECT * FROM t1;
-c1
-DROP TABLE t1;
-SHOW TABLES;
-Tables_in_test
-SET SQL_MODE='';
-SET SQL_MODE='TRADITIONAL';
-CREATE TABLE t1(c1 INTEGER   AUTO_INCREMENT NULL KEY );
-SHOW CREATE TABLE t1;
-Table	Create Table
-t1	CREATE TABLE `t1` (
-  `c1` int(11) NOT NULL AUTO_INCREMENT,
-  PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
-INSERT INTO t1 VALUES(111111111111111111111111111111111111);
-ERROR 22003: Out of range value for column 'c1' at row 1
-INSERT INTO t1 VALUES(-1111111111111111111111111111111111111);
-ERROR 22003: Out of range value for column 'c1' at row 1
-SELECT * FROM t1;
-c1
-DROP TABLE t1;
-SHOW TABLES;
-Tables_in_test
-SET SQL_MODE='';
-SET SQL_MODE='TRADITIONAL';
-CREATE TABLE t1(c1 BIGINT   AUTO_INCREMENT NULL KEY );
-SHOW CREATE TABLE t1;
-Table	Create Table
-t1	CREATE TABLE `t1` (
-  `c1` bigint(20) NOT NULL AUTO_INCREMENT,
-  PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
-INSERT INTO t1 VALUES(111111111111111111111111111111111111);
-ERROR 22003: Out of range value for column 'c1' at row 1
-INSERT INTO t1 VALUES(-1111111111111111111111111111111111111);
-ERROR 22003: Out of range value for column 'c1' at row 1
-SELECT * FROM t1;
-c1
-DROP TABLE t1;
-SHOW TABLES;
-Tables_in_test
-SET SQL_MODE='';
-SET SQL_MODE='TRADITIONAL';
 CREATE TABLE t1(c1 TINYINT   AUTO_INCREMENT NOT NULL KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -125,7 +17,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 SMALLINT   AUTO_INCREMENT NOT NULL KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -143,7 +39,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 MEDIUMINT   AUTO_INCREMENT NOT NULL KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -161,7 +61,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 INT   AUTO_INCREMENT NOT NULL KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -179,7 +83,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 INTEGER   AUTO_INCREMENT NOT NULL KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -197,7 +105,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 BIGINT   AUTO_INCREMENT NOT NULL KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -215,7 +127,143 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+CREATE TABLE t1(c1 TINYINT   AUTO_INCREMENT NOT NULL KEY );
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `c1` tinyint(4) NOT NULL AUTO_INCREMENT,
+  PRIMARY KEY (`c1`)
+) ENGINE=ENGINE DEFAULT CHARSET=latin1
+INSERT INTO t1 VALUES(111111111111111111111111111111111111);
+ERROR 22003: Out of range value for column 'c1' at row 1
+INSERT INTO t1 VALUES(-1111111111111111111111111111111111111);
+ERROR 22003: Out of range value for column 'c1' at row 1
+SELECT * FROM t1;
+c1
+DROP TABLE t1;
+SHOW TABLES;
+Tables_in_test
+SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+CREATE TABLE t1(c1 SMALLINT   AUTO_INCREMENT NOT NULL KEY );
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `c1` smallint(6) NOT NULL AUTO_INCREMENT,
+  PRIMARY KEY (`c1`)
+) ENGINE=ENGINE DEFAULT CHARSET=latin1
+INSERT INTO t1 VALUES(111111111111111111111111111111111111);
+ERROR 22003: Out of range value for column 'c1' at row 1
+INSERT INTO t1 VALUES(-1111111111111111111111111111111111111);
+ERROR 22003: Out of range value for column 'c1' at row 1
+SELECT * FROM t1;
+c1
+DROP TABLE t1;
+SHOW TABLES;
+Tables_in_test
+SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+CREATE TABLE t1(c1 MEDIUMINT   AUTO_INCREMENT NOT NULL KEY );
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `c1` mediumint(9) NOT NULL AUTO_INCREMENT,
+  PRIMARY KEY (`c1`)
+) ENGINE=ENGINE DEFAULT CHARSET=latin1
+INSERT INTO t1 VALUES(111111111111111111111111111111111111);
+ERROR 22003: Out of range value for column 'c1' at row 1
+INSERT INTO t1 VALUES(-1111111111111111111111111111111111111);
+ERROR 22003: Out of range value for column 'c1' at row 1
+SELECT * FROM t1;
+c1
+DROP TABLE t1;
+SHOW TABLES;
+Tables_in_test
+SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+CREATE TABLE t1(c1 INT   AUTO_INCREMENT NOT NULL KEY );
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `c1` int(11) NOT NULL AUTO_INCREMENT,
+  PRIMARY KEY (`c1`)
+) ENGINE=ENGINE DEFAULT CHARSET=latin1
+INSERT INTO t1 VALUES(111111111111111111111111111111111111);
+ERROR 22003: Out of range value for column 'c1' at row 1
+INSERT INTO t1 VALUES(-1111111111111111111111111111111111111);
+ERROR 22003: Out of range value for column 'c1' at row 1
+SELECT * FROM t1;
+c1
+DROP TABLE t1;
+SHOW TABLES;
+Tables_in_test
+SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+CREATE TABLE t1(c1 INTEGER   AUTO_INCREMENT NOT NULL KEY );
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `c1` int(11) NOT NULL AUTO_INCREMENT,
+  PRIMARY KEY (`c1`)
+) ENGINE=ENGINE DEFAULT CHARSET=latin1
+INSERT INTO t1 VALUES(111111111111111111111111111111111111);
+ERROR 22003: Out of range value for column 'c1' at row 1
+INSERT INTO t1 VALUES(-1111111111111111111111111111111111111);
+ERROR 22003: Out of range value for column 'c1' at row 1
+SELECT * FROM t1;
+c1
+DROP TABLE t1;
+SHOW TABLES;
+Tables_in_test
+SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+CREATE TABLE t1(c1 BIGINT   AUTO_INCREMENT NOT NULL KEY );
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `c1` bigint(20) NOT NULL AUTO_INCREMENT,
+  PRIMARY KEY (`c1`)
+) ENGINE=ENGINE DEFAULT CHARSET=latin1
+INSERT INTO t1 VALUES(111111111111111111111111111111111111);
+ERROR 22003: Out of range value for column 'c1' at row 1
+INSERT INTO t1 VALUES(-1111111111111111111111111111111111111);
+ERROR 22003: Out of range value for column 'c1' at row 1
+SELECT * FROM t1;
+c1
+DROP TABLE t1;
+SHOW TABLES;
+Tables_in_test
+SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 TINYINT   AUTO_INCREMENT NULL UNIQUE KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -233,7 +281,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 SMALLINT   AUTO_INCREMENT NULL UNIQUE KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -251,7 +303,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 MEDIUMINT   AUTO_INCREMENT NULL UNIQUE KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -269,7 +325,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 INT   AUTO_INCREMENT NULL UNIQUE KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -287,7 +347,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 INTEGER   AUTO_INCREMENT NULL UNIQUE KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -305,7 +369,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 BIGINT   AUTO_INCREMENT NULL UNIQUE KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -323,7 +391,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 TINYINT   AUTO_INCREMENT NOT NULL UNIQUE KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -341,7 +413,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 SMALLINT   AUTO_INCREMENT NOT NULL UNIQUE KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -359,7 +435,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 MEDIUMINT   AUTO_INCREMENT NOT NULL UNIQUE KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -377,7 +457,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 INT   AUTO_INCREMENT NOT NULL UNIQUE KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -395,7 +479,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 INTEGER   AUTO_INCREMENT NOT NULL UNIQUE KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -413,7 +501,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 BIGINT   AUTO_INCREMENT NOT NULL UNIQUE KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -431,7 +523,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 TINYINT   AUTO_INCREMENT NOT NULL PRIMARY KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -449,7 +545,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 SMALLINT   AUTO_INCREMENT NOT NULL PRIMARY KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -467,7 +567,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 MEDIUMINT   AUTO_INCREMENT NOT NULL PRIMARY KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -485,7 +589,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 INT   AUTO_INCREMENT NOT NULL PRIMARY KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -503,7 +611,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 INTEGER   AUTO_INCREMENT NOT NULL PRIMARY KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -521,7 +633,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 BIGINT   AUTO_INCREMENT NOT NULL PRIMARY KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -539,115 +655,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
-CREATE TABLE t1(c1 TINYINT UNSIGNED AUTO_INCREMENT NULL KEY );
-SHOW CREATE TABLE t1;
-Table	Create Table
-t1	CREATE TABLE `t1` (
-  `c1` tinyint(3) unsigned NOT NULL AUTO_INCREMENT,
-  PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
-INSERT INTO t1 VALUES(111111111111111111111111111111111111);
-ERROR 22003: Out of range value for column 'c1' at row 1
-INSERT INTO t1 VALUES(-1111111111111111111111111111111111111);
-ERROR 22003: Out of range value for column 'c1' at row 1
-SELECT * FROM t1;
-c1
-DROP TABLE t1;
-SHOW TABLES;
-Tables_in_test
-SET SQL_MODE='';
-SET SQL_MODE='TRADITIONAL';
-CREATE TABLE t1(c1 SMALLINT UNSIGNED AUTO_INCREMENT NULL KEY );
-SHOW CREATE TABLE t1;
-Table	Create Table
-t1	CREATE TABLE `t1` (
-  `c1` smallint(5) unsigned NOT NULL AUTO_INCREMENT,
-  PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
-INSERT INTO t1 VALUES(111111111111111111111111111111111111);
-ERROR 22003: Out of range value for column 'c1' at row 1
-INSERT INTO t1 VALUES(-1111111111111111111111111111111111111);
-ERROR 22003: Out of range value for column 'c1' at row 1
-SELECT * FROM t1;
-c1
-DROP TABLE t1;
-SHOW TABLES;
-Tables_in_test
-SET SQL_MODE='';
-SET SQL_MODE='TRADITIONAL';
-CREATE TABLE t1(c1 MEDIUMINT UNSIGNED AUTO_INCREMENT NULL KEY );
-SHOW CREATE TABLE t1;
-Table	Create Table
-t1	CREATE TABLE `t1` (
-  `c1` mediumint(8) unsigned NOT NULL AUTO_INCREMENT,
-  PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
-INSERT INTO t1 VALUES(111111111111111111111111111111111111);
-ERROR 22003: Out of range value for column 'c1' at row 1
-INSERT INTO t1 VALUES(-1111111111111111111111111111111111111);
-ERROR 22003: Out of range value for column 'c1' at row 1
-SELECT * FROM t1;
-c1
-DROP TABLE t1;
-SHOW TABLES;
-Tables_in_test
-SET SQL_MODE='';
-SET SQL_MODE='TRADITIONAL';
-CREATE TABLE t1(c1 INT UNSIGNED AUTO_INCREMENT NULL KEY );
-SHOW CREATE TABLE t1;
-Table	Create Table
-t1	CREATE TABLE `t1` (
-  `c1` int(10) unsigned NOT NULL AUTO_INCREMENT,
-  PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
-INSERT INTO t1 VALUES(111111111111111111111111111111111111);
-ERROR 22003: Out of range value for column 'c1' at row 1
-INSERT INTO t1 VALUES(-1111111111111111111111111111111111111);
-ERROR 22003: Out of range value for column 'c1' at row 1
-SELECT * FROM t1;
-c1
-DROP TABLE t1;
-SHOW TABLES;
-Tables_in_test
-SET SQL_MODE='';
-SET SQL_MODE='TRADITIONAL';
-CREATE TABLE t1(c1 INTEGER UNSIGNED AUTO_INCREMENT NULL KEY );
-SHOW CREATE TABLE t1;
-Table	Create Table
-t1	CREATE TABLE `t1` (
-  `c1` int(10) unsigned NOT NULL AUTO_INCREMENT,
-  PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
-INSERT INTO t1 VALUES(111111111111111111111111111111111111);
-ERROR 22003: Out of range value for column 'c1' at row 1
-INSERT INTO t1 VALUES(-1111111111111111111111111111111111111);
-ERROR 22003: Out of range value for column 'c1' at row 1
-SELECT * FROM t1;
-c1
-DROP TABLE t1;
-SHOW TABLES;
-Tables_in_test
-SET SQL_MODE='';
-SET SQL_MODE='TRADITIONAL';
-CREATE TABLE t1(c1 BIGINT UNSIGNED AUTO_INCREMENT NULL KEY );
-SHOW CREATE TABLE t1;
-Table	Create Table
-t1	CREATE TABLE `t1` (
-  `c1` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
-  PRIMARY KEY (`c1`)
-) ENGINE=ENGINE DEFAULT CHARSET=latin1
-INSERT INTO t1 VALUES(111111111111111111111111111111111111);
-ERROR 22003: Out of range value for column 'c1' at row 1
-INSERT INTO t1 VALUES(-1111111111111111111111111111111111111);
-ERROR 22003: Out of range value for column 'c1' at row 1
-SELECT * FROM t1;
-c1
-DROP TABLE t1;
-SHOW TABLES;
-Tables_in_test
-SET SQL_MODE='';
-SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 TINYINT UNSIGNED AUTO_INCREMENT NOT NULL KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -665,7 +677,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 SMALLINT UNSIGNED AUTO_INCREMENT NOT NULL KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -683,7 +699,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 MEDIUMINT UNSIGNED AUTO_INCREMENT NOT NULL KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -701,7 +721,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 INT UNSIGNED AUTO_INCREMENT NOT NULL KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -719,7 +743,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 INTEGER UNSIGNED AUTO_INCREMENT NOT NULL KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -737,7 +765,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 BIGINT UNSIGNED AUTO_INCREMENT NOT NULL KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -755,7 +787,143 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+CREATE TABLE t1(c1 TINYINT UNSIGNED AUTO_INCREMENT NOT NULL KEY );
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `c1` tinyint(3) unsigned NOT NULL AUTO_INCREMENT,
+  PRIMARY KEY (`c1`)
+) ENGINE=ENGINE DEFAULT CHARSET=latin1
+INSERT INTO t1 VALUES(111111111111111111111111111111111111);
+ERROR 22003: Out of range value for column 'c1' at row 1
+INSERT INTO t1 VALUES(-1111111111111111111111111111111111111);
+ERROR 22003: Out of range value for column 'c1' at row 1
+SELECT * FROM t1;
+c1
+DROP TABLE t1;
+SHOW TABLES;
+Tables_in_test
+SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+CREATE TABLE t1(c1 SMALLINT UNSIGNED AUTO_INCREMENT NOT NULL KEY );
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `c1` smallint(5) unsigned NOT NULL AUTO_INCREMENT,
+  PRIMARY KEY (`c1`)
+) ENGINE=ENGINE DEFAULT CHARSET=latin1
+INSERT INTO t1 VALUES(111111111111111111111111111111111111);
+ERROR 22003: Out of range value for column 'c1' at row 1
+INSERT INTO t1 VALUES(-1111111111111111111111111111111111111);
+ERROR 22003: Out of range value for column 'c1' at row 1
+SELECT * FROM t1;
+c1
+DROP TABLE t1;
+SHOW TABLES;
+Tables_in_test
+SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+CREATE TABLE t1(c1 MEDIUMINT UNSIGNED AUTO_INCREMENT NOT NULL KEY );
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `c1` mediumint(8) unsigned NOT NULL AUTO_INCREMENT,
+  PRIMARY KEY (`c1`)
+) ENGINE=ENGINE DEFAULT CHARSET=latin1
+INSERT INTO t1 VALUES(111111111111111111111111111111111111);
+ERROR 22003: Out of range value for column 'c1' at row 1
+INSERT INTO t1 VALUES(-1111111111111111111111111111111111111);
+ERROR 22003: Out of range value for column 'c1' at row 1
+SELECT * FROM t1;
+c1
+DROP TABLE t1;
+SHOW TABLES;
+Tables_in_test
+SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+CREATE TABLE t1(c1 INT UNSIGNED AUTO_INCREMENT NOT NULL KEY );
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `c1` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  PRIMARY KEY (`c1`)
+) ENGINE=ENGINE DEFAULT CHARSET=latin1
+INSERT INTO t1 VALUES(111111111111111111111111111111111111);
+ERROR 22003: Out of range value for column 'c1' at row 1
+INSERT INTO t1 VALUES(-1111111111111111111111111111111111111);
+ERROR 22003: Out of range value for column 'c1' at row 1
+SELECT * FROM t1;
+c1
+DROP TABLE t1;
+SHOW TABLES;
+Tables_in_test
+SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+CREATE TABLE t1(c1 INTEGER UNSIGNED AUTO_INCREMENT NOT NULL KEY );
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `c1` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  PRIMARY KEY (`c1`)
+) ENGINE=ENGINE DEFAULT CHARSET=latin1
+INSERT INTO t1 VALUES(111111111111111111111111111111111111);
+ERROR 22003: Out of range value for column 'c1' at row 1
+INSERT INTO t1 VALUES(-1111111111111111111111111111111111111);
+ERROR 22003: Out of range value for column 'c1' at row 1
+SELECT * FROM t1;
+c1
+DROP TABLE t1;
+SHOW TABLES;
+Tables_in_test
+SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+CREATE TABLE t1(c1 BIGINT UNSIGNED AUTO_INCREMENT NOT NULL KEY );
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `c1` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  PRIMARY KEY (`c1`)
+) ENGINE=ENGINE DEFAULT CHARSET=latin1
+INSERT INTO t1 VALUES(111111111111111111111111111111111111);
+ERROR 22003: Out of range value for column 'c1' at row 1
+INSERT INTO t1 VALUES(-1111111111111111111111111111111111111);
+ERROR 22003: Out of range value for column 'c1' at row 1
+SELECT * FROM t1;
+c1
+DROP TABLE t1;
+SHOW TABLES;
+Tables_in_test
+SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 TINYINT UNSIGNED AUTO_INCREMENT NULL UNIQUE KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -773,7 +941,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 SMALLINT UNSIGNED AUTO_INCREMENT NULL UNIQUE KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -791,7 +963,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 MEDIUMINT UNSIGNED AUTO_INCREMENT NULL UNIQUE KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -809,7 +985,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 INT UNSIGNED AUTO_INCREMENT NULL UNIQUE KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -827,7 +1007,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 INTEGER UNSIGNED AUTO_INCREMENT NULL UNIQUE KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -845,7 +1029,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 BIGINT UNSIGNED AUTO_INCREMENT NULL UNIQUE KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -863,7 +1051,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 TINYINT UNSIGNED AUTO_INCREMENT NOT NULL UNIQUE KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -881,7 +1073,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 SMALLINT UNSIGNED AUTO_INCREMENT NOT NULL UNIQUE KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -899,7 +1095,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 MEDIUMINT UNSIGNED AUTO_INCREMENT NOT NULL UNIQUE KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -917,7 +1117,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 INT UNSIGNED AUTO_INCREMENT NOT NULL UNIQUE KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -935,7 +1139,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 INTEGER UNSIGNED AUTO_INCREMENT NOT NULL UNIQUE KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -953,7 +1161,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 BIGINT UNSIGNED AUTO_INCREMENT NOT NULL UNIQUE KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -971,7 +1183,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 TINYINT UNSIGNED AUTO_INCREMENT NOT NULL PRIMARY KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -989,7 +1205,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 SMALLINT UNSIGNED AUTO_INCREMENT NOT NULL PRIMARY KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -1007,7 +1227,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 MEDIUMINT UNSIGNED AUTO_INCREMENT NOT NULL PRIMARY KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -1025,7 +1249,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 INT UNSIGNED AUTO_INCREMENT NOT NULL PRIMARY KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -1043,7 +1271,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 INTEGER UNSIGNED AUTO_INCREMENT NOT NULL PRIMARY KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -1061,7 +1293,11 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET SQL_MODE='TRADITIONAL';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 BIGINT UNSIGNED AUTO_INCREMENT NOT NULL PRIMARY KEY );
 SHOW CREATE TABLE t1;
 Table	Create Table
@@ -1079,3 +1315,5 @@ DROP TABLE t1;
 SHOW TABLES;
 Tables_in_test
 SET SQL_MODE='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.

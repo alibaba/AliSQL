@@ -1,15 +1,22 @@
 #ifndef _EVENT_H_
 #define _EVENT_H_
-/* Copyright (c) 2004, 2013, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2004, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -25,27 +32,34 @@
   A public interface of Events_Scheduler module.
 */
 
-#ifdef HAVE_PSI_INTERFACE
-extern PSI_mutex_key key_event_scheduler_LOCK_scheduler_state;
-extern PSI_cond_key key_event_scheduler_COND_state;
-extern PSI_thread_key key_thread_event_scheduler, key_thread_event_worker;
-#endif /* HAVE_PSI_INTERFACE */
-
-/* Always defined, for SHOW PROCESSLIST. */
-extern PSI_stage_info stage_waiting_on_empty_queue;
-extern PSI_stage_info stage_waiting_for_next_activation;
-extern PSI_stage_info stage_waiting_for_scheduler_to_stop;
-
-#include "sql_string.h"                         /* LEX_STRING */
+#include "my_global.h"
+#include "mysql/mysql_lex_string.h"             // LEX_STRING
+#include "mysql/psi/mysql_thread.h"             // PSI_mutex_key
 #include "my_time.h"                            /* interval_type */
 
 class Event_db_repository;
 class Event_parse_data;
 class Event_queue;
 class Event_scheduler;
+class Item;
+class String;
 struct TABLE_LIST;
 class THD;
 typedef struct charset_info_st CHARSET_INFO;
+typedef struct st_mysql_lex_string LEX_STRING;
+
+#ifdef HAVE_PSI_INTERFACE
+extern PSI_mutex_key key_event_scheduler_LOCK_scheduler_state;
+extern PSI_cond_key key_event_scheduler_COND_state;
+extern PSI_thread_key key_thread_event_scheduler, key_thread_event_worker;
+#endif /* HAVE_PSI_INTERFACE */
+
+extern PSI_memory_key key_memory_event_basic_root;
+
+/* Always defined, for SHOW PROCESSLIST. */
+extern PSI_stage_info stage_waiting_on_empty_queue;
+extern PSI_stage_info stage_waiting_for_next_activation;
+extern PSI_stage_info stage_waiting_for_scheduler_to_stop;
 
 int
 sortcmp_lex_string(LEX_STRING s, LEX_STRING t, CHARSET_INFO *cs);
@@ -114,7 +128,7 @@ public:
   drop_event(THD *thd, LEX_STRING dbname, LEX_STRING name, bool if_exists);
 
   static void
-  drop_schema_events(THD *thd, char *db);
+  drop_schema_events(THD *thd, const char *db);
 
   static bool
   show_create_event(THD *thd, LEX_STRING dbname, LEX_STRING name);

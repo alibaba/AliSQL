@@ -1,2 +1,0 @@
---slave-transaction-retries=0
---debug=d:t:i:o,/tmp/mysqld.trace

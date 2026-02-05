@@ -10,7 +10,7 @@
 #    1. We wait for $current_sessions <= $count_sessions because in the use case
 #       with count_sessions.inc before and wait_until_count_sessions.inc after
 #       the core of the test it could happen that the disconnects of sessions
-#       belonging to the preceeding test are not finished.
+#       belonging to the preceding test are not finished.
 #       sessions at test begin($count_sessions) =  m + n
 #       sessions of the previous test which will be soon disconnected = n (n >= 0)
 #       sessions at test end ($current sessions, assuming the test disconnects
@@ -105,7 +105,7 @@ if ($wait_timeout)
 let $wait_timeout= 0;
 while ($wait_counter)
 {
-   let $current_sessions= query_get_value(SHOW STATUS LIKE 'Threads_connected', Value, 1);
+   let $current_sessions= query_get_value(SHOW GLOBAL STATUS LIKE 'Threads_connected', Value, 1);
    let $success= `SELECT $current_sessions <= $count_sessions`;
    if ($success)
    {

@@ -1,13 +1,20 @@
-/* Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2012, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
@@ -20,6 +27,7 @@
 
 #include "table_cache.h"
 
+#include "mysqld_thd_manager.h"
 #include "ha_example.h"
 
 /*
@@ -32,6 +40,10 @@ namespace table_cache_unittest {
 
 using my_testing::Server_initializer;
 
+#ifdef SAFE_MUTEX
+static const char *assert_string=
+  ".*Assertion.*count > 0.*my_thread_equal.*";
+#endif
 
 /**
   Test fixture for basic tests involving Table_cache
@@ -49,10 +61,13 @@ protected:
 
   virtual void SetUp()
   {
+    Global_THD_manager *thd_manager= Global_THD_manager::get_instance();
+    thd_manager->set_unit_test();
+    // Reset thread ID counter for each test.
+    thd_manager->set_thread_id_counter(1);
     for (uint i= 0; i < MAX_THREADS; ++i)
     {
       initializer[i].SetUp();
-      initializer[i].thd()->thread_id= i + 1;
     }
 
     ::testing::FLAGS_gtest_death_test_style = "threadsafe";
@@ -125,7 +140,6 @@ class Mock_share : public TABLE_SHARE
 public:
   Mock_share(const char *key)
   {
-    memset((TABLE_SHARE *)this, 0, sizeof(TABLE_SHARE));
     /*
       Both table_cache_key and cache_element array are used by
       Table_cache code.
@@ -135,7 +149,7 @@ public:
     memset(cache_element_arr, 0, sizeof(cache_element_arr));
     cache_element= cache_element_arr;
     // MEM_ROOT is used for constructing ha_example() instances.
-    init_alloc_root(&m_mem_root, 1024, 0);
+    init_alloc_root(PSI_NOT_INSTRUMENTED, &m_mem_root, 1024, 0);
     /*
       Assertion in some of Table_cache methods check that version of
       the share is up-to-date.
@@ -152,9 +166,9 @@ public:
 
   TABLE *create_table(THD *thd)
   {
-    TABLE *result= (TABLE *)my_malloc(sizeof(TABLE), MYF(0));
+    TABLE *result= (TABLE *)my_malloc(PSI_NOT_INSTRUMENTED, sizeof(TABLE), MYF(0));
 
-    memset(result, 0, sizeof(TABLE));
+    ::new(result) TABLE;
     result->s= this;
     // We create TABLE which is already marked as used
     result->in_use= thd;
@@ -195,7 +209,7 @@ TEST_F(TableCacheBasicDeathTest, CacheCreateAndDestroy)
   // Cache should be not locked after creation
 #ifdef SAFE_MUTEX
   EXPECT_DEATH_IF_SUPPORTED(table_cache.assert_owner(),
-                            ".*Assertion.*count > 0.*pthread_equal.*");
+                            assert_string);
 #endif
   table_cache.destroy();
 }
@@ -214,7 +228,7 @@ TEST_F(TableCacheBasicDeathTest, CacheLockAndUnlock)
 #ifdef SAFE_MUTEX
   // Cache should not be locked after creation
   EXPECT_DEATH_IF_SUPPORTED(table_cache.assert_owner(),
-                            ".*Assertion.*count > 0.*pthread_equal.*");
+                            assert_string);
 #endif
 
   // And get locked after we call its lock() method
@@ -225,7 +239,7 @@ TEST_F(TableCacheBasicDeathTest, CacheLockAndUnlock)
   table_cache.unlock();
 #ifdef SAFE_MUTEX
   EXPECT_DEATH_IF_SUPPORTED(table_cache.assert_owner(),
-                            ".*Assertion.*count > 0.*pthread_equal.*");
+                            assert_string);
 #endif
 
   table_cache.destroy();
@@ -266,9 +280,9 @@ TEST_F(TableCacheBasicDeathTest, ManagerCreateAndDestroy)
   // And not locked
 #ifdef SAFE_MUTEX
   EXPECT_DEATH_IF_SUPPORTED(cache_1->assert_owner(),
-                            ".*Assertion.*count > 0.*pthread_equal.*");
+                            assert_string);
   EXPECT_DEATH_IF_SUPPORTED(cache_2->assert_owner(),
-                            ".*Assertion.*count > 0.*pthread_equal.*");
+                            assert_string);
 #endif
 
   table_cache_manager.destroy();
@@ -737,9 +751,9 @@ TEST_F(TableCacheDoubleCacheDeathTest, ManagerLockAndUnlock)
   // Nor caches nor LOCK_open should not be locked after initialization
 #ifdef SAFE_MUTEX
   EXPECT_DEATH_IF_SUPPORTED(table_cache_manager.assert_owner_all(),
-                            ".*Assertion.*count > 0.*pthread_equal.*");
+                            assert_string);
   EXPECT_DEATH_IF_SUPPORTED(table_cache_manager.assert_owner_all_and_tdc(),
-                            ".*Assertion.*count > 0.*pthread_equal.*");
+                            assert_string);
 #endif
 
   // And get locked after we call its lock_all_and_tdc() method.
@@ -761,9 +775,9 @@ TEST_F(TableCacheDoubleCacheDeathTest, ManagerLockAndUnlock)
 
 #ifdef SAFE_MUTEX
   EXPECT_DEATH_IF_SUPPORTED(table_cache_manager.assert_owner_all(),
-                            ".*Assertion.*count > 0.*pthread_equal.*");
+                            assert_string);
   EXPECT_DEATH_IF_SUPPORTED(table_cache_manager.assert_owner_all_and_tdc(),
-                            ".*Assertion.*count > 0.*pthread_equal.*");
+                            assert_string);
 #endif
 }
 
@@ -805,7 +819,7 @@ TEST_F(TableCacheDoubleCacheDeathTest, ManagerFreeTable)
   // There should be assert failure since we are trying
   // to free all tables for share_1, while some tables
   // are in use.
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   EXPECT_DEATH_IF_SUPPORTED(table_cache_manager.free_table(thd_1,
                                                            TDC_RT_REMOVE_ALL,
                                                            &share_1),
@@ -839,7 +853,7 @@ TEST_F(TableCacheDoubleCacheDeathTest, ManagerFreeTable)
   // There should be assert failure since we are trying
   // to free all not own TABLEs for share_1, while thd_2
   // has a TABLE object for it in used
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   EXPECT_DEATH_IF_SUPPORTED(table_cache_manager.free_table(thd_1,
                                                            TDC_RT_REMOVE_NOT_OWN,
                                                            &share_1),

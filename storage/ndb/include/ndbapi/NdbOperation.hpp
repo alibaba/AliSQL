@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -46,6 +53,7 @@ class NdbOperation
 {
 #ifndef DOXYGEN_SHOULD_SKIP_INTERNAL
   friend class Ndb;
+  friend class NdbImpl;
   friend class NdbTransaction;
   friend class NdbScanOperation;
   friend class NdbScanReceiver;
@@ -806,6 +814,12 @@ public:
    * @note A method also exists without the error parameter.
    * 
    * @param ErrorCode   An error code given by the application programmer.
+   *                    If not supplied, defaults to 899. Applications should 
+   *                    use error code 626 or any code in the [6000-6999] 
+   *                    range.  Error code 899 is supported for backwards 
+   *                    compatibility, but 626 is recommmended instead. For 
+   *                    other codes, the behavior is undefined and may change 
+   *                    at any time without prior notice.
    * @return            -1 if unsuccessful.
    */
   int   interpret_exit_nok(Uint32 ErrorCode);
@@ -1029,6 +1043,14 @@ public:
   struct OperationOptions
   {
     /*
+      Size of the OperationOptions structure.
+    */
+    static inline Uint32 size()
+    {
+        return sizeof(OperationOptions);
+    }
+
+    /*
      * Which options are present.  See below for option details
      */
     Uint64 optionsPresent;
@@ -1042,7 +1064,8 @@ public:
                  OO_LOCKHANDLE   = 0x80,
                  OO_QUEUABLE     = 0x100,
                  OO_NOT_QUEUABLE = 0x200,
-                 OO_DEFERRED_CONSTAINTS = 0x400
+                 OO_DEFERRED_CONSTAINTS = 0x400,
+                 OO_DISABLE_FK   = 0x800
     };
 
     /* An operation-specific abort option.
@@ -1085,6 +1108,11 @@ public:
   const NdbLockHandle* getLockHandle() const;
   const NdbLockHandle* getLockHandle();
 
+#ifndef DOXYGEN_SHOULD_SKIP_INTERNAL
+  // XXX until NdbRecord is used in ndb_restore
+  void set_disable_fk() { m_flags |= OF_DISABLE_FK; }
+#endif
+
 protected:
 /******************************************************************************
  * These are the methods used to create and delete the NdbOperation objects.
@@ -1097,7 +1125,7 @@ protected:
 //--------------------------------------------------------------
 // Initialise after allocating operation to a transaction		      
 //--------------------------------------------------------------
-  int init(const class NdbTableImpl*, NdbTransaction* aCon, bool useRec);
+  int init(const class NdbTableImpl*, NdbTransaction* aCon);
   void initInterpreter();
 
   NdbOperation(Ndb* aNdb, Type aType = PrimaryKeyAccess);	
@@ -1279,6 +1307,7 @@ protected:
   int	 receiveTCKEYREF(const NdbApiSignal*);
 
   int	 checkMagicNumber(bool b = true); // Verify correct object
+  static Uint32 getMagicNumber() { return (Uint32)0xABCDEF01; }
 
   int    checkState_TransId(const NdbApiSignal* aSignal);
 
@@ -1442,7 +1471,8 @@ protected:
     */
     OF_USE_ANY_VALUE = 0x2,
     OF_QUEUEABLE = 0x4,
-    OF_DEFERRED_CONSTRAINTS = 0x8
+    OF_DEFERRED_CONSTRAINTS = 0x8,
+    OF_DISABLE_FK = 0x10
   };
   Uint8  m_flags;
 
@@ -1543,7 +1573,7 @@ NdbOperation::checkMagicNumber(bool b)
 #ifndef NDB_NO_DROPPED_SIGNAL
   (void)b;  // unused param in this context
 #endif
-  if (theMagicNumber != 0xABCDEF01){
+  if (theMagicNumber != getMagicNumber()){
 #ifdef NDB_NO_DROPPED_SIGNAL
     if(b) abort();
 #endif
@@ -1612,7 +1642,7 @@ inline
 const NdbRecAttr*
 NdbOperation::getFirstRecAttr() const 
 {
-  return theReceiver.theFirstRecAttr;
+  return theReceiver.m_firstRecAttr;
 }
 
 /******************************************************************************

@@ -1,9 +1,17 @@
+# Some of the queries give different set of warnings with --ps-protocol
+if (`SELECT $PS_PROTOCOL + $CURSOR_PROTOCOL > 0`)
+{
+   --skip Need normal protocol
+}
+
 -- source include/have_query_cache.inc
 -- source include/not_embedded.inc
+-- source include/no_valgrind_without_big.inc
 
 # Save the initial number of concurrent sessions
 --source include/count_sessions.inc
-
+# Test needs myisam for some myisam specific testcases
+--source include/have_myisam.inc
 
 #
 # Tests with query cache
@@ -219,6 +227,8 @@ connection con1;
 send select f1();
 connection con2;
 select sleep(4);
+--echo # The below select should not see any rows in t1 as it is
+--echo # run before t1 is unlocked by stored function/insert.
 select * from t1;
 connection con1;
 reap;
@@ -251,7 +261,10 @@ USE bug30269;
 CREATE TABLE test1 (id int, name varchar(23));
 CREATE VIEW view1 AS SELECT * FROM test1;
 INSERT INTO test1 VALUES (5, 'testit');
+set @orig_sql_mode= @@sql_mode;
+set sql_mode= (select replace(@@sql_mode,'NO_AUTO_CREATE_USER',''));
 GRANT SELECT (id) ON TABLE bug30269.test1 TO 'bug30269'@'localhost';
+set sql_mode= @orig_sql_mode;
 GRANT SELECT ON TABLE bug30269.view1 TO 'bug30269'@'localhost';
 set global query_cache_size= 81920;
 connect (bug30269, localhost, bug30269,,);

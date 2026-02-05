@@ -1,29 +1,33 @@
-/* Copyright (c) 2006, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2006, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include <my_global.h> // For HAVE_REPLICATION
-#include "sql_priv.h"
-#include <my_dir.h>
-#include "unireg.h"                             // REQUIRED by other includes
-#include "rpl_mi.h"
-#include "rpl_slave.h"                          // SLAVE_MAX_HEARTBEAT_PERIOD
-
-using std::min;
-using std::max;
-
 #ifdef HAVE_REPLICATION
+#include "rpl_mi.h"
+
+#include "dynamic_ids.h"        // Server_ids
+#include "log.h"                // sql_print_error
+#include "rpl_msr.h"            // channel_map
+#include "rpl_slave.h"          // master_retry_count
+
 
 enum {
   LINES_IN_MASTER_INFO_WITH_SSL= 14,
@@ -55,8 +59,15 @@ enum {
   /* line for auto_position */
   LINE_FOR_AUTO_POSITION= 23,
 
+  /* line for channel */
+  LINE_FOR_CHANNEL= 24,
+
+  /* line for tls_version */
+  LINE_FOR_TLS_VERSION= 25,
+
   /* Number of lines currently used when saving master info file */
-  LINES_IN_MASTER_INFO= LINE_FOR_AUTO_POSITION
+  LINES_IN_MASTER_INFO= LINE_FOR_TLS_VERSION
+
 };
 
 /*
@@ -88,7 +99,14 @@ const char *info_mi_fields []=
   "retry_count",
   "ssl_crl",
   "ssl_crlpath",
-  "auto_position"
+  "auto_position",
+  "channel_name",
+  "tls_version",
+};
+
+const uint info_mi_table_pk_field_indexes []=
+{
+  LINE_FOR_CHANNEL-1,
 };
 
 Master_info::Master_info(
@@ -96,59 +114,67 @@ Master_info::Master_info(
                          PSI_mutex_key *param_key_info_run_lock,
                          PSI_mutex_key *param_key_info_data_lock,
                          PSI_mutex_key *param_key_info_sleep_lock,
+                         PSI_mutex_key *param_key_info_thd_lock,
                          PSI_mutex_key *param_key_info_data_cond,
                          PSI_mutex_key *param_key_info_start_cond,
                          PSI_mutex_key *param_key_info_stop_cond,
                          PSI_mutex_key *param_key_info_sleep_cond,
 #endif
-                         uint param_id
+                         uint param_id, const char *param_channel
                         )
    :Rpl_info("I/O"
 #ifdef HAVE_PSI_INTERFACE
              ,param_key_info_run_lock, param_key_info_data_lock,
-             param_key_info_sleep_lock,
+             param_key_info_sleep_lock, param_key_info_thd_lock,
              param_key_info_data_cond, param_key_info_start_cond,
              param_key_info_stop_cond, param_key_info_sleep_cond
 #endif
-             ,param_id
+             ,param_id, param_channel
             ),
    start_user_configured(false),
    ssl(0), ssl_verify_server_cert(0),
    port(MYSQL_PORT), connect_retry(DEFAULT_CONNECT_RETRY),
    clock_diff_with_master(0), heartbeat_period(0),
    received_heartbeats(0), last_heartbeat(0), master_id(0),
-   checksum_alg_before_fd(BINLOG_CHECKSUM_ALG_UNDEF),
-   retry_count(master_retry_count), master_gtid_mode(0),
+   checksum_alg_before_fd(binary_log::BINLOG_CHECKSUM_ALG_UNDEF),
+   retry_count(master_retry_count),
    mi_description_event(NULL),
-   auto_position(false)
+   auto_position(false),
+   reset(false)
 {
   host[0] = 0; user[0] = 0; bind_addr[0] = 0;
   password[0]= 0; start_password[0]= 0;
   ssl_ca[0]= 0; ssl_capath[0]= 0; ssl_cert[0]= 0;
-  ssl_cipher[0]= 0; ssl_key[0]= 0;
+  ssl_cipher[0]= 0; ssl_key[0]= 0; tls_version[0]= 0;
   ssl_crl[0]= 0; ssl_crlpath[0]= 0;
   master_uuid[0]= 0;
   start_plugin_auth[0]= 0; start_plugin_dir[0]= 0;
   start_user[0]= 0;
-  ignore_server_ids= new Server_ids(sizeof(::server_id));
+  ignore_server_ids= new Server_ids;
+
+  /*channel is set in base class, rpl_info.cc*/
+  my_snprintf(for_channel_str, sizeof(for_channel_str)-1,
+             " for channel '%s'", channel);
+  my_snprintf(for_channel_uppercase_str, sizeof(for_channel_uppercase_str)-1,
+             " FOR CHANNEL '%s'", channel);
+
+  m_channel_lock= new Checkable_rwlock(
+#ifdef HAVE_PSI_INTERFACE
+                                       key_rwlock_channel_lock
+#endif
+                                      );
 }
 
 Master_info::~Master_info()
 {
+  /* No one else is using this master_info */
+  m_channel_lock->assert_some_wrlock();
+  /* No other administrative task is able to get this master_info */
+  channel_map.assert_some_wrlock();
+  m_channel_lock->unlock();
+  delete m_channel_lock;
   delete ignore_server_ids;
   delete mi_description_event;
-}
-
-/**
-   A comparison function to be supplied as argument to @c sort_dynamic()
-   and @c bsearch()
-
-   @return -1 if first argument is less, 0 if it equal to, 1 if it is greater
-   than the second
-*/
-int change_master_server_id_cmp(ulong *id1, ulong *id2)
-{
-  return *id1 < *id2? -1 : (*id1 > *id2? 1 : 0);
 }
 
 /**
@@ -166,25 +192,8 @@ int change_master_server_id_cmp(ulong *id1, ulong *id2)
  */
 bool Master_info::shall_ignore_server_id(ulong s_id)
 {
-  if (likely(ignore_server_ids->dynamic_ids.elements == 1))
-    return (* (ulong*)
-      dynamic_array_ptr(&(ignore_server_ids->dynamic_ids), 0)) == s_id;
-  else      
-    return bsearch((const ulong *) &s_id,
-                   ignore_server_ids->dynamic_ids.buffer,
-                   ignore_server_ids->dynamic_ids.elements, sizeof(ulong),
-                   (int (*) (const void*, const void*)) change_master_server_id_cmp)
-      != NULL;
-}
-
-void Master_info::clear_in_memory_info(bool all)
-{
-  init_master_log_pos();
-  if (all)
-  {
-    port= MYSQL_PORT;
-    host[0] = 0; user[0] = 0; password[0] = 0;
-  }
+  return std::binary_search(ignore_server_ids->dynamic_ids.begin(),
+                            ignore_server_ids->dynamic_ids.end(), s_id);
 }
 
 void Master_info::init_master_log_pos()
@@ -193,19 +202,6 @@ void Master_info::init_master_log_pos()
 
   master_log_name[0]= 0;
   master_log_pos= BIN_LOG_HEADER_SIZE;             // skip magic number
-
-  /* Intentionally init ssl_verify_server_cert to 0, no option available  */
-  ssl_verify_server_cert= 0;
-  /* 
-    always request heartbeat unless master_heartbeat_period is set
-    explicitly zero.  Here is the default value for heartbeat period
-    if CHANGE MASTER did not specify it.  (no data loss in conversion
-    as hb period has a max)
-  */
-  heartbeat_period= min<float>(SLAVE_MAX_HEARTBEAT_PERIOD,
-                               (slave_net_timeout/2.0));
-  DBUG_ASSERT(heartbeat_period > (float) 0.001
-              || heartbeat_period == 0);
 
   DBUG_VOID_RETURN;
 }
@@ -220,6 +216,7 @@ void Master_info::end_info()
   handler->end_info();
 
   inited = 0;
+  reset = true;
 
   DBUG_VOID_RETURN;
 }
@@ -258,16 +255,25 @@ int Master_info::flush_info(bool force)
   DBUG_ENTER("Master_info::flush_info");
   DBUG_PRINT("enter",("master_pos: %lu", (ulong) master_log_pos));
 
-  if (!inited)
+  bool skip_flushing = !inited;
+  /*
+    A Master_info of a channel that was inited and then reset must be flushed
+    into the repository or else its connection configuration will be lost in
+    case the server restarts before starting the channel again.
+  */
+  if (force && reset) skip_flushing= false;
+
+  if (skip_flushing)
     DBUG_RETURN(0);
 
   /*
     We update the sync_period at this point because only here we
     now that we are handling a master info. This needs to be
     update every time we call flush because the option maybe
-    dinamically set.
+    dynamically set.
   */
-  handler->set_sync_period(sync_masterinfo_period);
+  if (inited)
+    handler->set_sync_period(sync_masterinfo_period);
 
   if (write_info(handler))
     goto err;
@@ -318,6 +324,7 @@ int Master_info::mi_init_info()
   }
 
   inited= 1;
+  reset= false;
   if (flush_info(TRUE))
     goto err;
 
@@ -333,6 +340,17 @@ err:
 size_t Master_info::get_number_info_mi_fields()
 {
   return sizeof(info_mi_fields)/sizeof(info_mi_fields[0]); 
+}
+
+uint Master_info::get_channel_field_num()
+{
+  uint channel_field= LINE_FOR_CHANNEL;
+  return channel_field;
+}
+
+const uint* Master_info::get_table_pk_field_indexes()
+{
+  return info_mi_table_pk_field_indexes;
 }
 
 bool Master_info::read_info(Rpl_info_handler *from)
@@ -366,7 +384,7 @@ bool Master_info::read_info(Rpl_info_handler *from)
   */
 
   if (from->prepare_info_for_read() || 
-      from->get_info(master_log_name, (size_t) sizeof(master_log_name),
+      from->get_info(master_log_name, sizeof(master_log_name),
                      (char *) ""))
     DBUG_RETURN(true);
 
@@ -376,7 +394,7 @@ bool Master_info::read_info(Rpl_info_handler *from)
       *first_non_digit=='\0' && lines >= LINES_IN_MASTER_INFO_WITH_SSL)
   {
     /* Seems to be new format => read master log name */
-    if (from->get_info(master_log_name, (size_t) sizeof(master_log_name),
+    if (from->get_info(master_log_name, sizeof(master_log_name),
                        (char *) ""))
       DBUG_RETURN(true);
   }
@@ -385,9 +403,9 @@ bool Master_info::read_info(Rpl_info_handler *from)
 
   if (from->get_info(&temp_master_log_pos,
                      (ulong) BIN_LOG_HEADER_SIZE) ||
-      from->get_info(host, (size_t) sizeof(host), (char *) 0) ||
-      from->get_info(user, (size_t) sizeof(user), (char *) "test") ||
-      from->get_info(password, (size_t) sizeof(password), (char *) 0) ||
+      from->get_info(host, sizeof(host), (char *) 0) ||
+      from->get_info(user, sizeof(user), (char *) "test") ||
+      from->get_info(password, sizeof(password), (char *) 0) ||
       from->get_info((int *) &port, (int) MYSQL_PORT) ||
       from->get_info((int *) &connect_retry,
                         (int) DEFAULT_CONNECT_RETRY))
@@ -402,11 +420,11 @@ bool Master_info::read_info(Rpl_info_handler *from)
   if (lines >= LINES_IN_MASTER_INFO_WITH_SSL)
   {
     if (from->get_info(&temp_ssl, 0) ||
-        from->get_info(ssl_ca, (size_t) sizeof(ssl_ca), (char *) 0) ||
-        from->get_info(ssl_capath, (size_t) sizeof(ssl_capath), (char *) 0) ||
-        from->get_info(ssl_cert, (size_t) sizeof(ssl_cert), (char *) 0) ||
-        from->get_info(ssl_cipher, (size_t) sizeof(ssl_cipher), (char *) 0) ||
-        from->get_info(ssl_key, (size_t) sizeof(ssl_key), (char *) 0))
+        from->get_info(ssl_ca, sizeof(ssl_ca), (char *) 0) ||
+        from->get_info(ssl_capath, sizeof(ssl_capath), (char *) 0) ||
+        from->get_info(ssl_cert, sizeof(ssl_cert), (char *) 0) ||
+        from->get_info(ssl_cipher, sizeof(ssl_cipher), (char *) 0) ||
+        from->get_info(ssl_key, sizeof(ssl_key), (char *) 0))
       DBUG_RETURN(true);
   }
 
@@ -416,7 +434,7 @@ bool Master_info::read_info(Rpl_info_handler *from)
   */
   if (lines >= LINE_FOR_MASTER_SSL_VERIFY_SERVER_CERT)
   { 
-    if (from->get_info(&temp_ssl_verify_server_cert, (int) 0))
+    if (from->get_info(&temp_ssl_verify_server_cert, 0))
       DBUG_RETURN(true);
   }
 
@@ -435,7 +453,7 @@ bool Master_info::read_info(Rpl_info_handler *from)
   */
   if (lines >= LINE_FOR_MASTER_BIND)
   {
-    if (from->get_info(bind_addr, (size_t) sizeof(bind_addr), (char *) ""))
+    if (from->get_info(bind_addr, sizeof(bind_addr), (char *) ""))
       DBUG_RETURN(true);
   }
 
@@ -445,14 +463,14 @@ bool Master_info::read_info(Rpl_info_handler *from)
   */
   if (lines >= LINE_FOR_REPLICATE_IGNORE_SERVER_IDS)
   {
-     if (from->get_info(ignore_server_ids, (Dynamic_ids *) NULL))
+     if (from->get_info(ignore_server_ids, (Server_ids *) NULL))
       DBUG_RETURN(true);
   }
 
   /* Starting from 5.5 the master_uuid may be in the repository. */
   if (lines >= LINE_FOR_MASTER_UUID)
   {
-    if (from->get_info(master_uuid, (size_t) sizeof(master_uuid),
+    if (from->get_info(master_uuid, sizeof(master_uuid),
                        (char *) 0))
       DBUG_RETURN(true);
   }
@@ -474,7 +492,19 @@ bool Master_info::read_info(Rpl_info_handler *from)
 
   if (lines >= LINE_FOR_AUTO_POSITION)
   {
-    if (from->get_info(&temp_auto_position, (int) 0))
+    if (from->get_info(&temp_auto_position, 0))
+      DBUG_RETURN(true);
+  }
+
+  if (lines >= LINE_FOR_CHANNEL)
+  {
+    if (from->get_info(channel, sizeof(channel), (char*)0))
+      DBUG_RETURN(true);
+  }
+
+  if (lines >= LINE_FOR_TLS_VERSION)
+  {
+    if (from->get_info(tls_version, sizeof(tls_version), (char *) 0))
       DBUG_RETURN(true);
   }
 
@@ -482,14 +512,6 @@ bool Master_info::read_info(Rpl_info_handler *from)
   ssl_verify_server_cert= (my_bool) MY_TEST(temp_ssl_verify_server_cert);
   master_log_pos= (my_off_t) temp_master_log_pos;
   auto_position= MY_TEST(temp_auto_position);
-
-  if (auto_position != 0 && gtid_mode != 3)
-  {
-    auto_position = 0;
-    sql_print_warning("MASTER_AUTO_POSITION in the master info file was 1 but "
-                      "server is started with @@GLOBAL.GTID_MODE = OFF. Forcing "
-                      "MASTER_AUTO_POSITION to 0.");
-  }
 
 #ifndef HAVE_OPENSSL
   if (ssl)
@@ -500,6 +522,18 @@ bool Master_info::read_info(Rpl_info_handler *from)
 
   DBUG_RETURN(false);
 }
+
+
+bool Master_info::set_info_search_keys(Rpl_info_handler *to)
+{
+  DBUG_ENTER("Master_info::set_info_search_keys");
+
+  if (to->set_info(LINE_FOR_CHANNEL-1, channel))
+    DBUG_RETURN(TRUE);
+
+  DBUG_RETURN(FALSE);
+}
+
 
 bool Master_info::write_info(Rpl_info_handler *to)
 {
@@ -535,32 +569,29 @@ bool Master_info::write_info(Rpl_info_handler *to)
       to->set_info(retry_count) ||
       to->set_info(ssl_crl) ||
       to->set_info(ssl_crlpath) ||
-      to->set_info((int) auto_position))
+      to->set_info((int) auto_position) ||
+      to->set_info(channel) ||
+      to->set_info(tls_version))
     DBUG_RETURN(TRUE);
 
   DBUG_RETURN(FALSE);
 }
 
-bool Master_info::set_password(const char* password_arg,
-                               int password_arg_size MY_ATTRIBUTE((unused)))
+void Master_info::set_password(const char* password_arg)
 {
-  bool ret= true;
   DBUG_ENTER("Master_info::set_password");
 
+  assert(password_arg);
+
   if (password_arg && start_user_configured)
-  {
     strmake(start_password, password_arg, sizeof(start_password) - 1);
-    ret= false;
-  }
   else if (password_arg)
-  {
     strmake(password, password_arg, sizeof(password) - 1);
-    ret= false;
-  }
-  DBUG_RETURN(ret);
+
+  DBUG_VOID_RETURN;
 }
 
-bool Master_info::get_password(char *password_arg, int *password_arg_size)
+bool Master_info::get_password(char *password_arg, size_t *password_arg_size)
 {
   bool ret= true;
   DBUG_ENTER("Master_info::get_password");
@@ -590,4 +621,30 @@ void Master_info::reset_start_info()
   start_password[0]= 0;
   DBUG_VOID_RETURN;
 }
+
+void Master_info::channel_rdlock()
+{
+  channel_map.assert_some_lock();
+  m_channel_lock->rdlock();
+}
+
+void Master_info::channel_wrlock()
+{
+  channel_map.assert_some_lock();
+  m_channel_lock->wrlock();
+}
+
+void Master_info::wait_until_no_reference(THD *thd)
+{
+  PSI_stage_info *old_stage= NULL;
+
+  thd->enter_stage(&stage_waiting_for_no_channel_reference,
+                   old_stage, __func__, __FILE__, __LINE__);
+
+  while (references.atomic_get() != 0)
+    my_sleep(10000);
+
+  THD_STAGE_INFO(thd, *old_stage);
+}
+
 #endif /* HAVE_REPLICATION */

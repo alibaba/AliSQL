@@ -1,15 +1,21 @@
 /*
-   Copyright (C) 2003, 2005, 2006, 2008 MySQL AB
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -21,8 +27,11 @@
 
 #include "SignalData.hpp"
 
-class SignalDroppedRep {
+#define JAM_FILE_ID 42
 
+
+struct SignalDroppedRep
+{
   /**
    * Receiver(s)
    */
@@ -37,12 +46,14 @@ class SignalDroppedRep {
   friend class TransporterCallbackKernel;
 
   friend bool printSIGNAL_DROPPED_REP(FILE *, const Uint32 *, Uint32, Uint16);  
-public:
-private:
+
   Uint32 originalGsn;
   Uint32 originalLength;
   Uint32 originalSectionCount;
   Uint32 originalData[1];
 };
+
+
+#undef JAM_FILE_ID
 
 #endif

@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2005, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -42,6 +49,8 @@ File_formats::Datafile::Zero_page g_df_zero;
 
 int main(int argc, char ** argv)
 {
+  ndb_init();
+  bool file_given_in_arg = false;
   for(int i = 1; i<argc; i++){
     if(!strncmp(argv[i], "-v", 2))
     {
@@ -62,9 +71,10 @@ int main(int argc, char ** argv)
 	    !strcmp(argv[i], "--help"))
     {
       print_usage(argv[0]);
-      exit(0);
+     return 0;
     }
     
+    file_given_in_arg = true;
     const char * filename = argv[i];
     
     struct stat sbuf;
@@ -94,6 +104,10 @@ int main(int argc, char ** argv)
     
     fclose(f);
     continue;
+  }
+  if(!file_given_in_arg){
+    ndbout << "Filename not given" << endl;
+    return 1;
   }
   return 0;
 }
@@ -249,6 +263,9 @@ print_data_page(int count, void* ptr, Uint32 sz){
 
 #define DBTUP_C
 #include "dbtup/Dbtup.hpp"
+
+#define JAM_FILE_ID 431
+
 
 int
 print_undo_page(int count, void* ptr, Uint32 sz){

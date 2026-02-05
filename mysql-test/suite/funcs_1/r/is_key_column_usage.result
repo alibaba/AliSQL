@@ -83,9 +83,14 @@ def	mysql	PRIMARY	def	mysql	columns_priv	Column_name
 def	mysql	PRIMARY	def	mysql	db	Host
 def	mysql	PRIMARY	def	mysql	db	Db
 def	mysql	PRIMARY	def	mysql	db	User
+def	mysql	PRIMARY	def	mysql	engine_cost	cost_name
+def	mysql	PRIMARY	def	mysql	engine_cost	engine_name
+def	mysql	PRIMARY	def	mysql	engine_cost	device_type
 def	mysql	PRIMARY	def	mysql	event	db
 def	mysql	PRIMARY	def	mysql	event	name
 def	mysql	PRIMARY	def	mysql	func	name
+def	mysql	PRIMARY	def	mysql	gtid_executed	source_uuid
+def	mysql	PRIMARY	def	mysql	gtid_executed	interval_start
 def	mysql	PRIMARY	def	mysql	help_category	help_category_id
 def	mysql	name	def	mysql	help_category	name
 def	mysql	PRIMARY	def	mysql	help_keyword	help_keyword_id
@@ -116,10 +121,11 @@ def	mysql	PRIMARY	def	mysql	proxies_priv	Host
 def	mysql	PRIMARY	def	mysql	proxies_priv	User
 def	mysql	PRIMARY	def	mysql	proxies_priv	Proxied_host
 def	mysql	PRIMARY	def	mysql	proxies_priv	Proxied_user
+def	mysql	PRIMARY	def	mysql	server_cost	cost_name
 def	mysql	PRIMARY	def	mysql	servers	Server_name
-def	mysql	PRIMARY	def	mysql	slave_master_info	Host
-def	mysql	PRIMARY	def	mysql	slave_master_info	Port
-def	mysql	PRIMARY	def	mysql	slave_relay_log_info	Id
+def	mysql	PRIMARY	def	mysql	slave_master_info	Channel_name
+def	mysql	PRIMARY	def	mysql	slave_relay_log_info	Channel_name
+def	mysql	PRIMARY	def	mysql	slave_worker_info	Channel_name
 def	mysql	PRIMARY	def	mysql	slave_worker_info	Id
 def	mysql	PRIMARY	def	mysql	tables_priv	Host
 def	mysql	PRIMARY	def	mysql	tables_priv	Db
@@ -134,6 +140,7 @@ def	mysql	PRIMARY	def	mysql	time_zone_transition_type	Time_zone_id
 def	mysql	PRIMARY	def	mysql	time_zone_transition_type	Transition_type_id
 def	mysql	PRIMARY	def	mysql	user	Host
 def	mysql	PRIMARY	def	mysql	user	User
+def	sys	PRIMARY	def	sys	sys_config	variable
 ########################################################################################
 # Testcase 3.2.7.2 + 3.2.7.3: INFORMATION_SCHEMA.KEY_COLUMN_USAGE accessible information
 ########################################################################################

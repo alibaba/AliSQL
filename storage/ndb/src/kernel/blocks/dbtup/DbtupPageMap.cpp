@@ -1,15 +1,21 @@
 /*
-   Copyright (C) 2003, 2005-2007 MySQL AB, 2009 Sun Microsystems, Inc.
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -24,6 +30,9 @@
 #include <ndb_limits.h>
 #include <pc.hpp>
 #include <signaldata/RestoreImpl.hpp>
+
+#define JAM_FILE_ID 415
+
 
 #define DBUG_PAGE_MAP 0
 
@@ -108,7 +117,9 @@ Uint32
 Dbtup::getRealpidCheck(Fragrecord* regFragPtr, Uint32 logicalPageId) 
 {
   DynArr256 map(c_page_map_pool, regFragPtr->m_page_map);
-  Uint32 * ptr = map.get(2 * logicalPageId);
+  // logicalPageId might not be mapped yet,
+  // get_dirty returns NULL also in debug in this case.
+  Uint32 * ptr = map.get_dirty(2 * logicalPageId);
   if (likely(ptr != 0))
   {
     Uint32 val = * ptr;
@@ -133,6 +144,7 @@ Dbtup::init_page(Fragrecord* regFragPtr, PagePtr pagePtr, Uint32 pageId)
   pagePtr.p->physical_page_id = pagePtr.i;
   pagePtr.p->nextList = RNIL;
   pagePtr.p->prevList = RNIL;
+  pagePtr.p->m_flags = 0;
 }
 
 #ifdef VM_TRACE
@@ -169,7 +181,7 @@ Dbtup::find_page_id_in_list(Fragrecord* fragPtrP, Uint32 pageId)
 void
 Dbtup::check_page_map(Fragrecord* fragPtrP)
 {
-  Uint32 max = fragPtrP->m_max_page_no;
+  Uint32 max = fragPtrP->m_max_page_cnt;
   DynArr256 map(c_page_map_pool, fragPtrP->m_page_map);
 
   for (Uint32 i = 0; i<max; i++)
@@ -208,18 +220,20 @@ void Dbtup::check_page_map(Fragrecord*) {}
 #endif
 
 Uint32 
-Dbtup::allocFragPage(Uint32 * err, Fragrecord* regFragPtr)
+Dbtup::allocFragPage(EmulatedJamBuffer* jamBuf,
+                     Uint32 * err, 
+                     Fragrecord* regFragPtr)
 {
   PagePtr pagePtr;
   Uint32 noOfPagesAllocated = 0;
   Uint32 list = regFragPtr->m_free_page_id_list;
-  Uint32 max = regFragPtr->m_max_page_no;
+  Uint32 max = regFragPtr->m_max_page_cnt;
   Uint32 cnt = regFragPtr->noOfPages;
 
-  allocConsPages(1, noOfPagesAllocated, pagePtr.i);
+  allocConsPages(jamBuf, 1, noOfPagesAllocated, pagePtr.i);
   if (noOfPagesAllocated == 0) 
   {
-    jam();
+    thrjam(jamBuf);
     * err = ZMEM_NOMEM_ERROR;
     return RNIL;
   }//if
@@ -228,23 +242,32 @@ Dbtup::allocFragPage(Uint32 * err, Fragrecord* regFragPtr)
   DynArr256 map(c_page_map_pool, regFragPtr->m_page_map);
   if (list == FREE_PAGE_RNIL)
   {
-    jam();
+    thrjam(jamBuf);
     pageId = max;
+    if (!Local_key::isShort(pageId))
+    {
+      /**
+       * TODO: remove when ACC supports 48 bit references
+       */
+      thrjam(jamBuf);
+      * err = 889;
+      return RNIL;
+    }
     Uint32 * ptr = map.set(2 * pageId);
     if (unlikely(ptr == 0))
     {
-      jam();
+      thrjam(jamBuf);
       returnCommonArea(pagePtr.i, noOfPagesAllocated);
       * err = ZMEM_NOMEM_ERROR;
       return RNIL;
     }
     ndbrequire(* ptr == RNIL);
     * ptr = pagePtr.i;
-    regFragPtr->m_max_page_no = max + 1;
+    regFragPtr->m_max_page_cnt = max + 1;
   }
   else
   {
-    jam();
+    thrjam(jamBuf);
     pageId = list;
     Uint32 * ptr = map.set(2 * pageId);
     ndbrequire(ptr != 0);
@@ -253,7 +276,7 @@ Dbtup::allocFragPage(Uint32 * err, Fragrecord* regFragPtr)
     
     if (next != FREE_PAGE_RNIL)
     {
-      jam();
+      thrjam(jamBuf);
       ndbrequire((next & FREE_PAGE_BIT) != 0);
       next &= ~FREE_PAGE_BIT;
       Uint32 * nextPrevPtr = map.set(2 * next + 1);
@@ -269,7 +292,7 @@ Dbtup::allocFragPage(Uint32 * err, Fragrecord* regFragPtr)
   
   if (DBUG_PAGE_MAP)
     ndbout_c("alloc -> (%u %u max: %u)", pageId, pagePtr.i, 
-             regFragPtr->m_max_page_no);
+             regFragPtr->m_max_page_cnt);
   
   do_check_page_map(regFragPtr);
   return pagePtr.i;
@@ -299,12 +322,12 @@ Dbtup::allocFragPage(Uint32 * err,
   
   LocalDLFifoList<Page> free_pages(c_page_pool, fragPtrP->thFreeFirst);
   Uint32 cnt = fragPtrP->noOfPages;
-  Uint32 max = fragPtrP->m_max_page_no;
+  Uint32 max = fragPtrP->m_max_page_cnt;
   Uint32 list = fragPtrP->m_free_page_id_list;
   Uint32 noOfPagesAllocated = 0;
   Uint32 next = pagePtr.i;
 
-  allocConsPages(1, noOfPagesAllocated, pagePtr.i);
+  allocConsPages(jamBuffer(), 1, noOfPagesAllocated, pagePtr.i);
   if (unlikely(noOfPagesAllocated == 0))
   {
     jam();
@@ -375,13 +398,37 @@ Dbtup::allocFragPage(Uint32 * err,
   if (page_no + 1 > max)
   {
     jam();
-    fragPtrP->m_max_page_no = page_no + 1;
+    fragPtrP->m_max_page_cnt = page_no + 1;
     if (DBUG_PAGE_MAP)
-      ndbout_c("new max: %u", fragPtrP->m_max_page_no);
+      ndbout_c("new max: %u", fragPtrP->m_max_page_cnt);
   }
   
+  Uint32 lcp_scan_ptr_i = fragPtrP->m_lcp_scan_op;
   c_page_pool.getPtr(pagePtr);
   init_page(fragPtrP, pagePtr, page_no);
+  if (lcp_scan_ptr_i != RNIL)
+  {
+    jam();
+    ScanOpPtr scanOp;
+    c_scanOpPool.getPtr(scanOp, lcp_scan_ptr_i);
+    if (page_no < scanOp.p->m_endPage)
+    {
+      Local_key lcp_key = scanOp.p->m_scanPos.m_key;
+      if (page_no > lcp_key.m_page_no)
+      {
+        jam();
+        /**
+         * We allocated a page during an LCP, it was within the pages that
+         * will be checked during the LCP scan. The page has also not yet
+         * been scanned by the LCP. Given that we know that the page will
+         * only contain rows that would set the LCP_SKIP bit we will
+         * set the LCP skip on the page level instead to speed up LCP
+         * processing.
+         */
+        pagePtr.p->set_page_to_skip_lcp();
+      }
+    }
+  }
   convertThPage((Fix_page*)pagePtr.p, tabPtrP, MM);
   pagePtr.p->page_state = ZTH_MM_FREE;
   free_pages.addFirst(pagePtr);
@@ -465,7 +512,7 @@ Dbtup::rebuild_page_free_list(Signal* signal)
   fragPtr.i= fragOpPtr.p->fragPointer;
   ptrCheckGuard(fragPtr, cnoOfFragrec, fragrecord);
   
-  if (pageId == fragPtr.p->m_max_page_no)
+  if (pageId == fragPtr.p->m_max_page_cnt)
   {
     RestoreLcpConf* conf = (RestoreLcpConf*)signal->getDataPtrSend();
     conf->senderRef = reference();

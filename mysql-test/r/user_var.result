@@ -22,21 +22,29 @@ i	@vv1:=if(sv1.i,1,0)	@vv2:=if(sv2.i,1,0)	@vv3:=if(sv3.i,1,0)	@vv1+@vv2+@vv3
 1	1	0	1	2
 2	1	0	0	1
 explain select * from t1 where i=@vv1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	i	i	4	const	1	NULL
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	i	i	4	const	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`i` AS `i`,`test`.`t1`.`v` AS `v` from `test`.`t1` where (`test`.`t1`.`i` = (@`vv1`))
 select @vv1,i,v from t1 where i=@vv1;
 @vv1	i	v
 1	1	1
 1	1	3
 explain select * from t1 where @vv1:=@vv1+1 and i=@vv1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ALL	NULL	NULL	NULL	NULL	3	Using where
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`i` AS `i`,`test`.`t1`.`v` AS `v` from `test`.`t1` where (@vv1:=(((@`vv1`) + 1) and (`test`.`t1`.`i` = (@`vv1`))))
 explain select @vv1:=i from t1 where i=@vv1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	index	NULL	i	4	NULL	3	Using where; Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	i	4	NULL	3	33.33	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select (@vv1:=`test`.`t1`.`i`) AS `@vv1:=i` from `test`.`t1` where (`test`.`t1`.`i` = (@`vv1`))
 explain select * from t1 where i=@vv1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	i	i	4	const	1	NULL
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	i	i	4	const	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`i` AS `i`,`test`.`t1`.`v` AS `v` from `test`.`t1` where (`test`.`t1`.`i` = (@`vv1`))
 drop table t1,t2;
 set @a=0,@b=0;
 select @a:=10,   @b:=1,   @a > @b, @a < @b;
@@ -326,30 +334,40 @@ select @a:=f1, count(f1) from t1 group by 1 desc;
 3	2
 2	1
 1	4
+Warnings:
+Warning	1287	'GROUP BY with ASC/DESC' is deprecated and will be removed in a future release. Please use GROUP BY ... ORDER BY ... ASC/DESC instead
 select @a:=f1, count(f1) from t1 group by 1 asc;
 @a:=f1	count(f1)
 1	4
 2	1
 3	2
 4	1
+Warnings:
+Warning	1287	'GROUP BY with ASC/DESC' is deprecated and will be removed in a future release. Please use GROUP BY ... ORDER BY ... ASC/DESC instead
 select @a:=f2, count(f2) from t1 group by 1 desc;
 @a:=f2	count(f2)
 d	1
 c	2
 b	1
 a	4
+Warnings:
+Warning	1287	'GROUP BY with ASC/DESC' is deprecated and will be removed in a future release. Please use GROUP BY ... ORDER BY ... ASC/DESC instead
 select @a:=f3, count(f3) from t1 group by 1 desc;
 @a:=f3	count(f3)
 4.5	1
 3.5	2
 2.5	1
 1.5	4
+Warnings:
+Warning	1287	'GROUP BY with ASC/DESC' is deprecated and will be removed in a future release. Please use GROUP BY ... ORDER BY ... ASC/DESC instead
 select @a:=f4, count(f4) from t1 group by 1 desc;
 @a:=f4	count(f4)
 4.6	1
 3.6	2
 2.6	1
 1.6	4
+Warnings:
+Warning	1287	'GROUP BY with ASC/DESC' is deprecated and will be removed in a future release. Please use GROUP BY ... ORDER BY ... ASC/DESC instead
 drop table t1;
 create table t1 (f1 int);
 insert into t1 values (2), (1);
@@ -537,40 +555,73 @@ EXPLAIN
 {
   "query_block": {
     "select_id": 1,
+    "cost_info": {
+      "query_cost": "58.04"
+    },
     "nested_loop": [
       {
         "table": {
           "table_name": "t1",
           "access_type": "ALL",
-          "rows": 10,
-          "filtered": 100
+          "rows_examined_per_scan": 10,
+          "rows_produced_per_join": 10,
+          "filtered": "100.00",
+          "cost_info": {
+            "read_cost": "2.02",
+            "eval_cost": "2.00",
+            "prefix_cost": "4.02",
+            "data_read_per_join": "80"
+          },
+          "used_columns": [
+            "a"
+          ]
         }
       },
       {
         "table": {
           "table_name": "t2",
           "access_type": "ALL",
-          "rows": 5,
-          "filtered": 100,
+          "rows_examined_per_scan": 5,
+          "rows_produced_per_join": 50,
+          "filtered": "100.00",
           "using_join_buffer": "Block Nested Loop",
-          "attached_condition": "<if>(is_not_null_compl(t2), ((`test`.`t1`.`a` = `test`.`t2`.`a`) and (`test`.`t2`.`a` < (@`var1`))), true)"
+          "cost_info": {
+            "read_cost": "2.01",
+            "eval_cost": "10.00",
+            "prefix_cost": "16.03",
+            "data_read_per_join": "400"
+          },
+          "used_columns": [
+            "a"
+          ],
+          "attached_condition": "<if>(is_not_null_compl(t2), ((`test`.`t2`.`a` = `test`.`t1`.`a`) and (`test`.`t1`.`a` < (@`var1`))), true)"
         }
       },
       {
         "table": {
           "table_name": "t3",
           "access_type": "ALL",
-          "rows": 4,
-          "filtered": 100,
+          "rows_examined_per_scan": 4,
+          "rows_produced_per_join": 200,
+          "filtered": "100.00",
           "using_join_buffer": "Block Nested Loop",
-          "attached_condition": "<if>(is_not_null_compl(t3), ((`test`.`t1`.`a` = `test`.`t3`.`a`) and (`test`.`t3`.`a` < (@`var1`))), true)"
+          "cost_info": {
+            "read_cost": "2.01",
+            "eval_cost": "40.00",
+            "prefix_cost": "58.04",
+            "data_read_per_join": "1K"
+          },
+          "used_columns": [
+            "a"
+          ],
+          "attached_condition": "<if>(is_not_null_compl(t3), ((`test`.`t3`.`a` = `test`.`t1`.`a`) and (`test`.`t1`.`a` < (@`var1`))), true)"
         }
       }
     ]
   }
 }
 Warnings:
-Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t2`.`a` AS `a`,`test`.`t3`.`a` AS `a`,(@var1:=((@`var1`) + 0)) AS `var` from `test`.`t1` left join `test`.`t2` on(((`test`.`t1`.`a` = `test`.`t2`.`a`) and (`test`.`t2`.`a` < (@`var1`)))) left join `test`.`t3` on(((`test`.`t1`.`a` = `test`.`t3`.`a`) and (`test`.`t3`.`a` < (@`var1`)))) where 1
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t2`.`a` AS `a`,`test`.`t3`.`a` AS `a`,(@var1:=((@`var1`) + 0)) AS `var` from `test`.`t1` left join `test`.`t2` on(((`test`.`t2`.`a` = `test`.`t1`.`a`) and (`test`.`t1`.`a` < (@`var1`)))) left join `test`.`t3` on(((`test`.`t3`.`a` = `test`.`t1`.`a`) and (`test`.`t1`.`a` < (@`var1`)))) where 1
 SELECT t1.a, t2.a, t3.a, (@var1:= @var1+0) AS var
 FROM t1
 LEFT JOIN t2 ON t1.a=t2.a AND t2.a < @var1
@@ -587,3 +638,32 @@ a	a	a	var
 8	NULL	NULL	6
 9	NULL	NULL	6
 DROP TABLE t1, t2, t3;
+set    @X234567890123456789012345678901234567890123456789012345678901234 = 12;
+select @X234567890123456789012345678901234567890123456789012345678901234;
+@X234567890123456789012345678901234567890123456789012345678901234
+12
+set    @X2345678901234567890123456789012345678901234567890123456789012345 = 12;
+ERROR 42000: User variable name 'X2345678901234567890123456789012345678901234567890123456789012345' is illegal
+set @``= "illegal";
+ERROR 42000: User variable name '' is illegal
+set @`endswithspace `= "illegal";
+ERROR 42000: User variable name 'endswithspace ' is illegal
+select @X2345678901234567890123456789012345678901234567890123456789012345;
+@X2345678901234567890123456789012345678901234567890123456789012345
+NULL
+select @``;
+@``
+NULL
+select @`endswithspace `;
+@`endswithspace `
+NULL
+CREATE TABLE t1(a INT,KEY(a))ENGINE=INNODB;
+SELECT 1 NOT IN (SELECT 1 FROM t1 as t1 GROUP BY 1 LIKE (SELECT 1 FROM t1 as t2)) AS col;
+col
+1
+SELECT 1 NOT IN (SELECT 1 FROM t1 as t1 ORDER BY 1 LIKE (SELECT 1 FROM t1 as t2)) AS col;
+col
+1
+SET @c =(SELECT 1 NOT IN (SELECT 1 FROM t1 as t1 GROUP BY 1 LIKE (SELECT 1 FROM t1 as t2)) AS col);
+SET @d =(SELECT 1 NOT IN (SELECT 1 FROM t1 as t1 ORDER BY 1 LIKE (SELECT 1 FROM t1 as t2)) AS col);
+DROP TABLE t1;

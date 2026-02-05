@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2009, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2009, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -16,6 +23,9 @@
 */
 
 #include "Dbtux.hpp"
+
+#define JAM_FILE_ID 373
+
 
 struct mt_BuildIndxCtx
 {
@@ -45,9 +55,7 @@ Dbtux::mt_buildIndexFragment_wrapper(void * obj)
     Uint32 * ptr = reinterpret_cast<Uint32*>(req->mem_buffer);
     ptr += (sizeof(* tux_ctx) + 3) / 4;
 
-    tux_ctx->jamBuffer = (EmulatedJamBuffer*)ptr;
-    tux_ctx->jamBuffer->theEmulatedJamIndex = 0;
-    ptr += (sizeof(EmulatedJamBuffer) + 3) / 4;
+    tux_ctx->jamBuffer = getThrJamBuf();
     tux_ctx->c_searchKey = ptr;
     ptr += MaxAttrDataSize;
     tux_ctx->c_entryKey = ptr;
@@ -83,12 +91,10 @@ Dbtux::mt_buildIndexFragment(mt_BuildIndxCtx* req)
   const Uint32 fragId = req->fragId;
   // get the fragment
   FragPtr fragPtr;
-  findFrag(*indexPtr.p, fragId, fragPtr);
+  TuxCtx & ctx = * (TuxCtx*)req->tux_ctx_ptr;
+  findFrag(ctx.jamBuffer, *indexPtr.p, fragId, fragPtr);
   ndbrequire(fragPtr.i != RNIL);
   Frag& frag = *fragPtr.p;
-
-  TuxCtx & ctx = * (TuxCtx*)req->tux_ctx_ptr;
-
   Local_key pos;
   Uint32 fragPtrI;
   int err = req->tup_ptr->mt_scan_init(req->tableId, req->fragId,
@@ -113,7 +119,7 @@ Dbtux::mt_buildIndexFragment(mt_BuildIndxCtx* req)
 
     if (unlikely(! indexPtr.p->m_storeNullKey) &&
         searchKey.get_null_cnt() == indexPtr.p->m_numAttrs) {
-      jam();
+      thrjam(ctx.jamBuffer);
       continue;
     }
 
@@ -127,7 +133,7 @@ Dbtux::mt_buildIndexFragment(mt_BuildIndxCtx* req)
      */
     if (frag.m_freeLoc == NullTupLoc)
     {
-      jam();
+      thrjam(ctx.jamBuffer);
       NodeHandle node(frag);
       err = -(int)allocNode(ctx, node);
 

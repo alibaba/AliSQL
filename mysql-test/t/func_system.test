@@ -1,7 +1,11 @@
+
+ #Get deafult engine value
+--let $DEFAULT_ENGINE = `select @@global.default_storage_engine`
+
 #
 # system functions
 #
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 select database();
 select charset(database());
 select database() = "test";
@@ -20,17 +24,23 @@ select charset(version());
 explain extended select database(), user();
 
 create table t1 (version char(60)) select database(), user(), version() as 'version';
+
+#Replace default engine value with static engine string 
+--replace_result $DEFAULT_ENGINE ENGINE
 show create table t1;
 drop table t1;
 
 select charset(charset(_utf8'a')), charset(collation(_utf8'a'));
 select collation(charset(_utf8'a')), collation(collation(_utf8'a'));
 create table t1 select charset(_utf8'a'), collation(_utf8'a');
+
+#Replace default engine value with static engine string 
+--replace_result $DEFAULT_ENGINE ENGINE
 show create table t1;
 drop table t1;
 
 select TRUE,FALSE,NULL;
-
+SET sql_mode = default;
 #
 # Bug#12351: CONCAT with USER()/DATEBASE() and
 # a constant and a column gets strange results

@@ -1,14 +1,21 @@
-# Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2009, 2023, Oracle and/or its affiliates.
 # 
 # This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; version 2 of the License.
-# 
+# it under the terms of the GNU General Public License, version 2.0,
+# as published by the Free Software Foundation.
+#
+# This program is also distributed with certain software (including
+# but not limited to OpenSSL) that is licensed under separate terms,
+# as designated in a particular file or component or in included license
+# documentation.  The authors of MySQL hereby grant you an additional
+# permission to link the program and your derivative works with the
+# separately licensed software that they have included with MySQL.
+#
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-# 
+# GNU General Public License, version 2.0, for more details.
+#
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
@@ -29,6 +36,25 @@ INSTALL(
   PATTERN "*.am" EXCLUDE
   PATTERN "*.in" EXCLUDE
 )
+  IF(NOT INSTALL_LAYOUT MATCHES "RPM")
+    INSTALL(FILES ${CMAKE_SOURCE_DIR}/COPYING
+      DESTINATION ${INSTALL_DOCREADMEDIR}
+      COMPONENT TestReadme
+      RENAME COPYING-test
+      OPTIONAL
+      )
+    INSTALL(FILES ${CMAKE_SOURCE_DIR}/LICENSE.mysql
+      DESTINATION ${INSTALL_DOCREADMEDIR}
+      COMPONENT TestReadme
+      RENAME LICENSE.mysql-test
+      OPTIONAL
+      )
+    INSTALL(FILES ${CMAKE_SOURCE_DIR}/README
+      DESTINATION ${INSTALL_DOCREADMEDIR}
+      COMPONENT TestReadme
+      RENAME README-test
+      )
+  ENDIF()
 ENDIF()
 
 
@@ -120,3 +146,18 @@ FOREACH(collin ${infiles})
     FILE(APPEND ${colldone} "${collin}\n")
   ENDIF()
 ENDFOREACH()
+
+# With different MAX_INDEXES values, server might behave differently in
+# certain cases. 'max_indexes.inc' file should be updated accordingly to
+# reflect the current MAX_INDEXES value. This file helps MTR to decide on
+# which tests should be skipped.
+# NOTE: While committing a patch please make sure that the file is unmodified
+# and should show the default MAX_INDEXES (i.e. 64U).
+IF (MAX_INDEXES)
+  IF(NOT (${MAX_INDEXES} EQUAL 64U))
+    FILE(WRITE include/max_indexes.inc
+         "# Warning: This is an auto-generated file. Please do not modify it.
+--let $max_indexes = ${MAX_INDEXES}\n")
+    MESSAGE(STATUS "mysql-test/include/max_indexes.inc adjusted")
+  ENDIF()
+ENDIF()

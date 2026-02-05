@@ -1,3 +1,8 @@
+# The include statement below is a temp one for tests that are yet to
+#be ported to run with InnoDB,
+#but needs to be kept for tests that would need MyISAM in future.
+--source include/force_myisam_default.inc
+
 --source include/have_debug.inc
 
 #
@@ -14,4 +19,14 @@ SET SESSION debug="d,subselect_exec_fail";
 SELECT SUM(EXISTS(SELECT RAND() FROM t1)) FROM t1;
 SELECT REVERSE(EXISTS(SELECT RAND() FROM t1));
 SET SESSION debug=@orig_debug;
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#21383882 ASSERTION FAILED: 0 IN SELECT_LEX::PRINT()
+--echo #
+
+CREATE TABLE t1(a INT);
+INSERT INTO t1 VALUES(1),(1);
+--error ER_SUBQUERY_NO_1_ROW
+SELECT ((SELECT 1 FROM t1) IN (SELECT 1 FROM t1)) - (11111111111111111111);
 DROP TABLE t1;

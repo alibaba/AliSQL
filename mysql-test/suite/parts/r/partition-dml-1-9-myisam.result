@@ -27,7 +27,11 @@ PARTITION `p3000-299999` VALUES LESS THAN (300000)
 (SUBPARTITION subp12  ,
 SUBPARTITION subp13  ,
 SUBPARTITION subp14  ));
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1 PARTITION (pNeg, subp0) VALUES (-4, '(pNeg-)subp0');
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t1', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t1 PARTITION (pNeg, subp0) VALUES (-3, '(pNeg-)subp0');
 INSERT INTO t1 PARTITION (pNeg, subp0) VALUES (-2, '(pNeg-)subp0');
 INSERT INTO t1 PARTITION (pNeg, subp0) VALUES (-1, '(pNeg-)subp0');
@@ -87,7 +91,11 @@ PARTITION `p3000-299999` VALUES LESS THAN (300000)
 (SUBPARTITION subp12  ,
 SUBPARTITION subp13  ,
 SUBPARTITION subp14  ));
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t2', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t2 PARTITION (pNeg, subp0) VALUES (-4, '(pNeg-)subp0');
+Warnings:
+Warning	1287	The partition engine, used by table 'test.t2', is deprecated and will be removed in a future release. Please use native partitioning instead.
 INSERT INTO t2 PARTITION (pNeg, subp0) VALUES (-3, '(pNeg-)subp0');
 INSERT INTO t2 PARTITION (pNeg, subp0) VALUES (-2, '(pNeg-)subp0');
 INSERT INTO t2 PARTITION (pNeg, subp0) VALUES (-1, '(pNeg-)subp0');
@@ -119,7 +127,8 @@ INSERT INTO t2 PARTITION (`p3000-299999`, subp14) VALUES (299996, '(p3000-299999
 INSERT INTO t2 PARTITION (`p3000-299999`, subp14) VALUES (299997, '(p3000-299999-)subp14');
 INSERT INTO t2 PARTITION (`p3000-299999`, subp14) VALUES (299998, '(p3000-299999-)subp14');
 INSERT INTO t2 PARTITION (`p3000-299999`, subp14) VALUES (299999, '(p3000-299999-)subp14');
-GRANT ALL PRIVILEGES ON test.* TO test_user_1 IDENTIFIED BY 'testpw';
+CREATE USER test_user_1 IDENTIFIED BY 'testpw';
+GRANT ALL PRIVILEGES ON test.* TO test_user_1;
 connect  session1, localhost, test_user_1,'testpw',test;
 CREATE VIEW v1 AS
 SELECT t1.a, t2.b FROM t1 PARTITION (`p0-29`), t2 

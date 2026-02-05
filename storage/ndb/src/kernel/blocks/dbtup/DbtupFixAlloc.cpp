@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -22,6 +29,9 @@
 #include <ndb_limits.h>
 #include <pc.hpp>
 
+#define JAM_FILE_ID 421
+
+
 //
 // Fixed Allocator
 // This module is used to allocate and free fixed size tuples from the
@@ -30,13 +40,13 @@
 // current implementation.
 // 
 // Public methods
-// bool
-// alloc_fix_rec(Fragrecord* const regFragPtr, # In
+// Uint32*
+// alloc_fix_rec(EmulatedJamBuffer* jamBuf,    # In/out
+//               Uint32 * err,                 # Out
+//               Fragrecord* const regFragPtr, # In
 //               Tablerec* const regTabPtr,    # In
-//               Uint32 pageType,              # In
-//               Signal* signal,               # In
-//               Uint32& pageOffset,           # Out
-//               PagePtr& pagePtr)             # In/Out
+//		 Local_key* key,               # Out
+//		 Uint32 * out_frag_page_id)    # Out
 // This method allocates a fixed size and the pagePtr is a reference
 // to the page and pageOffset is the offset in the page of the tuple.
 //
@@ -62,7 +72,8 @@
 // fragment.
 // 
 Uint32*
-Dbtup::alloc_fix_rec(Uint32 * err,
+Dbtup::alloc_fix_rec(EmulatedJamBuffer* jamBuf,
+                     Uint32 * err,
                      Fragrecord* const regFragPtr,
 		     Tablerec* const regTabPtr,
 		     Local_key* key,
@@ -73,14 +84,14 @@ Dbtup::alloc_fix_rec(Uint32 * err,
 /*       FAILED. TRY ALLOCATING FROM NORMAL PAGE.                   */
 /* ---------------------------------------------------------------- */
   PagePtr pagePtr;
-  pagePtr.i = regFragPtr->thFreeFirst.firstItem;
+  pagePtr.i = regFragPtr->thFreeFirst.getFirst();
   if (pagePtr.i == RNIL) {
 /* ---------------------------------------------------------------- */
 // No prepared tuple header page with free entries exists.
 /* ---------------------------------------------------------------- */
-    pagePtr.i = allocFragPage(err, regFragPtr);
+    pagePtr.i = allocFragPage(jamBuf, err, regFragPtr);
     if (pagePtr.i != RNIL) {
-      jam();
+      thrjam(jamBuf);
 /* ---------------------------------------------------------------- */
 // We found empty pages on the fragment. Allocate an empty page and
 // convert it into a tuple header page and put it in thFreeFirst-list.
@@ -93,14 +104,14 @@ Dbtup::alloc_fix_rec(Uint32 * err,
       LocalDLFifoList<Page> free_pages(c_page_pool, regFragPtr->thFreeFirst);
       free_pages.addFirst(pagePtr);
     } else {
-      jam();
+      thrjam(jamBuf);
 /* ---------------------------------------------------------------- */
 /*       THERE ARE NO EMPTY PAGES. MEMORY CAN NOT BE ALLOCATED.     */
 /* ---------------------------------------------------------------- */
       return 0;
     }
   } else {
-    jam();
+    thrjam(jamBuf);
 /* ---------------------------------------------------------------- */
 /*       THIS SHOULD BE THE COMMON PATH THROUGH THE CODE, FREE      */
 /*       COPY PAGE EXISTED.                                         */
@@ -109,7 +120,8 @@ Dbtup::alloc_fix_rec(Uint32 * err,
   }
 
   Uint32 page_offset= alloc_tuple_from_page(regFragPtr, (Fix_page*)pagePtr.p);
-  
+
+  regFragPtr->m_fixedElemCount++;
   *out_frag_page_id= pagePtr.p->frag_page_id;
   key->m_page_no = pagePtr.i;
   key->m_page_idx = page_offset;
@@ -163,7 +175,7 @@ Dbtup::alloc_tuple_from_page(Fragrecord* const regFragPtr,
   Uint32 idx= regPagePtr->alloc_record();
   if(regPagePtr->free_space == 0)
   {
-    jam();
+    jamNoBlock();
 /* ---------------------------------------------------------------- */
 /*       THIS WAS THE LAST TUPLE HEADER IN THIS PAGE. REMOVE IT FROM*/
 /*       THE TUPLE HEADER FREE LIST OR TH COPY FREE LIST. ALSO SET  */
@@ -188,7 +200,9 @@ void Dbtup::free_fix_rec(Fragrecord* regFragPtr,
 			 Fix_page* regPagePtr)
 {
   Uint32 free= regPagePtr->free_record(key->m_page_idx);
-  PagePtr pagePtr = { (Page*)regPagePtr, key->m_page_no };
+  PagePtr pagePtr((Page*)regPagePtr, key->m_page_no);
+  ndbassert(regFragPtr->m_fixedElemCount > 0);
+  regFragPtr->m_fixedElemCount--;
   
   if(free == 1)
   {
@@ -243,6 +257,7 @@ Dbtup::alloc_fix_rowid(Uint32 * err,
       free_pages.remove(pagePtr);
     }
     
+    regFragPtr->m_fixedElemCount++;
     *out_frag_page_id= page_no;
     key->m_page_no = pagePtr.i;
     key->m_page_idx = idx;

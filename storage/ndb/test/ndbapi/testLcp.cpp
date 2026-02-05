@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2004, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2004, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -130,7 +137,7 @@ main(int argc, char ** argv){
 	  " finished before SAVE_PAGES" << endl;
 	require(!load_table());
 	require(!pause_lcp(5900));
-	for(size_t j = 0; j<(size_t)g_rows; j++){
+        for(int j = 0; j < g_rows; j++){
 	  require(!do_op(j));
 	}
 	require(!continue_lcp(5900));
@@ -143,13 +150,13 @@ main(int argc, char ** argv){
     
     if((1 << test_case++) & g_cases)
     {
-      for(size_t tl = 0; tl<(size_t)g_case_loop; tl++){
+      for(int tl = 0; tl<g_case_loop; tl++){
 	g_info << "Testing pre LCP operations, ZLCP_OP_WRITE_RT_BREAK" << endl;
 	g_info << "  where ZLCP_OP_WRITE_RT_BREAK is finished after SAVE_PAGES"
 	       << endl;
 	require(!load_table());
 	require(!pause_lcp(5901));
-	for(size_t j = 0; j<(size_t)g_rows; j++){
+        for(int j = 0; j < g_rows; j++){
 	  require(!do_op(j));
 	}
 	require(!continue_lcp(5901));
@@ -162,11 +169,11 @@ main(int argc, char ** argv){
 
     if((1 << test_case++) & g_cases)
     {
-      for(size_t tl = 0; tl<(size_t)g_case_loop; tl++){
+      for(int tl = 0; tl<g_case_loop; tl++){
 	g_info << "Testing pre LCP operations, undo-ed at commit" << endl;
 	require(!load_table());
 	require(!pause_lcp(5902));
-	for(size_t j = 0; j<(size_t)g_rows; j++){
+        for(int j = 0; j < g_rows; j++){
 	  require(!do_op(j));
 	}
 	require(!continue_lcp(5902));
@@ -180,11 +187,11 @@ main(int argc, char ** argv){
     
     if((1 << test_case++) & g_cases)
     {
-      for(size_t tl = 0; tl<(size_t)g_case_loop; tl++){
+      for(int tl = 0; tl < g_case_loop; tl++){
 	g_info << "Testing prepared during LCP and committed after" << endl;
 	require(!load_table());
 	require(!pause_lcp(5904));    // Start LCP, but don't save pages
-	for(size_t j = 0; j<(size_t)g_rows; j++){
+        for(int j = 0; j < g_rows; j++){
 	  require(!do_op(j));
 	}
 	require(!continue_lcp(5904)); // Start ACC save pages
@@ -344,7 +351,7 @@ static int load_table()
   size_t rows = 0;
   size_t uncommitted = 0;
   //bool prepared = false;
-  for(size_t i = 0; i<(size_t)g_rows; i++){
+  for(int i = 0; i < g_rows; i++){
     for(op %= OP_COUNT; !((1 << op) & g_use_ops); op = (op + 1) % OP_COUNT);
     g_ops[i] = g_op_types[op++];
     if(g_ops[i].start_row){
@@ -553,7 +560,7 @@ static int restart()
 static int validate()
 {
   HugoOperations ops(* g_table);
-  for(size_t i = 0; i<(size_t)g_rows; i++){
+  for(int i = 0; i < g_rows; i++){
     require(g_ops[i].curr_row == g_ops[i].end_row);
     require(!ops.startTransaction(g_ndb));
     ops.pkReadRecord(g_ndb, i, 1);
@@ -566,7 +573,7 @@ static int validate()
     ops.closeTransaction(g_ndb);
   }
 
-  for(size_t j = 0; j<10; j++){
+  for(int j = 0; j<10; j++){
     UtilTransactions clear(* g_table);
     require(!clear.clearTable(g_ndb));
     

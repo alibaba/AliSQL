@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2007, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -18,7 +25,6 @@
 #include "atrt.hpp"
 #include <NdbSleep.h>
 
-static bool connect_mysqld(atrt_process* proc);
 static bool populate_db(atrt_config&, atrt_process*);
 static bool setup_repl(atrt_config&);
 
@@ -104,13 +110,13 @@ setup_db(atrt_config& config)
   atrt_process* atrt_client = 0;
   {
     atrt_cluster* cluster = 0;
-    for (size_t i = 0; i<config.m_clusters.size(); i++)
+    for (unsigned i = 0; i<config.m_clusters.size(); i++)
     {
       if (strcmp(config.m_clusters[i]->m_name.c_str(), ".atrt") == 0)
       {
 	cluster = config.m_clusters[i];
 
-	for (size_t i = 0; i<cluster->m_processes.size(); i++)
+        for (unsigned i = 0; i<cluster->m_processes.size(); i++)
 	{
 	  if (cluster->m_processes[i]->m_type == atrt_process::AP_CLIENT)
 	  {
@@ -132,7 +138,7 @@ setup_db(atrt_config& config)
     atrt_process * proc = config.m_processes[i];
     if (proc->m_type == atrt_process::AP_MYSQLD)
     {
-      if (!connect_mysqld(config.m_processes[i]))
+      if (!connect_mysqld(* config.m_processes[i]))
 	return false;
     }
   }    
@@ -140,7 +146,7 @@ setup_db(atrt_config& config)
   if (atrt_client)
   {
     atrt_process* atrt_mysqld = atrt_client->m_mysqld;
-    assert(atrt_mysqld);
+    require(atrt_mysqld);
 
     // Run the commands to create the db
     for (int i = 0; create_sql[i]; i++)
@@ -177,16 +183,16 @@ find(atrt_process* proc, const char * key)
 }
 
 bool
-connect_mysqld(atrt_process* proc)
+connect_mysqld(atrt_process& proc)
 {
-  if ( !mysql_init(&proc->m_mysql))
+  if ( !mysql_init(&proc.m_mysql))
   {
     g_logger.error("Failed to init mysql");
     return false;
   }
 
-  const char * port = find(proc, "--port=");
-  const char * socket = find(proc, "--socket=");
+  const char * port = find(&proc, "--port=");
+  const char * socket = find(&proc, "--socket=");
   if (port == 0 && socket == 0)
   {
     g_logger.error("Neither socket nor port specified...cant connect to mysql");
@@ -198,10 +204,10 @@ connect_mysqld(atrt_process* proc)
     if (port)
     {
       mysql_protocol_type val = MYSQL_PROTOCOL_TCP;
-      mysql_options(&proc->m_mysql, MYSQL_OPT_PROTOCOL, &val);
+      mysql_options(&proc.m_mysql, MYSQL_OPT_PROTOCOL, &val);
     }
-    if (mysql_real_connect(&proc->m_mysql,
-			   proc->m_host->m_hostname.c_str(),
+    if (mysql_real_connect(&proc.m_mysql,
+			   proc.m_host->m_hostname.c_str(),
 			   "root", "", "test",
 			   port ? atoi(port) : 0,
 			   socket,
@@ -210,15 +216,22 @@ connect_mysqld(atrt_process* proc)
       return true;
     }
     g_logger.info("Retrying connect to %s:%u 3s",
-		  proc->m_host->m_hostname.c_str(),atoi(port));
-    NdbSleep_SecSleep(3); 
+		  proc.m_host->m_hostname.c_str(),atoi(port));
+    NdbSleep_SecSleep(3);
   }
-  
+
   g_logger.error("Failed to connect to mysqld err: >%s< >%s:%u:%s<",
-		 mysql_error(&proc->m_mysql),
-		 proc->m_host->m_hostname.c_str(), port ? atoi(port) : 0,
+		 mysql_error(&proc.m_mysql),
+		 proc.m_host->m_hostname.c_str(), port ? atoi(port) : 0,
 		 socket ? socket : "<null>");
   return false;
+}
+
+bool
+disconnect_mysqld(atrt_process& proc)
+{
+  mysql_close(&proc.m_mysql);
+  return true;
 }
 
 void
@@ -235,7 +248,7 @@ BINDS(MYSQL_BIND& bind, const char * s, unsigned long * len)
 {
   bind.buffer_type= MYSQL_TYPE_STRING;
   bind.buffer= (char*)s;
-  bind.buffer_length= * len = strlen(s);
+  bind.buffer_length= * len = (unsigned long)strlen(s);
   bind.length= len;
   bind.is_null= 0;
 }
@@ -244,7 +257,7 @@ template <typename T>
 int
 find(T* obj, Vector<T*>& arr)
 {
-  for (size_t i = 0; i<arr.size(); i++)
+  for (unsigned i = 0; i<arr.size(); i++)
     if (arr[i] == obj)
       return (int)i;
   abort();
@@ -297,18 +310,18 @@ populate_db(atrt_config& config, atrt_process* mysqld)
   {
     const char * sql = "INSERT INTO host (id, name, port) values (?, ?, ?)";
     MYSQL_STMT * stmt = mysql_stmt_init(&mysqld->m_mysql);
-    if (mysql_stmt_prepare(stmt, sql, strlen(sql)))
+    if (mysql_stmt_prepare(stmt, sql, (unsigned long)strlen(sql)))
     {
       g_logger.error("Failed to prepare: %s", mysql_error(&mysqld->m_mysql));
       return false;
     }
 
-    for (size_t i = 0; i<config.m_hosts.size(); i++)
+    for (unsigned i = 0; i<config.m_hosts.size(); i++)
     {
       unsigned long l0;
       MYSQL_BIND bind[3];
       bzero(bind, sizeof(bind));
-      int id = i;
+      int id = (int)i;
       int port = config.m_hosts[i]->m_cpcd->getPort();
       BINDI(bind[0], &id);
       BINDS(bind[1], config.m_hosts[i]->m_hostname.c_str(), &l0);
@@ -331,18 +344,18 @@ populate_db(atrt_config& config, atrt_process* mysqld)
   {
     const char * sql = "INSERT INTO cluster (id, name) values (?, ?)";
     MYSQL_STMT * stmt = mysql_stmt_init(&mysqld->m_mysql);
-    if (mysql_stmt_prepare(stmt, sql, strlen(sql)))
+    if (mysql_stmt_prepare(stmt, sql, (unsigned long)strlen(sql)))
     {
       g_logger.error("Failed to prepare: %s", mysql_error(&mysqld->m_mysql));
       return false;
     }
 
-    for (size_t i = 0; i<config.m_clusters.size(); i++)
+    for (unsigned i = 0; i<config.m_clusters.size(); i++)
     {
       unsigned long l0;
       MYSQL_BIND bind[2];
       bzero(bind, sizeof(bind));
-      int id = i;
+      int id = (int)i;
       BINDI(bind[0], &id);
       BINDS(bind[1], config.m_clusters[i]->m_name.c_str(), &l0);
 
@@ -369,26 +382,26 @@ populate_db(atrt_config& config, atrt_process* mysqld)
       "INSERT INTO options (id, process_id, name, value) values (?,?,?,?)";
 
     MYSQL_STMT * stmt = mysql_stmt_init(&mysqld->m_mysql);
-    if (mysql_stmt_prepare(stmt, sql, strlen(sql)))
+    if (mysql_stmt_prepare(stmt, sql, (unsigned long)strlen(sql)))
     {
       g_logger.error("Failed to prepare: %s", mysql_error(&mysqld->m_mysql));
       return false;
     }
 
     MYSQL_STMT * stmtopt = mysql_stmt_init(&mysqld->m_mysql);
-    if (mysql_stmt_prepare(stmtopt, sqlopt, strlen(sqlopt)))
+    if (mysql_stmt_prepare(stmtopt, sqlopt, (unsigned long)strlen(sqlopt)))
     {
       g_logger.error("Failed to prepare: %s", mysql_error(&mysqld->m_mysql));
       return false;
     }
 
     int option_id = 0;
-    for (size_t i = 0; i<config.m_processes.size(); i++)
+    for (unsigned i = 0; i<config.m_processes.size(); i++)
     {
       unsigned long l0, l1;
       MYSQL_BIND bind[6];
       bzero(bind, sizeof(bind));
-      int id = i;
+      int id = (int)i;
       atrt_process* proc = config.m_processes[i];
       int host_id = find(proc->m_host, config.m_hosts);
       int cluster_id = find(proc->m_cluster, config.m_clusters);
@@ -494,7 +507,7 @@ setup_repl(atrt_process* dst, atrt_process* src)
 bool
 setup_repl(atrt_config& config)
 {
-  for (size_t i = 0; i<config.m_processes.size(); i++)
+  for (unsigned i = 0; i<config.m_processes.size(); i++)
   {
     atrt_process * dst = config.m_processes[i];
     if (dst->m_rep_src)

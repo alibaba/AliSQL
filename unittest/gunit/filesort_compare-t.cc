@@ -1,13 +1,20 @@
-/* Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2012, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -18,6 +25,7 @@
 #include <gtest/gtest.h>
 
 #include "filesort_utils.h"
+#include "test_utils.h"
 
 #include <algorithm>
 #include <memory>
@@ -57,7 +65,7 @@ int array_size(const T (&)[size])
 inline int bytes_to_int(const uchar *s)
 {
   int val;
-  longget(val, s);
+  longget(&val, s);
   return val ^ 0x80000000;
 }
 
@@ -91,7 +99,7 @@ protected:
   // Do each sort algorithm this many times. Increase value for benchmarking!
   static const int num_iterations= 1;
   // Number of records.
-  static const int num_records= 100 * 1000;
+  static const int num_records= 100 * 100;
   // Number of keys in each record.
   static const int keys_per_record= 4;
   // Size of each record.
@@ -114,7 +122,7 @@ protected:
       test_data.push_back(sort_str.val);
     }
     // Comment away shuffling for testing partially pre-sorted data.
-    std::random_shuffle(test_data.begin(), test_data.end());
+    // std::random_shuffle(test_data.begin(), test_data.end());
   }
 
   static void TearDownTestCase()
@@ -145,6 +153,15 @@ std::vector<int> FileSortCompareTest::test_data;
   The first one seems to win on all platforms, except sparc,
   where the builtin memcmp() wins.
  */
+inline bool mem_compare_0(const uchar *s1, const uchar *s2, size_t len)
+{
+  do {
+    if (*s1++ != *s2++)
+      return *--s1 < *--s2;
+  } while (--len != 0);
+  return s1 > s2; // Return false for duplicate keys.
+}
+
 inline bool mem_compare_1(const uchar *s1, const uchar *s2, size_t len)
 {
   do {
@@ -173,7 +190,7 @@ inline bool mem_compare_3(const uchar *s1, const uchar *s2, size_t len)
   return s1[0] < s2[0];
 }
 
-#if defined(__WIN__)
+#if defined(_WIN32)
 #pragma intrinsic(memcmp)
 #endif
 // For gcc, __builtin_memcmp is actually *slower* than the library call:
@@ -188,6 +205,19 @@ public:
   bool operator()(const uchar *s1, const uchar *s2)
   {
     return memcmp(s1, s2, m_size) < 0;
+  }
+  size_t m_size;
+};
+
+
+class Mem_compare_0 :
+  public std::binary_function<const uchar*, const uchar*, bool>
+{
+public:
+  Mem_compare_0(size_t n) : m_size(n) {}
+  bool operator()(const uchar *s1, const uchar *s2)
+  {
+    return mem_compare_0(s1, s2, m_size);
   }
   size_t m_size;
 };
@@ -234,11 +264,11 @@ public:
 
 #define COMPARE(N) if (s1[N] != s2[N]) return s1[N] < s2[N]
 
-class Mem_compare_0 : 
+class Mem_compare_4 : 
   public std::binary_function<const uchar*, const uchar*, bool>
 {
 public:
-  Mem_compare_0(size_t n) : m_size(n) {}
+  Mem_compare_4(size_t n) : m_size(n) {}
   bool operator()(const uchar *s1, const uchar *s2)
   {
     size_t len= m_size;
@@ -253,6 +283,23 @@ public:
       s2 += 4;
     }
     return false;
+  }
+  size_t m_size;
+};
+
+
+class Mem_compare_5 :
+  public std::binary_function<const uchar*, const uchar*, bool>
+{
+public:
+  Mem_compare_5(size_t n) : m_size(n) {}
+  bool operator()(const uchar *s1, const uchar *s2)
+  {
+    COMPARE(0);
+    COMPARE(1);
+    COMPARE(2);
+    COMPARE(3);
+    return memcmp(s1 + 4, s2 + 4, m_size - 4) < 0;
   }
   size_t m_size;
 };
@@ -311,7 +358,8 @@ TEST_F(FileSortCompareTest, SetUpOnly)
   }
 }
 
-TEST_F(FileSortCompareTest, RadixSort)
+// Disabled because radixsort takes forever when benchmarking.
+TEST_F(FileSortCompareTest, DISABLED_RadixSort)
 {
   for (int ix= 0; ix < num_iterations; ++ix)
   {
@@ -330,7 +378,7 @@ TEST_F(FileSortCompareTest, MyQsort)
   {
     std::vector<uchar*> keys(sort_keys, sort_keys + num_records);
     my_qsort2((uchar*) &keys[0], num_records, sizeof(uchar*),
-              get_ptr_compare(record_size), &size);
+              my_testing::get_ptr_compare(record_size), &size);
   }
 }
 
@@ -350,6 +398,24 @@ TEST_F(FileSortCompareTest, StdStableSortmemcmp)
     std::vector<uchar*> keys(sort_keys, sort_keys + num_records);
     std::stable_sort(keys.begin(), keys.end(),
                      Mem_compare_memcmp(record_size));
+  }
+}
+
+TEST_F(FileSortCompareTest, StdSortCompare0)
+{
+  for (int ix= 0; ix < num_iterations; ++ix)
+  {
+    std::vector<uchar*> keys(sort_keys, sort_keys + num_records);
+    std::sort(keys.begin(), keys.end(), Mem_compare_0(record_size));
+  }
+}
+
+TEST_F(FileSortCompareTest, StdStableSortCompare0)
+{
+  for (int ix= 0; ix < num_iterations; ++ix)
+  {
+    std::vector<uchar*> keys(sort_keys, sort_keys + num_records);
+    std::stable_sort(keys.begin(), keys.end(), Mem_compare_0(record_size));
   }
 }
 
@@ -412,7 +478,7 @@ TEST_F(FileSortCompareTest, StdSortCompare4)
   for (int ix= 0; ix < num_iterations; ++ix)
   {
     std::vector<uchar*> keys(sort_keys, sort_keys + num_records);
-    std::sort(keys.begin(), keys.end(), Mem_compare_0(record_size));
+    std::sort(keys.begin(), keys.end(), Mem_compare_4(record_size));
   }
 }
 
@@ -421,10 +487,29 @@ TEST_F(FileSortCompareTest, StdStableSortCompare4)
   for (int ix= 0; ix < num_iterations; ++ix)
   {
     std::vector<uchar*> keys(sort_keys, sort_keys + num_records);
-    std::stable_sort(keys.begin(), keys.end(), Mem_compare_0(record_size));
+    std::stable_sort(keys.begin(), keys.end(), Mem_compare_4(record_size));
   }
 }
 
+TEST_F(FileSortCompareTest, StdSortCompare5)
+{
+  for (int ix= 0; ix < num_iterations; ++ix)
+  {
+    std::vector<uchar*> keys(sort_keys, sort_keys + num_records);
+    std::sort(keys.begin(), keys.end(), Mem_compare_5(record_size));
+  }
+}
+
+TEST_F(FileSortCompareTest, StdStableSortCompare5)
+{
+  for (int ix= 0; ix < num_iterations; ++ix)
+  {
+    std::vector<uchar*> keys(sort_keys, sort_keys + num_records);
+    std::stable_sort(keys.begin(), keys.end(), Mem_compare_5(record_size));
+  }
+}
+
+// Disabled: experimental.
 TEST_F(FileSortCompareTest, DISABLED_StdSortIntCompare)
 {
   for (int ix= 0; ix < num_iterations; ++ix)
@@ -434,6 +519,7 @@ TEST_F(FileSortCompareTest, DISABLED_StdSortIntCompare)
   }
 }
 
+// Disabled: experimental.
 TEST_F(FileSortCompareTest, DISABLED_StdStableSortIntCompare)
 {
   for (int ix= 0; ix < num_iterations; ++ix)
@@ -443,6 +529,7 @@ TEST_F(FileSortCompareTest, DISABLED_StdStableSortIntCompare)
   }
 }
 
+// Disabled: experimental.
 TEST_F(FileSortCompareTest, DISABLED_StdSortIntIntIntInt)
 {
   for (int ix= 0; ix < num_iterations; ++ix)
@@ -453,6 +540,7 @@ TEST_F(FileSortCompareTest, DISABLED_StdSortIntIntIntInt)
   }
 }
 
+// Disabled: experimental.
 TEST_F(FileSortCompareTest, DISABLED_StdStableSortIntIntIntInt)
 {
   for (int ix= 0; ix < num_iterations; ++ix)

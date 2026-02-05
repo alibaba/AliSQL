@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -33,6 +40,9 @@ extern EventLogger * g_eventLogger;
 
 #include <NdbAutoPtr.hpp>
 
+#define JAM_FILE_ID 490
+
+
 #define MESSAGE_LENGTH 500
 
 static int WriteMessage(int thrdMessageID,
@@ -42,26 +52,38 @@ static int WriteMessage(int thrdMessageID,
 
 static void dumpJam(FILE* jamStream, 
 		    Uint32 thrdTheEmulatedJamIndex, 
-		    const Uint32 thrdTheEmulatedJam[],
-                    Uint32 aBlockNumber);
+		    const JamEvent thrdTheEmulatedJam[]);
 
+static
+const char *
+ndb_basename(const char * path)
+{
+  if (path == NULL)
+    return NULL;
 
+  const char separator = '/';
+  const char * p = path + strlen(path);
+  while (p > path && p[0] != separator)
+    p--;
+
+  if (p[0] == separator)
+    return p + 1;
+
+  return p;
+}
+
+static
 const char*
-ErrorReporter::formatTimeStampString(){
+formatTimeStampString(char* theDateTimeString, size_t len){
   TimeModule DateTime;          /* To create "theDateTimeString" */
-  
-  static char theDateTimeString[39]; 
-  /* Used to store the generated timestamp */
-  /* ex: "Wednesday 18 September 2000 - 18:54:37" */
-
   DateTime.setTimeStamp();
   
-  BaseString::snprintf(theDateTimeString, 39, "%s %d %s %d - %s:%s:%s", 
+  BaseString::snprintf(theDateTimeString, len, "%s %d %s %d - %s:%s:%s",
 	   DateTime.getDayName(), DateTime.getDayOfMonth(),
 	   DateTime.getMonthName(), DateTime.getYear(), DateTime.getHour(),
 	   DateTime.getMinute(), DateTime.getSecond());
   
-  return (const char *)&theDateTimeString;
+  return theDateTimeString;
 }
 
 int
@@ -77,14 +99,24 @@ ErrorReporter::get_trace_no(){
    * Read last number from tracefile
    */  
   stream = fopen(file_name, "r+");
-  if (stream == NULL){
+  if (stream == NULL)
+  {
     traceFileNo = 1;
-  } else {
+  }
+  else
+  {
     char buf[255];
-    fgets(buf, 255, stream);
-    const int scan = sscanf(buf, "%u", &traceFileNo);
-    if(scan != 1){
+    if (fgets(buf, 255, stream) == NULL)
+    {
       traceFileNo = 1;
+    }
+    else
+    {
+      const int scan = sscanf(buf, "%u", &traceFileNo);
+      if(scan != 1)
+      {
+        traceFileNo = 1;
+      }
     }
     fclose(stream);
     traceFileNo++;
@@ -135,6 +167,9 @@ ErrorReporter::formatMessage(int thr_no,
     BaseString::snprintf(thrbuf, sizeof(thrbuf), " thr: %u", thr_no);
   }
 
+  char time_str[39];
+  formatTimeStampString(time_str, sizeof(time_str));
+
   BaseString::snprintf(messptr, MESSAGE_LENGTH,
                        "Time: %s\n"
                        "Status: %s\n"
@@ -146,13 +181,13 @@ ErrorReporter::formatMessage(int thr_no,
                        "Pid: %d%s\n"
                        "Version: %s\n"
                        "Trace: %s",
-                       formatTimeStampString() , 
+                       time_str,
                        exit_st_msg,
                        exit_msg, exit_cl_msg,
                        faultID, 
                        (problemData == NULL) ? "" : problemData, 
                        objRef, 
-                       my_progname, 
+                       ndb_basename(my_progname),
                        processId, 
                        thrbuf,
                        NDB_VERSION_STRING,
@@ -161,18 +196,15 @@ ErrorReporter::formatMessage(int thr_no,
 
   if (theNameOfTheTraceFile)
   {
-    for (Uint32 i = 1 ; i < num_threads; i++)
+    sofar = (int)strlen(messptr);
+    if(sofar < MESSAGE_LENGTH)
     {
-      sofar = strlen(messptr);
-      if(sofar < MESSAGE_LENGTH)
-      {
-	BaseString::snprintf(messptr + sofar, MESSAGE_LENGTH - sofar,
-			     " %s_t%u", theNameOfTheTraceFile, i);
-      }
+      BaseString::snprintf(messptr + sofar, MESSAGE_LENGTH - sofar,
+                           " [t%u..t%u]", 1, num_threads);
     }
   }
 
-  sofar = strlen(messptr);
+  sofar = (int)strlen(messptr);
   if(sofar < MESSAGE_LENGTH)
   {
     BaseString::snprintf(messptr + sofar, MESSAGE_LENGTH - sofar,
@@ -196,23 +228,14 @@ NdbShutdownType ErrorReporter::s_errorHandlerShutdownType = NST_ErrorHandler;
 void
 ErrorReporter::handleAssert(const char* message, const char* file, int line, int ec)
 {
-  char refMessage[100];
-  Uint32 jamBlockNumber;
+  char refMessage[200];
 
 #ifdef NO_EMULATED_JAM
-  BaseString::snprintf(refMessage, 100, "file: %s lineNo: %d",
+  BaseString::snprintf(refMessage, 200, "file: %s lineNo: %d",
 	   file, line);
-  jam = NULL;
-  jamIndex = 0;
-  jamBlockNumber = 0;
 #else
-  const EmulatedJamBuffer *jamBuffer =
-    (EmulatedJamBuffer *)NdbThread_GetTlsKey(NDB_THREAD_TLS_JAM);
-  jamBlockNumber = jamBuffer->theEmulatedJamBlockNumber;
-  const char *blockName = getBlockName(jamBlockNumber);
-
-  BaseString::snprintf(refMessage, 100, "%s line: %d (block: %s)",
-	   file, line, blockName);
+  BaseString::snprintf(refMessage, 200, "%s line: %d",
+	   file, line);
 #endif
   NdbShutdownType nst = s_errorHandlerShutdownType;
   WriteMessage(ec, message, refMessage, nst);
@@ -237,7 +260,13 @@ ErrorReporter::handleError(int messageID,
       nst = s_errorHandlerShutdownType;
   }
   
-  WriteMessage(messageID, problemData, objRef, nst);
+  WriteMessage(messageID, ndb_basename(problemData), objRef, nst);
+
+  if (problemData == NULL)
+  {
+    ndbd_exit_classification cl;
+    problemData = ndbd_exit_message(messageID, &cl);
+  }
 
   g_eventLogger->info("%s", problemData);
   g_eventLogger->info("%s", objRef);
@@ -256,8 +285,21 @@ WriteMessage(int thrdMessageID,
   unsigned long maxOffset;  // Maximum size of file.
   char theMessage[MESSAGE_LENGTH];
   Uint32 thrdTheEmulatedJamIndex;
-  const Uint32 *thrdTheEmulatedJam;
-  Uint32 jamBlockNumber;
+  const JamEvent *thrdTheEmulatedJam;
+
+  /**
+   * In the multithreaded case we need to lock a mutex before starting
+   * the error processing. The method below will lock this mutex,
+   * after locking the mutex it will ensure that there is no other
+   * thread that already started the crash handling. If there is
+   * already another thread that is processing the thread we will
+   * write in the error log while holding the mutex. If we are
+   * crashing due to an error insert and we already have an ongoing
+   * crash handler then we will never return from this first call.
+   * Otherwise we will return, write the error log and never return
+   * from the second call to prepare_to_crash below.
+   */
+  ErrorReporter::prepare_to_crash(true, (nst == NST_ErrorInsert));
 
   Uint32 threadCount = globalScheduler.traceDumpGetNumThreads();
   int thr_no = globalScheduler.traceDumpGetCurrentThread();
@@ -318,7 +360,10 @@ WriteMessage(int thrdMessageID,
   } else {
     // Go to the latest position in the file...
     fseek(stream, 40, SEEK_SET);
-    fscanf(stream, "%u", &offset);
+    if (fscanf(stream, "%u", &offset) != 1)
+    {
+      abort();
+    }
     fseek(stream, offset, SEEK_SET);
     
     // ...and write the error-message there...
@@ -347,7 +392,9 @@ WriteMessage(int thrdMessageID,
   }
   fflush(stream);
   fclose(stream);
-  
+
+  ErrorReporter::prepare_to_crash(false, (nst == NST_ErrorInsert));
+
   if (theTraceFileName) {
     /* Attempt to stop all processing to be able to dump a consistent state. */
     globalScheduler.traceDumpPrepare(nst);
@@ -361,13 +408,12 @@ WriteMessage(int thrdMessageID,
       FILE *jamStream = fopen(theTraceFileName, "w");
 
       //  ...and "dump the jam" there.
-      bool ok = globalScheduler.traceDumpGetJam(i, jamBlockNumber,
-                                                thrdTheEmulatedJam,
+      bool ok = globalScheduler.traceDumpGetJam(i, thrdTheEmulatedJam,
                                                 thrdTheEmulatedJamIndex);
       if(ok && thrdTheEmulatedJam != 0)
       {
         dumpJam(jamStream, thrdTheEmulatedJamIndex,
-                thrdTheEmulatedJam, jamBlockNumber);
+                thrdTheEmulatedJam);
       }
 
       globalScheduler.dumpSignalMemory(i, jamStream);
@@ -382,69 +428,63 @@ WriteMessage(int thrdMessageID,
 void 
 dumpJam(FILE *jamStream, 
 	Uint32 thrdTheEmulatedJamIndex, 
-	const Uint32 thrdTheEmulatedJam[],
-        Uint32 aBlockNumber) {
+	const JamEvent thrdTheEmulatedJam[]) {
 #ifndef NO_EMULATED_JAM   
   // print header
-  const int maxaddr = 8;
-  fprintf(jamStream, "JAM CONTENTS up->down left->right ?=not block entry\n");
-  fprintf(jamStream, "%-7s ", "BLOCK");
-  for (int i = 0; i < maxaddr; i++)
-    fprintf(jamStream, "%-6s ", "ADDR");
+  const Uint32 maxCols = 9;
+  fprintf(jamStream, "JAM CONTENTS up->down left->right\n");
+  fprintf(jamStream, "%-20s ", "SOURCE FILE");
+  for (Uint32 i = 0; i < maxCols; i++)
+    fprintf(jamStream, "LINE  ");
   fprintf(jamStream, "\n");
 
-  const int first = thrdTheEmulatedJamIndex;	// oldest
-  int cnt, idx;
-
-  // look for first block entry
-  for (cnt = 0, idx = first; cnt < EMULATED_JAM_SIZE; cnt++, idx++) {
-    if (idx >= EMULATED_JAM_SIZE)
-      idx = 0;
-    const Uint32 aJamEntry = thrdTheEmulatedJam[idx];
-    if (aJamEntry > (1 << 20))
-      break;
-  }
-
-  // 1. if first entry is a block entry, it is printed in the main loop
-  // 2. else if any block entry exists, the jam starts in an unknown block
-  // 3. else if no block entry exists, the block is theEmulatedJamBlockNumber
-  // a "?" indicates first addr is not a block entry
-  if (cnt == 0)
-    ;
-  else if (cnt < EMULATED_JAM_SIZE)
-    fprintf(jamStream, "%-7s?", "");
-  else {
-    const char *aBlockName = getBlockName(aBlockNumber);
-    if (aBlockName != 0)
-      fprintf(jamStream, "%-7s?", aBlockName);
-    else
-      fprintf(jamStream, "0x%-5X?", aBlockNumber);
-  }
+  const Uint32 first = thrdTheEmulatedJamIndex;	// oldest
 
   // loop over all entries
-  int cntaddr = 0;
-  for (cnt = 0, idx = first; cnt < EMULATED_JAM_SIZE; cnt++, idx++) {
+  Uint32 col = 0;
+  Uint32 fileId = ~0;
+  bool newSig = false;
+  for (Uint32 cnt = 0; cnt < EMULATED_JAM_SIZE; cnt++)
+  {
     globalData.incrementWatchDogCounter(4);	// watchdog not to kill us ?
-    if (idx >= EMULATED_JAM_SIZE)
-      idx = 0;
-    const Uint32 aJamEntry = thrdTheEmulatedJam[idx];
-    if (aJamEntry > (1 << 20)) {
-      const Uint32 aBlockNumber = aJamEntry >> 20;
-      const char *aBlockName = getBlockName(aBlockNumber);
-      if (cnt > 0)
-	  fprintf(jamStream, "\n");
-      if (aBlockName != 0)
-	fprintf(jamStream, "%-7s ", aBlockName);
-      else
-	fprintf(jamStream, "0x%-5X ", aBlockNumber);
-      cntaddr = 0;
+    const JamEvent aJamEvent =
+      thrdTheEmulatedJam[(cnt+first)%EMULATED_JAM_SIZE];
+    
+    if (!aJamEvent.isEmpty())
+    {
+      // Mark starting point of execution of a new signal.
+      if (newSig)
+      {
+        fprintf(jamStream, "\n---> signal");
+        col = 0;
+        fileId = ~0;
+      }
+      if (aJamEvent.getFileId() != fileId)
+      {
+        fileId = aJamEvent.getFileId();
+        const char* const fileName = aJamEvent.getFileName();
+        if (fileName != NULL)
+        {
+          fprintf(jamStream, "\n%-20s ", fileName);
+        }
+        else
+        {
+          /** 
+           * Getting here indicates that there is a JAM_FILE_ID without a
+           * corresponding entry in jamFileNames.
+           */
+          fprintf(jamStream, "\nunknown_file_%05u   ", fileId);
+        }
+        col = 0;
+      }
+      else if (col==0)
+      {
+        fprintf(jamStream, "\n%-20s ", "");
+      }
+      fprintf(jamStream, "%05u ", aJamEvent.getLineNo());
+      col = (col+1) % maxCols;
+      newSig = aJamEvent.isEndOfSig();
     }
-    if (cntaddr == maxaddr) {
-      fprintf(jamStream, "\n%-7s ", "");
-      cntaddr = 0;
-    }
-    fprintf(jamStream, "%06u ", aJamEntry & 0xFFFFF);
-    cntaddr++;
   }
   fprintf(jamStream, "\n");
   fflush(jamStream);

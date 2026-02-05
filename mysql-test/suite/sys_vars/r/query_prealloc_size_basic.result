@@ -59,52 +59,44 @@ Warning	1292	Truncated incorrect query_prealloc_size value: '0'
 SELECT @@global.query_prealloc_size  ;
 @@global.query_prealloc_size
 8192
+SET @@global.query_prealloc_size   = -1024;
+Warnings:
+Warning	1292	Truncated incorrect query_prealloc_size value: '-1024'
+SELECT @@global.query_prealloc_size  ;
+@@global.query_prealloc_size
+8192
 SET @@global.query_prealloc_size   = 65530.34;
 ERROR 42000: Incorrect argument type to variable 'query_prealloc_size'
-SELECT @@global.query_prealloc_size  ;
-@@global.query_prealloc_size
-8192
 SET @@global.query_prealloc_size   = test;
 ERROR 42000: Incorrect argument type to variable 'query_prealloc_size'
-SELECT @@global.query_prealloc_size  ;
-@@global.query_prealloc_size
-8192
 SET @@global.query_prealloc_size   = "test";
 ERROR 42000: Incorrect argument type to variable 'query_prealloc_size'
-SELECT @@global.query_prealloc_size  ;
-@@global.query_prealloc_size
-8192
 SET @@global.query_prealloc_size   = 'test';
 ERROR 42000: Incorrect argument type to variable 'query_prealloc_size'
-SELECT @@global.query_prealloc_size  ;
-@@global.query_prealloc_size
-8192
+SET @@global.query_prealloc_size   = ' ';
+ERROR 42000: Incorrect argument type to variable 'query_prealloc_size'
 SET @@global.query_prealloc_size   = ON;
 ERROR 42000: Incorrect argument type to variable 'query_prealloc_size'
-SELECT @@global.query_prealloc_size  ;
-@@global.query_prealloc_size
-8192
 SET @@session.query_prealloc_size   = 0;
 Warnings:
 Warning	1292	Truncated incorrect query_prealloc_size value: '0'
 SELECT @@session.query_prealloc_size  ;
 @@session.query_prealloc_size
 8192
+SET @@session.query_prealloc_size   = -2;
+Warnings:
+Warning	1292	Truncated incorrect query_prealloc_size value: '-2'
+SELECT @@session.query_prealloc_size  ;
+@@session.query_prealloc_size
+8192
 SET @@session.query_prealloc_size   = 65530.34;
 ERROR 42000: Incorrect argument type to variable 'query_prealloc_size'
-SELECT @@session.query_prealloc_size  ;
-@@session.query_prealloc_size
-8192
 SET @@session.query_prealloc_size   = test;
 ERROR 42000: Incorrect argument type to variable 'query_prealloc_size'
-SELECT @@session.query_prealloc_size  ;
-@@session.query_prealloc_size
-8192
 SET @@session.query_prealloc_size   = "test";
 ERROR 42000: Incorrect argument type to variable 'query_prealloc_size'
-SELECT @@session.query_prealloc_size  ;
-@@session.query_prealloc_size
-8192
+SET @@session.query_prealloc_size   = " ";
+ERROR 42000: Incorrect argument type to variable 'query_prealloc_size'
 '#------------------FN_DYNVARS_005_06-----------------------#'
 SELECT @@global.query_prealloc_size   = VARIABLE_VALUE
 FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES
@@ -130,7 +122,7 @@ Warning	1292	Truncated incorrect query_prealloc_size value: '0'
 SELECT @@global.query_prealloc_size  ;
 @@global.query_prealloc_size
 8192
-'#---------------------FN_DYNVARS_001_09----------------------#'
+'#---------------------FN_DYNVARS_005_09----------------------#'
 SET @@global.query_prealloc_size   = 10;
 Warnings:
 Warning	1292	Truncated incorrect query_prealloc_size value: '10'

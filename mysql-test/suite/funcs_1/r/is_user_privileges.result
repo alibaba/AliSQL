@@ -89,7 +89,6 @@ SELECT * FROM mysql.user
 WHERE user LIKE 'testuser%' ORDER BY host, user;
 Host	localhost
 User	testuser1
-Password	
 Select_priv	N
 Insert_priv	N
 Update_priv	N
@@ -130,9 +129,11 @@ max_user_connections	0
 plugin	mysql_native_password
 authentication_string	
 password_expired	N
+password_last_changed	DTVALUE
+password_lifetime	NULL
+account_locked	N
 Host	localhost
 User	testuser2
-Password	
 Select_priv	N
 Insert_priv	Y
 Update_priv	Y
@@ -173,9 +174,11 @@ max_user_connections	0
 plugin	mysql_native_password
 authentication_string	
 password_expired	N
+password_last_changed	DTVALUE
+password_lifetime	NULL
+account_locked	N
 Host	localhost
 User	testuser3
-Password	
 Select_priv	N
 Insert_priv	N
 Update_priv	N
@@ -216,6 +219,9 @@ max_user_connections	0
 plugin	mysql_native_password
 authentication_string	
 password_expired	N
+password_last_changed	DTVALUE
+password_lifetime	NULL
+account_locked	N
 #
 # Add GRANT OPTION db_datadict.* to testuser1;
 GRANT UPDATE ON db_datadict.* TO 'testuser1'@'localhost' WITH GRANT OPTION;
@@ -242,7 +248,6 @@ SELECT * FROM mysql.user
 WHERE user LIKE 'testuser%' ORDER BY host, user;
 Host	localhost
 User	testuser1
-Password	
 Select_priv	N
 Insert_priv	N
 Update_priv	N
@@ -283,9 +288,11 @@ max_user_connections	0
 plugin	mysql_native_password
 authentication_string	
 password_expired	N
+password_last_changed	DTVALUE
+password_lifetime	NULL
+account_locked	N
 Host	localhost
 User	testuser2
-Password	
 Select_priv	N
 Insert_priv	Y
 Update_priv	Y
@@ -326,9 +333,11 @@ max_user_connections	0
 plugin	mysql_native_password
 authentication_string	
 password_expired	N
+password_last_changed	DTVALUE
+password_lifetime	NULL
+account_locked	N
 Host	localhost
 User	testuser3
-Password	
 Select_priv	N
 Insert_priv	N
 Update_priv	N
@@ -369,6 +378,9 @@ max_user_connections	0
 plugin	mysql_native_password
 authentication_string	
 password_expired	N
+password_last_changed	DTVALUE
+password_lifetime	NULL
+account_locked	N
 # Establish connection testuser1 (user=testuser1)
 SELECT * FROM information_schema.user_privileges
 WHERE grantee LIKE '''testuser%'''
@@ -381,7 +393,6 @@ SELECT * FROM mysql.user
 WHERE user LIKE 'testuser%' ORDER BY host, user;
 Host	localhost
 User	testuser1
-Password	
 Select_priv	N
 Insert_priv	N
 Update_priv	N
@@ -422,9 +433,11 @@ max_user_connections	0
 plugin	mysql_native_password
 authentication_string	
 password_expired	N
+password_last_changed	DTVALUE
+password_lifetime	NULL
+account_locked	N
 Host	localhost
 User	testuser2
-Password	
 Select_priv	N
 Insert_priv	Y
 Update_priv	Y
@@ -465,9 +478,11 @@ max_user_connections	0
 plugin	mysql_native_password
 authentication_string	
 password_expired	N
+password_last_changed	DTVALUE
+password_lifetime	NULL
+account_locked	N
 Host	localhost
 User	testuser3
-Password	
 Select_priv	N
 Insert_priv	N
 Update_priv	N
@@ -508,6 +523,9 @@ max_user_connections	0
 plugin	mysql_native_password
 authentication_string	
 password_expired	N
+password_last_changed	DTVALUE
+password_lifetime	NULL
+account_locked	N
 SHOW GRANTS;
 Grants for testuser1@localhost
 GRANT USAGE ON *.* TO 'testuser1'@'localhost'
@@ -542,7 +560,6 @@ SELECT * FROM mysql.user
 WHERE user LIKE 'testuser%' ORDER BY host, user;
 Host	localhost
 User	testuser1
-Password	
 Select_priv	Y
 Insert_priv	N
 Update_priv	N
@@ -583,9 +600,11 @@ max_user_connections	0
 plugin	mysql_native_password
 authentication_string	
 password_expired	N
+password_last_changed	DTVALUE
+password_lifetime	NULL
+account_locked	N
 Host	localhost
 User	testuser2
-Password	
 Select_priv	N
 Insert_priv	Y
 Update_priv	Y
@@ -626,9 +645,11 @@ max_user_connections	0
 plugin	mysql_native_password
 authentication_string	
 password_expired	N
+password_last_changed	DTVALUE
+password_lifetime	NULL
+account_locked	N
 Host	localhost
 User	testuser3
-Password	
 Select_priv	N
 Insert_priv	N
 Update_priv	N
@@ -669,6 +690,9 @@ max_user_connections	0
 plugin	mysql_native_password
 authentication_string	
 password_expired	N
+password_last_changed	DTVALUE
+password_lifetime	NULL
+account_locked	N
 GRANT SELECT ON *.* TO 'testuser1'@'localhost' WITH GRANT OPTION;
 #
 # Here <SELECT YES> is shown correctly for testuser1;
@@ -695,7 +719,6 @@ SELECT * FROM mysql.user
 WHERE user LIKE 'testuser%' ORDER BY host, user;
 Host	localhost
 User	testuser1
-Password	
 Select_priv	Y
 Insert_priv	N
 Update_priv	N
@@ -736,9 +759,11 @@ max_user_connections	0
 plugin	mysql_native_password
 authentication_string	
 password_expired	N
+password_last_changed	DTVALUE
+password_lifetime	NULL
+account_locked	N
 Host	localhost
 User	testuser2
-Password	
 Select_priv	N
 Insert_priv	Y
 Update_priv	Y
@@ -779,9 +804,11 @@ max_user_connections	0
 plugin	mysql_native_password
 authentication_string	
 password_expired	N
+password_last_changed	DTVALUE
+password_lifetime	NULL
+account_locked	N
 Host	localhost
 User	testuser3
-Password	
 Select_priv	N
 Insert_priv	N
 Update_priv	N
@@ -822,6 +849,9 @@ max_user_connections	0
 plugin	mysql_native_password
 authentication_string	
 password_expired	N
+password_last_changed	DTVALUE
+password_lifetime	NULL
+account_locked	N
 # Switch to connection testuser1
 SELECT * FROM information_schema.user_privileges
 WHERE grantee LIKE '''testuser%'''
@@ -834,7 +864,6 @@ SELECT * FROM mysql.user
 WHERE user LIKE 'testuser%' ORDER BY host, user;
 Host	localhost
 User	testuser1
-Password	
 Select_priv	Y
 Insert_priv	N
 Update_priv	N
@@ -875,9 +904,11 @@ max_user_connections	0
 plugin	mysql_native_password
 authentication_string	
 password_expired	N
+password_last_changed	DTVALUE
+password_lifetime	NULL
+account_locked	N
 Host	localhost
 User	testuser2
-Password	
 Select_priv	N
 Insert_priv	Y
 Update_priv	Y
@@ -918,9 +949,11 @@ max_user_connections	0
 plugin	mysql_native_password
 authentication_string	
 password_expired	N
+password_last_changed	DTVALUE
+password_lifetime	NULL
+account_locked	N
 Host	localhost
 User	testuser3
-Password	
 Select_priv	N
 Insert_priv	N
 Update_priv	N
@@ -961,6 +994,9 @@ max_user_connections	0
 plugin	mysql_native_password
 authentication_string	
 password_expired	N
+password_last_changed	DTVALUE
+password_lifetime	NULL
+account_locked	N
 SHOW GRANTS;
 Grants for testuser1@localhost
 GRANT SELECT ON *.* TO 'testuser1'@'localhost' WITH GRANT OPTION
@@ -1025,7 +1061,6 @@ SELECT * FROM mysql.user
 WHERE user LIKE 'testuser%' ORDER BY host, user;
 Host	localhost
 User	testuser1
-Password	
 Select_priv	N
 Insert_priv	N
 Update_priv	N
@@ -1066,9 +1101,11 @@ max_user_connections	0
 plugin	mysql_native_password
 authentication_string	
 password_expired	N
+password_last_changed	DTVALUE
+password_lifetime	NULL
+account_locked	N
 Host	localhost
 User	testuser2
-Password	
 Select_priv	N
 Insert_priv	Y
 Update_priv	Y
@@ -1109,9 +1146,11 @@ max_user_connections	0
 plugin	mysql_native_password
 authentication_string	
 password_expired	N
+password_last_changed	DTVALUE
+password_lifetime	NULL
+account_locked	N
 Host	localhost
 User	testuser3
-Password	
 Select_priv	N
 Insert_priv	N
 Update_priv	N
@@ -1152,6 +1191,9 @@ max_user_connections	0
 plugin	mysql_native_password
 authentication_string	
 password_expired	N
+password_last_changed	DTVALUE
+password_lifetime	NULL
+account_locked	N
 # Switch to connection testuser1
 SELECT * FROM information_schema.user_privileges
 WHERE grantee LIKE '''testuser%'''
@@ -1211,7 +1253,6 @@ SELECT * FROM mysql.user
 WHERE user LIKE 'testuser%' ORDER BY host, user;
 Host	localhost
 User	testuser1
-Password	
 Select_priv	N
 Insert_priv	N
 Update_priv	N
@@ -1252,9 +1293,11 @@ max_user_connections	0
 plugin	mysql_native_password
 authentication_string	
 password_expired	N
+password_last_changed	DTVALUE
+password_lifetime	NULL
+account_locked	N
 Host	localhost
 User	testuser2
-Password	
 Select_priv	N
 Insert_priv	Y
 Update_priv	Y
@@ -1295,9 +1338,11 @@ max_user_connections	0
 plugin	mysql_native_password
 authentication_string	
 password_expired	N
+password_last_changed	DTVALUE
+password_lifetime	NULL
+account_locked	N
 Host	localhost
 User	testuser3
-Password	
 Select_priv	N
 Insert_priv	N
 Update_priv	N
@@ -1338,6 +1383,9 @@ max_user_connections	0
 plugin	mysql_native_password
 authentication_string	
 password_expired	N
+password_last_changed	DTVALUE
+password_lifetime	NULL
+account_locked	N
 # Switch to connection testuser1
 SELECT * FROM information_schema.user_privileges
 WHERE grantee LIKE '''testuser%'''
@@ -1350,7 +1398,6 @@ SELECT * FROM mysql.user
 WHERE user LIKE 'testuser%' ORDER BY host, user;
 Host	localhost
 User	testuser1
-Password	
 Select_priv	N
 Insert_priv	N
 Update_priv	N
@@ -1391,9 +1438,11 @@ max_user_connections	0
 plugin	mysql_native_password
 authentication_string	
 password_expired	N
+password_last_changed	DTVALUE
+password_lifetime	NULL
+account_locked	N
 Host	localhost
 User	testuser2
-Password	
 Select_priv	N
 Insert_priv	Y
 Update_priv	Y
@@ -1434,9 +1483,11 @@ max_user_connections	0
 plugin	mysql_native_password
 authentication_string	
 password_expired	N
+password_last_changed	DTVALUE
+password_lifetime	NULL
+account_locked	N
 Host	localhost
 User	testuser3
-Password	
 Select_priv	N
 Insert_priv	N
 Update_priv	N
@@ -1477,6 +1528,9 @@ max_user_connections	0
 plugin	mysql_native_password
 authentication_string	
 password_expired	N
+password_last_changed	DTVALUE
+password_lifetime	NULL
+account_locked	N
 SHOW GRANTS;
 Grants for testuser1@localhost
 GRANT USAGE ON *.* TO 'testuser1'@'localhost'
@@ -1496,7 +1550,6 @@ SELECT * FROM mysql.user
 WHERE user LIKE 'testuser%' ORDER BY host, user;
 Host	localhost
 User	testuser1
-Password	
 Select_priv	N
 Insert_priv	N
 Update_priv	N
@@ -1537,9 +1590,11 @@ max_user_connections	0
 plugin	mysql_native_password
 authentication_string	
 password_expired	N
+password_last_changed	DTVALUE
+password_lifetime	NULL
+account_locked	N
 Host	localhost
 User	testuser2
-Password	
 Select_priv	N
 Insert_priv	Y
 Update_priv	Y
@@ -1580,9 +1635,11 @@ max_user_connections	0
 plugin	mysql_native_password
 authentication_string	
 password_expired	N
+password_last_changed	DTVALUE
+password_lifetime	NULL
+account_locked	N
 Host	localhost
 User	testuser3
-Password	
 Select_priv	N
 Insert_priv	N
 Update_priv	N
@@ -1623,6 +1680,9 @@ max_user_connections	0
 plugin	mysql_native_password
 authentication_string	
 password_expired	N
+password_last_changed	DTVALUE
+password_lifetime	NULL
+account_locked	N
 SHOW GRANTS;
 Grants for testuser1@localhost
 GRANT USAGE ON *.* TO 'testuser1'@'localhost'
@@ -1657,7 +1717,6 @@ SELECT * FROM mysql.user
 WHERE user LIKE 'testuser%' ORDER BY host, user;
 Host	localhost
 User	testuser1
-Password	
 Select_priv	N
 Insert_priv	N
 Update_priv	N
@@ -1698,9 +1757,11 @@ max_user_connections	0
 plugin	mysql_native_password
 authentication_string	
 password_expired	N
+password_last_changed	DTVALUE
+password_lifetime	NULL
+account_locked	N
 Host	localhost
 User	testuser2
-Password	
 Select_priv	N
 Insert_priv	Y
 Update_priv	Y
@@ -1741,9 +1802,11 @@ max_user_connections	0
 plugin	mysql_native_password
 authentication_string	
 password_expired	N
+password_last_changed	DTVALUE
+password_lifetime	NULL
+account_locked	N
 Host	localhost
 User	testuser3
-Password	
 Select_priv	N
 Insert_priv	N
 Update_priv	N
@@ -1784,6 +1847,9 @@ max_user_connections	0
 plugin	mysql_native_password
 authentication_string	
 password_expired	N
+password_last_changed	DTVALUE
+password_lifetime	NULL
+account_locked	N
 # Switch to connection testuser1
 SELECT * FROM information_schema.user_privileges
 WHERE grantee LIKE '''testuser%'''

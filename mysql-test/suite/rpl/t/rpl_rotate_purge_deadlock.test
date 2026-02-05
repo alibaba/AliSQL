@@ -3,10 +3,11 @@
 #
 # Bug#11763573 - 56299: MUTEX DEADLOCK WITH COM_BINLOG_DUMP, BINLOG PURGE, AND PROCESSLIST/KILL
 #
-source include/master-slave.inc;
+--source include/not_group_replication_plugin.inc
 source include/have_debug_sync.inc;
 source include/have_binlog_format_row.inc;
 source include/have_innodb.inc;
+source include/master-slave.inc;
 
 #
 # Testing that execution of two concurrent INSERTing connections both
@@ -29,7 +30,7 @@ connection master1;
 let $wait_condition=
   SELECT COUNT(*) = 1 FROM INFORMATION_SCHEMA.PROCESSLIST
     WHERE STATE like "debug sync point: at_purge_logs_before_date%";
---source include/wait_condition.inc
+--source include/wait_condition_or_abort.inc
 
 --echo *** there must be two logs in the list ***
 source include/show_binary_logs.inc;
@@ -66,7 +67,7 @@ connection master1;
 let $wait_condition=
   SELECT COUNT(*) = 1 FROM INFORMATION_SCHEMA.PROCESSLIST
     WHERE STATE like "debug sync point: at_purge_logs_before_date%";
---source include/wait_condition.inc
+--source include/wait_condition_or_abort.inc
 
 # find and kill DUMP thread
 let $_tid= `select id from information_schema.processlist where command like 'Binlog Dump%' limit 1`;
@@ -81,7 +82,7 @@ eval kill query $_tid;
 let $wait_condition=
   SELECT COUNT(*) = 1 FROM INFORMATION_SCHEMA.PROCESSLIST
     WHERE command like 'Binlog Dump%' and STATE like "Master has sent all binlog to slave%";
---source include/wait_condition.inc
+--source include/wait_condition_or_abort.inc
 
 SET DEBUG_SYNC = 'now SIGNAL rotated';
 --let $wait_condition= SELECT COUNT(*)=0 FROM information_schema.processlist WHERE state LIKE 'debug sync point: at_purge_logs_before_date%'

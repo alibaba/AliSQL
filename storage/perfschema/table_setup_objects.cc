@@ -1,13 +1,20 @@
-/* Copyright (c) 2008, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation; version 2 of the License.
+  it under the terms of the GNU General Public License, version 2.0,
+  as published by the Free Software Foundation.
+
+  This program is also distributed with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an additional
+  permission to link the program and your derivative works with the
+  separately licensed software that they have included with MySQL.
 
   This program is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
+  GNU General Public License, version 2.0, for more details.
 
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software Foundation,
@@ -19,7 +26,7 @@
 */
 
 #include "my_global.h"
-#include "my_pthread.h"
+#include "my_thread.h"
 #include "pfs_instr.h"
 #include "pfs_column_types.h"
 #include "pfs_column_values.h"
@@ -27,6 +34,8 @@
 #include "table_setup_objects.h"
 #include "table_helper.h"
 #include "pfs_global.h"
+#include "pfs_buffer_container.h"
+#include "field.h"
 
 THR_LOCK table_setup_objects::m_table_lock;
 
@@ -34,7 +43,7 @@ static const TABLE_FIELD_TYPE field_types[]=
 {
   {
     { C_STRING_WITH_LEN("OBJECT_TYPE") },
-    { C_STRING_WITH_LEN("enum(\'TABLE\')") },
+    { C_STRING_WITH_LEN("enum(\'EVENT\',\'FUNCTION\',\'PROCEDURE\',\'TABLE\',\'TRIGGER\'") },
     { NULL, 0}
   },
   {
@@ -63,6 +72,11 @@ TABLE_FIELD_DEF
 table_setup_objects::m_field_def=
 { 5, field_types };
 
+PFS_engine_table_share_state
+table_setup_objects::m_share_state = {
+  false /* m_checked */
+};
+
 PFS_engine_table_share
 table_setup_objects::m_share=
 {
@@ -72,11 +86,12 @@ table_setup_objects::m_share=
   table_setup_objects::write_row,
   table_setup_objects::delete_all_rows,
   table_setup_objects::get_row_count,
-  1000, /* records */
   sizeof(PFS_simple_index),
   &m_table_lock,
   &m_field_def,
-  false /* checked */
+  false, /* m_perpetual */
+  false, /* m_optional */
+  &m_share_state
 };
 
 int update_derived_flags()
@@ -86,6 +101,7 @@ int update_derived_flags()
     return HA_ERR_OUT_OF_MEM;
 
   update_table_share_derived_flags(thread);
+  update_program_share_derived_flags(thread);
   update_table_derived_flags();
   return 0;
 }
@@ -132,13 +148,15 @@ int table_setup_objects::write_row(TABLE *table, unsigned char *buf,
         timed_value= (enum_yes_no) get_field_enum(f);
         break;
       default:
-        DBUG_ASSERT(false);
+        assert(false);
       }
     }
   }
 
   /* Reject illegal enum values in OBJECT_TYPE */
-  if (object_type != OBJECT_TYPE_TABLE)
+  if (object_type < FIRST_OBJECT_TYPE ||
+      object_type > LAST_OBJECT_TYPE  ||
+      object_type == OBJECT_TYPE_TEMPORARY_TABLE)
     return HA_ERR_NO_REFERENCED_ROW;
 
   /* Reject illegal enum values in ENABLED */
@@ -169,7 +187,7 @@ int table_setup_objects::delete_all_rows(void)
 
 ha_rows table_setup_objects::get_row_count(void)
 {
-  return setup_object_count();
+  return global_setup_object_container.get_row_count();
 }
 
 table_setup_objects::table_setup_objects()
@@ -187,17 +205,14 @@ int table_setup_objects::rnd_next(void)
 {
   PFS_setup_object *pfs;
 
-  for (m_pos.set_at(&m_next_pos);
-       m_pos.m_index < setup_object_max;
-       m_pos.next())
+  m_pos.set_at(&m_next_pos);
+  PFS_setup_object_iterator it= global_setup_object_container.iterate(m_pos.m_index);
+  pfs= it.scan_next(& m_pos.m_index);
+  if (pfs != NULL)
   {
-    pfs= &setup_object_array[m_pos.m_index];
-    if (pfs->m_lock.is_populated())
-    {
-      make_row(pfs);
-      m_next_pos.set_after(&m_pos);
-      return 0;
-    }
+    make_row(pfs);
+    m_next_pos.set_after(&m_pos);
+    return 0;
   }
 
   return HA_ERR_END_OF_FILE;
@@ -209,9 +224,8 @@ int table_setup_objects::rnd_pos(const void *pos)
 
   set_position(pos);
 
-  DBUG_ASSERT(m_pos.m_index < setup_object_max);
-  pfs= &setup_object_array[m_pos.m_index];
-  if (pfs->m_lock.is_populated())
+  pfs= global_setup_object_container.get(m_pos.m_index);
+  if (pfs != NULL)
   {
     make_row(pfs);
     return 0;
@@ -222,7 +236,7 @@ int table_setup_objects::rnd_pos(const void *pos)
 
 void table_setup_objects::make_row(PFS_setup_object *pfs)
 {
-  pfs_lock lock;
+  pfs_optimistic_state lock;
 
   m_row_exists= false;
 
@@ -251,7 +265,7 @@ int table_setup_objects::read_row_values(TABLE *table,
     return HA_ERR_RECORD_DELETED;
 
   /* Set the null bits */
-  DBUG_ASSERT(table->s->null_bytes == 1);
+  assert(table->s->null_bytes == 1);
   buf[0]= 0;
 
   for (; (f= *fields) ; fields++)
@@ -284,7 +298,7 @@ int table_setup_objects::read_row_values(TABLE *table,
         set_field_enum(f, (*m_row.m_timed_ptr) ? ENUM_YES : ENUM_NO);
         break;
       default:
-        DBUG_ASSERT(false);
+        assert(false);
       }
     }
   }
@@ -326,7 +340,7 @@ int table_setup_objects::update_row_values(TABLE *table,
         *m_row.m_timed_ptr= (value == ENUM_YES) ? true : false;
         break;
       default:
-        DBUG_ASSERT(false);
+        assert(false);
       }
     }
   }
@@ -339,7 +353,7 @@ int table_setup_objects::delete_row_values(TABLE *table,
                                            const unsigned char *buf,
                                            Field **fields)
 {
-  DBUG_ASSERT(m_row_exists);
+  assert(m_row_exists);
 
   CHARSET_INFO *cs= &my_charset_utf8_bin;
   enum_object_type object_type= OBJECT_TYPE_TABLE;

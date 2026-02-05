@@ -19,6 +19,7 @@ master-bin.000001	#
 master-bin.000002	#
 ###################### TEST #2
 RESET MASTER;
+SET GLOBAL binlog_error_action= IGNORE_ERROR;
 FLUSH LOGS;
 ERROR HY000: Can't generate a unique log-filename master-bin.(1-999)
 
@@ -41,6 +42,7 @@ master-bin.000002	#
 DELETE FROM t2;
 RESET MASTER;
 ###################### TEST #4
+SET GLOBAL binlog_error_action= IGNORE_ERROR;
 SELECT count(*) FROM t2;
 count(*)
 0
@@ -63,6 +65,7 @@ count(*)
 DELETE FROM t2;
 RESET MASTER;
 ###################### TEST #6
+SET GLOBAL binlog_error_action= IGNORE_ERROR;
 # Table should be empty
 SELECT count(*) FROM t2;
 count(*)
@@ -83,6 +86,7 @@ DELETE FROM t2;
 include/rpl_restart_server.inc [server_number=1]
 RESET MASTER;
 ###################### TEST #7
+SET GLOBAL binlog_error_action= IGNORE_ERROR;
 SELECT count(*) FROM t4;
 count(*)
 0
@@ -97,6 +101,7 @@ DELETE FROM t4;
 include/rpl_restart_server.inc [server_number=1]
 RESET MASTER;
 ###################### TEST #8
+SET GLOBAL binlog_error_action= IGNORE_ERROR;
 SET @xxx = REPEAT('xxx', 1000);
 SET @yyy = REPEAT('yyy', 1000);
 INSERT INTO t2 VALUES (@xxx),(@yyy);
@@ -112,10 +117,12 @@ LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/bug_46166.data' INTO TABLE t4;
 ERROR HY000: Can't generate a unique log-filename master-bin.(1-999)
 
 include/rpl_restart_server.inc [server_number=1]
+SET GLOBAL binlog_error_action= IGNORE_ERROR;
 LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/bug_46166.data' INTO TABLE t2;
 ERROR HY000: Can't generate a unique log-filename master-bin.(1-999)
 
 include/rpl_restart_server.inc [server_number=1]
+SET GLOBAL binlog_error_action= IGNORE_ERROR;
 set @aaa = repeat('aaa',1000);
 set @bbb = repeat('bbb',1000);
 set @ccc = repeat('ccc',1000);
@@ -134,12 +141,14 @@ SELECT count(*) FROM t2;
 count(*)
 6
 include/rpl_restart_server.inc [server_number=1]
+SET GLOBAL binlog_error_action= IGNORE_ERROR;
 SET @xxx = REPEAT('xxx', 1000);
 SET @yyy = REPEAT('yyy', 1000);
 DELETE FROM t4 WHERE a IN (@xxx, @yyy) OR 1;
 ERROR HY000: Can't generate a unique log-filename master-bin.(1-999)
 
 include/rpl_restart_server.inc [server_number=1]
+SET GLOBAL binlog_error_action= IGNORE_ERROR;
 set @aaa = repeat('aaa',1000);
 set @bbb = repeat('bbb',1000);
 set @ccc = repeat('ccc',1000);
@@ -157,6 +166,7 @@ count(*)
 0
 DELETE FROM t2;
 ###################### TEST #9
+SET GLOBAL binlog_error_action= IGNORE_ERROR;
 SET SQL_LOG_BIN=0;
 INSERT INTO t2 VALUES ('aaa'), ('bbb'), ('ccc'), ('ddd');
 INSERT INTO t4 VALUES ('eee'), ('fff'), ('ggg'), ('hhh');
@@ -199,7 +209,6 @@ include/rpl_restart_server.inc [server_number=1]
 FLUSH LOGS;
 ERROR HY000: Can't open file: 'master-bin.index' (errno: 1 - Operation not permitted)
 RESET MASTER;
-ERROR HY000: Binlog closed, cannot RESET MASTER
 CREATE TABLE t5 (a INT);
 INSERT INTO t4 VALUES ('bbbbb');
 INSERT INTO t2 VALUES ('aaaaa');
@@ -211,7 +220,6 @@ include/rpl_restart_server.inc [server_number=1]
 FLUSH LOGS;
 ERROR HY000: Can't open file: 'master-bin' (errno: 2 - No such file or directory)
 RESET MASTER;
-ERROR HY000: Binlog closed, cannot RESET MASTER
 CREATE TABLE t5 (a INT);
 INSERT INTO t4 VALUES ('bbbbb');
 INSERT INTO t2 VALUES ('aaaaa');
@@ -226,54 +234,74 @@ include/start_slave.inc
 ####################### PART 2: SLAVE TESTS ###########################
 #######################################################################
 include/rpl_reset.inc
-call mtr.add_suppression("Slave I/O: Relay log write failure: could not queue event from master.*");
+call mtr.add_suppression("Slave I/O for channel '': Relay log write failure: could not queue event from master.*");
 call mtr.add_suppression("Error writing file .*");
 call mtr.add_suppression("Could not open .*");
 call mtr.add_suppression("MYSQL_BIN_LOG::open failed to sync the index file.");
 call mtr.add_suppression("Can't generate a unique log-filename .*");
 ###################### TEST #13
+SET GLOBAL binlog_error_action= IGNORE_ERROR;
 SET @old_debug=@@global.debug;
 include/stop_slave.inc
 SET GLOBAL debug="+d,error_unique_log_filename";
 START SLAVE io_thread;
 include/wait_for_slave_io_error.inc [errno=1595]
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 Last_IO_Error = 'Relay log write failure: could not queue event from master'
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET GLOBAL debug="-d,error_unique_log_filename";
 SET GLOBAL debug=@old_debug;
 include/rpl_restart_server.inc [server_number=2]
 ###################### TEST #14
+SET GLOBAL binlog_error_action= IGNORE_ERROR;
 SET @old_debug=@@global.debug;
 include/stop_slave.inc
 SET GLOBAL debug="+d,fault_injection_new_file_rotate_event";
 START SLAVE io_thread;
 include/wait_for_slave_io_error.inc [errno=1595]
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 Last_IO_Error = 'Relay log write failure: could not queue event from master'
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET GLOBAL debug="-d,fault_injection_new_file_rotate_event";
 SET GLOBAL debug=@old_debug;
 include/rpl_restart_server.inc [server_number=2]
 ###################### TEST #15
+SET GLOBAL binlog_error_action= IGNORE_ERROR;
 SET @old_debug=@@global.debug;
 include/stop_slave.inc
 SET GLOBAL debug="+d,fault_injection_registering_index";
 START SLAVE io_thread;
 include/wait_for_slave_io_error.inc [errno=1595]
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 Last_IO_Error = 'Relay log write failure: could not queue event from master'
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET GLOBAL debug="-d,fault_injection_registering_index";
 SET GLOBAL debug=@old_debug;
 include/rpl_restart_server.inc [server_number=2]
 ###################### TEST #16
+SET GLOBAL binlog_error_action= IGNORE_ERROR;
 SET @old_debug=@@global.debug;
 include/stop_slave.inc
 SET GLOBAL debug="+d,fault_injection_openning_index";
 START SLAVE io_thread;
 include/wait_for_slave_io_error.inc [errno=1595]
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 Last_IO_Error = 'Relay log write failure: could not queue event from master'
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 SET GLOBAL debug="-d,fault_injection_openning_index";
 SET GLOBAL debug=@old_debug;
 include/rpl_restart_server.inc [server_number=2]
 include/stop_slave_sql.inc
 Warnings:
-Note	1255	Slave already has been stopped
+Note	3084	Replication thread(s) for channel '' are already stopped.
 RESET SLAVE;
 RESET MASTER;
 include/rpl_end.inc

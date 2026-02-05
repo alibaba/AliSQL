@@ -19,66 +19,68 @@ use world;
 --enable_result_log
 --enable_query_log
 
-SELECT COUNT(*) FROM Country;
-SELECT COUNT(*) FROM City;
-SELECT COUNT(*) FROM CountryLanguage;
+SELECT COUNT(*) FROM country;
+SELECT COUNT(*) FROM city;
+SELECT COUNT(*) FROM countrylanguage;
 
 show variables like 'join_buffer_size';
 
+# Somewhat unstable filtering numbers
+--replace_regex /88.18/87.57/
 EXPLAIN
-SELECT City.Name, Country.Name FROM City,Country
-  WHERE City.Country=Country.Code AND 
-        Country.Name LIKE 'L%' AND City.Population > 100000;
+SELECT city.Name, country.Name FROM city,country
+  WHERE city.Country=country.Code AND 
+        country.Name LIKE 'L%' AND city.Population > 100000;
 
 --sorted_result
-SELECT City.Name, Country.Name FROM City,Country
-  WHERE City.Country=Country.Code AND 
-        Country.Name LIKE 'L%' AND City.Population > 100000;
+SELECT city.Name, country.Name FROM city,country
+  WHERE city.Country=country.Code AND 
+        country.Name LIKE 'L%' AND city.Population > 100000;
 
 EXPLAIN
-SELECT City.Name, Country.Name, CountryLanguage.Language
-  FROM City,Country,CountryLanguage
-  WHERE City.Country=Country.Code AND
-        CountryLanguage.Country=Country.Code AND
-        City.Name LIKE 'L%' AND Country.Population > 3000000 AND
-        CountryLanguage.Percentage > 50;
+SELECT city.Name, country.Name, countrylanguage.Language
+  FROM city,country,countrylanguage
+  WHERE city.Country=country.Code AND
+        countrylanguage.Country=country.Code AND
+        city.Name LIKE 'L%' AND country.Population > 3000000 AND
+        countrylanguage.Percentage > 50;
 
 --sorted_result
-SELECT City.Name, Country.Name, CountryLanguage.Language
-  FROM City,Country,CountryLanguage
-  WHERE City.Country=Country.Code AND
-        CountryLanguage.Country=Country.Code AND
-        City.Name LIKE 'L%' AND Country.Population > 3000000 AND
-        CountryLanguage.Percentage > 50;
+SELECT city.Name, country.Name, countrylanguage.Language
+  FROM city,country,countrylanguage
+  WHERE city.Country=country.Code AND
+        countrylanguage.Country=country.Code AND
+        city.Name LIKE 'L%' AND country.Population > 3000000 AND
+        countrylanguage.Percentage > 50;
 
 set join_buffer_size=256;
 show variables like 'join_buffer_size';
 
 EXPLAIN
-SELECT City.Name, Country.Name FROM City,Country
-  WHERE City.Country=Country.Code AND 
-        Country.Name LIKE 'L%' AND City.Population > 100000;
+SELECT city.Name, country.Name FROM city,country
+  WHERE city.Country=country.Code AND 
+        country.Name LIKE 'L%' AND city.Population > 100000;
 
 --sorted_result
-SELECT City.Name, Country.Name FROM City,Country
-  WHERE City.Country=Country.Code AND 
-        Country.Name LIKE 'L%' AND City.Population > 100000;
+SELECT city.Name, country.Name FROM city,country
+  WHERE city.Country=country.Code AND 
+        country.Name LIKE 'L%' AND city.Population > 100000;
 
 EXPLAIN
-SELECT City.Name, Country.Name, CountryLanguage.Language
-  FROM City,Country,CountryLanguage
-  WHERE City.Country=Country.Code AND
-        CountryLanguage.Country=Country.Code AND
-        City.Name LIKE 'L%' AND Country.Population > 3000000 AND
-        CountryLanguage.Percentage > 50;
+SELECT city.Name, country.Name, countrylanguage.Language
+  FROM city,country,countrylanguage
+  WHERE city.Country=country.Code AND
+        countrylanguage.Country=country.Code AND
+        city.Name LIKE 'L%' AND country.Population > 3000000 AND
+        countrylanguage.Percentage > 50;
 
 --sorted_result
-SELECT City.Name, Country.Name, CountryLanguage.Language
-  FROM City,Country,CountryLanguage
-  WHERE City.Country=Country.Code AND
-        CountryLanguage.Country=Country.Code AND
-        City.Name LIKE 'L%' AND Country.Population > 3000000 AND
-        CountryLanguage.Percentage > 50;
+SELECT city.Name, country.Name, countrylanguage.Language
+  FROM city,country,countrylanguage
+  WHERE city.Country=country.Code AND
+        countrylanguage.Country=country.Code AND
+        city.Name LIKE 'L%' AND country.Population > 3000000 AND
+        countrylanguage.Percentage > 50;
 
 set join_buffer_size=default;
 show variables like 'join_buffer_size';
@@ -102,146 +104,154 @@ use world;
 
 show variables like 'join_buffer_size';
 
+# Somewhat unstable filtering numbers
+--replace_regex /88.18/87.57/
 EXPLAIN
-SELECT City.Name, Country.Name FROM City,Country
-  WHERE City.Country=Country.Code AND 
-        Country.Name LIKE 'L%' AND City.Population > 100000;
+SELECT city.Name, country.Name FROM city,country
+  WHERE city.country=country.Code AND 
+        country.Name LIKE 'L%' AND city.Population > 100000;
 
 --sorted_result
-SELECT City.Name, Country.Name FROM City,Country
-  WHERE City.Country=Country.Code AND 
-        Country.Name LIKE 'L%' AND City.Population > 100000;
+SELECT city.Name, country.Name FROM city,country
+  WHERE city.country=country.Code AND 
+        country.Name LIKE 'L%' AND city.Population > 100000;
 
 --replace_result 185 # 188 #
 EXPLAIN
-SELECT City.Name, Country.Name, CountryLanguage.Language
-  FROM City,Country,CountryLanguage
-  WHERE City.Country=Country.Code AND
-        CountryLanguage.Country=Country.Code AND
-        City.Name LIKE 'L%' AND Country.Population > 3000000 AND
-        CountryLanguage.Percentage > 50;
+SELECT city.Name, country.Name, countrylanguage.Language
+  FROM city,country,countrylanguage
+  WHERE city.country=country.Code AND
+        countrylanguage.country=country.Code AND
+        city.Name LIKE 'L%' AND country.Population > 3000000 AND
+        countrylanguage.Percentage > 50;
 
 --sorted_result
-SELECT City.Name, Country.Name, CountryLanguage.Language
-  FROM City,Country,CountryLanguage
-  WHERE City.Country=Country.Code AND
-        CountryLanguage.Country=Country.Code AND
-        City.Name LIKE 'L%' AND Country.Population > 3000000 AND
-        CountryLanguage.Percentage > 50;
+SELECT city.Name, country.Name, countrylanguage.Language
+  FROM city,country,countrylanguage
+  WHERE city.country=country.Code AND
+        countrylanguage.country=country.Code AND
+        city.Name LIKE 'L%' AND country.Population > 3000000 AND
+        countrylanguage.Percentage > 50;
+
+# Somewhat unstable filtering numbers
+--replace_regex /88.18/87.57/
+EXPLAIN
+SELECT Name FROM city
+  WHERE city.country IN (SELECT Code FROM country WHERE country.Name LIKE 'L%') AND
+        city.Population > 100000;
+
+--sorted_result
+SELECT Name FROM city
+  WHERE city.country IN (SELECT Code FROM country WHERE country.Name LIKE 'L%') AND
+        city.Population > 100000;
 
 EXPLAIN
-SELECT Name FROM City
-  WHERE City.Country IN (SELECT Code FROM Country WHERE Country.Name LIKE 'L%') AND
-        City.Population > 100000;
+SELECT country.Name, IF(ISNULL(countrylanguage.country), NULL, countrylanguage.Percentage)
+  FROM country LEFT JOIN countrylanguage ON
+       (countrylanguage.country=country.Code AND Language='English')
+  WHERE 
+       country.Population > 10000000;
 
 --sorted_result
-SELECT Name FROM City
-  WHERE City.Country IN (SELECT Code FROM Country WHERE Country.Name LIKE 'L%') AND
-        City.Population > 100000;
-
-EXPLAIN
-SELECT Country.Name, IF(ISNULL(CountryLanguage.Country), NULL, CountryLanguage.Percentage)
-  FROM Country LEFT JOIN CountryLanguage ON
-       (CountryLanguage.Country=Country.Code AND Language='English')
+SELECT country.Name, IF(ISNULL(countrylanguage.country), NULL, countrylanguage.Percentage)
+  FROM country LEFT JOIN countrylanguage ON
+       (countrylanguage.country=country.Code AND Language='English')
   WHERE 
-       Country.Population > 10000000;
-
---sorted_result
-SELECT Country.Name, IF(ISNULL(CountryLanguage.Country), NULL, CountryLanguage.Percentage)
-  FROM Country LEFT JOIN CountryLanguage ON
-       (CountryLanguage.Country=Country.Code AND Language='English')
-  WHERE 
-       Country.Population > 10000000;
+       country.Population > 10000000;
 
 set join_buffer_size=256;
 show variables like 'join_buffer_size';
 
+# Somewhat unstable filtering numbers
+--replace_regex /88.18/87.57/
 EXPLAIN
-SELECT City.Name, Country.Name FROM City,Country
-  WHERE City.Country=Country.Code AND 
-        Country.Name LIKE 'L%' AND City.Population > 100000;
+SELECT city.Name, country.Name FROM city,country
+  WHERE city.country=country.Code AND 
+        country.Name LIKE 'L%' AND city.Population > 100000;
 
 --sorted_result
-SELECT City.Name, Country.Name FROM City,Country
-  WHERE City.Country=Country.Code AND 
-        Country.Name LIKE 'L%' AND City.Population > 100000;
+SELECT city.Name, country.Name FROM city,country
+  WHERE city.country=country.Code AND 
+        country.Name LIKE 'L%' AND city.Population > 100000;
 
 --replace_result 185 # 188 #
 EXPLAIN
-SELECT City.Name, Country.Name, CountryLanguage.Language
-  FROM City,Country,CountryLanguage
-  WHERE City.Country=Country.Code AND
-        CountryLanguage.Country=Country.Code AND
-        City.Name LIKE 'L%' AND Country.Population > 3000000 AND
-        CountryLanguage.Percentage > 50;
+SELECT city.Name, country.Name, countrylanguage.Language
+  FROM city,country,countrylanguage
+  WHERE city.country=country.Code AND
+        countrylanguage.country=country.Code AND
+        city.Name LIKE 'L%' AND country.Population > 3000000 AND
+        countrylanguage.Percentage > 50;
 
 --sorted_result
-SELECT City.Name, Country.Name, CountryLanguage.Language
-  FROM City,Country,CountryLanguage
-  WHERE City.Country=Country.Code AND
-        CountryLanguage.Country=Country.Code AND
-        City.Name LIKE 'L%' AND Country.Population > 3000000 AND
-        CountryLanguage.Percentage > 50;
+SELECT city.Name, country.Name, countrylanguage.Language
+  FROM city,country,countrylanguage
+  WHERE city.country=country.Code AND
+        countrylanguage.country=country.Code AND
+        city.Name LIKE 'L%' AND country.Population > 3000000 AND
+        countrylanguage.Percentage > 50;
 
+# Somewhat unstable filtering numbers
+--replace_regex /88.18/87.57/
 EXPLAIN
-SELECT Name FROM City
-  WHERE City.Country IN (SELECT Code FROM Country WHERE Country.Name LIKE 'L%') AND
-        City.Population > 100000;
+SELECT Name FROM city
+  WHERE city.country IN (SELECT Code FROM country WHERE country.Name LIKE 'L%') AND
+        city.Population > 100000;
 
 --sorted_result
-SELECT Name FROM City
-  WHERE City.Country IN (SELECT Code FROM Country WHERE Country.Name LIKE 'L%') AND
-        City.Population > 100000;
+SELECT Name FROM city
+  WHERE city.country IN (SELECT Code FROM country WHERE country.Name LIKE 'L%') AND
+        city.Population > 100000;
 
 set join_buffer_size=default;
 show variables like 'join_buffer_size';
 
 --sorted_result
-SELECT City.Name, Country.Name FROM City,Country
-  WHERE City.Country=Country.Code AND City.Population > 3000000;
+SELECT city.Name, country.Name FROM city,country
+  WHERE city.country=country.Code AND city.Population > 3000000;
 
 set join_buffer_size=256;
 
---replace_column 9 #
+--replace_column 10 #
 EXPLAIN
-SELECT City.Name, Country.Name FROM City,Country
-  WHERE City.Country=Country.Code AND City.Population > 3000000;
+SELECT city.Name, country.Name FROM city,country
+  WHERE city.country=country.Code AND city.Population > 3000000;
 
 --sorted_result
-SELECT City.Name, Country.Name FROM City,Country
-  WHERE City.Country=Country.Code AND City.Population > 3000000;
+SELECT city.Name, country.Name FROM city,country
+  WHERE city.country=country.Code AND city.Population > 3000000;
 
 set join_buffer_size=default;
 
-ALTER TABLE Country MODIFY Name varchar(52) NOT NULL default '';
+ALTER TABLE country MODIFY Name varchar(52) NOT NULL default '';
 
 --sorted_result
-SELECT City.Name, Country.Name FROM City,Country
-  WHERE City.Country=Country.Code AND 
-        Country.Name LIKE 'L%' AND City.Population > 100000;
+SELECT city.Name, country.Name FROM city,country
+  WHERE city.country=country.Code AND 
+        country.Name LIKE 'L%' AND city.Population > 100000;
 
-ALTER TABLE Country MODIFY Name varchar(300) NOT NULL default '';
+ALTER TABLE country MODIFY Name varchar(300) NOT NULL default '';
 
 --sorted_result
-SELECT City.Name, Country.Name FROM City,Country
-  WHERE City.Country=Country.Code AND 
-        Country.Name LIKE 'L%' AND City.Population > 100000;
+SELECT city.Name, country.Name FROM city,country
+  WHERE city.country=country.Code AND 
+        country.Name LIKE 'L%' AND city.Population > 100000;
 
-ALTER TABLE Country ADD COLUMN PopulationBar text;
-UPDATE Country 
+ALTER TABLE country ADD COLUMN PopulationBar text;
+UPDATE country 
   SET PopulationBar=REPEAT('x', CAST(Population/100000 AS unsigned int));
 
 --sorted_result
-SELECT City.Name, Country.Name, Country.PopulationBar FROM City,Country
-  WHERE City.Country=Country.Code AND 
-        Country.Name LIKE 'L%' AND City.Population > 100000;
+SELECT city.Name, country.Name, country.PopulationBar FROM city,country
+  WHERE city.country=country.Code AND 
+        country.Name LIKE 'L%' AND city.Population > 100000;
 
 set join_buffer_size=256;
 
 --sorted_result
-SELECT City.Name, Country.Name, Country.PopulationBar FROM City,Country
-  WHERE City.Country=Country.Code AND 
-        Country.Name LIKE 'L%' AND City.Population > 100000;
+SELECT city.Name, country.Name, country.PopulationBar FROM city,country
+  WHERE city.country=country.Code AND 
+        country.Name LIKE 'L%' AND city.Population > 100000;
 
 set join_buffer_size=default;
 
@@ -1259,6 +1269,7 @@ INSERT INTO t2 VALUES (2),(3);
 --echo # The query shall return 1 record with a max value 9 and one of the 
 --echo # int_key values inserted above (undefined which one). A changed 
 --echo # execution plan may change the value in the second column
+--source include/turn_off_only_full_group_by.inc
 SELECT  MAX(t1.int_key), t1.int_key
 FROM t1 STRAIGHT_JOIN t2  
 ORDER BY t1.int_key;
@@ -1271,7 +1282,7 @@ FROM t1 STRAIGHT_JOIN t2
 ORDER BY t1.int_key;
 
 --echo
-
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 DROP TABLE t1,t2;
 
 --echo #
@@ -1533,6 +1544,8 @@ drop table t1;
 --echo # and join_cache_level=5-8"
 --echo #
 
+--source include/turn_off_only_full_group_by.inc
+
 CREATE TABLE t1 (
   `col_int_key` int,
   `col_datetime` datetime,
@@ -1578,6 +1591,7 @@ eval explain $query;
 eval $query;
 
 drop table t1,t2;
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 
 --echo
 --echo # Bug#11766522 "59651: ASSERTION `TABLE_REF->HAS_RECORD' FAILED
@@ -1860,12 +1874,14 @@ RIGHT JOIN t2 ON t2.pk = t1.col_int_key
 GROUP BY field1 , field4 
 ORDER BY t1.col_datetime_key ;
 
+--source include/turn_off_only_full_group_by.inc
 eval explain $query;
 # even though there is ORDER BY, it does not cover all columns, so
 # there is still randomness, so we have to sort client-side:
 --sorted_result
 eval $query;
 
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 DROP TABLE t1,t2;
 
 --echo
@@ -1995,11 +2011,13 @@ INSERT INTO t1 VALUES ('a','a');
 
 CREATE TABLE t2 (i varchar(10)) ENGINE=innodb;
 INSERT INTO t2 VALUES ('a');
+--source include/turn_off_only_full_group_by.inc
 
 SELECT t1.col1
 FROM t1 JOIN t2 ON t1.col1 = t2.i 
 GROUP BY t1.col2;
 
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 DROP TABLE t1,t2;
 
 --echo # End of Bug#12997905
@@ -2027,11 +2045,11 @@ INSERT INTO t2 VALUES (9, '2002-08-25 20:35:06', 'e'),
 set @optimizer_switch_saved=@@session.optimizer_switch;
 set @@session.optimizer_switch='semijoin=off';
 
-let $query=SELECT PARENT1.col_varchar_key
-FROM t2 AS PARENT1 LEFT JOIN t1 USING (col_int_nokey)
-WHERE PARENT1.col_varchar_key IN
-      ( SELECT col_varchar_key FROM t2 AS CHILD1
-        WHERE PARENT1.col_datetime_nokey IS NULL
+let $query=SELECT parent1.col_varchar_key
+FROM t2 AS parent1 LEFT JOIN t1 USING (col_int_nokey)
+WHERE parent1.col_varchar_key IN
+      ( SELECT col_varchar_key FROM t2 AS child1
+        WHERE parent1.col_datetime_nokey IS NULL
               AND t1.col_int_nokey IS NULL )
 ;
 eval EXPLAIN $query;

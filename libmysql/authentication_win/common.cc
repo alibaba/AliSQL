@@ -1,13 +1,20 @@
-/* Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -52,7 +59,7 @@ int opt_auth_win_log_level= 2;
 
 Connection::Connection(MYSQL_PLUGIN_VIO *vio): m_vio(vio), m_error(0)
 {
-  DBUG_ASSERT(vio);
+  assert(vio);
 }
 
 
@@ -69,9 +76,9 @@ Connection::Connection(MYSQL_PLUGIN_VIO *vio): m_vio(vio), m_error(0)
 
 int Connection::write(const Blob &blob)
 {
-  m_error= m_vio->write_packet(m_vio, blob.ptr(), blob.len());
+  m_error= m_vio->write_packet(m_vio, blob.ptr(), static_cast<int>(blob.len()));
 
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   if (m_error)
     DBUG_PRINT("error", ("vio write error %d", m_error));
 #endif
@@ -120,7 +127,7 @@ Blob Connection::read()
 */
 
 Sid::Sid(const wchar_t *account_name): m_data(NULL)
-#ifndef DBUG_OFF
+#ifndef NDEBUG
 , m_as_string(NULL)
 #endif
 {
@@ -134,7 +141,7 @@ Sid::Sid(const wchar_t *account_name): m_data(NULL)
 
   if (!success && GetLastError() != ERROR_INSUFFICIENT_BUFFER)
   {
-#ifndef DBUG_OFF
+#ifndef NDEBUG
     Error_message_buf error_buf;
     DBUG_PRINT("error", ("Could not determine SID buffer size, "
                          "LookupAccountName() failed with error %X (%s)",
@@ -156,7 +163,7 @@ Sid::Sid(const wchar_t *account_name): m_data(NULL)
 
   if (!success || !is_valid())
   {
-#ifndef DBUG_OFF
+#ifndef NDEBUG
     Error_message_buf error_buf;
     DBUG_PRINT("error", ("Could not determine SID of '%S', "
                          "LookupAccountName() failed with error %X (%s)",
@@ -189,7 +196,7 @@ end:
 */
 
 Sid::Sid(HANDLE token): m_data(NULL)
-#ifndef DBUG_OFF
+#ifndef NDEBUG
 , m_as_string(NULL)
 #endif
 {
@@ -201,7 +208,7 @@ Sid::Sid(HANDLE token): m_data(NULL)
   success= GetTokenInformation(token, TokenUser, NULL, 0, &req_size);
   if (!success && GetLastError() != ERROR_INSUFFICIENT_BUFFER)
   {
-#ifndef DBUG_OFF
+#ifndef NDEBUG
     Error_message_buf error_buf;
     DBUG_PRINT("error", ("Could not determine SID buffer size, "
                          "GetTokenInformation() failed with error %X (%s)",
@@ -217,7 +224,7 @@ Sid::Sid(HANDLE token): m_data(NULL)
   {
     delete [] m_data;
     m_data= NULL;
-#ifndef DBUG_OFF
+#ifndef NDEBUG
     if (!success)
     {
       Error_message_buf error_buf;
@@ -234,7 +241,7 @@ Sid::~Sid()
 {
   if (m_data)
     delete [] m_data;
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   if (m_as_string)
     LocalFree(m_as_string);
 #endif
@@ -247,7 +254,7 @@ bool Sid::is_valid(void) const
 }
 
 
-#ifndef DBUG_OFF
+#ifndef NDEBUG
 
 /**
   Produces string representation of the SID.
@@ -269,7 +276,7 @@ const char* Sid::as_string()
 
     if (!success)
     {
-#ifndef DBUG_OFF
+#ifndef NDEBUG
       Error_message_buf error_buf;
       DBUG_PRINT("error", ("Could not get textual representation of a SID, "
                            "ConvertSidToStringSid() failed with error %X (%s)",
@@ -314,7 +321,7 @@ UPN::UPN(): m_buf(NULL)
   {
     if (GetLastError())
     {
-#ifndef DBUG_OFF
+#ifndef NDEBUG
       Error_message_buf error_buf;
       DBUG_PRINT("note", ("When determining UPN"
                           ", GetUserNameEx() failed with error %X (%s)",
@@ -406,7 +413,7 @@ char* wchar_to_utf8(const wchar_t *string, size_t *len)
 
   // res is 0 which indicates error
 
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   Error_message_buf error_buf;
   DBUG_PRINT("error", ("Could not convert string '%S' to utf8"
                        ", WideCharToMultiByte() failed with error %X (%s)",
@@ -415,7 +422,7 @@ char* wchar_to_utf8(const wchar_t *string, size_t *len)
 #endif
 
   // Let's check our assumption about sufficient buffer size
-  DBUG_ASSERT(ERROR_INSUFFICIENT_BUFFER != GetLastError());
+  assert(ERROR_INSUFFICIENT_BUFFER != GetLastError());
 
   return NULL;
 }
@@ -472,7 +479,7 @@ wchar_t* utf8_to_wchar(const char *string, size_t *len)
 
   // error in MultiByteToWideChar()
 
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   Error_message_buf error_buf;
   DBUG_PRINT("error", ("Could not convert UPN from UTF-8"
                        ", MultiByteToWideChar() failed with error %X (%s)",
@@ -480,7 +487,7 @@ wchar_t* utf8_to_wchar(const char *string, size_t *len)
 #endif
 
   // Let's check our assumption about sufficient buffer size
-  DBUG_ASSERT(ERROR_INSUFFICIENT_BUFFER != GetLastError());
+  assert(ERROR_INSUFFICIENT_BUFFER != GetLastError());
 
   return NULL;
 }
@@ -504,7 +511,7 @@ const char* get_last_error_message(Error_message_buf buf)
   buf[0]= '\0';
   FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM,
 		NULL, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-		(LPTSTR)buf, sizeof(buf), NULL );
+		(LPTSTR)buf, sizeof(Error_message_buf), NULL);
 
   return buf;
 }

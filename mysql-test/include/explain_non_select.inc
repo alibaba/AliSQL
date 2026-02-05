@@ -188,6 +188,12 @@ CREATE TABLE t3 (a3 INT NOT NULL, b3 INT NOT NULL, PRIMARY KEY (a3,b3));
 INSERT INTO t1 VALUES (1,1), (2,1), (1,3);
 INSERT INTO t2 VALUES (1,1), (2,2), (3,3);
 INSERT INTO t3 VALUES (1,1), (2,1), (1,3);
+# Need to run ANALYZE to get correct index statistics
+--disable_query_log
+--disable_result_log
+ANALYZE TABLE t1, t2, t3;
+--enable_result_log
+--enable_query_log
 --let $query =  DELETE t1,t2,t3 FROM t1,t2,t3 WHERE a1=a2 AND b2=a3 AND b1=b3
 --let $select = SELECT *        FROM t1,t2,t3 WHERE a1=a2 AND b2=a3 AND b1=b3
 --source include/explain_utils.inc
@@ -263,6 +269,9 @@ CREATE TABLE t2 (i INT);
 --let $query =  INSERT INTO t2 SELECT * FROM t1
 --let $select =                SELECT * FROM t1
 --source include/explain_utils.inc
+--let $query =  INSERT INTO t2 SELECT * FROM t1 JOIN t1 AS tt USING(i)
+--let $select =                SELECT * FROM t1 JOIN t1 AS tt USING(i)
+--source include/explain_utils.inc
 DROP TABLE t1, t2;
 
 --echo #26
@@ -291,9 +300,11 @@ CREATE TABLE t1 (a INT, i INT PRIMARY KEY);
 INSERT INTO t1 (i) VALUES (10),(11),(12),(13),(14),(15),(16),(17),(18),(19),
                           (20),(21),(22),(23),(24),(25),(26),(27),(28),(29),
                           (30),(31),(32),(33),(34),(35);
---let $query =  DELETE   FROM t1 WHERE i > 10 AND i <= 18 ORDER BY i LIMIT 5
---let $select = SELECT * FROM t1 WHERE i > 10 AND i <= 18 ORDER BY i LIMIT 5
+--let $query =  DELETE   FROM t1 WHERE i > 10 AND i <= 18 ORDER BY i LIMIT 1
+--let $select = SELECT * FROM t1 WHERE i > 10 AND i <= 18 ORDER BY i LIMIT 1
+--let $no_rows = 1
 --source include/explain_utils.inc
+--let $no_rows = 0
 DROP TABLE t1;
 
 --echo #30
@@ -362,12 +373,14 @@ CREATE TABLE t1 (i INT);
 INSERT INTO t1 (i) VALUES (10),(11),(12),(13),(14),(15),(16),(17),(18),(19),
                           (20),(21),(22),(23),(24),(25),(26),(27),(28),(29),
                           (30),(31),(32),(33),(34),(35),(36),(37),(38),(39),
-                          (40),(41),(42);
+                          (40),(41),(42),(43),(44);
 CREATE TABLE t2 (i INT, key1 INT, key2 INT, INDEX (key1), INDEX (key2));
 INSERT INTO t2 (key1, key2) SELECT i, i FROM t1;
 --let $query =  DELETE   FROM t2 WHERE key1 < 13 or key2 < 14 ORDER BY key1
 --let $select = SELECT * FROM t2 WHERE key1 < 13 or key2 < 14 ORDER BY key1
+--let $no_rows = 1
 --source include/explain_utils.inc
+--let $no_rows = 0
 DROP TABLE t1, t2;
 
 --echo #36
@@ -377,9 +390,11 @@ INSERT INTO t1 (i) VALUES (10),(11),(12),(13),(14),(15),(16),(17),(18),(19),
                           (30),(31),(32),(33),(34),(35);
 CREATE TABLE t2(a INT, i INT PRIMARY KEY);
 INSERT INTO t2 (i) SELECT i FROM t1;
---let $query =  DELETE   FROM t2 WHERE i > 10 AND i <= 18 ORDER BY i DESC LIMIT 5
---let $select = SELECT * FROM t2 WHERE i > 10 AND i <= 18 ORDER BY i DESC LIMIT 5
+--let $query =  DELETE   FROM t2 WHERE i > 10 AND i <= 18 ORDER BY i DESC LIMIT 1
+--let $select = SELECT * FROM t2 WHERE i > 10 AND i <= 18 ORDER BY i DESC LIMIT 1
+--let $no_rows = 1
 --source include/explain_utils.inc
+--let $no_rows = 0
 DROP TABLE t1, t2;
 
 --echo #37
@@ -415,8 +430,8 @@ INSERT INTO t1 VALUES (10),(11),(12),(13),(14),(15),(16),(17),(18),(19),
                       (30),(31),(32),(33),(34),(35);
 CREATE TABLE t2(a INT, i INT PRIMARY KEY);
 INSERT INTO t2 (i) SELECT i FROM t1;
---let $query =  UPDATE t2 SET a = 10 WHERE i > 10 AND i <= 18 ORDER BY i LIMIT 5
---let $select = SELECT * FROM  t2    WHERE i > 10 AND i <= 18 ORDER BY i LIMIT 5
+--let $query =  UPDATE t2 SET a = 10 WHERE i > 10 AND i <= 18 ORDER BY i LIMIT 1
+--let $select = SELECT * FROM  t2    WHERE i > 10 AND i <= 18 ORDER BY i LIMIT 1
 --let $no_rows = 1
 --source include/explain_utils.inc
 DROP TABLE t1, t2;
@@ -489,12 +504,14 @@ CREATE TABLE t1 (i INT);
 INSERT INTO t1 VALUES (10),(11),(12),(13),(14),(15),(16),(17),(18),(19),
                       (20),(21),(22),(23),(24),(25),(26),(27),(28),(29),
                       (30),(31),(32),(33),(34),(35),(36),(37),(38),(39),
-                      (40),(41),(42);
+                      (40),(41),(42),(43),(44);
 CREATE TABLE t2 (i INT, key1 INT, key2 INT, INDEX (key1), INDEX (key2));
 INSERT INTO t2 (key1, key2) SELECT i, i FROM t1;
 --let $query =  UPDATE t2 SET i = 123 WHERE key1 < 13 or key2 < 14 ORDER BY key1
 --let $select = SELECT * FROM t2      WHERE key1 < 13 or key2 < 14 ORDER BY key1
+--let $no_rows = 1
 --source include/explain_utils.inc
+--let $no_rows = 0
 DROP TABLE t1, t2;
 
 --echo #46
@@ -504,9 +521,11 @@ INSERT INTO t1 VALUES (10),(11),(12),(13),(14),(15),(16),(17),(18),(19),
                       (30),(31),(32),(33),(34),(35);
 CREATE TABLE t2(a INT, i INT PRIMARY KEY);
 INSERT INTO t2 (i) SELECT i FROM t1;
---let $query =  UPDATE t2 SET a = 10 WHERE i > 10 AND i <= 18 ORDER BY i DESC LIMIT 5
---let $select = SELECT * FROM t2     WHERE i > 10 AND i <= 18 ORDER BY i DESC LIMIT 5
+--let $query =  UPDATE t2 SET a = 10 WHERE i > 10 AND i <= 18 ORDER BY i DESC LIMIT 1
+--let $select = SELECT * FROM t2     WHERE i > 10 AND i <= 18 ORDER BY i DESC LIMIT 1
+--let $no_rows = 1
 --source include/explain_utils.inc
+--let $no_rows = 0
 DROP TABLE t1, t2;
 
 --echo #47
@@ -578,6 +597,12 @@ CREATE TABLE t2(f3 INT, f4 INT);
 CREATE INDEX IDX ON t2(f3);
 INSERT INTO t1 VALUES(1,0),(2,0);
 INSERT INTO t2 VALUES(1,1),(2,2);
+# Need to run ANALYZE to get correct index statistics
+-- disable_query_log
+-- disable_result_log
+ANALYZE TABLE t1,t2;
+-- enable_result_log
+-- enable_query_log
 --let $query =  UPDATE t1 SET t1.f2=(SELECT MAX(t2.f4) FROM t2 WHERE t2.f3=t1.f1)
 --let $select = SELECT              (SELECT MAX(t2.f4) FROM t2 WHERE t2.f3=t1.f1) FROM t1
 --source include/explain_utils.inc
@@ -615,7 +640,6 @@ CREATE TABLE t1 ( a INT, KEY( a ) );
 INSERT INTO t1 VALUES (0), (1);
 CREATE VIEW v1 AS SELECT t11.a, t12.a AS b FROM t1 t11, t1 t12;
 SET SESSION sql_safe_updates = 1;
---error ER_UPDATE_WITHOUT_KEY_IN_SAFE_MODE
 EXPLAIN EXTENDED UPDATE IGNORE v1 SET a = 1;
 --error ER_UPDATE_WITHOUT_KEY_IN_SAFE_MODE
 UPDATE IGNORE v1 SET a = 1;
@@ -642,7 +666,9 @@ INSERT INTO t1 VALUES (1), (2), (3), (4), (5);
 CREATE VIEW v1 (a) AS SELECT a FROM t1;
 --let $query =  DELETE   FROM v1 WHERE a < 4
 --let $select = SELECT * FROM v1 WHERE a < 4
+--let $no_rows = 1
 --source include/explain_utils.inc
+--let $no_rows = 0
 DROP TABLE t1;
 DROP VIEW v1;
 
@@ -689,11 +715,6 @@ CREATE VIEW v1 (x) AS SELECT b FROM t2;
 --source include/explain_utils.inc
 DROP TABLE t1, t2;
 DROP VIEW v1;
-
---echo #68
-CREATE TABLE t1 (i INT);
-EXPLAIN INSERT DELAYED INTO t1 VALUES (1);
-DROP TABLE t1;
 
 --echo #69
 CREATE TABLE t1 (a INT);
@@ -746,7 +767,7 @@ while ($1) {
 CREATE TABLE t2 LIKE t1;
 
 # replace "rows" column for InnoDB
---replace_column 9 X
+--replace_column 10 X
 EXPLAIN INSERT INTO t2 SELECT * FROM t1;
 INSERT INTO t2 SELECT * FROM t1;
 --disable_result_log

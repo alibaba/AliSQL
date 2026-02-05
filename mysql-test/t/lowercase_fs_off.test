@@ -1,9 +1,16 @@
+
 #
 # Specific tests for case sensitive file systems
 # i.e. lower_case_filesystem=OFF
 #
 -- source include/have_case_sensitive_file_system.inc
 -- source include/not_embedded.inc
+-- source include/have_lowercase0.inc
+
+set @orig_sql_mode_session= @@SESSION.sql_mode;
+set @orig_sql_mode_global= @@GLOBAL.sql_mode;
+set GLOBAL sql_mode= (select replace(@@GLOBAL.sql_mode,'NO_AUTO_CREATE_USER',''));
+set SESSION sql_mode= (select replace(@@SESSION.sql_mode,'NO_AUTO_CREATE_USER',''));
 
 connect (master,localhost,root,,);
 connection master;
@@ -46,6 +53,7 @@ select * from T1;
 connection default;
 GRANT SELECT ON t1 to user_1@localhost;
 connection con1;
+--sorted_result
 select * from information_schema.table_privileges;
 connection default;
 disconnect con1;
@@ -89,6 +97,9 @@ DROP USER user_1@localhost;
 DROP USER USER_1@localhost;
 DROP DATABASE db1;
 use test;
+
+set GLOBAL sql_mode= @orig_sql_mode_global;
+set SESSION sql_mode= @orig_sql_mode_session;
 
 # End of 5.0 tests
 

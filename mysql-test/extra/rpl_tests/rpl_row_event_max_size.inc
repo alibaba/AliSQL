@@ -41,7 +41,7 @@ eval set @@global.max_allowed_packet= $old_max_allowed_packet;
 
 INSERT INTO t1 (data1, data2) VALUES (repeat('a',1048576), repeat('a',1048576));
 
---source include/show_binlog_events2.inc
+--source suite/rpl/include/rpl_row_event_max_size_show_binlog.inc
 
 --source include/sync_slave_sql_with_master.inc
 --echo # On slave, test the row event data is replicated when the value of
@@ -55,10 +55,17 @@ SELECT LENGTH(data1), LENGTH(data2) FROM t1 WHERE a = 1;
 SELECT LENGTH(data1), LENGTH(data2) FROM t1 WHERE a = 2;
 
 connection master;
+--disable_query_log
+call mtr.add_suppression("InnoDB: Resizing redo log");
+call mtr.add_suppression("InnoDB: Starting to delete and rewrite log files");
+call mtr.add_suppression("InnoDB: New log files created");
+--enable_query_log
 DROP TABLE t1;
 
 --source include/sync_slave_sql_with_master.inc
 --source include/rpl_reset.inc
+
+# Bug #18233370
 
 --echo # Test it will cause ER_MASTER_FATAL_ERROR_READING_BINLOG when the value
 --echo # of the bigger one of max_allowed_packet and binlog_row_event_max_size
@@ -66,7 +73,7 @@ DROP TABLE t1;
 connection master;
 
 CREATE TABLE t1 (a int not null auto_increment, data1 LONGBLOB,
-                 data2 LONGBLOB, data3 LONGBLOB, PRIMARY KEY(a));
+                 data2 LONGBLOB, data3 LONGBLOB, PRIMARY KEY(a)) ROW_FORMAT=DYNAMIC;
 
 --source include/sync_slave_sql_with_master.inc
 --connection master

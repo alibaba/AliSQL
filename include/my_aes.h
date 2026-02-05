@@ -1,16 +1,23 @@
 #ifndef MY_AES_INCLUDED
 #define MY_AES_INCLUDED
 
-/* Copyright (c) 2000, 2014, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
- it under the terms of the GNU General Public License as published by
- the Free Software Foundation; version 2 of the License.
+ it under the terms of the GNU General Public License, version 2.0,
+ as published by the Free Software Foundation.
+
+ This program is also distributed with certain software (including
+ but not limited to OpenSSL) that is licensed under separate terms,
+ as designated in a particular file or component or in included license
+ documentation.  The authors of MySQL hereby grant you an additional
+ permission to link the program and your derivative works with the
+ separately licensed software that they have included with MySQL.
 
  This program is distributed in the hope that it will be useful,
  but WITHOUT ANY WARRANTY; without even the implied warranty of
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- GNU General Public License for more details.
+ GNU General Public License, version 2.0, for more details.
 
  You should have received a copy of the GNU General Public License
  along with this program; if not, write to the Free Software
@@ -20,10 +27,19 @@
 /* Header file for my_aes.c */
 /* Wrapper to give simple interface for MySQL to AES standard encryption */
 
+#include <string>
+#include <vector>
+
+using std::string;
+using std::vector;
+
 C_MODE_START
 
 /** AES IV size is 16 bytes for all supported ciphers except ECB */
 #define MY_AES_IV_SIZE 16
+
+/** AES block size is fixed to be 128 bits for CBC and ECB */
+#define MY_AES_BLOCK_SIZE 16
 
 
 /** Supported AES cipher/block mode combos */
@@ -34,9 +50,8 @@ enum my_aes_opmode
    my_aes_256_ecb,
    my_aes_128_cbc,
    my_aes_192_cbc,
-   my_aes_256_cbc,
-#ifndef HAVE_YASSL
-   my_aes_128_cfb1,
+   my_aes_256_cbc
+   ,my_aes_128_cfb1,
    my_aes_192_cfb1,
    my_aes_256_cfb1,
    my_aes_128_cfb8,
@@ -47,16 +62,11 @@ enum my_aes_opmode
    my_aes_256_cfb128,
    my_aes_128_ofb,
    my_aes_192_ofb,
-   my_aes_256_ofb,
-#endif
+   my_aes_256_ofb
 };
 
 #define MY_AES_BEGIN my_aes_128_ecb
-#ifdef HAVE_YASSL
-#define MY_AES_END my_aes_256_cbc
-#else
 #define MY_AES_END my_aes_256_ofb
-#endif
 
 /* If bad data discovered during decoding */
 #define MY_AES_BAD_DATA  -1
@@ -74,13 +84,17 @@ extern const char *my_aes_opmode_names[];
   @param key_length     [in]  Length of the key. Will handle keys of any length
   @param mode           [in]  encryption mode
   @param iv             [in]  16 bytes initialization vector if needed. Otherwise NULL
+  @param padding        [in]  if padding needed.
+  @param kdf_options    [in]  KDF options
   @return              size of encrypted data, or negative in case of error
 */
 
 int my_aes_encrypt(const unsigned char *source, uint32 source_length,
                    unsigned char *dest,
-		   const unsigned char *key, uint32 key_length,
-                   enum my_aes_opmode mode, const unsigned char *iv);
+                   const unsigned char *key, uint32 key_length,
+                   enum my_aes_opmode mode, const unsigned char *iv,
+                   bool padding = true,
+                   vector<string> *kdf_options = NULL);
 
 /**
   Decrypt an AES encrypted buffer
@@ -92,14 +106,18 @@ int my_aes_encrypt(const unsigned char *source, uint32 source_length,
   @param key_length     Length of the key. Will handle keys of any length
   @param mode           encryption mode
   @param iv             16 bytes initialization vector if needed. Otherwise NULL
+  @param padding        if padding needed.
+  @param kdf_options    [in]  KDF options
   @return size of original data.
 */
 
 
 int my_aes_decrypt(const unsigned char *source, uint32 source_length,
                    unsigned char *dest,
- 		   const unsigned char *key, uint32 key_length,
-                   enum my_aes_opmode mode, const unsigned char *iv);
+                   const unsigned char *key, uint32 key_length,
+                   enum my_aes_opmode mode, const unsigned char *iv,
+                   bool padding = true,
+                   vector<string> *kdf_options = NULL);
 
 /**
   Calculate the size of a buffer large enough for encrypted data

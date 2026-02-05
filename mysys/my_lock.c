@@ -1,27 +1,48 @@
-/* Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "mysys_priv.h"
+#include "my_sys.h"
 #include "mysys_err.h"
 #include <errno.h>
-#undef MY_HOW_OFTEN_TO_ALARM
-#define MY_HOW_OFTEN_TO_ALARM ((int) my_time_to_wait_for_lock)
-#ifdef NO_ALARM_LOOP
-#undef NO_ALARM_LOOP
-#endif
-#include <my_alarm.h>
+#include "my_thread_local.h"
+
+
+#ifndef _WIN32
+#include <signal.h>
+
+static int volatile my_have_got_alarm= 0;
+static uint my_time_to_wait_for_lock= 2; /* In seconds */
+
+void my_set_alarm_variable(int signo MY_ATTRIBUTE((unused)))
+{
+  my_have_got_alarm= 1;			/* Tell program that time expired */
+}
+#endif /* !_WIN32 */
 
 #ifdef _WIN32
 #define WIN_LOCK_INFINITE -1
@@ -138,11 +159,6 @@ error:
 int my_lock(File fd, int locktype, my_off_t start, my_off_t length,
 	    myf MyFlags)
 {
-#ifdef HAVE_FCNTL
-  int value;
-  ALARM_VARIABLES;
-#endif
-
   DBUG_ENTER("my_lock");
   DBUG_PRINT("my",("fd: %d  Op: %d  start: %ld  Length: %ld  MyFlags: %d",
 		   fd,locktype,(long) start,(long) length,MyFlags));
@@ -161,7 +177,6 @@ int my_lock(File fd, int locktype, my_off_t start, my_off_t length,
       DBUG_RETURN(0);
   }
 #else
-#if defined(HAVE_FCNTL)
   {
     struct flock lock;
 
@@ -172,16 +187,24 @@ int my_lock(File fd, int locktype, my_off_t start, my_off_t length,
 
     if (MyFlags & MY_DONT_WAIT)
     {
+      int value;
+      uint alarm_old;
+      sig_return alarm_signal;
+
       if (fcntl(fd,F_SETLK,&lock) != -1)	/* Check if we can lock */
 	DBUG_RETURN(0);			/* Ok, file locked */
       DBUG_PRINT("info",("Was locked, trying with alarm"));
-      ALARM_INIT;
-      while ((value=fcntl(fd,F_SETLKW,&lock)) && ! ALARM_TEST &&
+      my_have_got_alarm= 0;
+      alarm_old= alarm(my_time_to_wait_for_lock);
+      alarm_signal= signal(SIGALRM, my_set_alarm_variable);
+      while ((value= fcntl(fd, F_SETLKW, &lock)) && !my_have_got_alarm &&
 	     errno == EINTR)
       {			/* Setup again so we don`t miss it */
-	ALARM_REINIT;
+	(void) alarm(my_time_to_wait_for_lock);
+        my_have_got_alarm= 0;
       }
-      ALARM_END;
+      (void) signal(SIGALRM, alarm_signal);
+      (void) alarm(alarm_old);
       if (value != -1)
 	DBUG_RETURN(0);
       if (errno == EINTR)
@@ -190,37 +213,21 @@ int my_lock(File fd, int locktype, my_off_t start, my_off_t length,
     else if (fcntl(fd,F_SETLKW,&lock) != -1) /* Wait until a lock */
       DBUG_RETURN(0);
   }
-#else
-  if (MyFlags & MY_SEEK_NOT_DONE)
-  {
-    if (my_seek(fd,start,MY_SEEK_SET,MYF(MyFlags & ~MY_SEEK_NOT_DONE))
-        == MY_FILEPOS_ERROR)
-    {
-      /*
-        If an error has occured in my_seek then we will already
-        have an error code in my_errno; Just return error code.
-      */
-      DBUG_RETURN(-1);
-    }
-  }
-  if (lockf(fd,locktype,length) != -1)
-    DBUG_RETURN(0);
-#endif /* HAVE_FCNTL */
-#endif /* HAVE_LOCKING */
+#endif /* _WIN32 */
 
   /* We got an error. We don't want EACCES errors */
-  my_errno=(errno == EACCES) ? EAGAIN : errno ? errno : -1;
+  set_my_errno((errno == EACCES) ? EAGAIN : errno ? errno : -1);
 
   if (MyFlags & MY_WME)
   {
     char errbuf[MYSYS_STRERROR_SIZE];
     if (locktype == F_UNLCK)
-      my_error(EE_CANTUNLOCK, MYF(ME_BELL+ME_WAITTANG),
-               my_errno, my_strerror(errbuf, sizeof(errbuf), my_errno));
+      my_error(EE_CANTUNLOCK, MYF(0),
+               my_errno(), my_strerror(errbuf, sizeof(errbuf), my_errno()));
     else
-      my_error(EE_CANTLOCK, MYF(ME_BELL+ME_WAITTANG),
-               my_errno, my_strerror(errbuf, sizeof(errbuf), my_errno));
+      my_error(EE_CANTLOCK, MYF(0),
+               my_errno(), my_strerror(errbuf, sizeof(errbuf), my_errno()));
   }
-  DBUG_PRINT("error",("my_errno: %d (%d)",my_errno,errno));
+  DBUG_PRINT("error",("my_errno: %d (%d)",my_errno(),errno));
   DBUG_RETURN(-1);
 } /* my_lock */

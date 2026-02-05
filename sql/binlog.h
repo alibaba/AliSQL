@@ -1,14 +1,21 @@
 #ifndef BINLOG_H_INCLUDED
-/* Copyright (c) 2010, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
@@ -16,18 +23,31 @@
 
 #define BINLOG_H_INCLUDED
 
-#include "mysqld.h"                             /* opt_relay_logname */
-#include "log_event.h"
-#include "log.h"
+#include "sql_class.h"
+#include "my_global.h"
+#include "m_string.h"                  // llstr
+#include "binlog_event.h"              // enum_binlog_checksum_alg
+#include "mysqld.h"                    // opt_relay_logname
+#include "tc_log.h"                    // TC_LOG
+#include "atomic_class.h"
+#include "rpl_gtid.h"                  // Gtid_set, Sid_map
+#include "rpl_trx_tracking.h"
+
 
 class Relay_log_info;
 class Master_info;
-
+class Slave_worker;
 class Format_description_log_event;
+class Transaction_boundary_parser;
+class Rows_log_event;
+class Rows_query_log_event;
+class Incident_log_event;
+class Log_event;
+class Gtid_set;
+struct Gtid;
 
-#define barrier() __asm__ __volatile__("" ::: "memory")
-#define MAX_STAGE_COND 128
-#define UNDEF_COND_SLOT -1
+typedef int64 query_id_t;
+
 
 /**
   Class for maintaining the commit stages for binary log group commit.
@@ -38,7 +58,7 @@ public:
     friend class Stage_manager;
   public:
     Mutex_queue()
-      : m_first(NULL), m_last_thd(NULL), m_last(&m_first), group_prepared_engine(NULL)
+      : m_first(NULL), m_last(&m_first), m_size(0)
     {
     }
 
@@ -52,18 +72,18 @@ public:
 
     void deinit() {
       mysql_mutex_destroy(&m_lock);
-      if (group_prepared_engine)
-      {
-        delete group_prepared_engine;
-      }
     }
 
     bool is_empty() const {
       return m_first == NULL;
     }
 
-    /** Append a linked list of threads to the queue */
-    bool append(THD *first, int *slot);
+    /**
+      Append a linked list of threads to the queue.
+      @retval true The queue was empty before this operation.
+      @retval false The queue was non-empty before this operation.
+    */
+    bool append(THD *first);
 
     /**
        Fetch the entire queue for a stage.
@@ -71,6 +91,13 @@ public:
        This will fetch the entire queue in one go.
     */
     THD *fetch_and_empty();
+
+    std::pair<bool,THD*> pop_front();
+
+    inline int32 get_size()
+    {
+      return my_atomic_load32(&m_size);
+    }
 
   private:
     void lock() { mysql_mutex_lock(&m_lock); }
@@ -82,8 +109,6 @@ public:
     */
     THD *m_first;
 
-    /* The last thd object of the queue */
-    THD *m_last_thd;
     /**
        Pointer to the location holding the end of the queue.
 
@@ -92,21 +117,17 @@ public:
     */
     THD **m_last;
 
-    /**
-      Store the max prepared log for each engine that supports ha_flush_logs.
-      We have to init group_prepared_engine after all plugins are inited.
-     */
-    engine_lsn_map* group_prepared_engine;
-
-    /**
-      slot inex for allocating m_lock_done/m_cond_done, only changed
-      at first stage.
-     */
-    int cond_index;
+    /** size of the queue */
+    int32 m_size;
 
     /** Lock for protecting the queue. */
     mysql_mutex_t m_lock;
-  } MY_ATTRIBUTE((aligned(CPU_LEVEL1_DCACHE_LINESIZE)));
+    /*
+      This attribute did not have the desired effect, at least not according
+      to -fsanitize=undefined with gcc 5.2.1
+      Also: it fails to compile with gcc 7.2
+     */
+  }; // MY_ATTRIBUTE((aligned(CPU_LEVEL1_DCACHE_LINESIZE)));
 
 public:
   Stage_manager()
@@ -123,7 +144,6 @@ public:
   enum StageID {
     FLUSH_STAGE,
     SYNC_STAGE,
-    SEMISYNC_STAGE,
     COMMIT_STAGE,
     STAGE_COUNTER
   };
@@ -132,22 +152,17 @@ public:
 #ifdef HAVE_PSI_INTERFACE
             PSI_mutex_key key_LOCK_flush_queue,
             PSI_mutex_key key_LOCK_sync_queue,
-            PSI_mutex_key key_LOCK_semisync_queue,
             PSI_mutex_key key_LOCK_commit_queue,
             PSI_mutex_key key_LOCK_done,
             PSI_cond_key key_COND_done
 #endif
             )
   {
-    for(int i= 0; i< MAX_STAGE_COND; i++)
-    {
-      mysql_mutex_init(key_LOCK_done, &m_lock_done[i], MY_MUTEX_INIT_FAST);
-      mysql_cond_init(key_COND_done, &m_cond_done[i], NULL);
-    }
-#ifndef DBUG_OFF
-    mysql_mutex_init(key_LOCK_done, &m_lock_preempt, MY_MUTEX_INIT_FAST);
-    /* reuse key_COND_done 'cos a new PSI object would be wasteful in DBUG_ON */
-    mysql_cond_init(key_COND_done, &m_cond_preempt, NULL);
+    mysql_mutex_init(key_LOCK_done, &m_lock_done, MY_MUTEX_INIT_FAST);
+    mysql_cond_init(key_COND_done, &m_cond_done);
+#ifndef NDEBUG
+    /* reuse key_COND_done 'cos a new PSI object would be wasteful in !NDEBUG */
+    mysql_cond_init(key_COND_done, &m_cond_preempt);
 #endif
     m_queue[FLUSH_STAGE].init(
 #ifdef HAVE_PSI_INTERFACE
@@ -157,11 +172,6 @@ public:
     m_queue[SYNC_STAGE].init(
 #ifdef HAVE_PSI_INTERFACE
                              key_LOCK_sync_queue
-#endif
-                             );
-    m_queue[SEMISYNC_STAGE].init(
-#ifdef HAVE_PSI_INTERFACE
-                             key_LOCK_semisync_queue
 #endif
                              );
     m_queue[COMMIT_STAGE].init(
@@ -175,16 +185,8 @@ public:
   {
     for (size_t i = 0 ; i < STAGE_COUNTER ; ++i)
       m_queue[i].deinit();
-
-    for(int i= 0; i< MAX_STAGE_COND; i++)
-    {
-      mysql_cond_destroy(&m_cond_done[i]);
-      mysql_mutex_destroy(&m_lock_done[i]);
-    }
-#ifndef DBUG_OFF
-    mysql_cond_destroy(&m_cond_preempt);
-    mysql_mutex_destroy(&m_lock_preempt);
-#endif
+    mysql_cond_destroy(&m_cond_done);
+    mysql_mutex_destroy(&m_lock_done);
   }
 
   /**
@@ -211,7 +213,12 @@ public:
    */
   bool enroll_for(StageID stage, THD *first, mysql_mutex_t *stage_mutex);
 
-#ifndef DBUG_OFF
+  std::pair<bool,THD*> pop_front(StageID stage)
+  {
+    return m_queue[stage].pop_front();
+  }
+
+#ifndef NDEBUG
   /**
      The method ensures the follower's execution path can be preempted
      by the leader's thread.
@@ -233,49 +240,22 @@ public:
     return m_queue[stage].fetch_and_empty();
   }
 
-  void signal_done(THD *queue) {
-    THD* node= queue->prev_to_commit;
-    THD* prev_node= NULL;
+  /**
+    Introduces a wait operation on the executing thread.  The
+    waiting is done until the timeout elapses or count is
+    reached (whichever comes first).
 
-    while(node)
-    {
-      prev_node= node->prev_to_commit;
-      barrier();
-      node->transaction.flags.pending= false;
+    If count == 0, then the session will wait until the timeout
+    elapses. If timeout == 0, then there is no waiting.
 
-      if (node == queue)
-        break;
+    @param usec     the number of microseconds to wait.
+    @param count    wait for as many as count to join the queue the
+                    session is waiting on
+    @param stage    which stage queue size to compare count against.
+   */
+  void wait_count_or_timeout(ulong count, long usec, StageID stage);
 
-      node= prev_node;
-    }
-
-    mutex_enter_slot(queue->stage_cond_id);
-    cond_signal_slot(queue->stage_cond_id);
-    mutex_exit_slot(queue->stage_cond_id);
-  }
-
-  void mutex_enter_slot(int slot)
-  {
-    mysql_mutex_lock(&(m_lock_done[slot]));
-  }
-
-  void mutex_exit_slot(int slot)
-  {
-    mysql_mutex_unlock(&(m_lock_done[slot]));
-  }
-
-  void enter_cond_slot(int slot)
-  {
-    struct timespec abstime;
-    set_timespec(abstime, 1);
-
-    mysql_cond_timedwait(&(m_cond_done[slot]), &(m_lock_done[slot]), &abstime);
-  }
-
-  void cond_signal_slot(int slot)
-  {
-    mysql_cond_broadcast(&(m_cond_done[slot]));
-  }
+  void signal_done(THD *queue);
 
 private:
   /**
@@ -288,32 +268,86 @@ private:
   Mutex_queue m_queue[STAGE_COUNTER];
 
   /** Condition variable to indicate that the commit was processed */
-  mysql_cond_t m_cond_done[MAX_STAGE_COND];
-  /** Mutex used for the condition variable above */
-  mysql_mutex_t m_lock_done[MAX_STAGE_COND];
+  mysql_cond_t m_cond_done;
 
-#ifndef DBUG_OFF
+  /** Mutex used for the condition variable above */
+  mysql_mutex_t m_lock_done;
+#ifndef NDEBUG
   /** Flag is set by Leader when it starts waiting for follower's all-clear */
   bool leader_await_preempt_status;
 
-  mysql_mutex_t m_lock_preempt;
   /** Condition variable to indicate a follower started waiting for commit */
   mysql_cond_t m_cond_preempt;
 #endif
 };
 
+/* log info errors */
+#define LOG_INFO_EOF -1
+#define LOG_INFO_IO  -2
+#define LOG_INFO_INVALID -3
+#define LOG_INFO_SEEK -4
+#define LOG_INFO_MEM -6
+#define LOG_INFO_FATAL -7
+#define LOG_INFO_IN_USE -8
+#define LOG_INFO_EMFILE -9
 
-class MYSQL_BIN_LOG: public TC_LOG, private MYSQL_LOG
+/* bitmap to MYSQL_BIN_LOG::close() */
+#define LOG_CLOSE_INDEX		1
+#define LOG_CLOSE_TO_BE_OPENED	2
+#define LOG_CLOSE_STOP_EVENT	4
+
+
+/*
+  Note that we destroy the lock mutex in the destructor here.
+  This means that object instances cannot be destroyed/go out of scope
+  until we have reset thd->current_linfo to NULL;
+ */
+typedef struct st_log_info
 {
- private:
+  char log_file_name[FN_REFLEN];
+  my_off_t index_file_offset, index_file_start_offset;
+  my_off_t pos;
+  bool fatal; // if the purge happens to give us a negative offset
+  int entry_index; //used in purge_logs(), calculatd in find_log_pos().
+  st_log_info()
+    : index_file_offset(0), index_file_start_offset(0),
+      pos(0), fatal(0), entry_index(0)
+    {
+      memset(log_file_name, 0, FN_REFLEN);
+    }
+} LOG_INFO;
+
+/*
+  TODO use mmap instead of IO_CACHE for binlog
+  (mmap+fsync is two times faster than write+fsync)
+*/
+
+class MYSQL_BIN_LOG: public TC_LOG
+{
+  friend class Binlog_ext;
+  enum enum_log_state { LOG_OPENED, LOG_CLOSED, LOG_TO_BE_OPENED };
+
+  /* LOCK_log is inited by init_pthread_objects() */
+  mysql_mutex_t LOCK_log;
+  char *name;
+  char log_file_name[FN_REFLEN];
+  char db[NAME_LEN + 1];
+  bool write_error, inited;
+  IO_CACHE log_file;
+  const enum cache_type io_cache_type;
 #ifdef HAVE_PSI_INTERFACE
+  /** Instrumentation key to use for file io in @c log_file */
+  PSI_file_key m_log_file_key;
+  /** The instrumentation key to use for @ LOCK_log. */
+  PSI_mutex_key m_key_LOCK_log;
   /** The instrumentation key to use for @ LOCK_index. */
   PSI_mutex_key m_key_LOCK_index;
+  /** The instrumentation key to use for @ LOCK_binlog_end_pos. */
+  PSI_mutex_key m_key_LOCK_binlog_end_pos;
 
   PSI_mutex_key m_key_COND_done;
 
   PSI_mutex_key m_key_LOCK_commit_queue;
-  PSI_mutex_key m_key_LOCK_semisync_queue;
   PSI_mutex_key m_key_LOCK_done;
   PSI_mutex_key m_key_LOCK_flush_queue;
   PSI_mutex_key m_key_LOCK_sync_queue;
@@ -321,8 +355,6 @@ class MYSQL_BIN_LOG: public TC_LOG, private MYSQL_LOG
   PSI_mutex_key m_key_LOCK_commit;
   /** The instrumentation key to use for @ LOCK_sync. */
   PSI_mutex_key m_key_LOCK_sync;
-   /** The instrumentation key to use for @ LOCK_semisync. */
-  PSI_mutex_key m_key_LOCK_semisync;
   /** The instrumentation key to use for @ LOCK_xids. */
   PSI_mutex_key m_key_LOCK_xids;
   /** The instrumentation key to use for @ update_cond. */
@@ -333,15 +365,19 @@ class MYSQL_BIN_LOG: public TC_LOG, private MYSQL_LOG
   PSI_file_key m_key_file_log;
   /** The instrumentation key to use for opening the log index file. */
   PSI_file_key m_key_file_log_index;
+  /** The instrumentation key to use for opening a log cache file. */
+  PSI_file_key m_key_file_log_cache;
+  /** The instrumentation key to use for opening a log index cache file. */
+  PSI_file_key m_key_file_log_index_cache;
 #endif
   /* POSIX thread objects are inited by init_pthread_objects() */
   mysql_mutex_t LOCK_index;
   mysql_mutex_t LOCK_commit;
   mysql_mutex_t LOCK_sync;
-  mysql_mutex_t LOCK_semisync;
+  mysql_mutex_t LOCK_binlog_end_pos;
   mysql_mutex_t LOCK_xids;
   mysql_cond_t update_cond;
-  /* Trace the end position of current binary log file. */
+
   my_off_t binlog_end_pos;
   ulonglong bytes_written;
   IO_CACHE index_file;
@@ -384,53 +420,23 @@ class MYSQL_BIN_LOG: public TC_LOG, private MYSQL_LOG
   uint *sync_period_ptr;
   uint sync_counter;
 
-  my_atomic_rwlock_t m_prep_xids_lock;
   mysql_cond_t m_prep_xids_cond;
-  volatile int32 m_prep_xids;
+  Atomic_int32 m_prep_xids;
 
   /**
     Increment the prepared XID counter.
    */
-  void inc_prep_xids(THD *thd) {
-    DBUG_ENTER("MYSQL_BIN_LOG::inc_prep_xids");
-    my_atomic_rwlock_wrlock(&m_prep_xids_lock);
-#ifndef DBUG_OFF
-    int result= my_atomic_add32(&m_prep_xids, 1);
-#else
-    (void) my_atomic_add32(&m_prep_xids, 1);
-#endif
-    DBUG_PRINT("debug", ("m_prep_xids: %d", result + 1));
-    my_atomic_rwlock_wrunlock(&m_prep_xids_lock);
-    thd->transaction.flags.xid_written= true;
-    DBUG_VOID_RETURN;
-  }
+  void inc_prep_xids(THD *thd);
 
   /**
     Decrement the prepared XID counter.
 
     Signal m_prep_xids_cond if the counter reaches zero.
    */
-  void dec_prep_xids(THD *thd) {
-    DBUG_ENTER("MYSQL_BIN_LOG::dec_prep_xids");
-    my_atomic_rwlock_wrlock(&m_prep_xids_lock);
-    int32 result= my_atomic_add32(&m_prep_xids, -1);
-    DBUG_PRINT("debug", ("m_prep_xids: %d", result - 1));
-    my_atomic_rwlock_wrunlock(&m_prep_xids_lock);
-    thd->transaction.flags.xid_written= false;
-    /* If the old value was 1, it is zero now. */
-    if (result == 1)
-    {
-      mysql_mutex_lock(&LOCK_xids);
-      mysql_cond_signal(&m_prep_xids_cond);
-      mysql_mutex_unlock(&LOCK_xids);
-    }
-    DBUG_VOID_RETURN;
-  }
+  void dec_prep_xids(THD *thd);
 
   int32 get_prep_xids() {
-    my_atomic_rwlock_rdlock(&m_prep_xids_lock);
-    int32 result= my_atomic_load32(&m_prep_xids);
-    my_atomic_rwlock_rdunlock(&m_prep_xids_lock);
+    int32 result= m_prep_xids.atomic_get();
     return result;
   }
 
@@ -452,9 +458,20 @@ class MYSQL_BIN_LOG: public TC_LOG, private MYSQL_LOG
   Stage_manager stage_manager;
   void do_flush(THD *thd);
 
+  bool open(
+#ifdef HAVE_PSI_INTERFACE
+            PSI_file_key log_file_key,
+#endif
+            const char *log_name,
+            const char *new_name);
+  bool init_and_set_log_file_name(const char *log_name,
+                                  const char *new_name);
+  int generate_new_name(char *new_name, const char *log_name);
+
 public:
-  using MYSQL_LOG::generate_name;
-  using MYSQL_LOG::is_open;
+  const char *generate_name(const char *log_name, const char *suffix,
+                            char *buff);
+  bool is_open() { return log_state.atomic_get() != LOG_CLOSED; }
 
   /* This is relay log */
   bool is_relay_log;
@@ -493,9 +510,10 @@ public:
     (A)    - checksum algorithm descriptor value
     FD.(A) - the value of (A) in FD
   */
-  uint8 relay_log_checksum_alg;
+  binary_log::enum_binlog_checksum_alg relay_log_checksum_alg;
 
-  MYSQL_BIN_LOG(uint *sync_period);
+  MYSQL_BIN_LOG(uint *sync_period,
+                enum cache_type io_cache_type_arg);
   /*
     note that there's no destructor ~MYSQL_BIN_LOG() !
     The reason is that we don't want it to be automatically called
@@ -512,37 +530,41 @@ public:
                     PSI_mutex_key key_LOCK_binlog_end_pos,
                     PSI_mutex_key key_LOCK_sync,
                     PSI_mutex_key key_LOCK_sync_queue,
-                    PSI_mutex_key key_LOCK_semisync,
-                    PSI_mutex_key key_LOCK_semisync_queue,
                     PSI_mutex_key key_LOCK_xids,
                     PSI_cond_key key_COND_done,
                     PSI_cond_key key_update_cond,
                     PSI_cond_key key_prep_xids_cond,
                     PSI_file_key key_file_log,
-                    PSI_file_key key_file_log_index)
+                    PSI_file_key key_file_log_index,
+                    PSI_file_key key_file_log_cache,
+                    PSI_file_key key_file_log_index_cache)
   {
     m_key_COND_done= key_COND_done;
 
     m_key_LOCK_commit_queue= key_LOCK_commit_queue;
-    m_key_LOCK_semisync_queue = key_LOCK_semisync_queue;
     m_key_LOCK_done= key_LOCK_done;
     m_key_LOCK_flush_queue= key_LOCK_flush_queue;
     m_key_LOCK_sync_queue= key_LOCK_sync_queue;
-    m_key_LOCK_semisync_queue= key_LOCK_semisync_queue;
 
     m_key_LOCK_index= key_LOCK_index;
     m_key_LOCK_log= key_LOCK_log;
     m_key_LOCK_binlog_end_pos= key_LOCK_binlog_end_pos;
     m_key_LOCK_commit= key_LOCK_commit;
     m_key_LOCK_sync= key_LOCK_sync;
-    m_key_LOCK_semisync= key_LOCK_semisync;
     m_key_LOCK_xids= key_LOCK_xids;
     m_key_update_cond= key_update_cond;
     m_key_prep_xids_cond= key_prep_xids_cond;
     m_key_file_log= key_file_log;
     m_key_file_log_index= key_file_log_index;
+    m_key_file_log_cache= key_file_log_cache;
+    m_key_file_log_index_cache= key_file_log_index_cache;
   }
 #endif
+
+public:
+  /** Manage the MTS dependency tracking */
+  Transaction_dependency_tracker m_dependency_tracker;
+
   /**
     Find the oldest binary log that contains any GTID that
     is not in the given gtid set.
@@ -557,37 +579,85 @@ public:
   */
   bool find_first_log_not_in_gtid_set(char *binlog_file_name,
                                       const Gtid_set *gtid_set,
-                                      Gtid *first_gtid,
-                                      const char **errmsg);
+                                      Gtid *first_gtid, std::string &errmsg);
 
   /**
-    Reads the set of all GTIDs in the binary log, and the set of all
-    lost GTIDs in the binary log, and stores each set in respective
-    argument.
+    Reads the set of all GTIDs in the binary/relay log, and the set
+    of all lost GTIDs in the binary log, and stores each set in
+    respective argument.
 
-    @param gtid_set Will be filled with all GTIDs in this binary log.
+    @param gtid_set Will be filled with all GTIDs in this binary/relay
+    log.
     @param lost_groups Will be filled with all GTIDs in the
     Previous_gtids_log_event of the first binary log that has a
-    Previous_gtids_log_event.
-    @param last_gtid Will be filled with the last availble GTID information
-    in the binary/relay log files.
+    Previous_gtids_log_event. This is requested to binary logs but not
+    to relay logs.
     @param verify_checksum If true, checksums will be checked.
     @param need_lock If true, LOCK_log, LOCK_index, and
     global_sid_lock->wrlock are acquired; otherwise they are asserted
     to be taken already.
+    @param trx_parser [out] This will be used to return the actual
+    relaylog transaction parser state because of the possibility
+    of partial transactions.
+    @param [out] gtid_partial_trx If a transaction was left incomplete
+    on the relaylog, it's GTID should be returned to be used in the
+    case of the rest of the transaction be added to the relaylog.
     @param is_server_starting True if the server is starting.
     @return false on success, true on error.
   */
   bool init_gtid_sets(Gtid_set *gtid_set, Gtid_set *lost_groups,
-                      Gtid *last_gtid, bool verify_checksum,
-                      bool need_lock, bool is_server_starting= false);
+                      bool verify_checksum,
+                      bool need_lock,
+                      Transaction_boundary_parser *trx_parser,
+                      Gtid *gtid_partial_trx,
+                      bool is_server_starting= false);
 
-  void set_previous_gtid_set(Gtid_set *previous_gtid_set_param)
+  void set_previous_gtid_set_relaylog(Gtid_set *previous_gtid_set_param)
   {
-    previous_gtid_set= previous_gtid_set_param;
+    assert(is_relay_log);
+    previous_gtid_set_relaylog= previous_gtid_set_param;
   }
+  /**
+    If the thread owns a GTID, this function generates an empty
+    transaction and releases ownership of the GTID.
+
+    - If the binary log is disabled for this thread, the GTID is
+      inserted directly into the mysql.gtid_executed table and the
+      GTID is included in @@global.gtid_executed.  (This only happens
+      for DDL, since DML will save the GTID into table and release
+      ownership inside ha_commit_trans.)
+
+    - If the binary log is enabled for this thread, an empty
+      transaction consisting of GTID, BEGIN, COMMIT is written to the
+      binary log, the GTID is included in @@global.gtid_executed, and
+      the GTID is added to the mysql.gtid_executed table on the next
+      binlog rotation.
+
+    This function must be called by any committing statement (COMMIT,
+    implicitly committing statements, or Xid_log_event), after the
+    statement has completed execution, regardless of whether the
+    statement updated the database.
+
+    This logic ensures that an empty transaction is generated for the
+    following cases:
+
+    - Explicit empty transaction:
+      SET GTID_NEXT = 'UUID:NUMBER'; BEGIN; COMMIT;
+
+    - Transaction or DDL that gets completely filtered out in the
+      slave thread.
+
+    @param thd The committing thread
+
+    @retval 0 Success
+    @retval nonzero Error
+  */
+  int gtid_end_transaction(THD *thd);
 private:
-  Gtid_set* previous_gtid_set;
+  Atomic_int32 log_state; /* atomic enum_log_state */
+
+  /* The previous gtid set in relay log. */
+  Gtid_set* previous_gtid_set_relaylog;
 
   int open(const char *opt_name) { return open_binlog(opt_name); }
   bool change_stage(THD *thd, Stage_manager::StageID stage,
@@ -600,9 +670,10 @@ private:
   void process_commit_stage_queue(THD *thd, THD *queue);
   void process_after_commit_stage_queue(THD *thd, THD *first);
   int process_flush_stage_queue(my_off_t *total_bytes_var, bool *rotate_var,
-				THD **out_queue_var);
+                                THD **out_queue_var);
   int ordered_commit(THD *thd, bool all, bool skip_commit = false);
-  void handle_binlog_flush_or_sync_error(THD *thd, bool need_lock_log);
+  void handle_binlog_flush_or_sync_error(THD *thd, bool need_lock_log,
+                                         const char *message);
 public:
   int open_binlog(const char *opt_name);
   void close();
@@ -627,18 +698,7 @@ public:
   {
     bytes_written = 0;
   }
-  void harvest_bytes_written(ulonglong* counter)
-  {
-#ifndef DBUG_OFF
-    char buf1[22],buf2[22];
-#endif
-    DBUG_ENTER("harvest_bytes_written");
-    (*counter)+=bytes_written;
-    DBUG_PRINT("info",("counter: %s  bytes_written: %s", llstr(*counter,buf1),
-		       llstr(bytes_written,buf2)));
-    bytes_written=0;
-    DBUG_VOID_RETURN;
-  }
+  void harvest_bytes_written(Relay_log_info *rli, bool need_log_space_lock);
   void set_max_size(ulong max_size_arg);
   void signal_update()
   {
@@ -650,28 +710,33 @@ public:
 
   void update_binlog_end_pos()
   {
+    /*
+      binlog_end_pos is used only on master's binlog right now. It is possible
+      to use it on relay log.
+    */
     if (is_relay_log)
       signal_update();
     else
     {
       lock_binlog_end_pos();
-      binlog_end_pos= my_b_safe_tell(&log_file);
+      binlog_end_pos= my_b_tell(&log_file);
       signal_update();
       unlock_binlog_end_pos();
     }
   }
 
-  void update_binlog_end_pos(my_off_t pos)
+  void update_binlog_end_pos(const char *file, my_off_t pos)
   {
     lock_binlog_end_pos();
-    if (pos > binlog_end_pos)
+    if (is_active(file) && pos > binlog_end_pos)
       binlog_end_pos= pos;
     signal_update();
     unlock_binlog_end_pos();
   }
 
   int wait_for_update_relay_log(THD* thd, const struct timespec * timeout);
-  int  wait_for_update_bin_log(THD* thd, const struct timespec * timeout);
+  int wait_for_update_bin_log(THD* thd, const struct timespec * timeout);
+  bool do_write_cache(IO_CACHE *cache, class Binlog_event_writer *writer);
 public:
   void init_pthread_objects();
   void cleanup();
@@ -680,8 +745,6 @@ public:
     @param log_name Name of binlog
     @param new_name Name of binlog, too. todo: what's the difference
     between new_name and log_name?
-    @param io_cache_type_arg Specifies how the IO cache is opened:
-    read-only or read-write.
     @param max_size The size at which this binlog will be rotated.
     @param null_created If false, and a Format_description_log_event
     is written, then the Format_description_log_event will have the
@@ -695,7 +758,6 @@ public:
   */
   bool open_binlog(const char *log_name,
                    const char *new_name,
-                   enum cache_type io_cache_type_arg,
                    ulong max_size,
                    bool null_created,
                    bool need_lock_index, bool need_sid_lock,
@@ -706,14 +768,45 @@ public:
   int new_file(Format_description_log_event *extra_description_event);
 
   bool write_event(Log_event* event_info);
-  bool write_cache(THD *thd, class binlog_cache_data *binlog_cache_data);
-  int  do_write_cache(IO_CACHE *cache);
+  bool write_cache(THD *thd, class binlog_cache_data *binlog_cache_data,
+                   class Binlog_event_writer *writer);
+  /**
+    Assign automatic generated GTIDs for all commit group threads in the flush
+    stage having gtid_next.type == AUTOMATIC_GROUP.
+
+    @param first_seen The first thread seen entering the flush stage.
+    @return Returns false if succeeds, otherwise true is returned.
+  */
+  bool assign_automatic_gtids_to_flush_group(THD *first_seen);
+  bool write_gtid(THD *thd, binlog_cache_data *cache_data,
+                  class Binlog_event_writer *writer);
+
+  /**
+     Write a dml into statement cache and then flush it into binlog. It writes
+     Gtid_log_event and BEGIN, COMMIT automatically.
+
+     It is aimed to handle cases of "background" logging where a statement is
+     logged indirectly, like "TRUNCATE TABLE a_memory_table". So don't use it on any
+     normal statement.
+
+     @param[IN] thd  the THD object of current thread.
+     @param[IN] stmt the DML statement.
+     @param[IN] stmt_len the length of the DML statement.
+     @param[IN] sql_command the type of SQL command.
+
+     @return Returns false if succeeds, otherwise true is returned.
+  */
+  bool write_stmt_directly(THD* thd, const char *stmt, size_t stmt_len,
+                          enum enum_sql_command sql_command);
 
   void set_write_error(THD *thd, bool is_transactional);
   bool check_write_error(THD *thd);
   bool write_incident(THD *thd, bool need_lock_log,
+                      const char* err_msg,
                       bool do_flush_and_sync= true);
-  bool write_incident(Incident_log_event *ev, bool need_lock_log,
+  bool write_incident(Incident_log_event *ev, THD *thd,
+                      bool need_lock_log,
+                      const char* err_msg,
                       bool do_flush_and_sync= true);
 
   void start_union_events(THD *thd, query_id_t query_id_param);
@@ -757,7 +850,7 @@ public:
   int set_crash_safe_index_file_name(const char *base_file_name);
   int open_crash_safe_index_file();
   int close_crash_safe_index_file();
-  int add_log_to_index(uchar* log_file_name, int name_len,
+  int add_log_to_index(uchar* log_file_name, size_t name_len,
                        bool need_lock_index);
   int move_crash_safe_index_file_to_index_file(bool need_lock_index);
   int set_purge_index_file_name(const char *base_file_name);
@@ -770,13 +863,14 @@ public:
   int register_create_index_entry(const char* entry);
   int purge_index_entry(THD *thd, ulonglong *decrease_log_space,
                         bool need_lock_index);
-  bool reset_logs(THD* thd);
-  void close(uint exiting);
+  bool reset_logs(THD* thd, bool delete_only= false);
+  void close(uint exiting, bool need_lock_log, bool need_lock_index);
 
   // iterating through the log index file
   int find_log_pos(LOG_INFO* linfo, const char* log_name,
                    bool need_lock_index);
   int find_next_log(LOG_INFO* linfo, bool need_lock_index);
+  int find_next_relay_log(char log_name[FN_REFLEN+1]);
   int get_current_log(LOG_INFO* linfo, bool need_lock_log= true);
   int raw_get_current_log(LOG_INFO* linfo);
   uint next_file_id();
@@ -792,22 +886,90 @@ public:
   inline IO_CACHE *get_index_file() { return &index_file;}
   inline uint32 get_open_count() { return open_count; }
 
-  my_off_t get_binlog_end_pos()
+  /**
+    Function to report the missing GTIDs.
+
+    This function logs the missing transactions on master to its error log
+    as a warning. If the missing GTIDs are too long to print in a message,
+    it suggests the steps to extract the missing transactions.
+
+    This function also informs slave about the GTID set sent by the slave,
+    transactions missing on the master and few suggestions to recover from
+    the error. This message shall be wrapped by
+    ER_MASTER_FATAL_ERROR_READING_BINLOG on slave and will be logged as an
+    error.
+
+    This function will be called from mysql_binlog_send() function.
+
+    @param slave_executed_gtid_set     GTID set executed by slave
+    @param errmsg                      Pointer to the error message
+
+    @return void
+  */
+  void report_missing_purged_gtids(const Gtid_set *slave_executed_gtid_set,
+                                   std::string &errmsg);
+
+  /**
+    Function to report the missing GTIDs.
+
+    This function logs the missing transactions on master to its error log
+    as a warning. If the missing GTIDs are too long to print in a message,
+    it suggests the steps to extract the missing transactions.
+
+    This function also informs slave about the GTID set sent by the slave,
+    transactions missing on the master and few suggestions to recover from
+    the error. This message shall be wrapped by
+    ER_MASTER_FATAL_ERROR_READING_BINLOG on slave and will be logged as an
+    error.
+
+    This function will be called from find_first_log_not_in_gtid_set()
+    function.
+
+    @param previous_gtid_set           Previous GTID set found
+    @param slave_executed_gtid_set     GTID set executed by slave
+    @param errmsg                      Pointer to the error message
+
+    @return void
+  */
+  void report_missing_gtids(const Gtid_set *previous_gtid_set,
+                            const Gtid_set *slave_executed_gtid_set,
+                            std::string &errmsg);
+  static const int MAX_RETRIES_FOR_DELETE_RENAME_FAILURE= 5;
+  /*
+    It is called by the threads(e.g. dump thread) which want to read
+    hot log without LOCK_log protection.
+  */
+  my_off_t get_binlog_end_pos() const
   {
     mysql_mutex_assert_not_owner(&LOCK_log);
     mysql_mutex_assert_owner(&LOCK_binlog_end_pos);
     return binlog_end_pos;
   }
-
-  my_off_t get_binlog_end_pos_without_lock()
-  {
-    mysql_mutex_assert_not_owner(&LOCK_log);
-    mysql_mutex_assert_not_owner(&LOCK_binlog_end_pos);
-    return binlog_end_pos;
-  }
   mysql_mutex_t* get_binlog_end_pos_lock() { return &LOCK_binlog_end_pos; }
   void lock_binlog_end_pos() { mysql_mutex_lock(&LOCK_binlog_end_pos); }
   void unlock_binlog_end_pos() { mysql_mutex_unlock(&LOCK_binlog_end_pos); }
+
+  /**
+    Deep copy global_sid_map to @param sid_map and
+    gtid_state->get_executed_gtids() to @param gtid_set
+    Both operations are done under LOCK_commit and global_sid_lock
+    protection.
+
+    @param[out] sid_map  The Sid_map to which global_sid_map will
+                         be copied.
+    @param[out] gtid_set The Gtid_set to which gtid_executed will
+                         be copied.
+
+    @return the operation status
+      @retval 0      OK
+      @retval !=0    Error
+  */
+  int get_gtid_executed(Sid_map *sid_map, Gtid_set *gtid_set);
+
+  /*
+    True while rotating binlog, which is caused by logging Incident_log_event.
+  */
+  bool is_rotating_caused_by_incident;
 };
 
 typedef struct st_load_file_info
@@ -819,8 +981,49 @@ typedef struct st_load_file_info
 
 extern MYSQL_PLUGIN_IMPORT MYSQL_BIN_LOG mysql_bin_log;
 
+/**
+  Check if the the transaction is empty.
+
+  @param thd The client thread that executed the current statement.
+
+  @retval true No changes found in any storage engine
+  @retval false Otherwise.
+
+**/
+bool is_transaction_empty(THD* thd);
+/**
+  Check if the transaction has no rw flag set for any of the storage engines.
+
+  @param thd The client thread that executed the current statement.
+  @param trx_scope The transaction scope to look into.
+
+  @retval the number of engines which have actual changes.
+ */
+int check_trx_rw_engines(THD *thd, Transaction_ctx::enum_trx_scope trx_scope);
+
+/**
+  Check if at least one of transacaction and statement binlog caches contains
+  an empty transaction, other one is empty or contains an empty transaction,
+  which has two binlog events "BEGIN" and "COMMIT".
+
+  @param thd The client thread that executed the current statement.
+
+  @retval true  At least one of transacaction and statement binlog caches
+                contains an empty transaction, other one is empty or
+                contains an empty transaction.
+  @retval false Otherwise.
+*/
+bool is_empty_transaction_in_binlog_cache(const THD* thd);
 bool trans_has_updated_trans_table(const THD* thd);
 bool stmt_has_updated_trans_table(Ha_trx_info* ha_list);
+/**
+  This function checks if the transaction has no operation dml.
+
+  @param ha_list Registered storage engine handler list.
+  @return true  if the transaction has no operation dml.
+          false otherwise.
+*/
+bool trans_has_noop_dml(Ha_trx_info* ha_list);
 bool ending_trans(THD* thd, const bool all);
 bool ending_single_stmt_trans(THD* thd, const bool all);
 bool trans_cannot_safely_rollback(const THD* thd);
@@ -842,16 +1045,17 @@ void check_binlog_cache_size(THD *thd);
 void check_binlog_stmt_cache_size(THD *thd);
 bool binlog_enabled();
 void register_binlog_handler(THD *thd, bool trx);
-int gtid_empty_group_log_and_cleanup(THD *thd);
+int query_error_code(THD *thd, bool not_killed);
 
 extern const char *log_bin_index;
 extern const char *log_bin_basename;
 extern bool opt_binlog_order_commits;
-extern bool opt_gtid_precommit;
 
 /**
   Turns a relative log binary log path into a full path, based on the
-  opt_bin_logname or opt_relay_logname.
+  opt_bin_logname or opt_relay_logname. Also trims the cr-lf at the
+  end of the full_path before return to avoid any server startup
+  problem on windows.
 
   @param from         The log name we want to make into an absolute path.
   @param to           The buffer where to put the results of the 
@@ -871,7 +1075,7 @@ inline bool normalize_binlog_name(char *to, const char *from, bool is_relay_log)
   char *ptr= (char*) from;
   char *opt_name= is_relay_log ? opt_relay_logname : opt_bin_logname;
 
-  DBUG_ASSERT(from);
+  assert(from);
 
   /* opt_name is not null and not empty and from is a relative path */
   if (opt_name && opt_name[0] && from && !test_if_hard_path(from))
@@ -899,12 +1103,33 @@ inline bool normalize_binlog_name(char *to, const char *from, bool is_relay_log)
     }
   }
 
-  DBUG_ASSERT(ptr);
-
+  assert(ptr);
   if (ptr)
-    strmake(to, ptr, strlen(ptr));
+  {
+    size_t length= strlen(ptr);
 
+    // Strips the CR+LF at the end of log name and \0-terminates it.
+    if (length && ptr[length-1] == '\n')
+    {
+      ptr[length-1]= 0;
+      length--;
+      if (length && ptr[length-1] == '\r')
+      {
+        ptr[length-1]= 0;
+        length--;
+      }
+    }
+    if (!length)
+    {
+      error= true;
+      goto end;
+    }
+    strmake(to, ptr, length);
+  }
 end:
   DBUG_RETURN(error);
 }
+
+void trx_cache_write_event(THD *thd, Log_event *event);
+
 #endif /* BINLOG_H_INCLUDED */

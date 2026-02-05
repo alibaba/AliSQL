@@ -1,15 +1,22 @@
 /*
-   Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -62,7 +69,6 @@ ha_rows mi_records_in_range(MI_INFO *info, int inx,
     mysql_rwlock_rdlock(&info->s->key_root_lock[inx]);
 
   switch(info->s->keyinfo[inx].key_alg){
-#ifdef HAVE_RTREE_KEYS
   case HA_KEY_ALG_RTREE:
   {
     uchar * key_buff;
@@ -92,7 +98,6 @@ ha_rows mi_records_in_range(MI_INFO *info, int inx,
     res= res ? res : 1;                       /* Don't return 0 */
     break;
   }
-#endif
   case HA_KEY_ALG_BTREE:
   default:
     start_pos= (min_key ?  _mi_record_pos(info, min_key->key,
@@ -129,7 +134,7 @@ static ha_rows _mi_record_pos(MI_INFO *info, const uchar *key,
 
   DBUG_ENTER("_mi_record_pos");
   DBUG_PRINT("enter",("search_flag: %d",search_flag));
-  DBUG_ASSERT(keypart_map);
+  assert(keypart_map);
 
   key_buff=info->lastkey+info->s->base.max_key_length;
   key_len=_mi_pack_key(info,inx,key_buff,(uchar*) key, keypart_map,
@@ -189,13 +194,13 @@ static ha_rows _mi_record_pos(MI_INFO *info, const uchar *key,
 	/* This is a modified version of _mi_search */
 	/* Returns offset for key in indextable (decimal 0.0 <= x <= 1.0) */
 
-static double _mi_search_pos(register MI_INFO *info,
-			     register MI_KEYDEF *keyinfo,
+static double _mi_search_pos(MI_INFO *info,
+			     MI_KEYDEF *keyinfo,
 			     uchar *key, uint key_len, uint nextflag,
-			     register my_off_t pos)
+			     my_off_t pos)
 {
   int flag;
-  uint nod_flag,keynr,UNINIT_VAR(max_keynr);
+  uint nod_flag, keynr, max_keynr= 0;
   my_bool after_key;
   uchar *keypos,*buff;
   double offset;
@@ -250,14 +255,14 @@ static double _mi_search_pos(register MI_INFO *info,
 		     keynr,offset,max_keynr,nod_flag,flag));
   DBUG_RETURN((keynr+offset)/(max_keynr+1));
 err:
-  DBUG_PRINT("exit",("Error: %d",my_errno));
+  DBUG_PRINT("exit",("Error: %d",my_errno()));
   DBUG_RETURN (-1.0);
 }
 
 
 	/* Get keynummer of current key and max number of keys in nod */
 
-static uint _mi_keynr(MI_INFO *info, register MI_KEYDEF *keyinfo, uchar *page,
+static uint _mi_keynr(MI_INFO *info, MI_KEYDEF *keyinfo, uchar *page,
                       uchar *keypos, uint *ret_max_key)
 {
   uint nod_flag,keynr,max_key;

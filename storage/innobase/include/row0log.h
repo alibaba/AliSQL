@@ -1,14 +1,22 @@
 /*****************************************************************************
 
-Copyright (c) 2011, 2016, Oracle and/or its affiliates. All Rights Reserved.
+Copyright (c) 2011, 2023, Oracle and/or its affiliates.
 
-This program is free software; you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation; version 2 of the License.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License, version 2.0,
+as published by the Free Software Foundation.
 
-This program is distributed in the hope that it will be useful, but WITHOUT
-ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+This program is also distributed with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have included with MySQL.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License, version 2.0, for more details.
 
 You should have received a copy of the GNU General Public License along with
 this program; if not, write to the Free Software Foundation, Inc.,
@@ -35,11 +43,12 @@ Created 2011-05-26 Marko Makela
 #include "trx0types.h"
 #include "que0types.h"
 
+class ut_stage_alter_t;
+
 /******************************************************//**
 Allocate the row log for an index and flag the index
 for online creation.
 @retval true if success, false if not */
-UNIV_INTERN
 bool
 row_log_allocate(
 /*=============*/
@@ -58,7 +67,6 @@ row_log_allocate(
 
 /******************************************************//**
 Free the row log for an index that was being created online. */
-UNIV_INTERN
 void
 row_log_free(
 /*=========*/
@@ -77,8 +85,8 @@ row_log_abort_sec(
 /******************************************************//**
 Try to log an operation to a secondary index that is
 (or was) being created.
-@retval	true if the operation was logged or can be ignored
-@retval	false if online index creation is not taking place */
+@retval true if the operation was logged or can be ignored
+@retval false if online index creation is not taking place */
 UNIV_INLINE
 bool
 row_log_online_op_try(
@@ -90,7 +98,6 @@ row_log_online_op_try(
 	MY_ATTRIBUTE((nonnull, warn_unused_result));
 /******************************************************//**
 Logs an operation to a secondary index that is (or was) being created. */
-UNIV_INTERN
 void
 row_log_online_op(
 /*==============*/
@@ -103,7 +110,6 @@ row_log_online_op(
 /******************************************************//**
 Gets the error status of the online index rebuild log.
 @return DB_SUCCESS or error code */
-UNIV_INTERN
 dberr_t
 row_log_table_get_error(
 /*====================*/
@@ -111,15 +117,25 @@ row_log_table_get_error(
 					that is being rebuilt online */
 	MY_ATTRIBUTE((nonnull, warn_unused_result));
 
+/** Check whether a virtual column is indexed in the new table being
+created during alter table
+@param[in]	index	cluster index
+@param[in]	v_no	virtual column number
+@return true if it is indexed, else false */
+bool
+row_log_col_is_indexed(
+	const dict_index_t*	index,
+	ulint			v_no);
+
 /******************************************************//**
 Logs a delete operation to a table that is being rebuilt.
 This will be merged in row_log_table_apply_delete(). */
-UNIV_INTERN
 void
 row_log_table_delete(
 /*=================*/
 	const rec_t*	rec,	/*!< in: clustered index leaf page record,
 				page X-latched */
+	const dtuple_t*	ventry,	/*!< in: dtuple holding virtual column info */
 	dict_index_t*	index,	/*!< in/out: clustered index, S-latched
 				or X-latched */
 	const ulint*	offsets,/*!< in: rec_get_offsets(rec,index) */
@@ -130,7 +146,6 @@ row_log_table_delete(
 /******************************************************//**
 Logs an update operation to a table that is being rebuilt.
 This will be merged in row_log_table_apply_update(). */
-UNIV_INTERN
 void
 row_log_table_update(
 /*=================*/
@@ -139,16 +154,18 @@ row_log_table_update(
 	dict_index_t*	index,	/*!< in/out: clustered index, S-latched
 				or X-latched */
 	const ulint*	offsets,/*!< in: rec_get_offsets(rec,index) */
-	const dtuple_t*	old_pk)	/*!< in: row_log_table_get_pk()
+	const dtuple_t*	old_pk,	/*!< in: row_log_table_get_pk()
 				before the update */
-	UNIV_COLD MY_ATTRIBUTE((nonnull(1,2,3)));
+	const dtuple_t*	new_v_row,/*!< in: dtuple contains the new virtual
+				columns */
+	const dtuple_t*	old_v_row);/*!< in: dtuple contains the old virtual
+				columns */
 
 /******************************************************//**
 Constructs the old PRIMARY KEY and DB_TRX_ID,DB_ROLL_PTR
 of a table that is being rebuilt.
 @return tuple of PRIMARY KEY,DB_TRX_ID,DB_ROLL_PTR in the rebuilt table,
 or NULL if the PRIMARY KEY definition does not change */
-UNIV_INTERN
 const dtuple_t*
 row_log_table_get_pk(
 /*=================*/
@@ -166,19 +183,17 @@ row_log_table_get_pk(
 /******************************************************//**
 Logs an insert to a table that is being rebuilt.
 This will be merged in row_log_table_apply_insert(). */
-UNIV_INTERN
 void
 row_log_table_insert(
 /*=================*/
 	const rec_t*	rec,	/*!< in: clustered index leaf page record,
 				page X-latched */
+	const dtuple_t*	ventry,	/*!< in: dtuple holding virtual column info */
 	dict_index_t*	index,	/*!< in/out: clustered index, S-latched
 				or X-latched */
-	const ulint*	offsets)/*!< in: rec_get_offsets(rec,index) */
-	UNIV_COLD MY_ATTRIBUTE((nonnull));
+	const ulint*	offsets);/*!< in: rec_get_offsets(rec,index) */
 /******************************************************//**
 Notes that a BLOB is being freed during online ALTER TABLE. */
-UNIV_INTERN
 void
 row_log_table_blob_free(
 /*====================*/
@@ -187,51 +202,66 @@ row_log_table_blob_free(
 	UNIV_COLD MY_ATTRIBUTE((nonnull));
 /******************************************************//**
 Notes that a BLOB is being allocated during online ALTER TABLE. */
-UNIV_INTERN
 void
 row_log_table_blob_alloc(
 /*=====================*/
 	dict_index_t*	index,	/*!< in/out: clustered index, X-latched */
 	ulint		page_no)/*!< in: starting page number of the BLOB */
 	UNIV_COLD MY_ATTRIBUTE((nonnull));
-/******************************************************//**
-Apply the row_log_table log to a table upon completing rebuild.
+
+/** Apply the row_log_table log to a table upon completing rebuild.
+@param[in]	thr		query graph
+@param[in]	old_table	old table
+@param[in,out]	table		MySQL table (for reporting duplicates)
+@param[in,out]	stage		performance schema accounting object, used by
+ALTER TABLE. stage->begin_phase_log_table() will be called initially and then
+stage->inc() will be called for each block of log that is applied.
 @return DB_SUCCESS, or error code on failure */
-UNIV_INTERN
 dberr_t
 row_log_table_apply(
-/*================*/
-	que_thr_t*	thr,	/*!< in: query graph */
-	dict_table_t*	old_table,
-				/*!< in: old table */
-	struct TABLE*	table)	/*!< in/out: MySQL table
-				(for reporting duplicates) */
-	MY_ATTRIBUTE((nonnull, warn_unused_result));
+	que_thr_t*		thr,
+	dict_table_t*		old_table,
+	struct TABLE*		table,
+	ut_stage_alter_t*	stage)
+MY_ATTRIBUTE((warn_unused_result));
 
 /******************************************************//**
 Get the latest transaction ID that has invoked row_log_online_op()
 during online creation.
 @return latest transaction ID, or 0 if nothing was logged */
-UNIV_INTERN
 trx_id_t
 row_log_get_max_trx(
 /*================*/
 	dict_index_t*	index)	/*!< in: index, must be locked */
 	MY_ATTRIBUTE((nonnull, warn_unused_result));
 
-/******************************************************//**
-Merge the row log to the index upon completing index creation.
+/** Apply the row log to the index upon completing index creation.
+@param[in]	trx	transaction (for checking if the operation was
+interrupted)
+@param[in,out]	index	secondary index
+@param[in,out]	table	MySQL table (for reporting duplicates)
+@param[in,out]	stage	performance schema accounting object, used by
+ALTER TABLE. stage->begin_phase_log_index() will be called initially and then
+stage->inc() will be called for each block of log that is applied.
 @return DB_SUCCESS, or error code on failure */
-UNIV_INTERN
 dberr_t
 row_log_apply(
-/*==========*/
-	trx_t*		trx,	/*!< in: transaction (for checking if
-				the operation was interrupted) */
-	dict_index_t*	index,	/*!< in/out: secondary index */
-	struct TABLE*	table)	/*!< in/out: MySQL table
-				(for reporting duplicates) */
-	MY_ATTRIBUTE((nonnull, warn_unused_result));
+	const trx_t*		trx,
+	dict_index_t*		index,
+	struct TABLE*		table,
+	ut_stage_alter_t*	stage)
+	MY_ATTRIBUTE((warn_unused_result));
+
+#ifdef HAVE_PSI_STAGE_INTERFACE
+/** Estimate how much work is to be done by the log apply phase
+of an ALTER TABLE for this index.
+@param[in]	index	index whose log to assess
+@return work to be done by log-apply in abstract units
+*/
+ulint
+row_log_estimate_work(
+	const dict_index_t*	index);
+#endif /* HAVE_PSI_STAGE_INTERFACE */
 
 #ifndef UNIV_NONINL
 #include "row0log.ic"

@@ -1,13 +1,20 @@
-/* Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation; version 2 of the License.
+  it under the terms of the GNU General Public License, version 2.0,
+  as published by the Free Software Foundation.
+
+  This program is also distributed with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an additional
+  permission to link the program and your derivative works with the
+  separately licensed software that they have included with MySQL.
 
   This program is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
+  GNU General Public License, version 2.0, for more details.
 
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software Foundation,
@@ -44,6 +51,9 @@ struct PFS_digest_key
 /** A statement digest stat record. */
 struct PFS_ALIGNED PFS_statements_digest_stat
 {
+  /** Internal lock. */
+  pfs_lock m_lock;
+
   /** Digest Schema + MD5 Hash. */
   PFS_digest_key m_digest_key;
 
@@ -58,7 +68,7 @@ struct PFS_ALIGNED PFS_statements_digest_stat
   ulonglong m_last_seen;
 
   /** Reset data for this record. */
-  void reset_data(unsigned char* token_array, uint length);
+  void reset_data(unsigned char* token_array, size_t length);
   /** Reset data and remove index for this record. */
   void reset_index(PFS_thread *thread);
 };
@@ -66,7 +76,7 @@ struct PFS_ALIGNED PFS_statements_digest_stat
 int init_digest(const PFS_global_param *param);
 void cleanup_digest();
 
-int init_digest_hash(void);
+int init_digest_hash(const PFS_global_param *param);
 void cleanup_digest_hash(void);
 PFS_statement_stat* find_or_create_digest(PFS_thread *thread,
                                           const sql_digest_storage *digest_storage,
@@ -81,3 +91,4 @@ extern PFS_statements_digest_stat *statements_digest_stat_array;
 extern LF_HASH digest_hash;
 
 #endif
+

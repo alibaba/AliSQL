@@ -1,22 +1,26 @@
-/* Copyright (c) 2002, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2002, 2023, Oracle and/or its affiliates.
    
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
-   
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-   
+   GNU General Public License, version 2.0, for more details.
+
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA */
 
 #include "myisamdef.h"
-
-#ifdef HAVE_RTREE_KEYS
-
 #include "rt_index.h"
 #include "rt_key.h"
 #include "rt_mbr.h"
@@ -64,7 +68,7 @@ static int rtree_find_req(MI_INFO *info, MI_KEYDEF *keyinfo, uint search_flag,
   
   if (!(page_buf = (uchar*)my_alloca((uint)keyinfo->block_length)))
   {
-    my_errno = HA_ERR_OUT_OF_MEM;
+    set_my_errno(HA_ERR_OUT_OF_MEM);
     return -1;
   }
   if (!_mi_fetch_keypage(info, keyinfo, page, DFLT_INIT_HITS, page_buf, 0))
@@ -137,15 +141,13 @@ static int rtree_find_req(MI_INFO *info, MI_KEYDEF *keyinfo, uint search_flag,
     }
   }
   info->lastpos = HA_OFFSET_ERROR;
-  my_errno = HA_ERR_KEY_NOT_FOUND;
+  set_my_errno(HA_ERR_KEY_NOT_FOUND);
   res = 1;
 
 ok:
-  my_afree((uchar*)page_buf);
   return res;
 
 err1:
-  my_afree((uchar*)page_buf);
   info->lastpos = HA_OFFSET_ERROR;
   return -1;
 }
@@ -177,9 +179,17 @@ int rtree_find_first(MI_INFO *info, uint keynr, uchar *key, uint key_length,
 
   if ((root = info->s->state.key_root[keynr]) == HA_OFFSET_ERROR)
   {
-    my_errno= HA_ERR_END_OF_FILE;
+    // This is assumed to happen only when the index is empty. If that
+    // doesn't hold, the code in mi_rkey() that checks the record
+    // count has to be changed.
+    assert(info->s->state.state.records == 0);
+    set_my_errno(HA_ERR_END_OF_FILE);
     return -1;
   }
+
+  // All empty indexes should be caught above. Negative record counts
+  // should never occur.
+  assert(info->s->state.state.records > 0);
 
   /*
     Save searched key, include data pointer.
@@ -248,7 +258,7 @@ int rtree_find_next(MI_INFO *info, uint keynr, uint search_flag)
   }
   if ((root = info->s->state.key_root[keynr]) == HA_OFFSET_ERROR)
   {
-    my_errno= HA_ERR_END_OF_FILE;
+    set_my_errno(HA_ERR_END_OF_FILE);
     return -1;
   }
   
@@ -352,15 +362,13 @@ static int rtree_get_req(MI_INFO *info, MI_KEYDEF *keyinfo, uint key_length,
     }
   }
   info->lastpos = HA_OFFSET_ERROR;
-  my_errno = HA_ERR_KEY_NOT_FOUND;
+  set_my_errno(HA_ERR_KEY_NOT_FOUND);
   res = 1;
 
 ok:
-  my_afree((uchar*)page_buf);
   return res;
 
 err1:
-  my_afree((uchar*)page_buf);
   info->lastpos = HA_OFFSET_ERROR;
   return -1;
 }
@@ -382,7 +390,7 @@ int rtree_get_first(MI_INFO *info, uint keynr, uint key_length)
 
   if ((root = info->s->state.key_root[keynr]) == HA_OFFSET_ERROR)
   {
-    my_errno= HA_ERR_END_OF_FILE;
+    set_my_errno(HA_ERR_END_OF_FILE);
     return -1;
   }
 
@@ -409,7 +417,7 @@ int rtree_get_next(MI_INFO *info, uint keynr, uint key_length)
 
   if (root == HA_OFFSET_ERROR)
   {
-    my_errno= HA_ERR_END_OF_FILE;
+    set_my_errno(HA_ERR_END_OF_FILE);
     return -1;
   }
   
@@ -450,13 +458,10 @@ static uchar *rtree_pick_key(MI_INFO *info, MI_KEYDEF *keyinfo, uchar *key,
   double increase;
   double best_incr = DBL_MAX;
   double perimeter;
-  double best_perimeter;
-  uchar *best_key;
+  double best_perimeter= 0.0;
+  uchar *best_key= NULL;
   uchar *k = rt_PAGE_FIRST_KEY(page_buf, nod_flag);
   uchar *last = rt_PAGE_END(page_buf);
-
-  LINT_INIT(best_perimeter);
-  LINT_INIT(best_key);
 
   for (; k < last; k = rt_PAGE_NEXT_KEY(k, key_length, nod_flag))
   {
@@ -481,9 +486,9 @@ static uchar *rtree_pick_key(MI_INFO *info, MI_KEYDEF *keyinfo, uchar *key,
 			     uint key_length, uchar *page_buf, uint nod_flag)
 {
   double increase;
-  double UNINIT_VAR(best_incr);
+  double best_incr= 0.0;
   double area;
-  double UNINIT_VAR(best_area);
+  double best_area= 0.0;
   uchar *best_key= NULL;
   uchar *k = rt_PAGE_FIRST_KEY(page_buf, nod_flag);
   uchar *last = rt_PAGE_END(page_buf);
@@ -530,7 +535,7 @@ static int rtree_insert_req(MI_INFO *info, MI_KEYDEF *keyinfo, uchar *key,
   if (!(page_buf = (uchar*)my_alloca((uint)keyinfo->block_length + 
                                      MI_MAX_KEY_BUFF)))
   {
-    my_errno = HA_ERR_OUT_OF_MEM;
+    set_my_errno(HA_ERR_OUT_OF_MEM);
     DBUG_RETURN(-1); /* purecov: inspected */
   }
   if (!_mi_fetch_keypage(info, keyinfo, page, DFLT_INIT_HITS, page_buf, 0))
@@ -588,11 +593,9 @@ static int rtree_insert_req(MI_INFO *info, MI_KEYDEF *keyinfo, uchar *key,
   }
 
 ok:
-  my_afree((uchar*)page_buf);
   DBUG_RETURN(res);
 
 err1:
-  my_afree((uchar*)page_buf);
   DBUG_RETURN(-1); /* purecov: inspected */
 }
 
@@ -717,7 +720,8 @@ static int rtree_fill_reinsert_list(stPageList *ReinsertList, my_off_t page,
   if (ReinsertList->n_pages == ReinsertList->m_pages)
   {
     ReinsertList->m_pages += REINSERT_BUFFER_INC;
-    if (!(ReinsertList->pages = (stPageLevel*)my_realloc((uchar*)ReinsertList->pages, 
+    if (!(ReinsertList->pages = (stPageLevel*)my_realloc(mi_key_memory_stPageList_pages,
+                                                         (uchar*)ReinsertList->pages, 
       ReinsertList->m_pages * sizeof(stPageLevel), MYF(MY_ALLOW_ZERO_PTR))))
       goto err1;
   }
@@ -756,7 +760,7 @@ static int rtree_delete_req(MI_INFO *info, MI_KEYDEF *keyinfo, uchar *key,
 
   if (!(page_buf = (uchar*)my_alloca((uint)keyinfo->block_length)))
   {
-    my_errno = HA_ERR_OUT_OF_MEM;
+    set_my_errno(HA_ERR_OUT_OF_MEM);
     DBUG_RETURN(-1); /* purecov: inspected */
   }
   if (!_mi_fetch_keypage(info, keyinfo, page, DFLT_INIT_HITS, page_buf, 0))
@@ -869,11 +873,9 @@ static int rtree_delete_req(MI_INFO *info, MI_KEYDEF *keyinfo, uchar *key,
   res = 1;
 
 ok:
-  my_afree((uchar*)page_buf);
   DBUG_RETURN(res);
 
 err1:
-  my_afree((uchar*)page_buf);
   DBUG_RETURN(-1); /* purecov: inspected */
 }
 
@@ -896,7 +898,7 @@ int rtree_delete(MI_INFO *info, uint keynr, uchar *key, uint key_length)
 
   if ((old_root = info->s->state.key_root[keynr]) == HA_OFFSET_ERROR)
   {
-    my_errno= HA_ERR_END_OF_FILE;
+    set_my_errno(HA_ERR_END_OF_FILE);
     DBUG_RETURN(-1); /* purecov: inspected */
   }
   DBUG_PRINT("rtree", ("starting deletion at root page: %lu",
@@ -926,7 +928,7 @@ int rtree_delete(MI_INFO *info, uint keynr, uchar *key, uint key_length)
 
         if (!(page_buf = (uchar*)my_alloca((uint)keyinfo->block_length)))
         {
-          my_errno = HA_ERR_OUT_OF_MEM;
+          set_my_errno(HA_ERR_OUT_OF_MEM);
           goto err1;
         }
         if (!_mi_fetch_keypage(info, keyinfo, ReinsertList.pages[i].offs, 
@@ -946,7 +948,6 @@ int rtree_delete(MI_INFO *info, uint keynr, uchar *key, uint key_length)
           if ((res= rtree_insert_level(info, keynr, k, key_length,
                                        ReinsertList.pages[i].level)) == -1)
           {
-            my_afree((uchar*)page_buf);
             goto err1;
           }
           if (res)
@@ -962,7 +963,6 @@ int rtree_delete(MI_INFO *info, uint keynr, uchar *key, uint key_length)
             }
           }
         }
-        my_afree((uchar*)page_buf);
         if (_mi_dispose(info, keyinfo, ReinsertList.pages[i].offs,
             DFLT_INIT_HITS))
           goto err1;
@@ -994,7 +994,7 @@ err1:
     }
     case 1: /* not found */
     {
-      my_errno = HA_ERR_KEY_NOT_FOUND;
+      set_my_errno(HA_ERR_KEY_NOT_FOUND);
       DBUG_RETURN(-1); /* purecov: inspected */
     }
     default:
@@ -1095,13 +1095,8 @@ ha_rows rtree_estimate(MI_INFO *info, uint keynr, uchar *key,
       res = HA_POS_ERROR;
   }
 
-  my_afree((uchar*)page_buf);
   return res;
 
 err1:
-  my_afree((uchar*)page_buf);
   return HA_POS_ERROR;
 }
-
-#endif /*HAVE_RTREE_KEYS*/
-

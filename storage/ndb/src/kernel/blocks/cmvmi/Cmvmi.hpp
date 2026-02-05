@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -18,11 +25,13 @@
 #ifndef Cmvmi_H_
 #define Cmvmi_H_
 
-#include <pc.hpp>
 #include <SimulatedBlock.hpp>
 #include <LogLevel.hpp>
 
-#include <DLList.hpp>
+#include <IntrusiveList.hpp>
+
+#define JAM_FILE_ID 379
+
 
 /**
  * Cmvmi class
@@ -33,16 +42,6 @@ public:
   virtual ~Cmvmi();
   
 private:
-  /**
-   * These methods used to be reportXXX
-   *
-   * But they in a nasty way intefere with the execution model
-   * they been turned in to exec-Method used via prio A signals
-   */
-  void execDISCONNECT_REP(Signal*);
-  void execCONNECT_REP(Signal*);
-  
-private:
   BLOCK_DEFINES(Cmvmi);
 
   // The signal processing functions
@@ -51,9 +50,6 @@ private:
   void execEVENT_REP(Signal* signal);
   void execREAD_CONFIG_REQ(Signal* signal);
   void execSTTOR(Signal* signal);
-  void execCLOSE_COMREQ(Signal* signal);
-  void execENABLE_COMREQ(Signal* signal);
-  void execOPEN_COMREQ(Signal* signal);
   void execSIZEALT_ACK(Signal* signal);
   void execTEST_ORD(Signal* signal);
 
@@ -62,16 +58,15 @@ private:
   void execTAMPER_ORD(Signal* signal);
 
   void execDUMP_STATE_ORD(Signal* signal);
+  void execTC_COMMIT_ACK(Signal* signal);
 
   void execEVENT_SUBSCRIBE_REQ(Signal *);
-  void cancelSubscription(NodeId nodeId);
+  void execCANCEL_SUBSCRIPTION_REQ(Signal *);
 
   void execTESTSIG(Signal* signal);
   void execNODE_START_REP(Signal* signal);
 
   void execCONTINUEB(Signal* signal);
-
-  void execROUTE_ORD(Signal* signal);
 
   void execDBINFO_SCANREQ(Signal *signal);
 
@@ -155,5 +150,8 @@ private:
 
   void init_global_page_pool();
 };
+
+
+#undef JAM_FILE_ID
 
 #endif

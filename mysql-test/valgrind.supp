@@ -1,14 +1,20 @@
-# Copyright (c) 2005, 2016, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2005, 2023, Oracle and/or its affiliates.
 #
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU Library General Public
-# License as published by the Free Software Foundation; version 2
-# of the License.
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License, version 2.0,
+# as published by the Free Software Foundation.
+#
+# This program is also distributed with certain software (including
+# but not limited to OpenSSL) that is licensed under separate terms,
+# as designated in a particular file or component or in included license
+# documentation.  The authors of MySQL hereby grant you an additional
+# permission to link the program and your derivative works with the
+# separately licensed software that they have included with MySQL.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-# Library General Public License for more details.
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License, version 2.0, for more details.
 #
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
@@ -516,20 +522,11 @@
 }
 
 #
-# See related Bug#56666
-# Race condition between the server main thread and the kill server thread.
-#
-# Because of this race condition, the call to shutdown_performance_schema()
-# was commented in sql/mysqld.cc, causing the reported leaks.
-#
-
-{
-   missing shutdown_performance_schema 1a
-   Memcheck:Leak
-   fun:malloc
-   fun:_Z10pfs_mallocmi
-}
-
+# Bug#56666 is fixed by WL#6407
+# Also, as part of WL#6407, call to shutdown_performance_schema()
+# is uncommented in sql/mysqld.cc. As this call was commented out
+# for long time, there are still some leaks which needs to be
+# addressed by pfs.
 {
    missing shutdown_performance_schema 1b
    Memcheck:Leak
@@ -538,12 +535,24 @@
    fun:_Z10pfs_mallocmi
 }
 
+# The '...' wildcard is for 'fun:my_raw_malloc' which is hidden with HAVE_VALGRIND
 {
    missing shutdown_performance_schema 2
    Memcheck:Leak
    fun:malloc
+   ...
    fun:my_malloc
-   fun:_lf_alloc_new
+   fun:lf_alloc_new
+   fun:lf_hash_insert
+}
+
+# The '...' wildcard is for 'fun:my_raw_malloc' which is hidden with HAVE_VALGRIND
+{
+   missing shutdown_performance_schema 2-mem
+   Memcheck:Leak
+   ...
+   fun:my_malloc
+   fun:lf_alloc_new
    fun:lf_hash_insert
 }
 
@@ -551,123 +560,128 @@
 # Note that initialize_bucket() is reccursive,
 # can't provide more stack context.
 #
+# The '...' wildcard is for 'fun:my_raw_malloc' which is hidden with HAVE_VALGRIND
 {
    missing shutdown_performance_schema 3a
    Memcheck:Leak
    fun:malloc
+   ...
    fun:my_malloc
    fun:initialize_bucket
 }
 
+# The '...' wildcard is for 'fun:my_raw_malloc' which is hidden with HAVE_VALGRIND
+{
+   missing shutdown_performance_schema 3a-mem
+   Memcheck:Leak
+   ...
+   fun:my_malloc
+   fun:initialize_bucket
+}
+
+# The '...' wildcard is for 'fun:my_raw_malloc' which is hidden with HAVE_VALGRIND
 {
    missing shutdown_performance_schema 3b
    Memcheck:Leak
    fun:malloc
+   ...
    fun:my_malloc
-   fun:_lf_dynarray_lvalue
+   fun:lf_dynarray_lvalue
    fun:initialize_bucket
 }
 
+# The '...' wildcard is for 'fun:my_raw_malloc' which is hidden with HAVE_VALGRIND
+{
+   missing shutdown_performance_schema 3b-mem
+   Memcheck:Leak
+   ...
+   fun:my_malloc
+   fun:lf_dynarray_lvalue
+   fun:initialize_bucket
+}
+
+# The '...' wildcard is for 'fun:my_raw_malloc' which is hidden with HAVE_VALGRIND
 {
    missing shutdown_performance_schema 4
    Memcheck:Leak
    fun:malloc
+   ...
    fun:my_malloc
-   fun:_lf_dynarray_lvalue
-   fun:_lf_pinbox_get_pins
+   fun:lf_dynarray_lvalue
+   fun:lf_pinbox_get_pins
 }
 
+# The '...' wildcard is for 'fun:my_raw_malloc' which is hidden with HAVE_VALGRIND
+{
+   missing shutdown_performance_schema 4-mem
+   Memcheck:Leak
+   ...
+   fun:my_malloc
+   fun:lf_dynarray_lvalue
+   fun:lf_pinbox_get_pins
+}
+
+# The '...' wildcard is for 'fun:my_raw_malloc' which is hidden with HAVE_VALGRIND
 {
    missing shutdown_performance_schema 5
    Memcheck:Leak
    fun:malloc
+   ...
    fun:my_malloc
-   fun:_lf_dynarray_lvalue
+   fun:lf_dynarray_lvalue
    fun:lf_hash_insert
 }
 
+# The '...' wildcard is for 'fun:my_raw_malloc' which is hidden with HAVE_VALGRIND
+{
+   missing shutdown_performance_schema 5-mem
+   Memcheck:Leak
+   ...
+   fun:my_malloc
+   fun:lf_dynarray_lvalue
+   fun:lf_hash_insert
+}
+
+# The '...' wildcard is for 'fun:my_raw_malloc' which is hidden with HAVE_VALGRIND
 {
    missing shutdown_performance_schema 6
    Memcheck:Leak
    fun:malloc
+   ...
    fun:my_malloc
-   fun:_lf_dynarray_lvalue
+   fun:lf_dynarray_lvalue
    fun:lf_hash_delete
 }
 
+# The '...' wildcard is for 'fun:my_raw_malloc' which is hidden with HAVE_VALGRIND
+{
+   missing shutdown_performance_schema 6-mem
+   Memcheck:Leak
+   ...
+   fun:my_malloc
+   fun:lf_dynarray_lvalue
+   fun:lf_hash_delete
+}
+
+# The '...' wildcard is for 'fun:my_raw_malloc' which is hidden with HAVE_VALGRIND
 {
    missing shutdown_performance_schema 7
    Memcheck:Leak
    fun:malloc
+   ...
    fun:my_malloc
-   fun:_lf_dynarray_lvalue
+   fun:lf_dynarray_lvalue
    fun:lf_hash_search
 }
 
+# The '...' wildcard is for 'fun:my_raw_malloc' which is hidden with HAVE_VALGRIND
 {
-   missing shutdown_performance_schema 8
+   missing shutdown_performance_schema 7-mem
    Memcheck:Leak
-   fun:malloc
+   ...
    fun:my_malloc
-   fun:_Z22add_pfs_instr_to_arrayPKcS0_
-   fun:mysqld_get_one_option
-   fun:my_handle_options
-   fun:handle_options
-   fun:_Z20handle_early_optionsv
-}
-
-{
-   missing shutdown_performance_schema 9
-   Memcheck:Leak
-   fun:malloc
-   fun:my_malloc
-   fun:init_dynamic_array2
-   fun:_Z25init_pfs_instrument_arrayv
-   fun:_Z11mysqld_mainiPPc
-   fun:main
-}
-
-{
-   missing shutdown_performance_schema 9a
-   Memcheck:Leak
-   fun:malloc
-   fun:my_malloc
-   fun:_Z22add_pfs_instr_to_arrayPKcS0_
-   fun:mysqld_get_one_option
-   fun:my_handle_options
-   fun:_Z20handle_early_optionsv
-   fun:_Z11mysqld_mainiPPc
-}
-
-# Same as shutdown_performance_schema 9,
-# but the compiler/linker can sometime change the
-# calls from:
-# main()
-#   --> init_pfs_instrument_array()
-#     --> init_dynamic_array2()
-# to:
-# main()
-#   --> init_dynamic_array2()
-# when building with optimizations.
-
-{
-   missing shutdown_performance_schema 10
-   Memcheck:Leak
-   fun:malloc
-   fun:my_malloc
-   fun:init_dynamic_array2
-   fun:_Z11mysqld_mainiPPc
-   fun:main
-}
-
-{
-   missing shutdown_performance_schema 11
-   Memcheck:Leak
-   fun:malloc
-   fun:my_malloc
-   fun:init_dynamic_array2
-   fun:_Z11mysqld_mainiPPc
-   fun:(below main)
+   fun:lf_dynarray_lvalue
+   fun:lf_hash_search
 }
 
 {
@@ -793,6 +807,56 @@
    fun:buf_buddy_free
 }
 
+#
+# NDB packfrm vs deflate
+#
+{
+   NDB packfrm case 1
+   Memcheck:Cond
+   fun:deflate_slow
+   fun:deflate
+   fun:compress
+   fun:my_compress_alloc
+   fun:my_compress
+   fun:packfrm
+}
+
+{
+   NDB packfrm case 2
+   Memcheck:Cond
+   fun:longest_match
+   fun:deflate_slow
+   fun:deflate
+   fun:compress
+   fun:my_compress_alloc
+   fun:my_compress
+   fun:packfrm
+}
+
+#
+# pfs vs compress
+#
+{
+   pfs vs. compress case 1
+   Memcheck:Cond
+   fun:longest_match
+   fun:deflate_slow
+   fun:deflate
+   fun:compress
+   fun:my_compress_alloc
+   fun:my_compress
+}
+
+{
+   pfs vs. compress case 2
+   Memcheck:Cond
+   fun:deflate_slow
+   fun:deflate
+   fun:compress
+   fun:my_compress_alloc
+   fun:my_compress
+}
+
 # Note the wildcard in the (mangled) function signatures of
 # write_keys() and find_all_keys().
 # They both return ha_rows, which is platform dependent.
@@ -807,18 +871,8 @@
    fun:my_b_flush_io_cache
    fun:_my_b_write
    fun:_Z*10write_keysP10Sort_paramP13Filesort_infojP11st_io_cacheS4_
-   fun:_Z*13find_all_keysP10Sort_paramP10SQL_SELECTP13Filesort_infoP11st_io_cacheS6_P13Bounded_queueIhhEPy
-   fun:_Z8filesortP3THDP5TABLEP8FilesortbPyS5_
-}
-
-{
-   Bug#12856915 VALGRIND FAILURE IN FILESORT/CREATE_SORT_INDEX / two
-   Memcheck:Param
-   write(buf)
    ...
-   fun:my_b_flush_io_cache
-   fun:_Z15merge_many_buffP10Sort_paramPhP10st_buffpekPjP11st_io_cache
-   fun:_Z8filesortP3THDP5TABLEP8FilesortbPyS5_
+   fun:_Z8filesortP3THDP8FilesortbPyS3_S3_
 }
 
 {
@@ -827,18 +881,7 @@
    write(buf)
    ...
    fun:my_b_flush_io_cache
-   fun:_Z8filesortP3THDP5TABLEP8FilesortbPyS5_
-}
-
-{
-   Bug#12856915 VALGRIND FAILURE IN FILESORT/CREATE_SORT_INDEX / four
-   Memcheck:Param
-   write(buf)
-   ...
-   fun:my_b_flush_io_cache
-   fun:_my_b_write
-   fun:_Z*10write_keysP10Sort_paramP13Filesort_infojP11st_io_cacheS4_
-   fun:_Z8filesortP3THDP5TABLEP8FilesortbPyS5_
+   fun:_Z8filesortP3THDP8FilesortbPyS3_S3_
 }
 
 {
@@ -847,7 +890,7 @@
    fun:malloc
    fun:CRYPTO_malloc
    fun:sk_new
-   fun:load_builtin_compressions
+   ...
    fun:SSL_COMP_get_compression_methods
    fun:SSL_library_init
 }
@@ -880,25 +923,6 @@
 }
 
 {
-   BUG#14801497 CONDITIONAL JUMP OR MOVE DEPENDS ON UNINITIALISED VALUE(S) IN CREATE_TMP_TABLE
-   Memcheck:Cond
-   fun:_Z16create_tmp_tableP3THDP15TMP_TABLE_PARAMR4ListI4ItemEP8st_orderbbyyPKc
-   fun:_Z19create_schema_tableP3THDP10TABLE_LIST
-   fun:_Z18mysql_schema_tableP3THDP3LEXP10TABLE_LIST
-   ...
-   fun:_Z11open_tablesP3THDPP10TABLE_LISTPjjP19Prelocking_strategy
-   fun:_Z20open_and_lock_tablesP3THDP10TABLE_LISTbjP19Prelocking_strategy
-   fun:_Z20open_and_lock_tablesP3THDP10TABLE_LISTbj
-   fun:_Z21mysql_execute_commandP3THD
-   fun:_Z11mysql_parseP3THDPcjP12Parser_state
-   fun:_Z16dispatch_command19enum_server_commandP3THDPcj
-   fun:_Z24do_handle_one_connectionP3THD
-   fun:handle_one_connection
-   fun:pfs_spawn_thread
-}
-
-
-{
    Bug#16039908 "BYTES STILL REACHABLE" IN VALGRIND TEST ON 5.6/TRUNK
    Memcheck:Leak
    fun:calloc
@@ -909,10 +933,17 @@
    fun:_ZL10plugin_delP13st_plugin_int
    fun:_ZL12reap_pluginsv
    fun:_Z15plugin_shutdownv
-   fun:_ZL8clean_upb
-   fun:_Z10unireg_endv
-   fun:_ZL11kill_serverPv
-   fun:kill_server_thread
+   fun:_Z*8clean_upb*
+}
+
+{
+   main.udf gives similar warning as Bug#16039908
+   Memcheck:Leak
+   fun:calloc
+   fun:_dlerror_run
+   fun:dlclose
+   fun:_Z8udf_freev
+   fun:_Z*8clean_upb*
 }
 
 #Suppress warnings from glibc implementation of 'malloc_info' 
@@ -934,7 +965,33 @@
    fun:malloc_info
 }
 
-#supress warnings from openssl
+
+#supress warnings from openssl random generator
+
+{
+   OpenSSL conditional jump in ssl3_ctx_ctrl
+   Memcheck:Cond
+   ...
+   fun:ssl3_ctx_ctrl
+   fun:new_VioSSLFd
+}
+
+{
+   OpenSSL uninitialised value of size 8 in new_VioSSLFd
+   Memcheck:Value8
+   fun:BN_num_bits_word
+   fun:BN_num_bits
+   ...
+   fun:new_VioSSLFd
+}
+
+{
+   OpenSSL uninitialised value of size 8 in new_VioSSLFd
+   Memcheck:Value8
+   fun:BN_mod_exp_mont_consttime
+   ...
+   fun:new_VioSSLFd
+}
 
 {
    OpenSSL PB2 / 1
@@ -964,4 +1021,1049 @@
    fun:_ZL8init_sslv
    fun:_Z11mysqld_mainiPPc
    fun:main
+}
+
+
+{
+   OpenSSL libstdc++ version 5 / one
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:CRYPTO_malloc
+   fun:sk_new
+   obj:/lib/x86_64-linux-gnu/libssl.so.1.0.0
+   fun:SSL_COMP_get_compression_methods
+   fun:SSL_library_init
+   fun:ssl_start
+   fun:_ZL8init_sslv
+   fun:_Z11mysqld_mainiPPc
+   fun:main
+}
+
+{
+   OpenSSL libstdc++ version 5 / two
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:CRYPTO_malloc
+   fun:sk_new
+   obj:/lib/x86_64-linux-gnu/libssl.so.1.0.0
+   fun:SSL_COMP_get_compression_methods
+   fun:SSL_library_init
+   fun:ssl_start
+   fun:_ZL8init_sslv
+   fun:_Z11mysqld_mainiPPc
+   fun:main
+}
+
+{
+   OpenSSL libstdc++ version 5 / three
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   obj:/usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.21
+   fun:call_init.part.0
+   fun:call_init
+   fun:_dl_init
+}
+
+# supress uninitialized because some SSL libraries do random like that
+{
+   OpenSSL conditional jump in generate_user_salt due to randomness
+   Memcheck:Cond
+   fun:generate_user_salt
+   fun:native_password_authenticate
+}
+
+{
+   General protobuf globals
+   Memcheck:Leak
+   fun:_Znwm
+   ...
+   fun:_GLOBAL__sub_I_mysqlx*.pb.cc
+   ...
+}
+
+
+{
+   mysqlx plugin install
+   Memcheck:Leak
+   fun:*alloc
+   ...
+   fun:_dl_catch_error
+   ...
+   fun:dlopen*
+   ...
+   fun:_ZL13plugin_dl_addPK19st_mysql_lex_stringi*
+   ...
+}
+
+# supress inability to cleanup OpenSSL error contexts in GR
+{
+   OpenSSL GR suppress leak 1
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:CRYPTO_malloc
+   fun:ERR_get_state
+   fun:ERR_clear_error
+   obj:*
+   obj:*
+   obj:*
+   obj:*
+   obj:*
+   obj:*
+   obj:*
+   obj:*
+   obj:*
+   fun:_ZN14Trans_delegate13before_commitEP3THDbP11st_io_cacheS3_y
+   fun:_ZN13MYSQL_BIN_LOG6commitEP3THDb
+   fun:_Z17trans_commit_stmtP3THD
+}
+
+{
+   OpenSSL GR suppress leak 2
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:CRYPTO_malloc
+   fun:ERR_get_state
+   fun:ERR_clear_error
+   obj:*
+   obj:*
+   obj:*
+   obj:*
+   obj:*
+   obj:*
+   obj:*
+   obj:*
+   obj:*
+   fun:_ZN14Trans_delegate13before_commitEP3THDbP11st_io_cacheS3_y
+   fun:_ZN13MYSQL_BIN_LOG6commitEP3THDb
+   fun:_Z15ha_commit_transP3THDbb
+}
+
+{
+   OpenSSL GR suppress leak 3
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:CRYPTO_malloc
+   fun:lh_insert
+   fun:int_thread_set_item
+   fun:ERR_get_state
+   fun:ERR_clear_error
+   obj:*
+   obj:*
+   obj:*
+   obj:*
+   obj:*
+   obj:*
+   obj:*
+   obj:*
+   obj:*
+   fun:_ZN14Trans_delegate13before_commitEP3THDbP11st_io_cacheS3_y
+}
+
+{
+   OpenSSL GR suppress leak 4
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:CRYPTO_malloc
+   fun:lh_new
+   fun:int_thread_get
+   fun:int_thread_set_item
+   fun:ERR_get_state
+   fun:ERR_put_error
+   fun:PEM_read_bio
+   fun:PEM_X509_INFO_read_bio
+   fun:X509_load_cert_crl_file
+   fun:by_file_ctrl
+   fun:X509_STORE_load_locations
+   obj:*
+   obj:*
+   obj:*
+   obj:*
+}
+
+{
+   OpenSSL leak 1 static SSL
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:CRYPTO_malloc
+   ...
+   fun:pthread_once
+}
+
+{
+   OpenSSL leak 2 static SSL
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:realloc
+   fun:CRYPTO_realloc
+   ...
+   fun:pthread_once
+}
+
+{
+   OpenSSL leak 1 static SSL pthread_once_slow
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:CRYPTO_malloc
+   ...
+   fun:__pthread_once_slow
+}
+
+{
+   OpenSSL leak 2 static SSL pthread_once_slow
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:realloc
+   fun:CRYPTO_realloc
+   ...
+   fun:__pthread_once_slow
+}
+
+{
+   OpenSSL leak 3 static SSL
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:CRYPTO_malloc
+   ...
+   fun:RAND_priv_bytes
+}
+
+{
+   OpenSSL leak 4 static SSL
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:CRYPTO_malloc
+   ...
+   fun:RAND_bytes
+}
+
+# http://www.openldap.org/its/index.cgi/Software%20Bugs?id=9081;page=23
+# Memory leak in ldap_initialize/ldap_unbind
+# Version: 2.4.48
+# Fixed in RE24 (2.4.49)
+{
+   OpenLDAP bug 9081
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:calloc
+   fun:ber_memcalloc_x
+   fun:ber_memcalloc
+   fun:ber_sockbuf_alloc
+   fun:ldap_create
+   fun:ldap_initialize
+}
+
+{
+   cyrus libsasl2 still reachable one
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   ...
+   fun:sasl_client_init
+}
+
+{
+   cyrus libsasl2 still reachable two
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:calloc
+   ...
+   fun:sasl_client_init
+}
+
+{
+   cyrus libsasl2 still reachable three
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   ...
+   fun:sasl_set_path
+}
+
+{
+  OpenSSL still reachable.
+  Memcheck:Leak
+  match-leak-kinds: reachable
+  fun:malloc
+  fun:CRYPTO_malloc
+  ...
+  fun:ERR_peek_error
+  fun:vio_ssl_read
+  ...
+}
+
+{
+  OpenSSL still reachable.
+  Memcheck:Leak
+  match-leak-kinds: reachable
+  fun:malloc
+  fun:CRYPTO_malloc
+  ...
+  fun:ERR_peek_error
+  ...
+  fun:sslaccept
+  ...
+  fun:server_mpvio_read_packet
+  ...
+}
+
+{
+  OpenSSL 3.0
+  Memcheck:Leak
+  match-leak-kinds: reachable
+  ...
+  fun:evp_generic_fetch
+  ...
+}
+
+{
+   OpenSSL 3.0
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   fun:EVP_KEYMGMT_do_all_provided
+   ...
+}
+
+{
+   OpenSSL 3.0
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   fun:OSSL_DECODER_CTX_new_for_pkey
+   ...
+}
+
+{
+   OpenSSL 3.0
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   fun:OSSL_DECODER_do_all_provided
+   ...
+}
+
+{
+   OpenSSL 3.0
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   fun:OSSL_DECODER_CTX_new_for_pkey
+   ...
+}
+
+{
+   OpenSSL 3.0
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   fun:RAND_bytes_ex
+   ...
+}
+
+{
+   OpenSSL 3.0
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   fun:RAND_priv_bytes_ex
+   ...
+}
+
+{
+   OpenSSL 3.0 (strange ERR_set_debug is documented to not call strdup)
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:CRYPTO_malloc
+   fun:CRYPTO_strdup
+   fun:ERR_set_debug
+   ...
+}
+
+{
+   OpenSSL 3.0
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:CRYPTO_malloc
+   fun:ERR_add_error_vdata
+   ...
+}
+
+{
+   OpenSSL 3.0
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   fun:cache_objects
+   ...
+}
+
+{
+   OpenSSL 3.0
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   fun:inner_loader_fetch
+   ...
+}
+
+{
+   OpenSSL 3.0
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   fun:CRYPTO_THREAD_run_once
+   ...
+}
+
+{
+   OpenSSL 3.0
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   fun:ossl_provider_doall_activated
+   ...
+}
+
+{
+   OpenSSL 3.0
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   fun:_ZL8init_sslv
+   ...
+}
+
+{
+   OpenSSL 3.0
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   fun:ssl_load_ciphers
+   ...
+}
+
+{
+   OpenSSL 3.0
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   fun:RAND_get0_private
+   ...
+}
+
+#
+# Rules to suppress leaks from plugin dependencies
+#
+
+{
+  TPL leak 1
+  Memcheck:Leak
+  match-leak-kinds: reachable
+  fun:malloc
+  fun:CRYPTO_malloc
+  fun:BUF_strndup
+  fun:CONF_module_add
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  fun:_ZL17plugin_initializeP13st_plugin_int
+  ...
+}
+
+{
+  TPL leak 2
+  Memcheck:Leak
+  match-leak-kinds: reachable
+  fun:malloc
+  fun:CRYPTO_malloc
+  fun:BUF_strndup
+  fun:CONF_module_add
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  fun:_ZL17plugin_initializeP13st_plugin_int
+  ...
+}
+
+{
+  TPL leak 3
+  Memcheck:Leak
+  match-leak-kinds: reachable
+  fun:malloc
+  fun:CRYPTO_malloc
+  fun:lh_insert
+  fun:int_thread_set_item
+  fun:ERR_get_state
+  fun:ERR_clear_error
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  fun:_ZL17plugin_initializeP13st_plugin_int
+  ...
+}
+
+{
+  TPL leak 4
+  Memcheck:Leak
+  match-leak-kinds: reachable
+  fun:malloc
+  fun:CRYPTO_malloc
+  fun:sk_new
+  fun:CONF_module_add
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  fun:_ZL17plugin_initializeP13st_plugin_int
+  ...
+}
+
+{
+  TPL leak 5
+  Memcheck:Leak
+  match-leak-kinds: reachable
+  fun:malloc
+  fun:CRYPTO_malloc
+  fun:sk_new
+  fun:SSL_COMP_get_compression_methods
+  fun:SSL_library_init
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  fun:_ZL17plugin_initializeP13st_plugin_int
+  ...
+}
+
+{
+  TPL leak 6
+  Memcheck:Leak
+  match-leak-kinds: reachable
+  fun:malloc
+  fun:CRYPTO_malloc
+  fun:CONF_module_add
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  fun:_ZL17plugin_initializeP13st_plugin_int
+  ...
+}
+
+{
+  TPL leak 7
+  Memcheck:Leak
+  match-leak-kinds: reachable
+  fun:malloc
+  fun:CRYPTO_malloc
+  fun:CONF_module_add
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  fun:_ZL17plugin_initializeP13st_plugin_int
+  ...
+}
+
+{
+  TPL leak 8
+  Memcheck:Leak
+  match-leak-kinds: reachable
+  fun:malloc
+  fun:CRYPTO_malloc
+  fun:lh_new
+  fun:int_thread_get
+  fun:int_thread_set_item
+  fun:ERR_get_state
+  fun:ERR_clear_error
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  fun:_ZL17plugin_initializeP13st_plugin_int
+  ...
+}
+
+{
+  TPL leak 9
+  Memcheck:Leak
+  match-leak-kinds: reachable
+  fun:malloc
+  fun:CRYPTO_malloc
+  fun:ERR_get_state
+  fun:ERR_clear_error
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  fun:_ZL17plugin_initializeP13st_plugin_int
+  ...
+}
+
+{
+  TPL leak 10
+  Memcheck:Leak
+  match-leak-kinds: definite
+  fun:malloc
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  fun:_ZL17plugin_initializeP13st_plugin_int
+  ...
+}
+
+{ 
+  TPL leak 11
+  Memcheck:Leak
+  match-leak-kinds: reachable
+  fun:malloc
+  fun:CRYPTO_malloc
+  fun:ERR_get_state
+  fun:ERR_put_error
+  fun:PEM_read_bio
+  fun:PEM_X509_INFO_read_bio
+  fun:X509_load_cert_crl_file
+  fun:by_file_ctrl
+  fun:X509_STORE_load_locations
+  obj:*
+  obj:* 
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  fun:_ZL17plugin_initializeP13st_plugin_int
+}
+
+{
+  TPL leak 12
+  Memcheck:Leak
+  match-leak-kinds: reachable
+  fun:malloc
+  fun:CRYPTO_malloc
+  fun:BUF_strndup
+  fun:CONF_module_add
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+}
+
+{
+  TPL leak 13
+  Memcheck:Leak
+  match-leak-kinds: reachable
+  fun:malloc
+  fun:CRYPTO_malloc
+  fun:CONF_module_add
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+}
+
+{
+  TPL leak 14
+  Memcheck:Leak
+  match-leak-kinds: reachable
+  fun:malloc
+  fun:CRYPTO_malloc
+  fun:sk_new
+  fun:SSL_COMP_get_compression_methods
+  fun:SSL_library_init
+  obj:*
+  fun:_ZL17plugin_initializeP13st_plugin_int
+  ...
+}
+
+{
+  TPL leak 15
+  Memcheck:Leak
+  match-leak-kinds: reachable
+  fun:malloc
+  fun:CRYPTO_malloc
+  fun:lh_insert
+  fun:int_thread_set_item
+  fun:ERR_get_state
+  fun:ERR_put_error
+  fun:PEM_read_bio
+  fun:PEM_X509_INFO_read_bio
+  fun:X509_load_cert_crl_file
+  fun:by_file_ctrl
+  fun:X509_STORE_load_locations
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+}
+
+{
+  TPL leak 16
+  Memcheck:Leak
+  match-leak-kinds: reachable
+  fun:realloc
+  fun:CRYPTO_realloc
+  fun:sk_insert
+  fun:CONF_module_add
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  fun:_ZL17plugin_initializeP13st_plugin_int
+  ...
+}
+
+{
+  TPL leak 17
+  Memcheck:Leak
+  match-leak-kinds: reachable
+  fun:malloc
+  fun:CRYPTO_malloc
+  fun:lh_insert
+  fun:int_thread_set_item
+  fun:ERR_get_state
+  fun:ERR_clear_error
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+}
+
+{
+  TPL leak 18
+  Memcheck:Leak
+  match-leak-kinds: reachable
+  fun:malloc
+  fun:CRYPTO_malloc
+  fun:lh_insert
+  fun:int_thread_set_item
+  fun:ERR_get_state
+  fun:ERR_clear_error
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+}
+
+{
+  TPL leak 19
+  Memcheck:Leak
+  match-leak-kinds: reachable
+  fun:malloc
+  fun:CRYPTO_malloc
+  fun:ERR_get_state
+  fun:ERR_clear_error
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+}
+
+{
+  TPL leak 20
+  Memcheck:Leak
+  match-leak-kinds: definite
+  fun:malloc
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  fun:_ZL17plugin_initializeP13st_plugin_int
+  ...
+}
+
+{
+  TPL leak 21
+  Memcheck:Leak
+  match-leak-kinds: possible
+  fun:malloc
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  obj:*
+  fun:_ZL17plugin_initializeP13st_plugin_int
+  ...
+}
+
+{
+   TPL leak 22
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:CRYPTO_malloc
+   fun:lh_new
+   fun:int_thread_get
+   fun:int_thread_set_item
+   fun:ERR_get_state
+   fun:ERR_clear_error
+   obj:*
+   obj:*
+   obj:*
+   obj:*
+   obj:*
+   obj:*
+   obj:*
+   fun:_ZL17plugin_initializeP13st_plugin_int
+   ...
+}
+
+# Bug #25964438  LDAP: ASAN AND VALGRIND ISSUES
+{
+   LDAP_TLS_workaround1
+   Memcheck:Leak
+   fun:calloc
+   ...
+   ...
+   ...
+   ...
+   ...
+   fun:ldap_int_tls_start
+   fun:ldap_start_tls_s
+   fun:*establish_tls*
+   fun:*create*
+}
+{
+   LDAP_TLS_workaround2
+   Memcheck:Leak
+   fun:malloc
+   ...
+   ...
+   ...
+   ...
+   ...
+   fun:ldap_int_tls_start
+   fun:ldap_start_tls_s
+   fun:*establish_tls*
+   fun:*create*
+}
+{
+   LDAP_TLS_workaround3
+   Memcheck:Leak
+   fun:calloc
+   fun:PR_LoadLibraryWithFlags
+   ...
+   ...
+   ...
+   fun:PR_CallOnce
+   ...
+   ...
+   fun:_dl_init
+}
+{
+   LDAP_TLS_workaround4
+   Memcheck:Leak
+   fun:malloc
+   fun:PR_ErrorInstallTable
+   fun:PR_CallOnce
+   ...
+   ...
+   fun:PR_CallOnceWithArg
+   ...
+   fun:NSS_SetDomesticPolicy
+   ...
+   fun:PR_CallOnceWithArg
+   ...
+   ...
+   ...
+   fun:ldap_int_tls_start
+   fun:ldap_start_tls_s
+   fun:*establish_tls*
+}
+{
+   LDAP_TLS_workaround5
+   Memcheck:Leak
+   fun:malloc
+   ...
+   fun:PR_LoadLibraryWithFlags
+   ...
+   ...
+   ...
+   fun:PR_CallOnce
+   ...
+   ...
+   ...
+   ...
+   fun:_dl_catch_error
+   fun:_dl_open
+   fun:dlopen_doit
+   fun:_dl_catch_error
+   fun:_dlerror_run
+}
+{
+   LDAP_TLS_workaround6
+   Memcheck:Leak
+   fun:malloc
+   fun:ber_memalloc_x
+   fun:ber_strdup_x
+   ...
+   fun:ldap_int_initialize
+   fun:ldap_create
+   fun:ldap_initialize
+   fun:*create*
+}
+{
+   LDAP_TLS_workaround7
+   Memcheck:Leak
+   fun:malloc
+   fun:*dl_close_worker*
+   fun:*dl_close*
+   fun:*dl_catch_error*
+   fun:*libc_dlclose*
+   fun:*free_mem*
+   fun:*libc_freeres*
+   fun:*vgnU_freeres*
+   fun:*run_exit_handlers*
+   fun:exit*
+   fun:*mysqld_exit*
+   fun:*mysqld_main*
+   fun:*main*
+}
+{
+   LDAP_TLS_workaround8
+   Memcheck:Leak
+   fun:malloc
+   fun:ber_memalloc_x
+   fun:ber_strdup_x
+   ...
+   fun:ldap_int_initialize
+   fun:ldap_set_option
+   fun:*configure_tls*
+}
+{
+   LDAP_TLS_workaround9
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:PR_ErrorInstallTable
+   ...
+   ...
+   ...
+   ...
+   ...
+   ...  
+   ...
+   ...
+   ...
+   ...
+   ...
+   ...
+   fun:ldap_int_tls_start
+   fun:ldap_start_tls_s
+}
+
+{
+  AWS_SDK_1_9_s2n_init
+    Memcheck:Leak
+    match-leak-kinds: reachable,definite,indirect,possible
+    ...
+    fun:s2n_init
+    ...
+}
+{
+  AWS_SDK_1_9 AWS:Init call too deep in stack
+    Memcheck:Leak
+    match-leak-kinds: indirect
+    fun:realloc
+    fun:CRYPTO_realloc
+    ...
+    fun:asn1_template_ex_d2i
+    ...
+}
+{
+  AWS_SDK_1_9_curl_init
+    Memcheck:Leak
+    match-leak-kinds: reachable
+    ...
+    fun:curl_global_init
+    ...
+    fun:_ZN3Aws7InitAPIERKNS_10SDKOptionsE
+}
+{
+  AWS_SDK_1_9_conf_modules_load
+    Memcheck:Leak
+    match-leak-kinds: reachable
+    ...
+    fun:CONF_modules_load_file
+    fun:_ZL12keyring_initPv
+    ...
 }

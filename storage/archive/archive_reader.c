@@ -1,13 +1,20 @@
-/* Copyright (c) 2007, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2007, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -22,7 +29,6 @@
 #include <m_string.h>
 #include <my_getopt.h>
 #include <mysql_version.h>
-#include <welcome_copyright_notice.h> // ORACLE_WELCOME_COPYRIGHT_NOTICE
 
 #define BUFFER_LEN 1024
 #define ARCHIVE_ROW_HEADER_SIZE 4
@@ -251,7 +257,7 @@ int main(int argc, char *argv[])
       read= (unsigned int)azread(&reader_handle, buffer + ARCHIVE_ROW_HEADER_SIZE, 
                                  row_len, &error); 
 
-      DBUG_ASSERT(read == row_len);
+      assert(read == row_len);
 
       azwrite(&writer_handle, buffer, row_len + ARCHIVE_ROW_HEADER_SIZE);
 
@@ -323,7 +329,7 @@ get_one_option(int optid,
   case 'A':
     opt_autoincrement= 1;
     if (argument)
-      new_auto_increment_value= strtoull(argument, NULL, 0);
+      new_auto_increment_value= my_strtoull(argument, NULL, 0);
     else
       new_auto_increment_value= 0;
     break;
@@ -351,7 +357,7 @@ static struct my_option my_long_options[] =
    0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"check", 'c', "Check table for errors.",
    0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   {"debug", '#',
    "Output debug log. Often this is 'd:t:o,filename'.",
    0, 0, 0, GET_STR, OPT_ARG, 0, 0, 0, 0, 0, 0},
@@ -414,7 +420,7 @@ static void get_options(int *argc, char ***argv)
   if (*argc == 0)
   {
     usage();
-    exit(-1);
+    exit(1);
   }
 
   return;

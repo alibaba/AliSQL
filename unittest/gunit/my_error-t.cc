@@ -1,13 +1,20 @@
-/* Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2012, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -19,6 +26,7 @@
 
 #include "my_sys.h" // my_strerror()
 #include "my_base.h" // HA_ERR_KEY_NOT_FOUND
+#include "m_string.h" // native_strcasecmp
 #include <string.h>
 
 namespace my_error_unittest {
@@ -29,9 +37,9 @@ TEST(MyErrorTest, MyStrErrorSystem)
   const char *msg;
 
   msg= my_strerror(buf, sizeof(buf) - 1, 9999);
-  EXPECT_TRUE(!strcasecmp("unknown error", msg) ||
-              !strcasecmp("unknown error: 9999", msg) ||
-              !strcasecmp("unknown error 9999", msg))
+  EXPECT_TRUE(!native_strcasecmp("unknown error", msg) ||
+              !native_strcasecmp("unknown error: 9999", msg) ||
+              !native_strcasecmp("unknown error 9999", msg))
     << "msg<" << msg << ">";
 
   // try a proper error number
@@ -51,7 +59,7 @@ TEST(MyErrorTest, MyStrErrorHandlerPlugin)
   EXPECT_STREQ("Didn't find key on read or update", msg);
 }
 
-TEST(MyErrorTest, MyGetErrMsgUnitialized)
+TEST(MyErrorTest, MyGetErrMsgUninitialized)
 {
   const char *msg;
 
@@ -61,24 +69,24 @@ TEST(MyErrorTest, MyGetErrMsgUnitialized)
 
 const char *faux_errmsgs[]= { "alpha", "beta", NULL, "delta" };
 
-const char** get_faux_errmsgs()
-{
-  return faux_errmsgs;
-}
-
 static const int faux_error_first= 8000;
 static const int faux_error_last=  8003;
+
+const char* get_faux_errmsg(int nr)
+{
+  return faux_errmsgs[nr - faux_error_first];
+}
 
 TEST(MyErrorTest, MyGetErrMsgInitialized)
 {
   const char *msg;
 
-  EXPECT_EQ(0, my_error_register(get_faux_errmsgs,
+  EXPECT_EQ(0, my_error_register(get_faux_errmsg,
                                  faux_error_first,
                                  faux_error_last));
 
   // flag error when trying to register overlapping area
-  EXPECT_NE(0, my_error_register(get_faux_errmsgs,
+  EXPECT_NE(0, my_error_register(get_faux_errmsg,
                                  faux_error_first + 2,
                                  faux_error_last + 2));
 
@@ -104,10 +112,10 @@ TEST(MyErrorTest, MyGetErrMsgInitialized)
   msg= my_get_err_msg(faux_error_last + 1);
   EXPECT_TRUE(msg == NULL);
 
-  EXPECT_TRUE(my_error_unregister(faux_error_first, faux_error_last) != NULL);
+  EXPECT_FALSE(my_error_unregister(faux_error_first, faux_error_last));
 
   // flag error when trying to unregister twice
-  EXPECT_TRUE(my_error_unregister(faux_error_first, faux_error_last) == NULL);
+  EXPECT_TRUE(my_error_unregister(faux_error_first, faux_error_last));
 }
 
 }

@@ -7,7 +7,7 @@
 # Bug#14757009 : WHEN THE GENERAL_LOG IS A SOCKET AND THE READER GOES AWAY,
 #                MYSQL QUITS WORKING.
 #
-call mtr.add_suppression("Could not open");
+call mtr.add_suppression("Could not use");
 
 --let $gen_log_file= $MYSQLTEST_VARDIR/tmp/general_log.fifo
 --let $slow_query_log_file= $MYSQLTEST_VARDIR/tmp/slow_log.fifo
@@ -32,7 +32,7 @@ call mtr.add_suppression("Could not open");
 --echo #         and slow query log file.
 # Restart server with fifo file as general log file.
 --exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
---shutdown_server 60
+--shutdown_server 
 --source include/wait_until_disconnected.inc
 --enable_reconnect
 # Write file to make mysql-test-run.pl start up the server again
@@ -43,7 +43,7 @@ call mtr.add_suppression("Could not open");
 # regular file.
 --perl
   my $file= $ENV{'GREP_FILE'};
-  my $pattern= "Turning logging off for the whole duration";
+  my $pattern= "Turning logging off for the server";
   open(FILE, "$file") or die("Unable to open $file: $!\n");
   my $count = 0;
   while (<FILE>) {

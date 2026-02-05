@@ -1,14 +1,20 @@
-/* Copyright (c) 2000-2002, 2005-2007 MySQL AB
-   Use is subject to license terms
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -25,7 +31,7 @@
 	   HA_ERR_END_OF_FILE = EOF.
 */
 
-int heap_scan_init(register HP_INFO *info)
+int heap_scan_init(HP_INFO *info)
 {
   DBUG_ENTER("heap_scan_init");
   info->lastinx= -1;
@@ -35,7 +41,7 @@ int heap_scan_init(register HP_INFO *info)
   DBUG_RETURN(0);
 }
 
-int heap_scan(register HP_INFO *info, uchar *record)
+int heap_scan(HP_INFO *info, uchar *record)
 {
   HP_SHARE *share=info->s;
   ulong pos;
@@ -55,7 +61,8 @@ int heap_scan(register HP_INFO *info, uchar *record)
       if (pos >= info->next_block)
       {
 	info->update= 0;
-	DBUG_RETURN(my_errno= HA_ERR_END_OF_FILE);
+        set_my_errno(HA_ERR_END_OF_FILE);
+	DBUG_RETURN(HA_ERR_END_OF_FILE);
       }
     }
     hp_find_record(info, pos);
@@ -64,7 +71,8 @@ int heap_scan(register HP_INFO *info, uchar *record)
   {
     DBUG_PRINT("warning",("Found deleted record"));
     info->update= HA_STATE_PREV_FOUND | HA_STATE_NEXT_FOUND;
-    DBUG_RETURN(my_errno=HA_ERR_RECORD_DELETED);
+    set_my_errno(HA_ERR_RECORD_DELETED);
+    DBUG_RETURN(HA_ERR_RECORD_DELETED);
   }
   info->update= HA_STATE_PREV_FOUND | HA_STATE_NEXT_FOUND | HA_STATE_AKTIV;
   memcpy(record,info->current_ptr,(size_t) share->reclength);

@@ -1,15 +1,21 @@
 /*
-   Copyright (C) 2003-2007 MySQL AB, 2008, 2009 Sun Microsystems, Inc.
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -21,6 +27,8 @@
 #include "HugoTransactions.hpp"
 #include "UtilTransactions.hpp"
 #include <NdbRestarter.hpp>
+
+template class Vector<int>;
 
 struct OperationTestCase {
   const char * name;
@@ -264,7 +272,7 @@ valid(const Sequence& s)
   if(s.size() == 0)
     return false;
 
-  for(size_t i = 1; i<s.size(); i++)
+  for(unsigned i = 1; i<s.size(); i++)
   {
     switch(s[i]){
     case o_INS:
@@ -288,7 +296,7 @@ static
 NdbOut& operator<<(NdbOut& out, const Sequence& s)
 {
   out << "[ ";
-  for(size_t i = 0; i<s.size(); i++)
+  for(unsigned = 0; i<s.size(); i++)
   {
    switch(s[i]){
     case o_INS:
@@ -492,7 +500,7 @@ runOperations(NDBT_Context* ctx, NDBT_Step* step)
     
   HugoOperations trans1(*ctx->getTab());
   C3(trans1.startTransaction(pNdb) == 0);  
-  for(size_t i = 0; i<seq.size(); i++)
+  for(unsigned i = 0; i<seq.size(); i++)
   {
     /**
      * Perform operation
@@ -523,7 +531,7 @@ runOperations(NDBT_Context* ctx, NDBT_Step* step)
      */
     Uint64 transactionId= trans1.getTransaction()->getTransactionId();
 
-    for(size_t k=0; k<=i+1; k++)
+    for(unsigned k=0; k<=i+1; k++)
     {
       if(verify_savepoint(ctx, pNdb, k, 
 			  k>0 ? seq[k-1] : initial_row ? o_INS : o_DONE, 
@@ -710,12 +718,12 @@ main(int argc, const char** argv){
     ts.addTest(pt);
   }
 
-  for(size_t i = 0; i<tmp.size(); i++)
+  for(unsigned i = 0; i<tmp.size(); i++)
   {
     BaseString name;
     Sequence s;
     generate(s, tmp[i]);
-    for(size_t j = 0; j<s.size(); j++){
+    for(unsigned j = 0; j<s.size(); j++){
       switch(s[j]){
       case o_INS:
 	name.append("_INS");

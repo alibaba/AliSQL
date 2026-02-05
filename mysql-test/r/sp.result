@@ -791,7 +791,7 @@ comment 'Characteristics procedure test'
   insert into t1 values ("chistics", 1)|
 show create procedure chistics|
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
-chistics	NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` PROCEDURE `chistics`()
+chistics	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` PROCEDURE `chistics`()
     MODIFIES SQL DATA
     COMMENT 'Characteristics procedure test'
 insert into t1 values ("chistics", 1)	latin1	latin1_swedish_ci	latin1_swedish_ci
@@ -803,7 +803,7 @@ delete from t1|
 alter procedure chistics sql security invoker|
 show create procedure chistics|
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
-chistics	NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` PROCEDURE `chistics`()
+chistics	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` PROCEDURE `chistics`()
     MODIFIES SQL DATA
     SQL SECURITY INVOKER
     COMMENT 'Characteristics procedure test'
@@ -818,7 +818,7 @@ comment 'Characteristics procedure test'
   return 42|
 show create function chistics|
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
-chistics	NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` FUNCTION `chistics`() RETURNS int(11)
+chistics	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` FUNCTION `chistics`() RETURNS int(11)
     DETERMINISTIC
     SQL SECURITY INVOKER
     COMMENT 'Characteristics procedure test'
@@ -831,7 +831,7 @@ no sql
 comment 'Characteristics function test'|
 show create function chistics|
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
-chistics	NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` FUNCTION `chistics`() RETURNS int(11)
+chistics	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` FUNCTION `chistics`() RETURNS int(11)
     NO SQL
     DETERMINISTIC
     SQL SECURITY INVOKER
@@ -840,6 +840,8 @@ return 42	latin1	latin1_swedish_ci	latin1_swedish_ci
 drop function chistics|
 insert into t1 values ("foo", 1), ("bar", 2), ("zip", 3)|
 set @@sql_mode = 'ANSI'|
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 drop procedure if exists modes$
 create procedure modes(out c1 int, out c2 int)
 begin
@@ -1219,12 +1221,12 @@ n	f
 19	121645100408832000
 20	2432902008176640000
 drop table t3|
-show function status like '%f%'|
+show function status like '%fac'|
 Db	Name	Type	Definer	Modified	Created	Security_type	Comment	character_set_client	collation_connection	Database Collation
 test	fac	FUNCTION	root@localhost	0000-00-00 00:00:00	0000-00-00 00:00:00	DEFINER		latin1	latin1_swedish_ci	latin1_swedish_ci
 drop procedure ifac|
 drop function fac|
-show function status like '%f%'|
+show function status like '%fac'|
 Db	Name	Type	Definer	Modified	Created	Security_type	Comment	character_set_client	collation_connection	Database Collation
 drop table if exists t3|
 create table t3 (
@@ -2243,7 +2245,7 @@ bug2564_3		CREATE DEFINER=`root`@`localhost` FUNCTION `bug2564_3`(x int, y int) 
 return x || y	latin1	latin1_swedish_ci	latin1_swedish_ci
 show create function bug2564_4|
 Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
-bug2564_4	REAL_AS_FLOAT,PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ANSI	CREATE DEFINER="root"@"localhost" FUNCTION "bug2564_4"(x int, y int) RETURNS int(11)
+bug2564_4	REAL_AS_FLOAT,PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ANSI	CREATE DEFINER="root"@"localhost" FUNCTION "bug2564_4"(x int, y int) RETURNS int(11)
 return x || y	latin1	latin1_swedish_ci	latin1_swedish_ci
 drop procedure bug2564_1|
 drop procedure bug2564_2|
@@ -2379,7 +2381,7 @@ Level	Code	Message
 Field	Type	Null	Key	Default	Extra
 id	char(16)	NO			
 data	int(11)	NO		NULL	
-Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment
 Database	Table	In_use	Name_locked
 Variable_name	Value
 Tables_in_test (foo)
@@ -2400,7 +2402,7 @@ Level	Code	Message
 Field	Type	Null	Key	Default	Extra
 id	char(16)	NO			
 data	int(11)	NO		NULL	
-Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment
 Database	Table	In_use	Name_locked
 Variable_name	Value
 Tables_in_test (foo)
@@ -2646,24 +2648,27 @@ create procedure bug7743 ( searchstring char(28) )
 begin
 declare var mediumint(8) unsigned;
 select a into var from t4 where b = 2 and c = binary searchstring limit 1;
+show warnings;
 select var;
 end|
 call bug7743("oneword")|
+Level	Code	Message
 var
 1
 call bug7743("OneWord")|
+Level	Code	Message
+Warning	1329	No data - zero rows fetched, selected, or processed
 var
 NULL
-Warnings:
-Warning	1329	No data - zero rows fetched, selected, or processed
 call bug7743("anotherword")|
+Level	Code	Message
 var
 2
 call bug7743("AnotherWord")|
+Level	Code	Message
+Warning	1329	No data - zero rows fetched, selected, or processed
 var
 NULL
-Warnings:
-Warning	1329	No data - zero rows fetched, selected, or processed
 drop procedure bug7743|
 drop table t4|
 delete from t3|
@@ -2915,17 +2920,15 @@ select @@sql_mode|
 call bug6129()|
 @@sql_mode
 ERROR_FOR_DIVISION_BY_ZERO
-set @@sql_mode= "NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO"|
+set @@sql_mode= "STRICT_ALL_TABLES,NO_ZERO_DATE"|
 Warnings:
-Warning	1681	'ERROR_FOR_DIVISION_BY_ZERO' is deprecated and will be removed in a future release.
-Warning	1681	'NO_ZERO_DATE' is deprecated and will be removed in a future release.
-Warning	1681	'NO_ZERO_IN_DATE' is deprecated and will be removed in a future release.
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
 call bug6129()|
 @@sql_mode
 ERROR_FOR_DIVISION_BY_ZERO
 set @@sql_mode= "NO_ZERO_IN_DATE"|
 Warnings:
-Warning	1681	'NO_ZERO_IN_DATE' is deprecated and will be removed in a future release.
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
 call bug6129()|
 @@sql_mode
 ERROR_FOR_DIVISION_BY_ZERO
@@ -3012,7 +3015,11 @@ set @x = @x + 1;
 return @x;
 end|
 set @qcs1 = @@query_cache_size|
+Warnings:
+Warning	1287	'@@query_cache_size' is deprecated and will be removed in a future release.
 set global query_cache_size = 102400|
+Warnings:
+Warning	1287	'@@query_cache_size' is deprecated and will be removed in a future release.
 set @x = 1|
 insert into t1 values ("qc", 42)|
 select bug9902() from t1|
@@ -3025,6 +3032,8 @@ select @x|
 @x
 3
 set global query_cache_size = @qcs1|
+Warnings:
+Warning	1287	'@@query_cache_size' is deprecated and will be removed in a future release.
 delete from t1|
 drop function bug9902|
 drop function if exists bug9102|
@@ -3672,6 +3681,8 @@ drop procedure if exists bug6127|
 create table t3 (s1 int unique)|
 set @sm=@@sql_mode|
 set sql_mode='traditional'|
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 create procedure bug6127()
 begin
 declare continue handler for sqlstate '23000'
@@ -3695,6 +3706,8 @@ s1
 0
 1
 set sql_mode=@sm|
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 drop table t3|
 drop procedure bug6127|
 drop procedure if exists bug12589_1|
@@ -4583,14 +4596,11 @@ Before NOT FOUND condition is triggered
 2
 After NOT FOUND condtition is triggered
 xid	xdone
-1	1
+1	0
 call bug15231_3()|
 Result
 Missed it (correct)
 Level	Code	Message
-Warning	1366	Incorrect decimal value: 'zap' for column 'x' at row 1
-Result
-Caught it (correct)
 call bug15231_5()|
 Result
 Missed it (correct)
@@ -5270,11 +5280,11 @@ use test|
 drop table t3|
 DROP PROCEDURE IF EXISTS bug16899_p1|
 DROP FUNCTION IF EXISTS bug16899_f1|
-CREATE DEFINER=1234567890abcdefGHIKL@localhost PROCEDURE bug16899_p1()
+CREATE DEFINER=1234567890abcdefGHIKLsdafdsjakfhkshfkshsndvkjsddngjhasdkjghskahfdksjhcnsndkhjkghskjfjsdhfkhskfdhksjdhfkjshfksh@localhost PROCEDURE bug16899_p1()
 BEGIN
 SET @a = 1;
 END|
-ERROR HY000: String '1234567890abcdefGHIKL' is too long for user name (should be no longer than 16)
+ERROR HY000: String '1234567890abcdefGHIKLsdafdsjakfhkshfkshsndvkjsddngjhasdkjghskahfdksjhc' is too long for user name (should be no longer than 32)
 CREATE DEFINER=some_user_name@1234567890abcdefghij1234567890abcdefghij1234567890abcdefghijQWERTY
 FUNCTION bug16899_f1() RETURNS INT
 BEGIN
@@ -5423,6 +5433,8 @@ Warning	1329	No data - zero rows fetched, selected, or processed
 call proc_20028_c()|
 ERROR 22012: Division by 0
 SET sql_mode='TRADITIONAL'|
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 drop function func_20028_a|
 drop function func_20028_b|
 drop function func_20028_c|
@@ -5478,6 +5490,8 @@ Warnings:
 Warning	1329	No data - zero rows fetched, selected, or processed
 call proc_20028_c()|
 SET @@sql_mode=@save_sql_mode|
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 drop function func_20028_a|
 drop function func_20028_b|
 drop function func_20028_c|
@@ -6196,7 +6210,6 @@ create procedure mysqltest_db1.sp_bug28551() begin end;
 call mysqltest_db1.sp_bug28551();
 show warnings;
 Level	Code	Message
-Note	1008	Can't drop database 'mysqltest_db1'; database doesn't exist
 drop database mysqltest_db1;
 drop database if exists mysqltest_db1;
 drop table if exists test.t1;
@@ -6360,26 +6373,40 @@ CREATE TABLE t1 (c1 INT, INDEX(c1));
 INSERT INTO t1 VALUES (1), (2), (3), (4), (5);
 CREATE VIEW v1 AS SELECT c1 FROM t1;
 EXPLAIN SELECT * FROM t1 WHERE c1=1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	c1	c1	5	const	1	Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	c1	c1	5	const	1	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`c1` AS `c1` from `test`.`t1` where (`test`.`t1`.`c1` = 1)
 EXPLAIN SELECT * FROM t1 WHERE c1=f1();
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	c1	c1	5	const	1	Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	c1	c1	5	const	1	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`c1` AS `c1` from `test`.`t1` where (`test`.`t1`.`c1` = `f1`())
 EXPLAIN SELECT * FROM v1 WHERE c1=1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	c1	c1	5	const	1	Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	c1	c1	5	const	1	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`c1` AS `c1` from `test`.`t1` where (`test`.`t1`.`c1` = 1)
 EXPLAIN SELECT * FROM v1 WHERE c1=f1();
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	c1	c1	5	const	1	Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	c1	c1	5	const	1	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`c1` AS `c1` from `test`.`t1` where (`test`.`t1`.`c1` = `f1`())
 EXPLAIN SELECT * FROM t1 WHERE c1=f2(10);
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ref	c1	c1	5	const	1	Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	c1	c1	5	const	1	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`c1` AS `c1` from `test`.`t1` where (`test`.`t1`.`c1` = `f2`(10))
 EXPLAIN SELECT * FROM t1 WHERE c1=f2(c1);
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	index	NULL	c1	5	NULL	5	Using where; Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	c1	5	NULL	5	20.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`c1` AS `c1` from `test`.`t1` where (`test`.`t1`.`c1` = `f2`(`test`.`t1`.`c1`))
 EXPLAIN SELECT * FROM t1 WHERE c1=f2(rand());
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	index	NULL	c1	5	NULL	5	Using where; Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	c1	5	NULL	5	20.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`c1` AS `c1` from `test`.`t1` where (`test`.`t1`.`c1` = `f2`(rand()))
 DROP VIEW v1;
 DROP FUNCTION f1;
 DROP FUNCTION f2;
@@ -6879,13 +6906,14 @@ drop procedure if exists p;
 set @old_mode= @@sql_mode;
 set @@sql_mode= cast(pow(2,32)-1 as unsigned integer);
 Warnings:
-Warning	1681	'ERROR_FOR_DIVISION_BY_ZERO' is deprecated and will be removed in a future release.
-Warning	1681	'NO_ZERO_DATE' is deprecated and will be removed in a future release.
-Warning	1681	'NO_ZERO_IN_DATE' is deprecated and will be removed in a future release.
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+Warning	3090	Changing sql mode 'POSTGRESQL,ORACLE,MSSQL,DB2,MAXDB,NO_KEY_OPTIONS,NO_TABLE_OPTIONS,NO_FIELD_OPTIONS,MYSQL323,MYSQL40' is deprecated. It will be removed in a future release.
 select @@sql_mode into @full_mode;
 create procedure p() begin end;
 call p();
 set @@sql_mode= @old_mode;
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 select replace(@full_mode, ',,,', ',NOT_USED,') into @full_mode;
 select replace(@full_mode, 'ALLOW_INVALID_DATES', 'INVALID_DATES') into @full_mode;
 select name from mysql.proc where name = 'p' and sql_mode = @full_mode;
@@ -7075,15 +7103,12 @@ CREATE PROCEDURE p1(a CHAR)
 BEGIN
 SELECT 1;
 SELECT CAST('10 ' as UNSIGNED INTEGER);
-SELECT 1;
 END|
 CALL p1('data truncated parameter');
 1
 1
 CAST('10 ' as UNSIGNED INTEGER)
 10
-1
-1
 Warnings:
 Warning	1265	Data truncated for column 'a' at row 1
 Warning	1292	Truncated incorrect INTEGER value: '10 '
@@ -7102,15 +7127,12 @@ CREATE PROCEDURE p4()
 BEGIN
 SELECT 1;
 SELECT CAST('10 ' as UNSIGNED INTEGER);
-SELECT 2;
 END|
 CALL p1();
 1
 1
 CAST('10 ' as UNSIGNED INTEGER)
 10
-2
-2
 Warnings:
 Warning	1292	Truncated incorrect INTEGER value: '10 '
 DROP PROCEDURE p1;
@@ -7641,8 +7663,42 @@ CALL p1();
 1
 1
 DROP PROCEDURE p1;
+prepare s from 'select 1 from `v1` join `t1` on `v1`.`a`
+where (select 1 from `t1` where `v1`.`a`)';
+execute s;
+1
+1
+execute s;
+1
+1
+prepare s from 'select 1 from `v1` join `t1` on `v1`.`a`';
+execute s;
+1
+1
+execute s;
+1
+1
+prepare s from 'select 1 from `v1` join `t1` on `v1`.`a` join t1 as t2
+on v1.a';
+execute s;
+1
+1
+execute s;
+1
+1
+create view v2 as select 0 as a from t1;
+prepare s from 'select 1 from `v2` join `t1` on `v2`.`a` join v1 on `v1`.`a`';
+execute s;
+1
+execute s;
+1
+prepare s from 'select 1 from `v2` join `t1` on `v2`.`a`, v1 where `v1`.`a`';
+execute s;
+1
+execute s;
+1
 DROP TABLE t1;
-DROP VIEW v1;
+DROP VIEW v1,v2;
 #
 # WL#2111: Add non-reserved ROW_COUNT keyword.
 #
@@ -7711,33 +7767,33 @@ DROP FUNCTION f4;
 CREATE TABLE t1(a INT);
 CREATE PROCEDURE p(p INT)
 SET p = DEFAULT|
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '' at line 2
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'DEFAULT' at line 2
 CREATE PROCEDURE p()
 BEGIN
 DECLARE v INT;
 SET v = DEFAULT;
 END|
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ';
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'DEFAULT;
 END' at line 4
 CREATE PROCEDURE p()
 BEGIN
 DECLARE v INT DEFAULT 1;
 SET v = DEFAULT;
 END|
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ';
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'DEFAULT;
 END' at line 4
 CREATE PROCEDURE p()
 BEGIN
 DECLARE v INT DEFAULT (SELECT * FROM t1);
 SET v = DEFAULT;
 END|
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ';
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'DEFAULT;
 END' at line 4
 CREATE TRIGGER t1_bu BEFORE UPDATE ON t1 FOR EACH ROW
 BEGIN
 SET NEW.a = DEFAULT;
 END|
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ';
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'DEFAULT;
 END' at line 3
 
 # Check that setting system variables to DEFAULT still works in SP.
@@ -7759,104 +7815,172 @@ MyISAM
 SET @@default_storage_engine = @default_storage_engine_saved;
 DROP PROCEDURE p1;
 DROP TABLE t1;
-
-#
-# BUG 16041903: CONTINUE HANDLER NOT INVOKED
-# IN A STORED FUNCTION AFTER A LOCK WAIT TIMEOUT
-#
-
-# Save and set lock wait timeout
-SET @lock_wait_timeout_saved= @@lock_wait_timeout;
-SET @innodb_lock_wait_timeout_saved= @@innodb_lock_wait_timeout;
-SET @@lock_wait_timeout= 1;
-SET @@innodb_lock_wait_timeout= 1;
-
-# Create a function with exit handler:
-CREATE FUNCTION f1() RETURNS VARCHAR(20)
-BEGIN
-DECLARE EXIT HANDLER FOR SQLSTATE '42S02' RETURN 'No such table';
-INSERT INTO no_such_table VALUES (1);
-END//
-
-# Create a function calling f1():
-CREATE FUNCTION f2() RETURNS VARCHAR(20)
-BEGIN
-RETURN f1();
-END//
-
-# Create a function provoking deadlock:
-CREATE FUNCTION f3() RETURNS VARCHAR(20)
-BEGIN
-UPDATE t1 SET i= 1 WHERE i= 1;
-RETURN 'Will never get here';
-END//
-
-# Create a function calling f3, to create
-# a deadlock indirectly:
-CREATE FUNCTION f4() RETURNS VARCHAR(20)
-BEGIN
-RETURN f3();
-END//
-
-# Open another connection, create and initialize a table
-# to be used for provoking deadlock, put a lock on the table:
-CREATE TABLE t1 (i INT) ENGINE=InnoDB;
-INSERT INTO t1 VALUES (1);
-SET AUTOCOMMIT= 0;
-UPDATE t1 SET i=1 WHERE i=1;
-
-# On the default connection, do an update to provoke a
-# deadlock, then call the function with handler. This case
-# fails without the patch (with error ER_NO_SUCH_TABLE):
-SET AUTOCOMMIT= 0;
-UPDATE t1 SET i=1 WHERE i=1;
-ERROR HY000: Lock wait timeout exceeded; try restarting transaction
-SELECT f1() AS 'f1():';
-f1():
-No such table
-
-# Provoke another deadlock, then call the function with
-# handler indirectly. This case fails without the patch
-# (with error ER_NO_SUCH_TABLE):
-UPDATE t1 SET i= 1 WHERE i= 1;
-ERROR HY000: Lock wait timeout exceeded; try restarting transaction
-SELECT f2() AS 'f2():';
-f2():
-No such table
-
-# Provoke yet another deadlock, but now from within a function,
-# then call the function with handler. This succeeds even
-# without the patch because is_fatal_sub_stmt_error is reset
-# in restore_sub_stmt after the failing function has been
-# executed. The test case is included anyway for better coverage:
-SELECT f3() AS 'f3():';
-ERROR HY000: Lock wait timeout exceeded; try restarting transaction
-SELECT f1() AS 'f1():';
-f1():
-No such table
-# Provoke yet another deadlock, but now from within a function,
-# calling another function, then call the function with handler.
-# This succeeds even without the patch because
-# is_fatal_sub_stmt_error is reset in restore_sub_stmt after
-# the failing function has been executed. The test case is
-# included anyway for better coverage:
-SELECT f4() AS 'f4():';
-ERROR HY000: Lock wait timeout exceeded; try restarting transaction
-SELECT f1() AS 'f1():';
-f1():
-No such table
-
-# Disconnect, drop functions and table:
-DROP FUNCTION f4;
-DROP FUNCTION f3;
-DROP FUNCTION f2;
-DROP FUNCTION f1;
-DROP TABLE t1;
-
-# Reset lock wait timeouts
-SET @@lock_wait_timeout= @lock_wait_timeout_saved;
-SET @@innodb_lock_wait_timeout= @innodb_lock_wait_timeout_saved;
-#
-# BUG 16041903: End of test case
-#
 # End of 5.6 tests
+#
+# BUG 18484649 - STRICT MODE + CURSOR FETCH INTO WRONG TYPE, ASSERTION
+#                IN PROTOCOL::END_STATEMENT
+#
+SET @org_mode= @@sql_mode;
+SET sql_mode= 'STRICT_TRANS_TABLES';
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+CREATE TABLE t1(a INT) ENGINE= InnoDB;
+INSERT INTO t1 VALUES (123456);
+CREATE PROCEDURE p1() 
+BEGIN
+DECLARE `v` TINYINT; 
+DECLARE `c` CURSOR FOR SELECT a FROM t1; 
+BEGIN
+OPEN c; 
+FETCH c INTO v;   
+CLOSE c; 
+END; 
+END $
+# With the fix, Call to p1 will result in error as the routine was
+# created in STRICT MODE.
+CALL p1();
+ERROR 22003: Out of range value for column 'v' at row 1
+# Clean-up
+SET sql_mode= @org_mode;
+DROP PROCEDURE p1;
+DROP TABLE t1;
+#
+# Bug#20583321: CRASH ON PS_THREAD_INFO / SYS USAGE
+#
+SET sql_mode = 'only_full_group_by';
+CREATE TABLE t1 ( a INT, b INT );
+CREATE TABLE t2 ( a INT );
+CREATE PROCEDURE p1 ()
+BEGIN
+DECLARE output INT;
+SET output = ( SELECT b FROM t1 LEFT JOIN t2 USING ( a ) GROUP BY t1.a );
+END $$
+CALL p1();
+ERROR 42000: Expression #1 of SELECT list is not in GROUP BY clause and contains nonaggregated column 'test.t1.b' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+CALL p1();
+ERROR 42000: Expression #1 of SELECT list is not in GROUP BY clause and contains nonaggregated column 'test.t1.b' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+DROP PROCEDURE p1;
+PREPARE s FROM
+'SET @x = ( SELECT b FROM t1 LEFT JOIN t2 USING ( a ) GROUP BY t1.a )';
+ERROR 42000: Expression #1 of SELECT list is not in GROUP BY clause and contains nonaggregated column 'test.t1.b' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+DROP TABLE t1, t2;
+SET sql_mode = DEFAULT;
+#
+# ASSERTION FAILED: FALSE IN CREATE_TMP_FIELD WITH UNKNOWN OUTER FIELD
+#
+CREATE TABLE t1 ( a INT );
+SET @v = 1;
+PREPARE stmt FROM 'SELECT 1 FROM ( SELECT ? FROM t1 GROUP BY a ) al;';
+EXECUTE stmt USING @v;
+1
+PREPARE stmt FROM 'CREATE TABLE t2 AS SELECT ? FROM t1';
+EXECUTE stmt USING @v;
+DROP TABLE t1, t2;
+#
+# Bug #18599181: CALLING A ROUTINE WITHOUT SPECIFYING DATABASE PREFIX
+#                MAY RETURN ERROR 1370
+#
+CREATE DATABASE db1;
+CREATE FUNCTION f1() RETURNS INT RETURN 1;
+CREATE FUNCTION db1.f2() RETURNS INT RETURN test.f1();
+CREATE USER myuser@'localhost';
+GRANT ALL ON db1.* TO myuser@'localhost';
+SELECT f2();
+f2()
+1
+SELECT f2();
+f2()
+1
+DROP DATABASE db1;
+DROP USER myuser@localhost;
+DROP FUNCTION f1;
+#
+# Bug #22222013 ASSERTION `! IS_SET() || M_CAN_OVERWRITE_STATUS' FAILED
+#               IN ::SET_ERROR_STATUS
+#
+CREATE DATABASE bug22222013;
+USE bug22222013;
+SET NAMES swe7;
+CREATE FUNCTION f1() RETURNS INT RETURN (1);
+CREATE FUNCTION f21(p1 CHAR) RETURNS CHAR RETURN (p1);
+SELECT sql_data_access FROM information_schema.routines WHERE
+specific_name like 'p%' and routine_schema=0;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '??@?? FUNCTION ?bug22222013?.?f1?() RETURNS int(11)
+RETURN NULL' at line 1
+DROP DATABASE bug22222013;
+SET NAMES default;
+#
+# WL#9262: All system tables should support 32 character length user names
+#
+#This should just work with username + hostname of length 93 as DEFINER
+CREATE USER user_name_robert_golebiowski1234@oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char;
+#For procedure
+CREATE DEFINER=user_name_robert_golebiowski1234@oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char PROCEDURE test.proc_test() SELECT CURRENT_USER();
+#and for function
+CREATE DEFINER=user_name_robert_golebiowski1234@oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char FUNCTION test.f_test() RETURNS INT RETURN 1;
+SHOW PROCEDURE STATUS LIKE 'proc_test';
+Db	Name	Type	Definer	Modified	Created	Security_type	Comment	character_set_client	collation_connection	Database Collation
+test	proc_test	PROCEDURE	user_name_robert_golebiowski1234@oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char	#	#	DEFINER		latin1	latin1_swedish_ci	latin1_swedish_ci
+DROP PROCEDURE test.proc_test;
+SHOW FUNCTION STATUS LIKE 'f_test';
+Db	Name	Type	Definer	Modified	Created	Security_type	Comment	character_set_client	collation_connection	Database Collation
+test	f_test	FUNCTION	user_name_robert_golebiowski1234@oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char	#	#	DEFINER		latin1	latin1_swedish_ci	latin1_swedish_ci
+DROP FUNCTION test.f_test;
+# Changing mysql.proc.definer column to char(77) - i.e. old layout (5.7.12)
+SET @orig_sql_mode= @@sql_mode;
+SET sql_mode='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+ALTER TABLE mysql.proc
+MODIFY definer char(77) collate utf8_bin DEFAULT '' NOT NULL;
+SET sql_mode= @orig_sql_mode;
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+#Now we make sure that username + hostname with length of 77 or less work with
+#this old db schema
+#This should just pass as the DEFINER length is 77 chars - so the same as mysql.proc.definer
+CREATE USER robert_golebiows@oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char;
+#For procedure
+CREATE DEFINER=robert_golebiows@oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char PROCEDURE test.proc_test_1() SELECT CURRENT_USER();
+DROP PROCEDURE test.proc_test_1;
+#For function
+CREATE DEFINER=robert_golebiows@oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char FUNCTION test.f_test_1() RETURNS INT RETURN 1;
+DROP FUNCTION test.f_test_1;
+#Now definer is 93 char long so we should get error as mysql.proc.definer in old schema was only 77 char long
+#For procedure
+CREATE DEFINER=user_name_robert_golebiowski1234@oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char PROCEDURE test.proc_test() SELECT CURRENT_USER();
+ERROR HY000: It seems that your db schema is old. The definer column is 77 characters long and should be 93 characters long. Please run mysql_upgrade.
+#For function
+CREATE DEFINER=user_name_robert_golebiowski1234@oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char FUNCTION test.f_test_1() RETURNS INT RETURN 1;
+ERROR HY000: It seems that your db schema is old. The definer column is 77 characters long and should be 93 characters long. Please run mysql_upgrade.
+# Let us check with user name + hostname of length 78
+#For procedure
+CREATE DEFINER=robert_golebiowsk@oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char PROCEDURE test.proc_test() SELECT CURRENT_USER();
+ERROR HY000: It seems that your db schema is old. The definer column is 77 characters long and should be 93 characters long. Please run mysql_upgrade.
+#For function
+CREATE DEFINER=robert_golebiowsk@oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char FUNCTION test.f_test_1() RETURNS INT RETURN 1;
+ERROR HY000: It seems that your db schema is old. The definer column is 77 characters long and should be 93 characters long. Please run mysql_upgrade.
+# DEFINER with length longer than 93 characters should fail with old plain error staying that data is too long for username
+# as upgrading to 93 characters (with mysql_upgrade) will not help
+# Let us try with 94 characters long username
+CREATE DEFINER=user_name_robert_golebiowski12345@oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char PROCEDURE test.proc_test() SELECT CURRENT_USER();
+ERROR HY000: String 'user_name_robert_golebiowski12345' is too long for user name (should be no longer than 32)
+CREATE DEFINER=user_name_robert_golebiowski12345@oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char FUNCTION test.f_test_1() RETURNS INT RETURN 1;
+ERROR HY000: String 'user_name_robert_golebiowski12345' is too long for user name (should be no longer than 32)
+CREATE DEFINER=user_name_robert_golebiowski1234@oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char1 PROCEDURE test.proc_test() SELECT CURRENT_USER();
+ERROR HY000: String 'oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char1' is too long for host name (should be no longer than 60)
+CREATE DEFINER=user_name_robert_golebiowski1234@oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char1 FUNCTION test.f_test_1() RETURNS INT RETURN 1;
+ERROR HY000: String 'oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char1' is too long for host name (should be no longer than 60)
+#Cleanup
+DROP USER user_name_robert_golebiowski1234@oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char;
+DROP USER robert_golebiows@oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char;
+Restore mysql.proc
+SET @orig_sql_mode= @@sql_mode;
+SET sql_mode='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
+ALTER TABLE mysql.proc
+MODIFY definer char(93) collate utf8_bin DEFAULT '' NOT NULL;
+SET sql_mode= @orig_sql_mode;
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.

@@ -1,23 +1,31 @@
 #ifndef ITEM_INETFUNC_INCLUDED
 #define ITEM_INETFUNC_INCLUDED
 
-/* Copyright (c) 2011, 2013, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-
-#include "item.h"
+#include "my_global.h"
+#include "item_cmpfunc.h"  // Item_bool_func
+#include "item_strfunc.h"  // Item_str_func
 
 /*************************************************************************
   Item_func_inet_aton implements INET_ATON() SQL-function.
@@ -26,8 +34,8 @@
 class Item_func_inet_aton : public Item_int_func
 {
 public:
-  inline Item_func_inet_aton(Item *arg)
-    : Item_int_func(arg)
+  inline Item_func_inet_aton(const POS &pos, Item *arg)
+    : Item_int_func(pos, arg)
   {}
 
 public:
@@ -53,8 +61,8 @@ public:
 class Item_func_inet_ntoa : public Item_str_func
 {
 public:
-  inline Item_func_inet_ntoa(Item *arg)
-    : Item_str_func(arg)
+  inline Item_func_inet_ntoa(const POS &pos, Item *arg)
+    : Item_str_func(pos, arg)
   { }
 
 public:
@@ -80,8 +88,8 @@ public:
 class Item_func_inet_bool_base : public Item_bool_func
 {
 public:
-  inline Item_func_inet_bool_base(Item *ip_addr)
-    : Item_bool_func(ip_addr)
+  Item_func_inet_bool_base(const POS &pos, Item *ip_addr)
+    : Item_bool_func(pos, ip_addr)
   {
     null_value= false;
   }
@@ -102,8 +110,8 @@ protected:
 class Item_func_inet_str_base : public Item_str_ascii_func
 {
 public:
-  inline Item_func_inet_str_base(Item *arg)
-    : Item_str_ascii_func(arg)
+  Item_func_inet_str_base(const POS &pos, Item *arg)
+    : Item_str_ascii_func(pos, arg)
   { }
 
 public:
@@ -121,8 +129,8 @@ protected:
 class Item_func_inet6_aton : public Item_func_inet_str_base
 {
 public:
-  inline Item_func_inet6_aton(Item *ip_addr)
-    : Item_func_inet_str_base(ip_addr)
+  Item_func_inet6_aton(const POS &pos, Item *ip_addr)
+    : Item_func_inet_str_base(pos, ip_addr)
   { }
 
 public:
@@ -148,8 +156,8 @@ protected:
 class Item_func_inet6_ntoa : public Item_func_inet_str_base
 {
 public:
-  inline Item_func_inet6_ntoa(Item *ip_addr)
-    : Item_func_inet_str_base(ip_addr)
+  Item_func_inet6_ntoa(const POS &pos, Item *ip_addr)
+    : Item_func_inet_str_base(pos, ip_addr)
   { }
 
 public:
@@ -180,8 +188,8 @@ protected:
 class Item_func_is_ipv4 : public Item_func_inet_bool_base
 {
 public:
-  inline Item_func_is_ipv4(Item *ip_addr)
-    : Item_func_inet_bool_base(ip_addr)
+  Item_func_is_ipv4(const POS &pos, Item *ip_addr)
+    : Item_func_inet_bool_base(pos, ip_addr)
   { }
 
 public:
@@ -200,8 +208,8 @@ protected:
 class Item_func_is_ipv6 : public Item_func_inet_bool_base
 {
 public:
-  inline Item_func_is_ipv6(Item *ip_addr)
-    : Item_func_inet_bool_base(ip_addr)
+  Item_func_is_ipv6(const POS &pos, Item *ip_addr)
+    : Item_func_inet_bool_base(pos, ip_addr)
   { }
 
 public:
@@ -220,8 +228,8 @@ protected:
 class Item_func_is_ipv4_compat : public Item_func_inet_bool_base
 {
 public:
-  inline Item_func_is_ipv4_compat(Item *ip_addr)
-    : Item_func_inet_bool_base(ip_addr)
+  Item_func_is_ipv4_compat(const POS &pos, Item *ip_addr)
+    : Item_func_inet_bool_base(pos, ip_addr)
   { }
 
 public:
@@ -240,8 +248,8 @@ protected:
 class Item_func_is_ipv4_mapped : public Item_func_inet_bool_base
 {
 public:
-  inline Item_func_is_ipv4_mapped(Item *ip_addr)
-    : Item_func_inet_bool_base(ip_addr)
+  Item_func_is_ipv4_mapped(const POS &pos, Item *ip_addr)
+    : Item_func_inet_bool_base(pos, ip_addr)
   { }
 
 public:

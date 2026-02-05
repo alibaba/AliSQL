@@ -1,13 +1,20 @@
-/* Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2003, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -54,7 +61,7 @@ int mi_preload(MI_INFO *info, ulonglong key_map, my_bool ignore_leaves)
     DBUG_RETURN(0);
 
   /* Preload into a non initialized key cache should never happen. */
-  DBUG_ASSERT(share->key_cache->key_cache_inited);
+  assert(share->key_cache->key_cache_inited);
 
   block_length= keyinfo[0].block_length;
 
@@ -64,7 +71,10 @@ int mi_preload(MI_INFO *info, ulonglong key_map, my_bool ignore_leaves)
     for (i= 1 ; i < keys ; i++)
     {
       if (keyinfo[i].block_length != block_length)
-        DBUG_RETURN(my_errno= HA_ERR_NON_UNIQUE_BLOCK_SIZE);
+      {
+        set_my_errno(HA_ERR_NON_UNIQUE_BLOCK_SIZE);
+        DBUG_RETURN(HA_ERR_NON_UNIQUE_BLOCK_SIZE);
+      }
     }
   }
   else
@@ -73,10 +83,15 @@ int mi_preload(MI_INFO *info, ulonglong key_map, my_bool ignore_leaves)
   length= info->preload_buff_size/block_length * block_length;
   set_if_bigger(length, block_length);
 
-  if (!(buff= (uchar *) my_malloc(length, MYF(MY_WME))))
-    DBUG_RETURN(my_errno= HA_ERR_OUT_OF_MEM);
+  if (!(buff= (uchar *) my_malloc(mi_key_memory_preload_buffer,
+                                  length, MYF(MY_WME))))
+  {
+    set_my_errno(HA_ERR_OUT_OF_MEM);
+    DBUG_RETURN(HA_ERR_OUT_OF_MEM);
+  }
 
-  if (flush_key_blocks(share->key_cache,share->kfile, FLUSH_RELEASE))
+  if (flush_key_blocks(share->key_cache, keycache_thread_var(),
+                       share->kfile, FLUSH_RELEASE))
     goto err;
 
   do
@@ -96,6 +111,7 @@ int mi_preload(MI_INFO *info, ulonglong key_map, my_bool ignore_leaves)
         if (mi_test_if_nod(buff))
         {
           if (key_cache_insert(share->key_cache,
+                               keycache_thread_var(),
                                share->kfile, pos, DFLT_INIT_HITS,
                               (uchar*) buff, block_length))
 	    goto err;
@@ -108,6 +124,7 @@ int mi_preload(MI_INFO *info, ulonglong key_map, my_bool ignore_leaves)
     else
     {
       if (key_cache_insert(share->key_cache,
+                           keycache_thread_var(),
                            share->kfile, pos, DFLT_INIT_HITS,
                            (uchar*) buff, length))
 	goto err;
@@ -121,6 +138,7 @@ int mi_preload(MI_INFO *info, ulonglong key_map, my_bool ignore_leaves)
 
 err:
   my_free(buff);
-  DBUG_RETURN(my_errno= errno);
+  set_my_errno(errno);
+  DBUG_RETURN(errno);
 }
 

@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -60,6 +67,8 @@
 #define RESTORE    0x106
 #define DBINFO     0x107
 #define DBSPJ      0x108
+#define THRMAN     0x109
+#define TRPMAN     0x10A
 
 const BlockReference BACKUP_REF  = numberToRef(BACKUP, 0);
 const BlockReference DBTC_REF    = numberToRef(DBTC, 0);
@@ -82,6 +91,8 @@ const BlockReference PGMAN_REF   = numberToRef(PGMAN, 0);
 const BlockReference RESTORE_REF = numberToRef(RESTORE, 0);
 const BlockReference DBINFO_REF  = numberToRef(DBINFO, 0);
 const BlockReference DBSPJ_REF  = numberToRef(DBSPJ, 0);
+const BlockReference THRMAN_REF  = numberToRef(THRMAN, 0);
+const BlockReference TRPMAN_REF  = numberToRef(TRPMAN, 0);
 
 static inline void __hide_warnings_unused_ref_vars(void) {
   // Hide annoying warnings about unused variables
@@ -92,21 +103,11 @@ static inline void __hide_warnings_unused_ref_vars(void) {
   (void)DBUTIL_REF;  (void)SUMA_REF;    (void)DBTUX_REF;
   (void)TSMAN_REF;   (void)LGMAN_REF;   (void)PGMAN_REF;
   (void)RESTORE_REF; (void)DBINFO_REF;  (void)DBSPJ_REF;
+  (void)THRMAN_REF;  (void)TRPMAN_REF;
 }
 
 const BlockNumber MIN_BLOCK_NO = BACKUP;
-const BlockNumber MAX_BLOCK_NO = DBSPJ;
+const BlockNumber MAX_BLOCK_NO = TRPMAN;
 const BlockNumber NO_OF_BLOCKS = (MAX_BLOCK_NO - MIN_BLOCK_NO + 1);
-
-/**
- * Used for printing and stuff
- */
-struct BlockName {
-  const char* name;
-  BlockNumber number;
-};
-
-extern const BlockName BlockNames[];
-extern const BlockNumber NO_OF_BLOCK_NAMES;
 
 #endif

@@ -1,13 +1,20 @@
-/* Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved. 
+/* Copyright (c) 2011, 2023, Oracle and/or its affiliates. 
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -129,11 +136,41 @@ TEST(CostEstimateTest, Operators)
   EXPECT_DOUBLE_EQ(2*import1_import_cost + import2_import_cost, 
                    ce_mi_copy.get_import_cost());
 
+  // operator-
+  ce_mi_copy= ce_mem_import1 - ce_mem_import2;
+  EXPECT_DOUBLE_EQ(ce_mi_copy.get_mem_cost(),
+                   ce_mem_import1.get_mem_cost() -
+                   ce_mem_import2.get_mem_cost());
+  EXPECT_DOUBLE_EQ(ce_mi_copy.get_import_cost(),
+                   ce_mem_import1.get_import_cost() -
+                   ce_mem_import2.get_import_cost());
+
   // copy assignment
   Cost_estimate ce_copy3;
   ce_copy3= ce_copy2;
   EXPECT_DOUBLE_EQ(copy2_totcost, ce_copy3.total_cost());
 }
+
+TEST(CostEstimateTest, MaxValue)
+{
+  Cost_estimate ce;
+  Cost_estimate ce2;
+
+  EXPECT_FALSE(ce.is_max_cost());
+
+  ce.set_max_cost();
+  EXPECT_TRUE(ce.is_max_cost());
+
+  EXPECT_TRUE(ce > ce2);
+  EXPECT_FALSE(ce < ce2);
+  EXPECT_FALSE(ce2 > ce);
+  EXPECT_TRUE(ce2 < ce);
+
+  ce2= ce;
+  EXPECT_TRUE(ce2.is_max_cost());
+  EXPECT_FALSE(ce < ce2);
+  EXPECT_FALSE(ce2 > ce);
+ }
 
 
 } //namespace

@@ -19,9 +19,9 @@ test.t1	check	status	OK
 SHOW CREATE TABLE test.t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` varchar(32) NOT NULL DEFAULT '',
-  `c2` varchar(32) NOT NULL DEFAULT '',
-  `c3` varchar(32) NOT NULL DEFAULT '',
+  `c1` varchar(32) NOT NULL,
+  `c2` varchar(32) NOT NULL,
+  `c3` varchar(32) NOT NULL,
   PRIMARY KEY (`c1`,`c2`,`c3`),
   KEY `ind1` (`c1`(5),`c2`,`c3`),
   KEY `ind2` (`c3`,`c1`(10),`c2`),
@@ -42,9 +42,9 @@ test.t1	check	status	OK
 SHOW CREATE TABLE test.t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
-  `c1` varchar(32) NOT NULL DEFAULT '',
-  `c2` varchar(32) NOT NULL DEFAULT '',
-  `c3` varchar(32) NOT NULL DEFAULT '',
+  `c1` varchar(32) NOT NULL,
+  `c2` varchar(32) NOT NULL,
+  `c3` varchar(32) NOT NULL,
   PRIMARY KEY (`c1`(5),`c2`(10),`c3`(20)),
   KEY `ind1` (`c1`(5),`c2`,`c3`),
   KEY `ind2` (`c3`,`c1`(10),`c2`),

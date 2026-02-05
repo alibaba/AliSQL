@@ -1,13 +1,20 @@
-/* Copyright (c) 2000, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -57,7 +64,8 @@ int ft_init_stopwords()
 {
   if (!stopwords3)
   {
-    if (!(stopwords3=(TREE *)my_malloc(sizeof(TREE),MYF(0))))
+    if (!(stopwords3=(TREE *)my_malloc(mi_key_memory_ft_stopwords,
+                                       sizeof(TREE),MYF(0))))
       return -1;
     init_tree(stopwords3,0,0,sizeof(FT_STOPWORD),(qsort_cmp2)&FT_STOPWORD_cmp,
               0,
@@ -76,7 +84,7 @@ int ft_init_stopwords()
   if (ft_stopword_file)
   {
     File fd;
-    uint len;
+    size_t len;
     uchar *buffer, *start, *end;
     FT_WORD w;
     int error=-1;
@@ -86,15 +94,17 @@ int ft_init_stopwords()
 
     if ((fd=my_open(ft_stopword_file, O_RDONLY, MYF(MY_WME))) == -1)
       return -1;
-    len=(uint)my_seek(fd, 0L, MY_SEEK_END, MYF(0));
+    len= (size_t)my_seek(fd, 0L, MY_SEEK_END, MYF(0));
     my_seek(fd, 0L, MY_SEEK_SET, MYF(0));
-    if (!(start=buffer=my_malloc(len+1, MYF(MY_WME))))
+    if (!(start=buffer=my_malloc(mi_key_memory_ft_stopwords,
+                                 len+1, MYF(MY_WME))))
       goto err0;
     len=my_read(fd, buffer, len, MYF(MY_WME));
     end=start+len;
     while (ft_simple_get_word(ft_stopword_cs, &start, end, &w, TRUE))
     {
-      if (ft_add_stopword(my_strndup((char*) w.pos, w.len, MYF(0))))
+      if (ft_add_stopword(my_strndup(mi_key_memory_ft_stopwords,
+                                     (char*) w.pos, w.len, MYF(0))))
         goto err1;
     }
     error=0;

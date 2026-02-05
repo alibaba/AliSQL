@@ -1,0 +1,156 @@
+[/
+ / Copyright (c) 2013 Boost.Test team
+ /
+ / Distributed under the Boost Software License, Version 1.0. (See accompanying
+ / file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+ /]
+
+ 
+[section:summary Summary of run-time parameters]
+
+[table
+  [
+    [Command]
+    [Short description]
+  ] 
+  
+  [/ ###############################################################################################]
+  [
+    [__param_auto_start_dbg__]
+    [Automatically attach debugger in case of system failure.]
+  ]
+  
+  
+  [/ ###############################################################################################]
+  [
+    [__param_show_progress__]
+    [Makes the framework to print progress information. More details [link boost_test.test_output.test_output_progress here].]
+  ]
+  
+
+  [/ ###############################################################################################]
+  [
+    [__param_build_info__]
+    [Print build information.]
+  ]
+  
+  
+  [/ ###############################################################################################]
+  [
+    [__param_catch_system__]
+    [Catch system errors.]
+  ]
+  
+  [/ ###############################################################################################]
+  [
+    [__param_break_exec_path__]
+    [Break execution path]
+  ]    
+
+
+  [/ ###############################################################################################]
+  [
+    [__param_color_output__]
+    [Produce color output]
+  ]  
+
+  [/ ###############################################################################################]
+  [
+    [__param_log_format__]
+    [Specifies the log format]
+  ]
+
+  [/ ###############################################################################################]
+  [
+    [__param_log_level__]
+    [Specifies the logging level of the __UTF__]
+  ]
+  
+  
+  [/ ###############################################################################################]
+  [
+    [__param_run_test__]
+    [Specifies which test units to run.]
+  ]
+  
+  
+  [/ ###############################################################################################]
+  [
+    [__param_output_format__]
+    [Specifies the log format and the report format.]
+  ]  
+  
+  [/ ###############################################################################################]
+  [
+    [__param_report_format__]
+    [Specifies the report format.]
+  ]
+
+  [/ ###############################################################################################]
+  [
+    [__param_result_code__]
+    [Make the framework return a result code indicating an error in the tests.]
+  ]
+  
+  [/ ###############################################################################################]
+  [
+    [__param_report_level__]
+    [The level of details carried by the __UTF__ report.]
+  ]
+  
+  [/ ###############################################################################################]
+  [
+    [__param_random__]
+    [Runs the tests in random order]
+  ]
+  
+  [/ ###############################################################################################]
+  [
+    [__param_detect_memory_leaks__]
+    [Detects memory leaks.]
+  ]
+  
+  
+  [/ ###############################################################################################]
+  [
+    [__param_use_alt_stack__]
+    [Uses an alternative stack for running tests (on supported platforms).]
+  ]
+  
+  
+  [/ ###############################################################################################]
+  [
+    [__param_detect_fp_exceptions__]
+    [Traps floating point exceptions (on supported platforms).]
+  ]
+  
+  
+  [/ ###############################################################################################]
+  [
+    [__param_log_sink__]
+    [Specifies the sink stream for logging.]
+  ]
+  
+  
+  [/ ###############################################################################################]
+  [
+    [__param_report_sink__]
+    [Specifies the sink stream for tests reports.]
+  ]
+  
+  [/ ###############################################################################################]
+  [
+    [__param_save_pattern__]
+    [Provides parameters for testing output streams.]
+  ]
+  
+  
+  [/ ###############################################################################################]
+  [
+    [__param_list_content__]
+    [List the tests that will be run.]
+  ]
+]
+
+
+[endsect]

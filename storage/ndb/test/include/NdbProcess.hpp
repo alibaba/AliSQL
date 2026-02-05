@@ -1,16 +1,22 @@
 /*
-  Copyright 2009 Sun Microsystems, Inc.
+  Copyright (c) 2009, 2021, Oracle and/or its affiliates.
 
-   All rights reserved. Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -26,7 +32,7 @@
 class NdbProcess
 {
 #ifdef _WIN32
-  tyepdef DWORD pid_t;
+  typedef DWORD pid_t;
 #endif
   pid_t m_pid;
   BaseString m_name;
@@ -63,6 +69,12 @@ public:
       BaseString tmp;
       tmp.assfmt("%s%d", str, val);
       m_args.push_back(tmp);
+    }
+
+    void add(const Args & args)
+    {
+      for (unsigned i = 0; i < args.m_args.size(); i++)
+        add(args.m_args[i].c_str());
     }
 
     const Vector<BaseString>& args(void) const
@@ -157,7 +169,7 @@ public:
       }
       NdbSleep_MilliSleep(10);
     }
-    assert(false); // Never reached
+    require(false); // Never reached
   }
 
 private:
@@ -195,7 +207,7 @@ private:
       printf("Started process: %d\n", pid);
       return true;
     }
-    assert(tmp == 0);
+    require(tmp == 0);
 
     if (cwd && chdir(cwd) != 0)
     {

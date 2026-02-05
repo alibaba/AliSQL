@@ -1,14 +1,20 @@
-/* Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2012, 2023, Oracle and/or its affiliates.
 
-   This program is free software; you can redistribute it and/or
-   modify it under the terms of the GNU General Public License as
-   published by the Free Software Foundation; version 2 of the
-   License.
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
 
-   This program is distributed in the hope that it will be useful, but
-   WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-   General Public License for more details.
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -17,12 +23,78 @@
 
 #include "rpl_gtid.h"
 
-#include <ctype.h>
+#include "mysqld_error.h"     // ER_*
 
-#include "mysqld_error.h"
 #ifndef MYSQL_CLIENT
-#include "sql_class.h"
+#include "rpl_msr.h"
+#include "sql_class.h"        // THD
+#include "binlog.h"
 #endif // ifndef MYSQL_CLIENT
+
+
+// Todo: move other global gtid variable declarations here.
+Checkable_rwlock *gtid_mode_lock= NULL;
+
+ulong _gtid_mode;
+const char *gtid_mode_names[]=
+{"OFF", "OFF_PERMISSIVE", "ON_PERMISSIVE", "ON", NullS};
+TYPELIB gtid_mode_typelib=
+{ array_elements(gtid_mode_names) - 1, "", gtid_mode_names, NULL };
+
+
+#ifndef MYSQL_CLIENT
+enum_gtid_mode get_gtid_mode(enum_gtid_mode_lock have_lock)
+{
+  switch (have_lock)
+  {
+  case GTID_MODE_LOCK_NONE:
+    global_sid_lock->rdlock();
+    break;
+  case GTID_MODE_LOCK_SID:
+    global_sid_lock->assert_some_lock();
+    break;
+  case GTID_MODE_LOCK_CHANNEL_MAP:
+#ifdef HAVE_REPLICATION
+    channel_map.assert_some_lock();
+#endif
+    break;
+  case GTID_MODE_LOCK_GTID_MODE:
+    gtid_mode_lock->assert_some_lock();
+
+/*
+  This lock is currently not used explicitly by any of the places
+  that calls get_gtid_mode.  Still it would be valid for a caller to
+  use it to protect reads of GTID_MODE, so we keep the code here in
+  case it is needed in the future.
+
+  case GTID_MODE_LOCK_LOG:
+    mysql_mutex_assert_owner(mysql_bin_log.get_log_lock());
+    break;
+*/
+  }
+  enum_gtid_mode ret= (enum_gtid_mode)_gtid_mode;
+  if (have_lock == GTID_MODE_LOCK_NONE)
+    global_sid_lock->unlock();
+  return ret;
+}
+#endif
+
+
+ulong _gtid_consistency_mode;
+const char *gtid_consistency_mode_names[]=
+{"OFF", "ON", "WARN", NullS};
+TYPELIB gtid_consistency_mode_typelib=
+{ array_elements(gtid_consistency_mode_names) - 1, "", gtid_consistency_mode_names, NULL };
+
+
+#ifndef MYSQL_CLIENT
+enum_gtid_consistency_mode get_gtid_consistency_mode()
+{
+  global_sid_lock->assert_some_lock();
+  return (enum_gtid_consistency_mode)_gtid_consistency_mode;
+}
+#endif
+
 
 enum_return_status Gtid::parse(Sid_map *sid_map, const char *text)
 {
@@ -33,12 +105,12 @@ enum_return_status Gtid::parse(Sid_map *sid_map, const char *text)
   SKIP_WHITESPACE();
 
   // parse sid
-  if (sid.parse(s) == RETURN_STATUS_OK)
+  if (sid.parse(s) == 0)
   {
     rpl_sidno sidno_var= sid_map->add_sid(sid);
     if (sidno_var <= 0)
       RETURN_REPORTED_ERROR;
-    s += Uuid::TEXT_LENGTH;
+    s += binary_log::Uuid::TEXT_LENGTH;
 
     SKIP_WHITESPACE();
 
@@ -93,10 +165,39 @@ int Gtid::to_string(const rpl_sid &sid, char *buf) const
 }
 
 
-int Gtid::to_string(const Sid_map *sid_map, char *buf) const
+int Gtid::to_string(const Sid_map *sid_map, char *buf, bool need_lock) const
 {
   DBUG_ENTER("Gtid::to_string");
-  int ret= to_string(sid_map->sidno_to_sid(sidno), buf);
+  int ret;
+  if (sid_map != NULL)
+  {
+    Checkable_rwlock *lock= sid_map->get_sid_lock();
+    if (lock)
+    {
+      if (need_lock)
+        lock->rdlock();
+      else
+        lock->assert_some_lock();
+    }
+    const rpl_sid &sid= sid_map->sidno_to_sid(sidno);
+    if (lock && need_lock)
+      lock->unlock();
+    ret= to_string(sid, buf);
+  }
+  else
+  {
+#ifdef NDEBUG
+    /*
+      NULL is only allowed in debug mode, since the sidno does not
+      make sense for users but is useful to include in debug
+      printouts.  Therefore, we want to ASSERT(0) in non-debug mode.
+      Since there is no ASSERT in non-debug mode, we use abort
+      instead.
+    */
+    abort();
+#endif
+    ret= sprintf(buf, "%d:%lld", sidno, gno);
+  }
   DBUG_RETURN(ret);
 }
 
@@ -112,7 +213,7 @@ bool Gtid::is_valid(const char *text)
                         (int)(s - text), text));
     DBUG_RETURN(false);
   }
-  s += Uuid::TEXT_LENGTH;
+  s += binary_log::Uuid::TEXT_LENGTH;
   SKIP_WHITESPACE();
   if (*s != ':')
   {
@@ -140,22 +241,56 @@ bool Gtid::is_valid(const char *text)
 }
 
 
-#ifndef DBUG_OFF
+#ifndef NDEBUG
 void check_return_status(enum_return_status status, const char *action,
                          const char *status_name, int allow_unreported)
 {
   if (status != RETURN_STATUS_OK)
   {
-    DBUG_ASSERT(allow_unreported || status == RETURN_STATUS_REPORTED_ERROR);
+    assert(allow_unreported || status == RETURN_STATUS_REPORTED_ERROR);
     if (status == RETURN_STATUS_REPORTED_ERROR)
     {
-#if !defined(MYSQL_CLIENT) && !defined(DBUG_OFF)
+#if !defined(MYSQL_CLIENT) && !defined(NDEBUG)
       THD *thd= current_thd;
-      DBUG_ASSERT(thd == NULL ||
-                  thd->get_stmt_da()->status() == Diagnostics_area::DA_ERROR);
+      /*
+        We create a new system THD with 'SYSTEM_THREAD_COMPRESS_GTID_TABLE'
+        when initializing gtid state by fetching gtids during server startup,
+        so we can check on it before diagnostic area is active and skip the
+        assert in this case. We assert that diagnostic area logged the error
+        outside server startup since the assert is realy useful.
+     */
+      assert(thd == NULL ||
+             thd->get_stmt_da()->status() == Diagnostics_area::DA_ERROR ||
+             (thd->get_stmt_da()->status() == Diagnostics_area::DA_EMPTY &&
+              thd->system_thread == SYSTEM_THREAD_COMPRESS_GTID_TABLE));
 #endif
     }
     DBUG_PRINT("info", ("%s error %d (%s)", action, status, status_name));
   }
 }
-#endif // ! DBUG_OFF
+#endif // ! NDEBUG
+
+
+#ifndef MYSQL_CLIENT
+rpl_sidno get_sidno_from_global_sid_map(rpl_sid sid)
+{
+  DBUG_ENTER("get_sidno_from_global_sid_map(rpl_sid)");
+
+  global_sid_lock->rdlock();
+  rpl_sidno sidno= global_sid_map->add_sid(sid);
+  global_sid_lock->unlock();
+
+  DBUG_RETURN(sidno);
+}
+
+rpl_gno get_last_executed_gno(rpl_sidno sidno)
+{
+  DBUG_ENTER("get_last_executed_gno(rpl_sidno)");
+
+  global_sid_lock->rdlock();
+  rpl_gno gno= gtid_state->get_last_executed_gno(sidno);
+  global_sid_lock->unlock();
+
+  DBUG_RETURN(gno);
+}
+#endif // ifndef MYSQL_CLIENT

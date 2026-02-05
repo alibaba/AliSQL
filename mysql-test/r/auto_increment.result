@@ -133,6 +133,9 @@ a
 -1
 2
 drop table t1;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 create table t1 (i tinyint unsigned not null auto_increment primary key);
 insert into t1 set i = 254;
 insert into t1 set i = null;
@@ -140,9 +143,10 @@ select last_insert_id();
 last_insert_id()
 255
 explain extended select last_insert_id();
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
 Warnings:
+Warning	1681	'EXTENDED' is deprecated and will be removed in a future release.
 Note	1003	/* select#1 */ select last_insert_id() AS `last_insert_id()`
 insert into t1 set i = 254;
 ERROR 23000: Duplicate entry '254' for key 'PRIMARY'
@@ -183,8 +187,11 @@ select last_insert_id();
 last_insert_id()
 2
 drop table t1;
+SET sql_mode = default;
 create table t1(a int auto_increment,b int null,primary key(a));
 SET SQL_MODE=NO_AUTO_VALUE_ON_ZERO;
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 insert into t1(a,b)values(NULL,1);
 insert into t1(a,b)values(200,2);
 insert into t1(a,b)values(0,3);

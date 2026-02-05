@@ -1,6 +1,9 @@
 DROP TABLE IF EXISTS t1,t2,t3,t4;
+SET sql_mode='NO_ENGINE_SUBSTITUTION';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t1(c1 YEAR(4) NOT NULL, c2 YEAR(4) NULL, c3 DATE, c4 DATETIME, PRIMARY KEY(c1), UNIQUE INDEX(c2));
-CREATE TABLE t2(c1 YEAR(4) NOT NULL, c2 YEAR(4) NULL, c3 DATE, c4 DATETIME, PRIMARY KEY(c1,c2));
+CREATE TABLE t2(c1 YEAR(4) NOT NULL, c2 YEAR(4) NOT NULL, c3 DATE, c4 DATETIME, PRIMARY KEY(c1,c2));
 CREATE TABLE t3(c1 YEAR(4) NOT NULL, c2 YEAR(4) NULL, c3 DATE, c4 DATETIME, UNIQUE INDEX idx(c1,c2));
 CREATE TABLE t4(c1 YEAR(4) NOT NULL, c2 YEAR(4) NULL, c3 DATE, c4 DATETIME);
 INSERT INTO t1 VALUES('1901','1901','98-12-31','98.12.31 11:30:45'),('1999','1999','98-12-30','98.12.30 11:30:45'),('2000','2000','98-12-29','98.12.29 11:30:45'),('2001','2001','98-12-28','98.12.28 11:30:45'),('2099','2099','98-12-27','98.12.27 11:30:45'),('2100','2100','98-12-26','98.12.26 11:30:45'),('2155','2155','98-12-26','98.12.26 11:30:45');
@@ -28,6 +31,8 @@ Warnings:
 Note	1265	Data truncated for column 'c3' at row 1
 INSERT INTO t1(c1) VALUES('5');
 INSERT INTO t2(c1) VALUES('5');
+Warnings:
+Warning	1364	Field 'c2' doesn't have a default value
 INSERT INTO t3(c1) VALUES('5');
 INSERT INTO t4(c1,c2) VALUES('0','000');
 INSERT INTO t2 VALUES(1900,2156,'08-01-06','08/01/07');
@@ -3116,9 +3121,17 @@ ERROR 23000: Duplicate entry '2069' for key 'c2'
 INSERT INTO t3(c1,c2) VALUES(00,00);
 ERROR 23000: Duplicate entry '0000-0000' for key 'idx'
 INSERT IGNORE INTO t1(c1,c2) VALUES(01,'99');
+Warnings:
+Warning	1062	Duplicate entry '2001' for key 'PRIMARY'
 INSERT IGNORE INTO t2(c1,c2) VALUES('1999','1999');
+Warnings:
+Warning	1062	Duplicate entry '1999-1999' for key 'PRIMARY'
 INSERT IGNORE INTO t1(c1,c2) VALUES('2098','69');
+Warnings:
+Warning	1062	Duplicate entry '2069' for key 'c2'
 INSERT IGNORE INTO t3(c1,c2) VALUES(00,00);
+Warnings:
+Warning	1062	Duplicate entry '0000-0000' for key 'idx'
 SELECT * FROM t1 WHERE c1='01' /* Returns 1 row */;
 c1	c2	c3	c4
 2001	2001	1998-12-28	1998-12-28 11:30:45
@@ -3202,6 +3215,8 @@ TRUNCATE TABLE t5;
 DROP TABLE t5;
 INSERT INTO t1 SET c1='00';
 INSERT INTO t2 SET c1=69;
+Warnings:
+Warning	1364	Field 'c2' doesn't have a default value
 INSERT INTO t3 SET c1=70;
 INSERT INTO t4 SET c2=99;
 Warnings:
@@ -3226,22 +3241,10 @@ c1	c2	c3	c4
 1999	1999	1998-12-23	1998-12-23 11:30:45
 1999	1999	1998-12-30	1998-12-30 11:30:45
 DROP TABLE t1,t2,t3,t4;
-CREATE TABLE t1(c1 YEAR(2) NOT NULL, c2 YEAR(2) NULL, c3 DATE, c4 DATETIME, PRIMARY KEY(c1), UNIQUE INDEX(c2));
-Warnings:
-Warning	1818	YEAR(2) column type is deprecated. Creating YEAR(4) column instead.
-Warning	1818	YEAR(2) column type is deprecated. Creating YEAR(4) column instead.
-CREATE TABLE t2(c1 YEAR(2) NOT NULL, c2 YEAR(2) NULL, c3 DATE, c4 DATETIME, PRIMARY KEY(c1,c2));
-Warnings:
-Warning	1818	YEAR(2) column type is deprecated. Creating YEAR(4) column instead.
-Warning	1818	YEAR(2) column type is deprecated. Creating YEAR(4) column instead.
-CREATE TABLE t3(c1 YEAR(2) NOT NULL, c2 YEAR(2) NULL, c3 DATE, c4 DATETIME, UNIQUE INDEX idx(c1,c2));
-Warnings:
-Warning	1818	YEAR(2) column type is deprecated. Creating YEAR(4) column instead.
-Warning	1818	YEAR(2) column type is deprecated. Creating YEAR(4) column instead.
-CREATE TABLE t4(c1 YEAR(2) NOT NULL, c2 YEAR(2) NULL, c3 DATE, c4 DATETIME);
-Warnings:
-Warning	1818	YEAR(2) column type is deprecated. Creating YEAR(4) column instead.
-Warning	1818	YEAR(2) column type is deprecated. Creating YEAR(4) column instead.
+CREATE TABLE t1(c1 YEAR(4) NOT NULL, c2 YEAR(4) NULL, c3 DATE, c4 DATETIME, PRIMARY KEY(c1), UNIQUE INDEX(c2));
+CREATE TABLE t2(c1 YEAR(4) NOT NULL, c2 YEAR(4) NOT NULL, c3 DATE, c4 DATETIME, PRIMARY KEY(c1,c2));
+CREATE TABLE t3(c1 YEAR(4) NOT NULL, c2 YEAR(4) NULL, c3 DATE, c4 DATETIME, UNIQUE INDEX idx(c1,c2));
+CREATE TABLE t4(c1 YEAR(4) NOT NULL, c2 YEAR(4) NULL, c3 DATE, c4 DATETIME);
 INSERT INTO t1 VALUES('1901','1901','98-12-31','98.12.31 11:30:45'),('1999','1999','98-12-30','98.12.30 11:30:45'),('2000','2000','98-12-29','98.12.29 11:30:45'),('2001','2001','98-12-28','98.12.28 11:30:45'),('2099','2099','98-12-27','98.12.27 11:30:45'),('2100','2100','98-12-26','98.12.26 11:30:45'),('2155','2155','98-12-26','98.12.26 11:30:45');
 INSERT INTO t2 VALUES('1901','1901','98-12-31','98.12.31 11:30:45'),('1999','1999','98-12-30','98.12.30 11:30:45'),('2000','2000','98-12-29','98.12.29 11:30:45'),('2001','2001','98-12-28','98.12.28 11:30:45'),('2099','2099','98-12-27','98.12.27 11:30:45'),('2100','2100','98-12-26','98.12.26 11:30:45'),('2155','2155','98-12-26','98.12.26 11:30:45');
 INSERT INTO t3 VALUES('1901','1901','98-12-31','98.12.31 11:30:45'),('1999','1999','98-12-30','98.12.30 11:30:45'),('2000','2000','98-12-29','98.12.29 11:30:45'),('2001','2001','98-12-28','98.12.28 11:30:45'),('2099','2099','98-12-27','98.12.27 11:30:45'),('2100','2100','98-12-26','98.12.26 11:30:45'),('2155','2155','98-12-26','98.12.26 11:30:45');
@@ -3267,6 +3270,8 @@ Warnings:
 Note	1265	Data truncated for column 'c3' at row 1
 INSERT INTO t1(c1) VALUES('5');
 INSERT INTO t2(c1) VALUES('5');
+Warnings:
+Warning	1364	Field 'c2' doesn't have a default value
 INSERT INTO t3(c1) VALUES('5');
 INSERT INTO t4(c1,c2) VALUES('0','000');
 INSERT INTO t2 VALUES(1900,2156,'08-01-06','08/01/07');
@@ -6259,9 +6264,17 @@ ERROR 23000: Duplicate entry '2069' for key 'c2'
 INSERT INTO t3(c1,c2) VALUES(00,00);
 ERROR 23000: Duplicate entry '0000-0000' for key 'idx'
 INSERT IGNORE INTO t1(c1,c2) VALUES(01,'99');
+Warnings:
+Warning	1062	Duplicate entry '2001' for key 'PRIMARY'
 INSERT IGNORE INTO t2(c1,c2) VALUES('1999','1999');
+Warnings:
+Warning	1062	Duplicate entry '1999-1999' for key 'PRIMARY'
 INSERT IGNORE INTO t1(c1,c2) VALUES('2098','69');
+Warnings:
+Warning	1062	Duplicate entry '2069' for key 'c2'
 INSERT IGNORE INTO t3(c1,c2) VALUES(00,00);
+Warnings:
+Warning	1062	Duplicate entry '0000-0000' for key 'idx'
 SELECT * FROM t1 WHERE c1='01' /* Returns 1 row */;
 c1	c2	c3	c4
 2001	2001	1998-12-28	1998-12-28 11:30:45
@@ -6345,6 +6358,8 @@ TRUNCATE TABLE t5;
 DROP TABLE t5;
 INSERT INTO t1 SET c1='00';
 INSERT INTO t2 SET c1=69;
+Warnings:
+Warning	1364	Field 'c2' doesn't have a default value
 INSERT INTO t3 SET c1=70;
 INSERT INTO t4 SET c2=99;
 Warnings:
@@ -6369,3 +6384,4 @@ c1	c2	c3	c4
 1999	1999	1998-12-23	1998-12-23 11:30:45
 1999	1999	1998-12-30	1998-12-30 11:30:45
 DROP TABLE t1,t2,t3,t4;
+SET sql_mode=default;

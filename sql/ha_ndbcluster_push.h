@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2011, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -98,8 +105,7 @@ public:
    * of operation specified by the arguments.
    */
   bool match_definition(int type, //NdbQueryOperationDef::Type, 
-                        const NDB_INDEX_DATA* idx,
-                        bool needSorted) const;
+                        const NDB_INDEX_DATA* idx) const;
 
   /** Create an executable instance of this defined query. */
   NdbQuery* make_query_instance(
@@ -125,7 +131,7 @@ public:
   /** Get the table that is accessed by the i'th table access operation.*/
   TABLE* get_table(uint i) const
   { 
-    DBUG_ASSERT(i < m_operation_count);
+    assert(i < m_operation_count);
     return m_tables[i];
   }
 
@@ -251,8 +257,14 @@ private:
   // These are effectively const or params wrt. the pushed join
   ndb_table_access_map m_const_scope;
 
-  // Set of tables required to have strict sequential dependency
-  ndb_table_access_map m_forced_sequence;
+  // Set of tables which 'FirstMatch' algorithm will 
+  // skip when a FirstMatch has been found.
+  // Use a bitmap as there may be multiple usage of FirstMatch
+  // in a query, and each FirstMatch may skip multiple tables.
+  ndb_table_access_map m_firstmatch_skipped;
+
+  // Number of internal operations used so far (unique lookups count as two).
+  uint m_internal_op_count;
 
   uint m_fld_refs;
   Field* m_referred_fields[ndb_pushed_join::MAX_REFERRED_FIELDS];
@@ -276,6 +288,8 @@ private:
       m_depend_parents(), 
       m_parent(MAX_TABLES), 
       m_ancestors(), 
+      m_fanout(1.0),
+      m_child_fanout(1.0),
       m_op(NULL) 
     {}
 
@@ -286,7 +300,7 @@ private:
      *  - 'common' are those parents for which ::collect_key_refs()
      *     will find key_refs[] (possibly through the EQ-sets) such that all
      *     linkedValues() refer fields from the same parent.
-     *  - 'extendeded' are those parents refered from some of the 
+     *  - 'extended' are those parents refered from some of the 
      *     key_refs[], and having the rest of the key_refs[] available as
      *     'grandparent refs'.
      */
@@ -296,6 +310,22 @@ private:
     /**
      * (sub)Set of a parents which *must* be available as ancestors
      * due to dependencies on these parents tables.
+     *
+     * NOTE1: When the 'm_parent' has been choosen by
+     *        ::optimize_query_plan(), any remaining grandparent 
+     *        dependencies has to be added the 'depend_parents' 
+     *        of the choosen parents such that it is taken into account
+     *        when calculating the ancestor tables.
+     *
+     * NOTE2: These 'depend_parents' place restrictions on which of the
+     *        'common', 'extend' parents above we actually may use:
+     *        As all 'depend_parents' must be joined as (grand)parents 
+     *        prior to one of the selected common/extend parents, only
+     *        parents >= the last 'depend_parents' are the real candidates.
+     *
+     *        We currently mask away the unusable common/extend parents
+     *        as part of ::optimize_query_plan() prior to selecting
+     *        the parent.
      */
     ndb_table_access_map m_depend_parents;
 
@@ -309,6 +339,16 @@ private:
      * All ancestors available throught the 'm_parent' chain
      */
     ndb_table_access_map m_ancestors;
+
+    /**
+     * The fanout of this table.
+     */
+    double m_fanout;
+
+    /**
+     * The (cross) product of all child fanouts.
+     */
+    double m_child_fanout;
 
     const NdbQueryOperationDef* m_op;
   } m_tables[MAX_TABLES];

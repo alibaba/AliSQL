@@ -1,2 +1,0 @@
---source include/have_tokudb.inc
---source include/invisible_indexes.inc

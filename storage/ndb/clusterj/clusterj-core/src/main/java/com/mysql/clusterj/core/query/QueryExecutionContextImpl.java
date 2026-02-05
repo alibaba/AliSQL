@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2010, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -79,6 +86,7 @@ public class QueryExecutionContextImpl implements QueryExecutionContext {
      */
     protected QueryExecutionContextImpl(QueryExecutionContextImpl context) {
         this.session = context.getSession();
+        this.explain = context.getExplain();
         boundParameters = new HashMap<String, Object>(context.boundParameters);
     }
 
@@ -102,6 +110,8 @@ public class QueryExecutionContextImpl implements QueryExecutionContext {
                     local.message("ERR_Parameter_Null"));
         }
         boundParameters.put(parameterName, value);
+        // if any parameters changed, the explain is no longer valid
+        this.explain = null;
     }
     /** Get the value of a parameter by name.
      */
@@ -127,7 +137,8 @@ public class QueryExecutionContextImpl implements QueryExecutionContext {
     }
 
     public ResultData getResultData(QueryDomainType<?> queryDomainType) {
-        return ((QueryDomainTypeImpl<?>)queryDomainType).getResultData(this);
+        // TODO handle skip and limit
+        return ((QueryDomainTypeImpl<?>)queryDomainType).getResultData(this, 0, Long.MAX_VALUE, null, null);
     }
 
     /** Add a filter to the list of filters created for this query.
@@ -336,6 +347,15 @@ public class QueryExecutionContextImpl implements QueryExecutionContext {
 
     public Object getObject(String index) {
         return boundParameters.get(index);
+    }
+
+    public boolean hasNoNullParameters() {
+        for (Object value: boundParameters.values()) {
+            if (value == null) {
+                return false;
+            }
+        }
+        return true;
     }
 
 }

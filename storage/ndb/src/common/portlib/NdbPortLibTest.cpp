@@ -1,15 +1,22 @@
 /*
-   Copyright (C) 2003-2006, 2008 MySQL AB
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
     All rights reserved. Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -93,7 +100,6 @@ extern "C" void* testfunc(void* arg)
 {
   int tmpVar;
   int threadno;
-  int result;
 
   threadno = *(int*)arg;
 
@@ -102,12 +108,9 @@ extern "C" void* testfunc(void* arg)
     {
 
       if ((threadno % 2) == 0)
-	result = NdbSleep_SecSleep(1);
+	NdbSleep_SecSleep(1);
       else
-	result = NdbSleep_MilliSleep(100);
-
-      if (result != 0)
-	fail("TEST3", "Wrong result from sleep function");
+	NdbSleep_MilliSleep(100);
 
       if (NdbMutex_Lock(testmutex) != 0)
 	fail("TEST3", "Wrong result from NdbMutex_Lock function");
@@ -132,7 +135,6 @@ extern "C" void* testTryLockfunc(void* arg)
 {
   int tmpVar = 0;
   int threadno;
-  int result;
 
   threadno = *(int*)arg;
 
@@ -141,12 +143,9 @@ extern "C" void* testTryLockfunc(void* arg)
     {
 
       if ((threadno % 2) == 0)
-	result = NdbSleep_SecSleep(1);
+	NdbSleep_SecSleep(1);
       else
-	result = NdbSleep_MilliSleep(100);
-
-      if (result != 0)
-	fail("TEST3", "Wrong result from sleep function");
+	NdbSleep_MilliSleep(100);
 
       if (NdbMutex_Trylock(testmutex) == 0){
 	 
@@ -316,8 +315,8 @@ NDB_COMMAND(PortLibTest, "portlibtest", "portlibtest", "Test the portable functi
   {
   ndbout << "*------------------------------- Measure" << i << endl;
 
-  NDB_TICKS millisec_now; 
-  NDB_TICKS millisec_now2;
+  Uint64 millisec_now; 
+  Uint64 millisec_now2;
 
   millisec_now = NdbTick_CurrentMillisecond();
   NdbSleep_MilliSleep(sleeptimes[i]);
@@ -421,8 +420,8 @@ NDB_COMMAND(PortLibTest, "portlibtest", "portlibtest", "Test the portable functi
   {
     ndbout << "*------------------------------- Measure" << i << endl;
 
-  NDB_TICKS millisec_now; 
-  NDB_TICKS millisec_now2;
+  Uint64 millisec_now; 
+  Uint64 millisec_now2;
 
   millisec_now = NdbTick_CurrentMillisecond();
   if (NdbCondition_WaitTimeout(testcond, testmutex, sleeptimes[i]) != 0)
@@ -446,22 +445,12 @@ NDB_COMMAND(PortLibTest, "portlibtest", "portlibtest", "Test the portable functi
   {
     ndbout << "*------------------------------- Measure" << i << endl;
 
-  NDB_TICKS millisec_now; 
-  NDB_TICKS millisec_now2;
-  Uint32 usec_now, usec_now2;
-  Uint64 msec_now, msec_now2;
-
-
-  millisec_now = NdbTick_CurrentMillisecond();
-  NdbTick_CurrentMicrosecond( &msec_now, &usec_now);
-
+  const NDB_TICKS t1 = NdbTick_getCurrentTicks();
   NdbSleep_MilliSleep(sleeptimes[i]);
+  const NDB_TICKS t2 = NdbTick_getCurrentTicks();
 
-  millisec_now2 = NdbTick_CurrentMillisecond();
-  NdbTick_CurrentMicrosecond( &msec_now2, &usec_now2);
-
-  Uint64 usecdiff = time_diff(msec_now,msec_now2,usec_now,usec_now2);
-  NDB_TICKS msecdiff = millisec_now2 -millisec_now;
+  Uint64 usecdiff = NdbTick_Elapsed(t1,t2).microSec();
+  Uint64 msecdiff = NdbTick_Elapsed(t1,t2).milliSec();
 
   ndbout << "     Slept "<<sleeptimes[i]<<" milliseconds." << endl;
   ndbout << "  Measured " << msecdiff <<" milliseconds with milli function ." << endl;
@@ -555,21 +544,14 @@ testMicros(int count){
   Uint32 sum2 = 0;
 
   for(int i = 0; i<count; i++){
-    Uint64 s1, s2;
-    Uint32 m1, m2;
-    if(NdbTick_CurrentMicrosecond(&s1, &m1) != 0){
-      ndbout << "Failed to get current micro" << endl;
-      TestHasFailed = 1; 
-      return;
-    }
+
+    const NDB_TICKS t1 = NdbTick_getCurrentTicks();
+
     Uint32 r = (rand() % 1000) + 1;
     NdbSleep_MilliSleep(r);
-    if(NdbTick_CurrentMicrosecond(&s2, &m2) != 0){
-      ndbout << "Failed to get current micro" << endl;
-      TestHasFailed = 1; 
-      return;
-    }
-    Uint64 m = time_diff(s1,s2,m1,m2);
+
+    const NDB_TICKS t2 = NdbTick_getCurrentTicks();
+    const Uint64 m = NdbTick_Elapsed(t1,t2).microSec();
     if(verbose)
       ndbout << "Slept for " << r << " ms" 
 	     << " - Measured  " << m << " us" << endl;

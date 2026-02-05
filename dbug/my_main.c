@@ -3,18 +3,18 @@
   fixed so that it could compile and run in MySQL source tree
 */
 
-#ifdef DBUG_OFF				/* We are testing dbug */
-#undef DBUG_OFF
+#ifdef NDEBUG				/* We are testing dbug */
+#undef NDEBUG
 #endif
 
 #include <my_global.h>	/* This includes dbug.h */
-#include <my_pthread.h>
+#include <my_thread.h>
 
 int main (argc, argv)
 int argc;
 char *argv[];
 {
-  register int result, ix;
+  int result, ix;
   extern int factorial(int);
   my_thread_global_init();
 

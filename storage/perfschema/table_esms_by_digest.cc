@@ -1,13 +1,20 @@
-/* Copyright (c) 2010, 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation; version 2 of the License.
+  it under the terms of the GNU General Public License, version 2.0,
+  as published by the Free Software Foundation.
+
+  This program is also distributed with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an additional
+  permission to link the program and your derivative works with the
+  separately licensed software that they have included with MySQL.
 
   This program is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
+  GNU General Public License, version 2.0, for more details.
 
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software
@@ -19,7 +26,7 @@
 */
 
 #include "my_global.h"
-#include "my_pthread.h"
+#include "my_thread.h"
 #include "pfs_instr_class.h"
 #include "pfs_column_types.h"
 #include "pfs_column_values.h"
@@ -30,6 +37,7 @@
 #include "pfs_visitor.h"
 #include "table_esms_by_digest.h"
 #include "pfs_digest.h"
+#include "field.h"
 
 THR_LOCK table_esms_by_digest::m_table_lock;
 
@@ -186,6 +194,11 @@ TABLE_FIELD_DEF
 table_esms_by_digest::m_field_def=
 { 29, field_types };
 
+PFS_engine_table_share_state
+table_esms_by_digest::m_share_state = {
+  false /* m_checked */
+};
+
 PFS_engine_table_share
 table_esms_by_digest::m_share=
 {
@@ -194,12 +207,13 @@ table_esms_by_digest::m_share=
   table_esms_by_digest::create,
   NULL, /* write_row */
   table_esms_by_digest::delete_all_rows,
-  NULL, /* get_row_count */
-  1000, /* records */
+  table_esms_by_digest::get_row_count,
   sizeof(PFS_simple_index),
   &m_table_lock,
   &m_field_def,
-  false /* checked */
+  false, /* m_perpetual */
+  false, /* m_optional */
+  &m_share_state
 };
 
 PFS_engine_table*
@@ -213,6 +227,12 @@ table_esms_by_digest::delete_all_rows(void)
 {
   reset_esms_by_digest();
   return 0;
+}
+
+ha_rows
+table_esms_by_digest::get_row_count(void)
+{
+  return digest_max;
 }
 
 table_esms_by_digest::table_esms_by_digest()
@@ -238,11 +258,14 @@ int table_esms_by_digest::rnd_next(void)
        m_pos.next())
   {
     digest_stat= &statements_digest_stat_array[m_pos.m_index];
-    if (digest_stat->m_first_seen != 0)
+    if (digest_stat->m_lock.is_populated())
     {
-      make_row(digest_stat);
-      m_next_pos.set_after(&m_pos);
-      return 0;
+      if (digest_stat->m_first_seen != 0)
+      {
+        make_row(digest_stat);
+        m_next_pos.set_after(&m_pos);
+        return 0;
+      }
     }
   }
 
@@ -260,10 +283,13 @@ table_esms_by_digest::rnd_pos(const void *pos)
   set_position(pos);
   digest_stat= &statements_digest_stat_array[m_pos.m_index];
 
-  if (digest_stat->m_first_seen != 0)
+  if (digest_stat->m_lock.is_populated())
   {
-    make_row(digest_stat);
-    return 0;
+    if (digest_stat->m_first_seen != 0)
+    {
+      make_row(digest_stat);
+      return 0;
+    }
   }
 
   return HA_ERR_RECORD_DELETED;
@@ -295,11 +321,11 @@ int table_esms_by_digest
   if (unlikely(! m_row_exists))
     return HA_ERR_RECORD_DELETED;
 
-  /* 
+  /*
     Set the null bits. It indicates how many fields could be null
     in the table.
   */
-  DBUG_ASSERT(table->s->null_bytes == 1);
+  assert(table->s->null_bytes == 1);
   buf[0]= 0;
 
   for (; (f= *fields) ; fields++)

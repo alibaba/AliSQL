@@ -43,13 +43,16 @@ CREATE VIEW test.v_procs_priv AS SELECT * FROM mysql.procs_priv WHERE User LIKE 
 CREATE VIEW test.v_event AS SELECT definer FROM mysql.event WHERE name = 'e1';
 CREATE PROCEDURE p1() SELECT 1;
 --echo # bug48321_1-01234 has the max length(16) of user.
-GRANT ALL PRIVILEGES ON *.* TO 'bug48321_1-01234'@'localhost' WITH GRANT OPTION; 
+set @orig_sql_mode= @@sql_mode;
+set sql_mode= (select replace(@@sql_mode,'NO_AUTO_CREATE_USER',''));
+GRANT ALL PRIVILEGES ON *.* TO 'bug48321_1-01234'@'localhost' WITH GRANT OPTION;
+set sql_mode= @orig_sql_mode;
 
 --echo
 --echo # Make sure the max lengths of user and host
 --echo # the user name is too lengh
 --error 1470
-GRANT CREATE USER ON *.* TO '01234567890123456'@'fakehost';
+GRANT CREATE USER ON *.* TO '012345678901234567890123456789012'@'fakehost';
 --echo # the host name is too lengh
 --error 1470
 GRANT CREATE USER ON *.* TO 'fakename'@'0123456789012345678901234567890123456789012345678901234567890';
@@ -172,6 +175,7 @@ connection master;
 INSERT INTO t1 VALUES(CURRENT_USER()), ('1234');
 SELECT * FROM t1;
 --source include/sync_slave_sql_with_master.inc
+--connection slave
 --echo # [On slave]
 SELECT * FROM t1;
 --echo # [On server_3]
@@ -184,6 +188,7 @@ connection master;
 UPDATE t1 SET c1=CURRENT_USER() WHERE c1='1234';
 SELECT * FROM t1;
 --source include/sync_slave_sql_with_master.inc
+--connection slave
 --echo # [On slave]
 SELECT * FROM t1;
 --let $sync_slave_connection= server_3
@@ -196,6 +201,7 @@ connection master;
 DELETE FROM t1 WHERE c1=CURRENT_USER();
 SELECT * FROM t1;
 --source include/sync_slave_sql_with_master.inc
+--connection slave
 --echo # [On slave]
 SELECT * FROM t1;
 --let $sync_slave_connection= server_3
@@ -220,6 +226,7 @@ INSERT INTO t1 VALUES(my_user());
 SELECT * FROM t1;
 SELECT * FROM t2;
 --source include/sync_slave_sql_with_master.inc
+--connection slave
 --echo # [On slave]
 SELECT * FROM t1;
 SELECT * FROM t2;

@@ -1,13 +1,20 @@
-/* Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2012, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -16,21 +23,15 @@
 #include <my_sys.h>
 #include <string>
 #include <mysql/plugin_validate_password.h>
+#include <mysql/service_my_plugin_log.h>
+#include <mysql/service_mysql_string.h>
 #include <set>
-#include <ios>       // std::streamoff
 #include <iostream>
 #include <fstream>
 #include <algorithm> // std::swap
+THD *thd_get_current_thd(); // from sql_class.cc
 
 
-/*  
-  MY_ATTRIBUTE(A) needs to be defined for Windows else complier
-  do not recognise it. Argument in plugin_init and plugin_deinit
-  Used in other plugins as well.
-*/
-#if !defined(MY_ATTRIBUTE) && (defined(__cplusplus) || !defined(__GNUC__)  || __GNUC__ == 2 && __GNUC_MINOR__ < 8)
-#define MY_ATTRIBUTE(A)
-#endif
 
 #define MAX_DICTIONARY_FILE_LENGTH    1024 * 1024
 #define PASSWORD_SCORE                25
@@ -96,6 +97,7 @@ static ulong validate_password_policy;
 static char *validate_password_dictionary_file;
 static char *validate_password_dictionary_file_last_parsed= NULL;
 static long long validate_password_dictionary_file_words_count= 0;
+static my_bool check_user_name;
 
 /**
   Activate the new dictionary
@@ -123,7 +125,7 @@ static void dictionary_activate(set_type *dict_words)
               tm.tm_hour,
               tm.tm_min,
               tm.tm_sec);
-  new_ts= my_strdup(timebuf, MYF(0));
+  new_ts= my_strdup(PSI_NOT_INSTRUMENTED, timebuf, MYF(0));
 
   mysql_rwlock_wrlock(&LOCK_dict_file);
   std::swap(dictionary_words, *dict_words);
@@ -258,6 +260,119 @@ static int validate_dictionary_check(mysql_string_handle password)
   return (1);
 }
 
+
+/**
+  Compare a sequence of bytes in "a" with the reverse sequence of bytes of "b"
+
+  @param a the first sequence
+  @param a_len the length of a
+  @param b the second sequence
+  @param b_len the length of b
+
+  @retval true sequences match
+  @retval false sequences don't match
+*/
+static bool my_memcmp_reverse(const char *a, size_t a_len,
+                              const char *b, size_t b_len)
+{
+  const char *a_ptr;
+  const char *b_ptr;
+
+  if (a_len != b_len)
+    return false;
+
+  for (a_ptr= a, b_ptr= b + b_len - 1; b_ptr >= b; a_ptr++, b_ptr--)
+    if (*a_ptr != *b_ptr)
+      return false;
+  return true;
+}
+
+/**
+  Validate a user name from the security context
+
+  A helper function.
+  Validates one user name (as specified by field_name)
+  against the data in buffer/length by comparing the byte
+  sequences in forward and reverse.
+
+  Logs an error to the error log if it can't pick up the user names.
+
+  @param ctx the current security context
+  @param buffer the password data
+  @param length the length of buffer
+  @param field_name the id of the security context field to use
+  @param logical_name the name of the field to use in the error message
+
+  @retval true name can be used
+  @retval false name is invalid
+*/
+static bool is_valid_user(MYSQL_SECURITY_CONTEXT ctx,
+                          const char *buffer, int length,
+                          const char *field_name,
+                          const char *logical_name)
+{
+  MYSQL_LEX_CSTRING user={ NULL, 0 };
+
+  if (security_context_get_option(ctx, field_name, &user))
+  {
+    my_plugin_log_message(&plugin_info_ptr, MY_ERROR_LEVEL,
+                          "Can't retrieve the %s from the"
+                          "security context", logical_name);
+    return false;
+  }
+
+  /* lengths must match for the strings to match */
+  if (user.length != (size_t) length)
+    return true;
+  /* empty strings turn the check off */
+  if (user.length == 0)
+    return true;
+  /* empty strings turn the check off */
+  if (!user.str)
+    return true;
+
+  return (0 != memcmp(buffer, user.str, user.length) &&
+          !my_memcmp_reverse(user.str, user.length, buffer, length));
+}
+
+
+/**
+  Check if the password is not the user name
+
+  Helper function.
+  Checks if the password supplied is valid to use by comparing it
+  the effected and the login user names to it and to the reverse of it.
+  logs an error to the error log if it can't pick up the names.
+
+  @param password the password handle
+  @retval true The password can be used
+  @retval false the password is invalid
+*/
+static bool is_valid_password_by_user_name(mysql_string_handle password)
+{
+  char buffer[MAX_PASSWORD_LENGTH];
+  int length, error;
+  MYSQL_SECURITY_CONTEXT ctx= NULL;
+
+  if (!check_user_name)
+    return true;
+
+  if (thd_get_security_context(thd_get_current_thd(), &ctx) || !ctx)
+  {
+    my_plugin_log_message(&plugin_info_ptr, MY_ERROR_LEVEL,
+                          "Can't retrieve the security context");
+    return false;
+  }
+
+  length= mysql_string_convert_to_char_ptr(password, "utf8",
+                                           buffer, MAX_PASSWORD_LENGTH,
+                                           &error);
+
+  return
+    is_valid_user(ctx, buffer, length, "user", "login user name")
+    && is_valid_user(ctx, buffer, length, "priv_user", "effective user name");
+}
+
 static int validate_password_policy_strength(mysql_string_handle password,
                                              int policy)
 {
@@ -288,6 +403,9 @@ static int validate_password_policy_strength(mysql_string_handle password,
   mysql_string_iterator_free(iter);
   if (n_chars >= validate_password_length)
   {
+    if (!is_valid_password_by_user_name(password))
+      return(0);
+
     if (policy == PASSWORD_POLICY_LOW)
       return (1);
     if (has_upper >= validate_password_mixed_case_count &&
@@ -316,10 +434,13 @@ static int get_password_strength(mysql_string_handle password)
   int n_chars= 0;
   mysql_string_iterator_handle iter;
 
+  if (!is_valid_password_by_user_name(password))
+    return 0;
+
   iter = mysql_string_get_iterator(password);
   while(mysql_string_iterator_next(iter))
     n_chars++;
-  
+
   mysql_string_iterator_free(iter);
   if (n_chars < MIN_DICTIONARY_WORD_LENGTH)
     return (policy);
@@ -336,6 +457,49 @@ static int get_password_strength(mysql_string_handle password)
     }
   }
   return ((policy+1) * PASSWORD_SCORE + PASSWORD_SCORE);
+}
+
+/**
+  @brief Check and readjust effective value of validate_password_length
+
+  @details
+  Readjust validate_password_length according to the values of
+  validate_password_number_count,validate_password_mixed_case_count
+  and validate_password_special_char_count. This is required at the
+  time plugin installation and as a part of setting new values for
+  any of above mentioned variables.
+
+*/
+static void
+readjust_validate_password_length()
+{
+  int policy_password_length;
+
+  /*
+    Effective value of validate_password_length variable is:
+
+    MAX(validate_password_length,
+        (validate_password_number_count +
+         2*validate_password_mixed_case_count +
+         validate_password_special_char_count))
+  */
+  policy_password_length= (validate_password_number_count +
+                           (2 * validate_password_mixed_case_count) +
+                           validate_password_special_char_count);
+
+  if (validate_password_length < policy_password_length)
+  {
+    /*
+       Raise a warning that effective restriction on password
+       length is changed.
+    */
+    my_plugin_log_message(&plugin_info_ptr, MY_WARNING_LEVEL,
+                          "Effective value of validate_password_length is changed."
+                          " New value is %d",
+                          policy_password_length);
+
+    validate_password_length= policy_password_length;
+  }
 }
 
 /* Plugin type-specific descriptor */
@@ -359,6 +523,8 @@ static int validate_password_init(MYSQL_PLUGIN plugin_info)
 #endif
   mysql_rwlock_init(key_validate_password_LOCK_dict_file, &LOCK_dict_file);
   read_dictionary_file();
+  /* Check if validate_password_length needs readjustment */
+  readjust_validate_password_length();
   return (0);
 }
 
@@ -400,8 +566,6 @@ length_update(MYSQL_THD thd MY_ATTRIBUTE((unused)),
               struct st_mysql_sys_var *var MY_ATTRIBUTE((unused)),
               void *var_ptr, const void *save)
 {
-  int new_validate_password_length;
-
   /* check if there is an actual change */
   if (*((int *)var_ptr) == *((int *)save))
     return;
@@ -415,33 +579,7 @@ length_update(MYSQL_THD thd MY_ATTRIBUTE((unused)),
   */
   *((int *)var_ptr)= *((int *)save);
 
-  /*
-    Any change in above mentioned system variables can trigger a change in
-    actual password length restriction applied by validate password plugin.
-    actual restriction on password length can be described as:
-
-    MAX(validate_password_length,
-        (validate_password_number_count +
-         2*validate_password_mixed_case_count +
-         validate_password_special_char_count))
-  */
-
-  new_validate_password_length= (validate_password_number_count +
-                                 (2 * validate_password_mixed_case_count) +
-                                 validate_password_special_char_count);
-
-  if (validate_password_length < new_validate_password_length)
-  {
-    /*
-       Raise a warning that effective restriction on password
-       length is changed.
-    */
-    my_plugin_log_message(&plugin_info_ptr, MY_WARNING_LEVEL,
-                          "Effective value of validate_password_length is changed. New value is %d",
-                          new_validate_password_length);
-
-    validate_password_length= new_validate_password_length;
-  }
+  readjust_validate_password_length();
 }
 
 
@@ -479,6 +617,12 @@ static MYSQL_SYSVAR_STR(dictionary_file, validate_password_dictionary_file,
   "password_validate_dictionary file to be loaded and check for password",
   NULL, dictionary_update, NULL);
 
+static MYSQL_SYSVAR_BOOL(check_user_name, check_user_name,
+  PLUGIN_VAR_NOCMDARG,
+  "Check if the password matches the login or the effective user names "
+  "or the reverse of them",
+  NULL, NULL, FALSE);
+
 static struct st_mysql_sys_var* validate_password_system_variables[]= {
   MYSQL_SYSVAR(length),
   MYSQL_SYSVAR(number_count),
@@ -486,13 +630,18 @@ static struct st_mysql_sys_var* validate_password_system_variables[]= {
   MYSQL_SYSVAR(special_char_count),
   MYSQL_SYSVAR(policy),
   MYSQL_SYSVAR(dictionary_file),
+  MYSQL_SYSVAR(check_user_name),
   NULL
 };
 
 static struct st_mysql_show_var validate_password_status_variables[]= {
-    { "validate_password_dictionary_file_last_parsed", (char *) &validate_password_dictionary_file_last_parsed, SHOW_CHAR_PTR },
-    { "validate_password_dictionary_file_words_count", (char *) &validate_password_dictionary_file_words_count, SHOW_LONGLONG },
-    { NullS, NullS, SHOW_LONG }
+    { "validate_password_dictionary_file_last_parsed",
+      (char *) &validate_password_dictionary_file_last_parsed,
+      SHOW_CHAR_PTR, SHOW_SCOPE_GLOBAL },
+    { "validate_password_dictionary_file_words_count",
+      (char *) &validate_password_dictionary_file_words_count,
+      SHOW_LONGLONG, SHOW_SCOPE_GLOBAL },
+    { NullS, NullS, SHOW_LONG, SHOW_SCOPE_GLOBAL }
 };
 
 mysql_declare_plugin(validate_password)

@@ -1,15 +1,22 @@
 /*
-   Copyright (C) 2003-2007 MySQL AB
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
     All rights reserved. Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -283,14 +290,14 @@ error_input:
 void commitTrans(Ndb* aNdb, NdbConnection* aCon)
 {
   int ret = aCon->execute(Commit);
-  assert (ret != -1);
+  require(ret != -1);
   aNdb->closeTransaction(aCon);
 }
 
 void rollbackTrans(Ndb* aNdb, NdbConnection* aCon)
 {
   int ret = aCon->execute(Rollback);
-  assert (ret != -1);
+  require(ret != -1);
   aNdb->closeTransaction(aCon);
 }
 
@@ -304,7 +311,7 @@ void updateNoCommit(NdbConnection* aCon, Uint32* flip, unsigned int key)
   theOperation->equal((Uint32)0, key);
   theOperation->setValue((Uint32)1, (char*)flip);
   int ret = aCon->execute(NoCommit);
-  assert (ret != -1);
+  require(ret != -1);
 }
 
 void updateNoCommitFail(NdbConnection* aCon, unsigned int key)
@@ -317,7 +324,7 @@ void updateNoCommitFail(NdbConnection* aCon, unsigned int key)
   theOperation->equal((Uint32)0, key);
   theOperation->setValue((Uint32)1, (char*)flip);
   int ret = aCon->execute(NoCommit);
-  assert (ret == -1);
+  require(ret == -1);
 }
 
 void deleteNoCommit(NdbConnection* aCon, Uint32* flip, unsigned int key)
@@ -329,7 +336,7 @@ void deleteNoCommit(NdbConnection* aCon, Uint32* flip, unsigned int key)
   theOperation->deleteTuple();
   theOperation->equal((Uint32)0, key);
   int ret = aCon->execute(NoCommit);
-  assert (ret != -1);
+  require(ret != -1);
 }
 
 void insertNoCommit(NdbConnection* aCon, Uint32* flip, unsigned int key)
@@ -345,7 +352,7 @@ void insertNoCommit(NdbConnection* aCon, Uint32* flip, unsigned int key)
   theOperation->setValue((Uint32)2, (char*)&placeholder[0]);
   theOperation->setValue((Uint32)3, (char*)&placeholder[0]);
   int ret = aCon->execute(NoCommit);
-  assert (ret != -1);
+  require(ret != -1);
 }
 
 void writeNoCommit(NdbConnection* aCon, Uint32* flip, unsigned int key)
@@ -361,7 +368,7 @@ void writeNoCommit(NdbConnection* aCon, Uint32* flip, unsigned int key)
   theOperation->setValue((Uint32)2, (char*)&placeholder[0]);
   theOperation->setValue((Uint32)3, (char*)&placeholder[0]);
   int ret = aCon->execute(NoCommit);
-  assert (ret != -1);
+  require(ret != -1);
 }
 
 void readNoCommit(NdbConnection* aCon, Uint32* flip, Uint32 key, int expected_ret)
@@ -374,9 +381,9 @@ void readNoCommit(NdbConnection* aCon, Uint32* flip, Uint32 key, int expected_re
   theOperation->equal((Uint32)0, key);
   theOperation->getValue((Uint32)1, (char*)&readFlip);
   int ret = aCon->execute(NoCommit);
-  assert (ret == expected_ret);
+  require(ret == expected_ret);
   if (ret == 0) 
-    assert (*flip == readFlip);
+    require(*flip == readFlip);
 }
 
 void readDirtyNoCommit(NdbConnection* aCon, Uint32* flip, Uint32 key, int expected_ret)
@@ -389,9 +396,9 @@ void readDirtyNoCommit(NdbConnection* aCon, Uint32* flip, Uint32 key, int expect
   theOperation->equal((Uint32)0, key);
   theOperation->getValue((Uint32)1, (char*)&readFlip);
   int ret = aCon->execute(NoCommit);
-  assert (ret == expected_ret);
+  require(ret == expected_ret);
   if (ret == 0) 
-    assert (*flip == readFlip);
+    require(*flip == readFlip);
 }
 
 void readVerify(Ndb* aNdb, Uint32* flip, Uint32 key, int expected_ret)
@@ -414,9 +421,9 @@ void readDirty(Ndb* aNdb, Uint32* flip, Uint32 key, int expected_ret)
   theOperation->equal((Uint32)0, key);
   theOperation->getValue((Uint32)1, (char*)&readFlip);
   int ret = theTransaction->execute(Commit);
-  assert (ret == expected_ret);
+  require(ret == expected_ret);
   if (ret == 0) 
-    assert (*flip == readFlip);
+    require(*flip == readFlip);
   aNdb->closeTransaction(theTransaction);
 }
 

@@ -1,3 +1,5 @@
+# Applies BINLOG statements equivalent to a binlog generated with GTID_MODE=OFF
+--source include/not_gtid_enabled.inc
 source include/have_binlog_format_mixed_or_row.inc;
 source include/master-slave.inc;
 
@@ -6,6 +8,8 @@ SET GLOBAL SLAVE_TYPE_CONVERSIONS = 'ALL_NON_LOSSY';
 
 CREATE DATABASE track;
 USE track;
+
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 
 CREATE TABLE `visits` (
   `visits_id` int(11) unsigned NOT NULL AUTO_INCREMENT,
@@ -25,7 +29,9 @@ CREATE TABLE `visits` (
   KEY `ip` (`ip`),
   KEY `time` (`time`),
   KEY `user_id` (`user_id`)
-) ENGINE=MyISAM AUTO_INCREMENT=21293381 DEFAULT CHARSET=latin1;
+) AUTO_INCREMENT=21293381 DEFAULT CHARSET=latin1;
+
+SET sql_mode = default;
 
 CREATE TABLE `visits_events` (
   `event_id` mediumint(8) unsigned NOT NULL DEFAULT '0',
@@ -38,7 +44,7 @@ CREATE TABLE `visits_events` (
   KEY `event_id` (`event_id`),
   KEY `visit_id` (`visit_id`),
   KEY `data` (`data`)
-) ENGINE=MyISAM AUTO_INCREMENT=33900731 DEFAULT CHARSET=latin1;
+) AUTO_INCREMENT=33900731 DEFAULT CHARSET=latin1;
 
 /*!50530 SET @@SESSION.PSEUDO_SLAVE_MODE=1*/;
 /*!40019 SET @@session.max_insert_delayed_threads=0*/;
@@ -77,6 +83,7 @@ AAAAAAAAAAAAAAAAAAA7VlVHEzgNAAgAEgAEBAQEEgAAUwAEGggAAAAICAgC
 #  9c90bf7 79 73 71 6c 2d 34 2e  |ysql.4.|
 # 	Write_rows: table id 35084185 flags: STMT_END_F
 
+--error 1149
 BINLOG '
 Bk3vRhO0AQAAOAAAALcLyQkAAJlXFwIAAAAABXRyYWNrAA12aXNpdHNfZXZlbnRzAAYJAwcPDwM=
 Bk3vRhe0AQAAWgAAABEMyQkQAJlXFwIAAAEABv/AIE4AvvVDAQZN70YAK0Rvd25sb2Fkcy9NeVNR

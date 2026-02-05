@@ -1,25 +1,35 @@
-/* Copyright (c) 2007, 2013, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2007, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
    51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
 
-#include "sql_priv.h"
-#include "unireg.h"
-#include "rpl_rli.h"
 #include "rpl_record.h"
-#include "rpl_slave.h"                  // Need to pull in slave_print_msg
-#include "rpl_utility.h"
-#include "rpl_rli.h"
+
+#include "my_bitmap.h"        // MY_BITMAP
+#include "derror.h"           // ER_THD
+#include "field.h"            // Field
+#include "mysqld.h"           // ER
+#include "rpl_rli.h"          // Relay_log_info
+#include "rpl_utility.h"      // table_def
+#include "table.h"            // TABLE
+#include "template_utils.h"   // down_cast
 
 using std::min;
 using std::max;
@@ -67,7 +77,7 @@ pack_row(TABLE *table, MY_BITMAP const* cols,
   uchar *pack_ptr = row_data + null_byte_count;
   uchar *null_ptr = row_data;
   my_ptrdiff_t const rec_offset= record - table->record[0];
-  my_ptrdiff_t const def_offset= table->s->default_values - table->record[0];
+  my_ptrdiff_t const def_offset= table->default_values_offset();
 
   DBUG_ENTER("pack_row");
 
@@ -106,7 +116,7 @@ pack_row(TABLE *table, MY_BITMAP const* cols,
           length is stored in little-endian format, since this is the
           format used for the binlog.
         */
-#ifndef DBUG_OFF
+#ifndef NDEBUG
         const uchar *old_pack_ptr= pack_ptr;
 #endif
         pack_ptr= field->pack(pack_ptr, field->ptr + offset,
@@ -122,13 +132,13 @@ pack_row(TABLE *table, MY_BITMAP const* cols,
       null_mask <<= 1;
       if ((null_mask & 0xFF) == 0)
       {
-        DBUG_ASSERT(null_ptr < row_data + null_byte_count);
+        assert(null_ptr < row_data + null_byte_count);
         null_mask = 1U;
         *null_ptr++ = null_bits;
         null_bits= (1U << 8) - 1;
       }
     }
-#ifndef DBUG_OFF
+#ifndef NDEBUG
     else
     {
       DBUG_PRINT("debug", ("Skipped"));
@@ -141,7 +151,7 @@ pack_row(TABLE *table, MY_BITMAP const* cols,
   */
   if ((null_mask & 0xFF) > 1)
   {
-    DBUG_ASSERT(null_ptr < row_data + null_byte_count);
+    assert(null_ptr < row_data + null_byte_count);
     *null_ptr++ = null_bits;
   }
 
@@ -149,7 +159,7 @@ pack_row(TABLE *table, MY_BITMAP const* cols,
     The null pointer should now point to the first byte of the
     packed data. If it doesn't, something is very wrong.
   */
-  DBUG_ASSERT(null_ptr == row_data + null_byte_count);
+  assert(null_ptr == row_data + null_byte_count);
   DBUG_DUMP("row_data", row_data, pack_ptr - row_data);
   DBUG_RETURN(static_cast<size_t>(pack_ptr - row_data));
 }
@@ -207,8 +217,8 @@ unpack_row(Relay_log_info const *rli,
            uchar const *const row_end)
 {
   DBUG_ENTER("unpack_row");
-  DBUG_ASSERT(row_data);
-  DBUG_ASSERT(table);
+  assert(row_data);
+  assert(table);
   size_t const master_null_byte_count= (bitmap_bits_set(cols) + 7) / 8;
   int error= 0;
 
@@ -231,7 +241,7 @@ unpack_row(Relay_log_info const *rli,
   Field **field_ptr;
   Field **const end_ptr= begin_ptr + colcnt;
 
-  DBUG_ASSERT(null_ptr < row_data + master_null_byte_count);
+  assert(null_ptr < row_data + master_null_byte_count);
 
   // Mask to mask out the correct bit among the null bits
   unsigned int null_mask= 1U;
@@ -243,7 +253,7 @@ unpack_row(Relay_log_info const *rli,
   bool table_found= rli && rli->get_table_data(table, &tabledef, &conv_table);
   DBUG_PRINT("debug", ("Table data: table_found: %d, tabldef: %p, conv_table: %p",
                        table_found, tabledef, conv_table));
-  DBUG_ASSERT(table_found);
+  assert(table_found);
 
   /*
     If rli is NULL it means that there is no source table and that the
@@ -269,7 +279,7 @@ unpack_row(Relay_log_info const *rli,
                          conv_field ? "" : "not ",
                          (*field_ptr)->field_name,
                          (long) (field_ptr - begin_ptr)));
-    DBUG_ASSERT(f != NULL);
+    assert(f != NULL);
 
     DBUG_PRINT("debug", ("field: %s; null mask: 0x%x; null bits: 0x%lx;"
                          " row start: %p; null bytes: %ld",
@@ -284,15 +294,15 @@ unpack_row(Relay_log_info const *rli,
     {
       if ((null_mask & 0xFF) == 0)
       {
-        DBUG_ASSERT(null_ptr < row_data + master_null_byte_count);
+        assert(null_ptr < row_data + master_null_byte_count);
         null_mask= 1U;
         null_bits= *null_ptr++;
       }
 
-      DBUG_ASSERT(null_mask & 0xFF); // One of the 8 LSB should be set
+      assert(null_mask & 0xFF); // One of the 8 LSB should be set
 
       /* Field...::unpack() cannot return 0 */
-      DBUG_ASSERT(pack_ptr != NULL);
+      assert(pack_ptr != NULL);
 
       if (null_bits & null_mask)
       {
@@ -321,7 +331,7 @@ unpack_row(Relay_log_info const *rli,
         else
         {
           f->set_default();
-          push_warning_printf(current_thd, Sql_condition::WARN_LEVEL_WARN,
+          push_warning_printf(current_thd, Sql_condition::SL_WARNING,
                               ER_BAD_NULL_ERROR, ER(ER_BAD_NULL_ERROR),
                               f->field_name);
         }
@@ -336,7 +346,7 @@ unpack_row(Relay_log_info const *rli,
           normal unpack operation.
         */
         uint16 const metadata= tabledef->field_metadata(i);
-#ifndef DBUG_OFF
+#ifndef NDEBUG
         uchar const *const old_pack_ptr= pack_ptr;
 #endif
         uint32 len= tabledef->calc_field_size(i, (uchar *) pack_ptr);
@@ -346,6 +356,20 @@ unpack_row(Relay_log_info const *rli,
           my_error(ER_SLAVE_CORRUPT_EVENT, MYF(0));
           DBUG_RETURN(ER_SLAVE_CORRUPT_EVENT);
         }
+        /*
+          For a virtual generated column based on the blob type, we have to keep
+          both the old and new value for the field since this might be
+          needed by the storage engine during updates.
+
+          The reason why this needs special handling is that the virtual
+          generated blob-based fields are neither stored in the record buffers
+          nor stored by the storage engine. This special handling for blob-based
+          fields is normally taken care of in update_generated_write_fields()
+          but this function is not called when applying updated records
+          in replication.
+        */
+        if ((f->flags & BLOB_FLAG) != 0 && f->is_virtual_gcol())
+          (down_cast<Field_blob*>(f))->keep_old_value();
         pack_ptr= f->unpack(f->ptr, pack_ptr, metadata, TRUE);
 	DBUG_PRINT("debug", ("Unpacked; metadata: 0x%x;"
                              " pack_ptr: 0x%lx; pack_ptr': 0x%lx; bytes: %d",
@@ -358,9 +382,9 @@ unpack_row(Relay_log_info const *rli,
           a old decimal data type which is unsupported datatype in
           RBR mode.
          */
-        DBUG_ASSERT(tabledef->type(i) == MYSQL_TYPE_DECIMAL ||
-                    tabledef->calc_field_size(i, (uchar *) old_pack_ptr) ==
-                    (uint32) (pack_ptr - old_pack_ptr));
+        assert(tabledef->type(i) == MYSQL_TYPE_DECIMAL ||
+               tabledef->calc_field_size(i, (uchar *) old_pack_ptr) ==
+               (uint32) (pack_ptr - old_pack_ptr));
       }
 
       /*
@@ -372,7 +396,7 @@ unpack_row(Relay_log_info const *rli,
       if (conv_field)
       {
         Copy_field copy;
-#ifndef DBUG_OFF
+#ifndef NDEBUG
         char source_buf[MAX_FIELD_WIDTH];
         char value_buf[MAX_FIELD_WIDTH];
         String source_type(source_buf, sizeof(source_buf), system_charset_info);
@@ -384,8 +408,8 @@ unpack_row(Relay_log_info const *rli,
                              source_type.c_ptr_safe(), value_string.c_ptr_safe()));
 #endif
         copy.set(*field_ptr, f, TRUE);
-        (*copy.do_copy)(&copy);
-#ifndef DBUG_OFF
+        copy.invoke_do_copy(&copy);
+#ifndef NDEBUG
         char target_buf[MAX_FIELD_WIDTH];
         String target_type(target_buf, sizeof(target_buf), system_charset_info);
         (*field_ptr)->sql_type(target_type);
@@ -398,13 +422,33 @@ unpack_row(Relay_log_info const *rli,
 
       null_mask <<= 1;
     }
-#ifndef DBUG_OFF
+#ifndef NDEBUG
     else
     {
       DBUG_PRINT("debug", ("Non-existent: skipped"));
     }
 #endif
     i++;
+  }
+
+  /*
+    Re-evaluating generated columns since their values must be
+    recalculated prior to change.
+  */
+  if (table->has_gcol())
+  {
+    for (Field **vfield_ptr= table->vfield; *vfield_ptr; ++vfield_ptr)
+    {
+      Field *vfield= *vfield_ptr;
+      if ((vfield->is_virtual_gcol() && vfield->m_indexed) ||
+          bitmap_is_overlapping(table->write_set,
+                                &vfield->gcol_info->base_columns_map))
+      {
+        if ((vfield->flags & BLOB_FLAG) != 0 && vfield->is_virtual_gcol())
+          (down_cast<Field_blob*>(vfield))->keep_old_value();
+        vfield->gcol_info->expr_item->save_in_field(vfield, 0);
+      }
+    }
   }
 
   /*
@@ -417,11 +461,11 @@ unpack_row(Relay_log_info const *rli,
     {
       if ((null_mask & 0xFF) == 0)
       {
-        DBUG_ASSERT(null_ptr < row_data + master_null_byte_count);
+        assert(null_ptr < row_data + master_null_byte_count);
         null_mask= 1U;
         null_bits= *null_ptr++;
       }
-      DBUG_ASSERT(null_mask & 0xFF); // One of the 8 LSB should be set
+      assert(null_mask & 0xFF); // One of the 8 LSB should be set
 
       if (!((null_bits & null_mask) && tabledef->maybe_null(i))) {
         uint32 len= tabledef->calc_field_size(i, (uchar *) pack_ptr);
@@ -441,7 +485,7 @@ unpack_row(Relay_log_info const *rli,
     We should now have read all the null bytes, otherwise something is
     really wrong.
    */
-  DBUG_ASSERT(null_ptr == row_data + master_null_byte_count);
+  assert(null_ptr == row_data + master_null_byte_count);
 
   DBUG_DUMP("row_data", row_data, pack_ptr - row_data);
 
@@ -487,24 +531,51 @@ int prepare_record(TABLE *const table, const MY_BITMAP *cols, const bool check)
   */
   
   DBUG_PRINT_BITSET("debug", "cols: %s", cols);
+  /**
+    Save a reference to the original write set bitmaps.
+    We will need this to restore the bitmaps at the end.
+  */
+  MY_BITMAP *old_write_set= table->write_set;
+  /**
+    Just to be sure that tmp_set is currently not in use as
+    the read_set already.
+  */
+  assert(table->write_set != &table->tmp_set);
+  /* set the temporary write_set */
+  table->column_bitmaps_set_no_signal(table->read_set,
+                                      &table->tmp_set);
+  /**
+    Set table->write_set bits for all the columns as they
+    will be checked in set_default() function.
+  */
+  bitmap_set_all(table->write_set);
+
   for (Field **field_ptr= table->field; *field_ptr; ++field_ptr)
   {
-    if ((uint) (field_ptr - table->field) >= cols->n_bits ||
-        !bitmap_is_set(cols, field_ptr - table->field))
-    {   
+    uint field_index= (uint) (field_ptr - table->field);
+    if (field_index >= cols->n_bits || !bitmap_is_set(cols, field_index))
+    {
       Field *const f= *field_ptr;
       if ((f->flags &  NO_DEFAULT_VALUE_FLAG) &&
           (f->real_type() != MYSQL_TYPE_ENUM))
       {
         f->set_default();
         push_warning_printf(current_thd,
-                            Sql_condition::WARN_LEVEL_WARN,
+                            Sql_condition::SL_WARNING,
                             ER_NO_DEFAULT_FOR_FIELD,
                             ER(ER_NO_DEFAULT_FOR_FIELD),
                             f->field_name);
       }
+      else if (f->has_insert_default_function())
+      {
+        f->set_default();
+      }
     }
   }
+
+  /* set the write_set back to original*/
+  table->column_bitmaps_set_no_signal(table->read_set,
+                                      old_write_set);
 
   DBUG_RETURN(0);
 }

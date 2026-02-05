@@ -1,3 +1,8 @@
+# The include statement below is a temp one for tests that are yet to
+#be ported to run with InnoDB,
+#but needs to be kept for tests that would need MyISAM in future.
+--source include/force_myisam_default.inc
+
 #
 # Test of alter table
 #
@@ -5,6 +10,8 @@
 drop table if exists t1,t2;
 drop database if exists mysqltest;
 --enable_warnings
+
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION,NO_AUTO_CREATE_USER';
 
 create table t1 (
 col1 int not null auto_increment primary key,
@@ -153,16 +160,6 @@ alter table t1 add unique (a,b), add key (b);
 show keys from t1;
 analyze table t1;
 show keys from t1;
-drop table t1;
-
-#
-# Test of ALTER TABLE DELAYED
-#
-
-CREATE TABLE t1 (i int(10), index(i) );
-ALTER TABLE t1 DISABLE KEYS;
-INSERT DELAYED INTO t1 VALUES(1),(2),(3);
-ALTER TABLE t1 ENABLE KEYS;
 drop table t1;
 
 #
@@ -636,8 +633,7 @@ drop table t1;
 # Bug#27507: Wrong DATETIME value was allowed by ALTER TABLE in the
 #            NO_ZERO_DATE mode.
 #
-set @orig_sql_mode = @@sql_mode;
-set sql_mode="no_zero_date";
+set sql_mode= default;
 create table t1(f1 int);
 alter table t1 add column f2 datetime not null, add column f21 date not null;
 insert into t1 values(1,'2000-01-01','2000-01-01');
@@ -652,7 +648,6 @@ alter table t1 add column f4 datetime not null default '2002-02-02',
   add column f41 date not null default '2002-02-02';
 select * from t1;
 drop table t1;
-set sql_mode= @orig_sql_mode;
 
 #
 # Some additional tests for new, faster alter table.  Note that most of the
@@ -1182,7 +1177,9 @@ DROP DATABASE IF EXISTS db1;
 --enable_warnings
 
 CREATE DATABASE db1 CHARACTER SET utf8;
+--error ER_TOO_LONG_KEY
 CREATE TABLE db1.t1 (bar TINYTEXT, KEY (bar(100)));
+CREATE TABLE db1.t1 (bar TINYTEXT, KEY (bar(85)));
 ALTER TABLE db1.t1 ADD baz INT;
 
 DROP DATABASE db1;
@@ -1468,15 +1465,7 @@ ALTER TABLE tm1 MODIFY COLUMN e INT AFTER h;
 ALTER TABLE ti1 MODIFY COLUMN e INT FIRST;
 ALTER TABLE tm1 MODIFY COLUMN e INT FIRST;
 # This will set both ALTER_COLUMN_NOT_NULLABLE and COLUMN_DEFAULT_VALUE
---disable_info
-# NULL -> NOT NULL only allowed INPLACE if strict sql_mode is on.
-SET @orig_sql_mode = @@sql_mode;
-SET @@sql_mode = 'STRICT_TRANS_TABLES';
---enable_info
 ALTER TABLE ti1 MODIFY COLUMN c INT NOT NULL;
---disable_info
-SET @@sql_mode = @orig_sql_mode;
---enable_info
 ALTER TABLE tm1 MODIFY COLUMN c INT NOT NULL;
 # This will set both ALTER_COLUMN_NULLABLE and COLUMN_DEFAULT_VALUE
 ALTER TABLE ti1 MODIFY COLUMN c INT NULL;
@@ -1564,7 +1553,7 @@ DROP TABLE tm1;
 --echo # Bug#11815557 60269: MYSQL SHOULD REJECT ATTEMPTS TO CREATE SYSTEM
 --echo #                     TABLES IN INCORRECT ENGINE
 --echo #
---echo # Note: This test assumes that only MyISAM supports system tables.
+--echo # Note: This test assumes that only MyISAM and InnoDB supports system tables.
 --echo #       If other engines are made to support system tables,
 --echo #       then this test needs to be updated
 --echo #
@@ -1581,7 +1570,7 @@ ALTER TABLE func ENGINE=csv;
 --error ER_UNSUPPORTED_ENGINE
 ALTER TABLE event ENGINE=merge;
 --error ER_UNSUPPORTED_ENGINE
-ALTER TABLE servers ENGINE=innodb;
+ALTER TABLE servers ENGINE=merge;
 --error ER_UNSUPPORTED_ENGINE
 ALTER TABLE procs_priv ENGINE=memory;
 --error ER_UNSUPPORTED_ENGINE
@@ -1591,8 +1580,7 @@ ALTER TABLE columns_priv ENGINE=csv;
 --error ER_UNSUPPORTED_ENGINE
 ALTER TABLE time_zone ENGINE=merge;
 --error ER_UNSUPPORTED_ENGINE
-ALTER TABLE help_topic ENGINE=innodb;
-
+ALTER TABLE help_topic ENGINE=merge;
 --error ER_UNSUPPORTED_ENGINE
 CREATE TABLE db (dummy int) ENGINE=innodb;
 --error ER_UNSUPPORTED_ENGINE
@@ -1604,7 +1592,7 @@ CREATE TABLE func (dummy int) ENGINE=csv;
 --error ER_UNSUPPORTED_ENGINE
 CREATE TABLE event (dummy int) ENGINE=merge;
 --error ER_UNSUPPORTED_ENGINE
-CREATE TABLE servers (dummy int) ENGINE=innodb;
+CREATE TABLE servers (dummy int) ENGINE=merge;
 --error ER_UNSUPPORTED_ENGINE
 CREATE TABLE procs_priv (dummy int) ENGINE=memory;
 --error ER_UNSUPPORTED_ENGINE
@@ -1614,12 +1602,514 @@ CREATE TABLE columns_priv (dummy int) ENGINE=csv;
 --error ER_UNSUPPORTED_ENGINE
 CREATE TABLE time_zone (dummy int) ENGINE=merge;
 --error ER_UNSUPPORTED_ENGINE
-CREATE TABLE help_topic (dummy int) ENGINE=innodb;
+CREATE TABLE help_topic (dummy int) ENGINE=merge;
 use test;
 --echo # End of Bug#11815557
 
 
 --echo #
+--echo # Tests for WL#6555 "Online rename index".
+--echo #
+
+--echo #
+--echo # 1) Tests for syntax and semantics of ALTER TABLE RENAME
+--echo #    KEY/INDEX result.
+--echo #
+--echo # 1.a) Both RENAME KEY and RENAME INDEX variants should be
+--echo #      allowed and produce expected results.
+create table t1 (pk int primary key, i int, j int, key a(i));
+alter table t1 rename key a to b;
+show create table t1;
+alter table t1 rename index b to c;
+show create table t1;
+
+--echo # 1.b) It should be impossible to rename index that doesn't
+--echo #      exists, dropped or added within the same ALTER TABLE.
+--error ER_KEY_DOES_NOT_EXITS 
+alter table t1 rename key d to e;
+show create table t1;
+--error ER_KEY_DOES_NOT_EXITS 
+alter table t1 drop key c, rename key c to d;
+show create table t1;
+--error ER_KEY_DOES_NOT_EXITS 
+alter table t1 add key d(j), rename key d to e; 
+show create table t1;
+
+--echo # 1.c) It should be impossible to rename index to a name
+--echo #      which is already used by another index, or is used
+--echo #      by index which is added within the same ALTER TABLE.
+alter table t1 add key d(j);
+--error ER_DUP_KEYNAME
+alter table t1 rename key c to d;
+show create table t1;
+alter table t1 drop key d;
+--error ER_DUP_KEYNAME
+alter table t1 add key d(j), rename key c to d;
+show create table t1;
+
+--echo # 1.d) It should be possible to rename index to a name
+--echo #      which belongs to index which is dropped within the
+--echo #      same ALTER TABLE.
+alter table t1 add key d(j);
+alter table t1 drop key c, rename key d to c;
+show create table t1;
+
+--echo # 1.e) We disallow renaming from/to PRIMARY as it might
+--echo #      lead to some other key becoming "primary" internally,
+--echo #      which will be interpreted as dropping/addition of
+--echo #      primary key.
+--error ER_PARSE_ERROR
+alter table t1 rename key primary to d;
+show create table t1;
+--echo # Even using 'funny' syntax.
+--error ER_WRONG_NAME_FOR_INDEX
+alter table t1 rename key t1.primary to d;
+show create table t1;
+--error ER_PARSE_ERROR
+alter table t1 rename key c to primary;
+show create table t1;
+--error ER_WRONG_NAME_FOR_INDEX
+alter table t1 rename key c to t1.primary;
+show create table t1;
+drop table t1;
+
+
+--echo #
+--echo # 2) More complex tests for semantics of ALTER TABLE.
+--echo #
+--echo # 2.a) Check that standalone RENAME KEY works as expected
+--echo #      for unique and non-unique indexes.
+create table t1 (a int, unique u(a), b int, key k(b));
+alter table t1 rename key u to uu;
+show create table t1;
+alter table t1 rename key k to kk;
+show create table t1;
+
+--echo # 2.b) Check how that this clause can be mixed with other
+--echo #      clauses which don't affect key or its columns.
+alter table t1 rename key kk to kkk, add column c int;
+show create table t1;
+alter table t1 rename key uu to uuu, add key c(c);
+show create table t1;
+alter table t1 rename key kkk to k, drop key uuu;
+show create table t1;
+alter table t1 rename key k to kk, rename to t2;
+show create table t2;
+
+--echo # 2.c) Check that this clause properly works even in case
+--echo #      when it is mixed with clauses affecting columns in
+--echo #      the key renamed.
+alter table t2 rename key c to cc, modify column c bigint not null first;
+show create table t2;
+--echo # Create multi-component key for next example.
+alter table t2 add unique u (a, b, c);
+show create table t2;
+alter table t2 rename key u to uu, drop column b;
+show create table t2;
+drop table t2;
+
+
+--echo #
+--echo # 3) Test coverage for handling of RENAME INDEX clause in
+--echo #    various storage engines and using different ALTER
+--echo #    algorithm.
+--echo #
+--echo # 3.a) Test coverage for simple storage engines (MyISAM/Heap).
+create table t1 (i int, key k(i)) engine=myisam;
+insert into t1 values (1);
+create table t2 (i int, key k(i)) engine=memory;
+insert into t2 values (1);
+--echo # MyISAM and Heap should be able to handle key renaming in-place.
+alter table t1 algorithm=inplace, rename key k to kk;
+alter table t2 algorithm=inplace, rename key k to kk;
+show create table t1;
+show create table t2;
+--echo # So by default in-place algorithm should be chosen.
+--echo # (ALTER TABLE should report 0 rows affected).
+--enable_info
+alter table t1 rename key kk to kkk;
+alter table t2 rename key kk to kkk;
+--disable_info
+show create table t1;
+show create table t2;
+--echo # Copy algorithm should work as well.
+alter table t1 algorithm=copy, rename key kkk to kkkk;
+alter table t2 algorithm=copy, rename key kkk to kkkk;
+show create table t1;
+show create table t2;
+--echo # When renaming is combined with other in-place operation
+--echo # it still works as expected (i.e. works in-place).
+alter table t1 algorithm=inplace, rename key kkkk to k, alter column i set default 100;
+alter table t2 algorithm=inplace, rename key kkkk to k, alter column i set default 100;
+show create table t1;
+show create table t2;
+--echo # Combining with non-inplace operation results in the whole ALTER
+--echo # becoming non-inplace. 
+--error ER_ALTER_OPERATION_NOT_SUPPORTED
+alter table t1 algorithm=inplace, rename key k to kk, add column j int;
+--error ER_ALTER_OPERATION_NOT_SUPPORTED
+alter table t2 algorithm=inplace, rename key k to kk, add column j int;
+drop table t1, t2;
+
+--echo # 3.b) Basic tests for InnoDB. More tests can be found in
+--echo #      innodb.innodb_rename_index*
+create table t1 (i int, key k(i)) engine=innodb;
+insert into t1 values (1);
+--echo # Basic rename, inplace algorithm should be chosen
+--enable_info
+alter table t1 algorithm=inplace, rename key k to kk;
+--disable_info
+show create table t1;
+--echo # copy algorithm should work as well.
+--enable_info
+alter table t1 algorithm=copy, rename key kk to kkk;
+--disable_info
+show create table t1;
+drop table t1;
+
+--echo #
+--echo # 4) Additional coverage for complex cases in which code
+--echo #    in ALTER TABLE comparing old and new table version
+--echo #    got confused.
+--echo #
+--echo # Once InnoDB starts to support in-place index renaming the result
+--echo # of below statements should stay the same. Information about
+--echo # indexes returned by SHOW CREATE TABLE (from .FRM) and by
+--echo # InnoDB (from InnoDB data-dictionary) should be consistent.
+--echo #
+create table t1 ( a int, b int, c int, d int,
+                  primary key (a), index i1 (b), index i2 (c) ) engine=innodb;
+alter table t1 add index i1 (d), rename index i1 to x;
+show create table t1;
+select i.name as k, f.name as c from information_schema.innodb_sys_tables as t,
+                                     information_schema.innodb_sys_indexes as i,
+                                     information_schema.innodb_sys_fields as f
+where t.name='test/t1' and t.table_id = i.table_id and i.index_id = f.index_id
+order by k, c;
+drop table t1;
+create table t1 (a int, b int, c int, d int,
+                 primary key (a), index i1 (b), index i2 (c)) engine=innodb;
+alter table t1 add index i1 (d), rename index i1 to i2, drop index i2;
+show create table t1;
+select i.name as k, f.name as c from information_schema.innodb_sys_tables as t,
+                                     information_schema.innodb_sys_indexes as i,
+                                     information_schema.innodb_sys_fields as f
+where t.name='test/t1' and t.table_id = i.table_id and i.index_id = f.index_id
+order by k, c;
+drop table t1;
+--echo #
+--echo # The below ALTER TABLE statement should either drop and recreate key
+--echo # under new name, or simply rename it. It should not bring .FRM and
+--echo # InnoDB data-dictionary out of sync thus causing asserts.
+--echo #
+create table t1 (i int, key x(i)) engine=InnoDB;
+alter table t1 drop key x, add key X(i), alter column i set default 10;
+drop table t1;
+
+
+--echo #
+--echo # Coverage for changes to ALTER TABLE ... IMPORT/DISCARD TABLESPACE
+--echo # code introduced by WL#6671 "Improve scalability by not using
+--echo # thr_lock.c locks for InnoDB tables".
+--echo #
+--echo # Check that ALTER TABLE ... IMPORT/DISCARD TABLESPACE acquires X
+--echo # metadata lock on the table even when executed under LOCK TABLES.
+--echo #
+
+--enable_connect_log
+--echo # Suppress error messages which will be generated by IMPORT TABLESPACE
+call mtr.add_suppression("InnoDB: Trying to import a tablespace, but could not open the tablespace file");
+call mtr.add_suppression("InnoDB: Operating system error number 2 in a file operation.");
+call mtr.add_suppression("InnoDB: The error means the system cannot find the path specified.");
+
+CREATE TABLE t1 (i INT) ENGINE=InnoDB;
+
+--echo #
+--echo # 1) Check that ALTER TABLE ... IMPORT/DISCARD TABLESPACE on
+--echo #    base table acquire X lock (when not under LOCK TABLES).
+--echo # 
+
+connect(con1, localhost, root);
+--echo # Acquire S lock on table 't1'.
+HANDLER t1 OPEN;
+
+connect(con2, localhost, root);
+--echo # Sending:
+--send ALTER TABLE t1 DISCARD TABLESPACE
+
+connection default;
+--echo # Wait until ALTER TABLE is blocked since it tries to acquire X lock.
+let $wait_condition=
+  SELECT COUNT(*) = 1 FROM information_schema.processlist
+  WHERE state = "Waiting for table metadata lock" AND
+        info = "ALTER TABLE t1 DISCARD TABLESPACE";
+--source include/wait_condition.inc
+
+connection con1;
+--echo # Unblock ALTER TABLE DISCARD
+HANDLER t1 CLOSE;
+
+connection con2;
+--echo # Reaping ALTER TABLE DISCARD
+--reap
+
+connection con1;
+--echo # Acquire S lock on table 't1'.
+HANDLER t1 OPEN;
+
+connection con2;
+--echo # Sending:
+--send ALTER TABLE t1 IMPORT TABLESPACE
+
+connection default;
+--echo # Wait until ALTER TABLE is blocked since it tries to acquire X lock.
+let $wait_condition=
+  SELECT COUNT(*) = 1 FROM information_schema.processlist
+  WHERE state = "Waiting for table metadata lock" AND
+        info = "ALTER TABLE t1 IMPORT TABLESPACE";
+--source include/wait_condition.inc
+
+connection con1;
+--echo # Unblock ALTER TABLE IMPORT
+HANDLER t1 CLOSE;
+
+connection con2;
+--echo # Reaping ALTER TABLE IMPORT
+--echo # It should fail as no tablespace was copied after DISCARD.
+--error ER_TABLESPACE_MISSING
+--reap
+
+connection default;
+DROP TABLE t1;
+
+--echo #
+--echo # 2) ALTER TABLE ... IMPORT/DISCARD TABLESPACE on temporary table
+--echo #    should not try to acquire X metadata lock on base table.
+--echo #
+
+CREATE TABLE t1 (i INT) ENGINE=InnoDB;
+
+connection con1;
+--echo # Acquire S lock on table 't1'.
+HANDLER t1 OPEN;
+
+connection con2;
+CREATE TEMPORARY TABLE t1 (j INT) ENGINE=InnoDB;
+
+--echo # Both DISCARD and IMPORT on temporary table should fail without
+--echo # acquiring any locks and blocking.
+--error ER_CANNOT_DISCARD_TEMPORARY_TABLE
+ALTER TABLE t1 DISCARD TABLESPACE;
+--error ER_CANNOT_DISCARD_TEMPORARY_TABLE
+ALTER TABLE t1 IMPORT TABLESPACE;
+
+DROP TEMPORARY TABLE t1;
+
+--echo #
+--echo # 3) Check that ALTER TABLE ... IMPORT/DISCARD TABLESPACE on
+--echo #    base table under LOCK TABLES acquire X lock.
+--echo # 
+
+connection con2;
+LOCK TABLES t1 WRITE;
+--echo # Sending:
+--send ALTER TABLE t1 DISCARD TABLESPACE
+
+connection default;
+--echo # Wait until ALTER TABLE is blocked since it tries to acquire X lock.
+let $wait_condition=
+  SELECT COUNT(*) = 1 FROM information_schema.processlist
+  WHERE state = "Waiting for table metadata lock" AND
+        info = "ALTER TABLE t1 DISCARD TABLESPACE";
+--source include/wait_condition.inc
+
+connection con1;
+--echo # Unblock ALTER TABLE DISCARD
+HANDLER t1 CLOSE;
+
+connection con2;
+--echo # Reaping ALTER TABLE DISCARD
+--reap
+
+connection con1;
+--echo # Acquire S lock on table 't1'.
+HANDLER t1 OPEN;
+
+connection con2;
+--echo # Sending:
+--send ALTER TABLE t1 IMPORT TABLESPACE
+
+connection default;
+--echo # Wait until ALTER TABLE is blocked since it tries to acquire X lock.
+let $wait_condition=
+  SELECT COUNT(*) = 1 FROM information_schema.processlist
+  WHERE state = "Waiting for table metadata lock" AND
+        info = "ALTER TABLE t1 IMPORT TABLESPACE";
+--source include/wait_condition.inc
+
+connection con1;
+--echo # Unblock ALTER TABLE IMPORT
+HANDLER t1 CLOSE;
+
+connection con2;
+--echo # Reaping ALTER TABLE IMPORT
+--echo # It should fail as no tablespace was copied after DISCARD.
+--error ER_TABLESPACE_MISSING
+--reap
+
+UNLOCK TABLES;
+
+connection default;
+DROP TABLE t1;
+
+--echo #
+--echo # 4) Under LOCK TABLES, ALTER TABLE ... IMPORT/DISCARD TABLESPACE on
+--echo #    temporary table should not try to acquire X metadata lock on base
+--echo #    table.
+--echo #
+
+CREATE TABLE t1 (i INT) ENGINE=InnoDB;
+
+connection con1;
+--echo # Acquire S lock on table 't1'.
+HANDLER t1 OPEN;
+
+connection con2;
+CREATE TEMPORARY TABLE t1 (j INT) ENGINE=InnoDB;
+LOCK TABLES t1 WRITE;
+
+--echo # Both DISCARD and IMPORT on temporary table should fail without
+--echo # acquiring any locks and blocking.
+--error ER_CANNOT_DISCARD_TEMPORARY_TABLE
+ALTER TABLE t1 DISCARD TABLESPACE;
+--error ER_CANNOT_DISCARD_TEMPORARY_TABLE
+ALTER TABLE t1 IMPORT TABLESPACE;
+
+UNLOCK TABLES;
+DROP TEMPORARY TABLE t1;
+
+connection con1;
+HANDLER t1 CLOSE;
+
+--echo #
+--echo # Clean-up.
+--echo #
+disconnect con1;
+--source include/wait_until_disconnected.inc
+disconnect con2;
+--source include/wait_until_disconnected.inc
+connection default;
+--disable_connect_log
+DROP TABLE t1;
+SET sql_mode = default;
+
+
+--echo #
+--echo # BUG 19779365: INDEX COMMENT IN ADD INDEX IS IGNORED.
+--echo #
+
+--echo # After the patch, the alter table reflects the new
+--echo # index comment or the lack of comment for the indexes.
+CREATE TABLE t1(fld1 int, key key1(fld1));
+SHOW INDEX FROM t1;
+ALTER TABLE t1 DROP INDEX key1, ADD INDEX key1(fld1) COMMENT 'test';
+SHOW INDEX FROM t1;
+DROP TABLE t1;
+
+CREATE TABLE t1(fld1 int, key key1(fld1) COMMENT 'test');
+SHOW INDEX FROM t1;
+ALTER TABLE t1 DROP INDEX key1, ADD INDEX key1(fld1);
+SHOW INDEX FROM t1;
+DROP TABLE t1;
+
+CREATE TABLE t1(fld1 int, key key1(fld1) COMMENT 'test');
+SHOW INDEX FROM t1;
+ALTER TABLE t1 DROP INDEX key1, ADD INDEX key1(fld1) COMMENT 'success';
+SHOW INDEX FROM t1;
+DROP TABLE t1;
+
+# Alter the comment, but keep the same comment length
+CREATE TABLE t1(fld1 int, key key1(fld1) COMMENT 'old comment');
+SHOW INDEX FROM t1;
+ALTER TABLE t1 DROP INDEX key1, ADD INDEX key1(fld1) COMMENT 'new comment';
+SHOW INDEX FROM t1;
+DROP TABLE t1; 
+
+
+--echo #
+--echo # Bug#19635706
+--echo # Verify that it is possible to add a unique key to a not-NULL POINT 
+--echo # column and that this key is promoted to primary key
+--echo # 
+
+CREATE TABLE t1(a INT NOT NULL, b POINT NOT NULL) ENGINE=INNODB;
+SHOW CREATE TABLE t1;
+ALTER TABLE t1 ADD UNIQUE INDEX (b);
+
+--echo # Note that SHOW CREATE TABLE does not list b as a primary key, 
+--echo # even though it was promoted. This appears to be the case also 
+--echo # for other column types.
+SHOW CREATE TABLE t1;
+
+ALTER TABLE t1 ADD UNIQUE INDEX (a);
+SHOW CREATE TABLE t1;
+
+--echo # Verify that the expected indices have been created by Innodb
+SELECT T.NAME AS TABLE_NAME, I.NAME AS INDEX_NAME, 
+       CASE I.TYPE 
+            WHEN 0 THEN 'Secondary' 
+            WHEN 1 THEN 'Clustered' 
+            WHEN 2 THEN 'Unique' 
+            WHEN 3 THEN 'Primary' 
+            WHEN 32 THEN 'Full text' 
+            WHEN 64 THEN 'Spatial' 
+            ELSE 'Unknown' 
+       END AS INDEX_TYPE, 
+       F.NAME AS FIELD_NAME, F.POS AS FIELD_POS FROM 
+              INFORMATION_SCHEMA.INNODB_SYS_TABLES AS T JOIN 
+              INFORMATION_SCHEMA.INNODB_SYS_INDEXES AS I JOIN 
+              INFORMATION_SCHEMA.INNODB_SYS_FIELDS AS F 
+              ON I.INDEX_ID = F.INDEX_ID AND I.TABLE_ID = T.TABLE_ID 
+       WHERE T.NAME = 'test/t1';
+
+DROP TABLE t1;
+
+
+--echo #
+--echo # BUG#16886196 - ALTER TABLE FAILS TO CONVERT TO PREFIX INDEX IN
+--echo #                ALTER_COLUMN_EQUAL_PACK_LENGTH
+
+
+SET @orig_sql_mode = @@sql_mode;
+SET sql_mode= '';
+
+--echo # Test with '767' as index size limit.
+SET GLOBAL innodb_large_prefix=OFF;
+CREATE TABLE t1(fld1 VARCHAR(767), KEY a(fld1)) ENGINE= INNODB;
+INSERT INTO t1 VALUES('a');
+ALTER TABLE t1 CHANGE fld1 fld1 VARCHAR(768), ALGORITHM= INPLACE;
+
+--echo # Without patch, the below statement will assert in a debug build.
+SELECT COUNT(*) FROM t1 WHERE fld1= 'a';
+
+--echo # Cleanup.
+DROP TABLE t1;
+SET GLOBAL innodb_large_prefix=default;
+
+--echo # Test with innodb large prefix indexes(Upto 3072).
+
+CREATE TABLE t1(fld1 VARCHAR(3072), KEY a(fld1)) ENGINE= INNODB
+ROW_FORMAT= DYNAMIC;
+INSERT INTO t1 VALUES('a');
+ALTER TABLE t1 CHANGE fld1 fld1 VARCHAR(3073), ALGORITHM= INPLACE;
+
+--echo # Without patch, the below statement will assert in a debug build.
+SELECT COUNT(*) FROM t1 WHERE fld1= 'a';
+
+--echo # Cleanup.
+DROP TABLE t1;
+SET sql_mode= @orig_sql_mode;
+
 --echo # BUG#17246318 - ALTER TABLE SHOULD NOT ALLOW CREATION OF TABLES
 --echo #                WITH BOTH 5.5 AND 5.6 TEMPORALS
 --echo #
@@ -1640,13 +2130,15 @@ ALTER TABLE t1 ENGINE= INNODB;
 --echo #since the table contains old temporal type.
 
 --error ER_ALTER_OPERATION_NOT_SUPPORTED_REASON
-ALTER TABLE t1 ADD COLUMN fld4 TIMESTAMP, ALGORITHM= INPLACE;
+ALTER TABLE t1 ADD COLUMN fld4 TIMESTAMP DEFAULT '201211111',
+ALGORITHM= INPLACE;
 
 --error ER_ALTER_OPERATION_NOT_SUPPORTED_REASON
 ALTER TABLE t1 ADD COLUMN fld4 TIMESTAMP FIRST, ALGORITHM= INPLACE;
 
 --error ER_ALTER_OPERATION_NOT_SUPPORTED_REASON
-ALTER TABLE t1 ADD COLUMN fld4 TIMESTAMP AFTER f_timestamp, ALGORITHM= INPLACE;
+ALTER TABLE t1 ADD COLUMN fld4 TIMESTAMP DEFAULT '201211111' AFTER f_timestamp,
+ALGORITHM= INPLACE;
 
 --error ER_ALTER_OPERATION_NOT_SUPPORTED_REASON
 ALTER TABLE t1 CHANGE COLUMN f_time fld4 TIMESTAMP, ALGORITHM= INPLACE;
@@ -1671,7 +2163,7 @@ INSERT INTO t2 VALUES ('22:22:22','2011-11-21 22:22:22','2011-11-21 22:22:22');
 
 SELECT f_time, f_datetime, f_timestamp, HEX(WEIGHT_STRING(f_time)),
        HEX(WEIGHT_STRING(f_datetime)), HEX(WEIGHT_STRING(f_timestamp)) FROM t2;
-ALTER TABLE t2 ADD COLUMN fld4 TIMESTAMP, ALGORITHM= COPY;
+ALTER TABLE t2 ADD COLUMN fld4 TIMESTAMP DEFAULT '201211111', ALGORITHM= COPY;
 SELECT f_time, f_datetime, f_timestamp, HEX(WEIGHT_STRING(f_time)),
        HEX(WEIGHT_STRING(f_datetime)), HEX(WEIGHT_STRING(f_timestamp)) FROM t2;
 DROP TABLE t2;
@@ -1695,7 +2187,8 @@ INSERT INTO t2 VALUES ('22:22:22','2011-11-21 22:22:22','2011-11-21 22:22:22');
 
 SELECT f_time, f_datetime, f_timestamp, HEX(WEIGHT_STRING(f_time)),
        HEX(WEIGHT_STRING(f_datetime)), HEX(WEIGHT_STRING(f_timestamp)) FROM t2;
-ALTER TABLE t2 ADD COLUMN fld4 TIMESTAMP AFTER f_timestamp, ALGORITHM= COPY;
+ALTER TABLE t2 ADD COLUMN fld4 TIMESTAMP DEFAULT '201211111' AFTER f_timestamp,
+ALGORITHM= COPY;
 SELECT f_time, f_datetime, f_timestamp, HEX(WEIGHT_STRING(f_time)),
        HEX(WEIGHT_STRING(f_datetime)), HEX(WEIGHT_STRING(f_timestamp)) FROM t2;
 DROP TABLE t2;
@@ -1746,7 +2239,7 @@ INSERT INTO t2 VALUES ('22:22:22','2011-11-21 22:22:22','2011-11-21 22:22:22');
 
 SELECT f_time, f_datetime, f_timestamp, HEX(WEIGHT_STRING(f_time)),
        HEX(WEIGHT_STRING(f_datetime)), HEX(WEIGHT_STRING(f_timestamp)) FROM t2;
-ALTER TABLE t2 ADD COLUMN fld4 TIMESTAMP, ALGORITHM= DEFAULT;
+ALTER TABLE t2 ADD COLUMN fld4 TIMESTAMP DEFAULT '201211111', ALGORITHM= DEFAULT;
 SELECT f_time, f_datetime, f_timestamp, HEX(WEIGHT_STRING(f_time)),
        HEX(WEIGHT_STRING(f_datetime)), HEX(WEIGHT_STRING(f_timestamp)) FROM t2;
 DROP TABLE t2;
@@ -1770,7 +2263,8 @@ INSERT INTO t2 VALUES ('22:22:22','2011-11-21 22:22:22','2011-11-21 22:22:22');
 
 SELECT f_time, f_datetime, f_timestamp, HEX(WEIGHT_STRING(f_time)),
        HEX(WEIGHT_STRING(f_datetime)), HEX(WEIGHT_STRING(f_timestamp)) FROM t2;
-ALTER TABLE t2 ADD COLUMN fld4 TIMESTAMP AFTER f_timestamp, ALGORITHM= DEFAULT;
+ALTER TABLE t2 ADD COLUMN fld4 TIMESTAMP DEFAULT '201211111' AFTER f_timestamp,
+ALGORITHM= DEFAULT;
 SELECT f_time, f_datetime, f_timestamp, HEX(WEIGHT_STRING(f_time)),
        HEX(WEIGHT_STRING(f_datetime)), HEX(WEIGHT_STRING(f_timestamp)) FROM t2;
 DROP TABLE t2;
@@ -1830,7 +2324,7 @@ INSERT INTO t2 VALUES ('22:22:22','2011-11-21 22:22:22','2011-11-21 22:22:22');
 
 --echo #Before upgrade.
 SHOW CREATE TABLE t2;
-ALTER TABLE t2 ADD COLUMN fld4 TIMESTAMP, ALGORITHM= COPY;
+ALTER TABLE t2 ADD COLUMN fld4 TIMESTAMP DEFAULT '201211111', ALGORITHM= COPY;
 --echo #After upgrade.
 SHOW CREATE TABLE t2;
 
@@ -1894,7 +2388,7 @@ INSERT INTO t2 VALUES ('22:22:22','2011-11-21 22:22:22','2011-11-21 22:22:22');
 
 SELECT f_time, f_datetime, f_timestamp, HEX(WEIGHT_STRING(f_time)),
        HEX(WEIGHT_STRING(f_datetime)), HEX(WEIGHT_STRING(f_timestamp)) FROM t2;
-ALTER TABLE t2 ADD COLUMN fld4 TIMESTAMP, ALGORITHM= INPLACE;
+ALTER TABLE t2 ADD COLUMN fld4 TIMESTAMP DEFAULT '201211111', ALGORITHM= INPLACE;
 SELECT f_time, f_datetime, f_timestamp, fld4, HEX(WEIGHT_STRING(f_time)),
        HEX(WEIGHT_STRING(f_datetime)), HEX(WEIGHT_STRING(f_timestamp)),
        HEX(WEIGHT_STRING(fld4)) FROM t2;
@@ -1908,7 +2402,8 @@ SELECT f_time, f_datetime, f_timestamp, fld5, HEX(WEIGHT_STRING(f_time)),
 
 SELECT f_time, f_datetime, f_timestamp, HEX(WEIGHT_STRING(f_time)),
        HEX(WEIGHT_STRING(f_datetime)), HEX(WEIGHT_STRING(f_timestamp)) FROM t2;
-ALTER TABLE t2 ADD COLUMN fld6 TIMESTAMP AFTER f_timestamp, ALGORITHM= INPLACE;
+ALTER TABLE t2 ADD COLUMN fld6 TIMESTAMP DEFAULT '201211111' AFTER f_timestamp,
+ALGORITHM= INPLACE;
 SELECT f_time, f_datetime, f_timestamp, fld6, HEX(WEIGHT_STRING(f_time)),
        HEX(WEIGHT_STRING(f_datetime)), HEX(WEIGHT_STRING(f_timestamp)),
        HEX(WEIGHT_STRING(fld6)) FROM t2;
@@ -1931,7 +2426,7 @@ INSERT INTO t2 VALUES ('22:22:22','2011-11-21 22:22:22','2011-11-21 22:22:22');
 
 SELECT f_time, f_datetime, f_timestamp, HEX(WEIGHT_STRING(f_time)),
        HEX(WEIGHT_STRING(f_datetime)), HEX(WEIGHT_STRING(f_timestamp)) FROM t2;
-ALTER TABLE t2 ADD COLUMN fld4 TIMESTAMP, ALGORITHM= COPY;
+ALTER TABLE t2 ADD COLUMN fld4 TIMESTAMP DEFAULT '201211111', ALGORITHM= COPY;
 SELECT f_time, f_datetime, f_timestamp, HEX(WEIGHT_STRING(f_time)),
        HEX(WEIGHT_STRING(f_datetime)), HEX(WEIGHT_STRING(f_timestamp)) FROM t2;
 
@@ -1945,7 +2440,8 @@ SELECT f_time, f_datetime, f_timestamp, HEX(WEIGHT_STRING(f_time)),
 --echo #ADD COLUMN AFTER does not upgrade the old temporal type.
 SELECT f_time, f_datetime, f_timestamp, HEX(WEIGHT_STRING(f_time)),
        HEX(WEIGHT_STRING(f_datetime)), HEX(WEIGHT_STRING(f_timestamp)) FROM t2;
-ALTER TABLE t2 ADD COLUMN fld6 TIMESTAMP AFTER f_timestamp, ALGORITHM= COPY;
+ALTER TABLE t2 ADD COLUMN fld6 TIMESTAMP DEFAULT '201211111' AFTER f_timestamp,
+ALGORITHM= COPY;
 SELECT f_time, f_datetime, f_timestamp, HEX(WEIGHT_STRING(f_time)),
        HEX(WEIGHT_STRING(f_datetime)), HEX(WEIGHT_STRING(f_timestamp)) FROM t2;
 
@@ -1986,7 +2482,7 @@ INSERT INTO t2 VALUES ('22:22:22','2011-11-21 22:22:22','2011-11-21 22:22:22');
 
 SELECT f_time, f_datetime, f_timestamp, HEX(WEIGHT_STRING(f_time)),
        HEX(WEIGHT_STRING(f_datetime)), HEX(WEIGHT_STRING(f_timestamp)) FROM t2;
-ALTER TABLE t2 ADD COLUMN fld4 TIMESTAMP, ALGORITHM= DEFAULT;
+ALTER TABLE t2 ADD COLUMN fld4 TIMESTAMP DEFAULT '201211111', ALGORITHM= DEFAULT;
 SELECT f_time, f_datetime, f_timestamp, HEX(WEIGHT_STRING(f_time)),
        HEX(WEIGHT_STRING(f_datetime)), HEX(WEIGHT_STRING(f_timestamp)) FROM t2;
 
@@ -2000,7 +2496,8 @@ SELECT f_time, f_datetime, f_timestamp, HEX(WEIGHT_STRING(f_time)),
 --echo #ADD COLUMN AFTER does not upgrade the old temporal type.
 SELECT f_time, f_datetime, f_timestamp, HEX(WEIGHT_STRING(f_time)),
        HEX(WEIGHT_STRING(f_datetime)), HEX(WEIGHT_STRING(f_timestamp)) FROM t2;
-ALTER TABLE t2 ADD COLUMN fld6 TIMESTAMP AFTER f_timestamp, ALGORITHM= DEFAULT;
+ALTER TABLE t2 ADD COLUMN fld6 TIMESTAMP DEFAULT '201211111' AFTER f_timestamp,
+ALGORITHM= DEFAULT;
 SELECT f_time, f_datetime, f_timestamp, HEX(WEIGHT_STRING(f_time)),
        HEX(WEIGHT_STRING(f_datetime)), HEX(WEIGHT_STRING(f_timestamp)) FROM t2;
 
@@ -2072,6 +2569,196 @@ DROP TABLE t1, t2;
 
 
 --echo #
+--echo #BUG#20106553: ALTER TABLE WHICH CHANGES INDEX COMMENT IS NOT
+--echo #              LONGER INPLACE/FAST OPERATION.
+
+--echo #Without the patch, the ALTER TABLE to change the index
+--echo #comment using INPLACE algorithm reports an error.
+CREATE TABLE t1(fld1 int, key key1(fld1)) ENGINE= INNODB;
+SHOW INDEX FROM t1;
+ALTER TABLE t1 DROP INDEX key1, ADD INDEX key1(fld1) COMMENT 'test',
+ALGORITHM= INPLACE;
+SHOW INDEX FROM t1;
+DROP TABLE t1;
+
+CREATE TABLE t1(fld1 int, key key1(fld1) COMMENT 'test') ENGINE= MyISAM;
+SHOW INDEX FROM t1;
+ALTER TABLE t1 DROP INDEX key1, ADD INDEX key1(fld1), ALGORITHM=INPLACE;
+SHOW INDEX FROM t1;
+DROP TABLE t1;
+
+CREATE TABLE t1(fld1 int, key key1(fld1) COMMENT 'test') ENGINE= INNODB;
+SHOW INDEX FROM t1;
+ALTER TABLE t1 DROP INDEX key1, ADD INDEX key1(fld1) COMMENT 'success',
+ALGORITHM= INPLACE;
+SHOW INDEX FROM t1;
+DROP TABLE t1;
+
+# Alter the comment, but keep the same comment length
+CREATE TABLE t1(fld1 int, key key1(fld1) COMMENT 'old comment') ENGINE=MyISAM;
+SHOW INDEX FROM t1;
+ALTER TABLE t1 DROP INDEX key1, ADD INDEX key1(fld1) COMMENT 'new comment',
+ALGORITHM= INPLACE;
+SHOW INDEX FROM t1;
+DROP TABLE t1;
+
+--echo #Test cases with merge threshold specified in the index comment.
+
+CREATE TABLE t1(fld1 int, key key1(fld1)) ENGINE=INNODB;
+SHOW INDEX FROM t1;
+SELECT MERGE_THRESHOLD from INFORMATION_SCHEMA.INNODB_SYS_INDEXES WHERE NAME='key1';
+ALTER TABLE t1 DROP INDEX key1, ADD INDEX key1(fld1) COMMENT
+'MERGE_THRESHOLD=45';
+SHOW INDEX FROM t1;
+SELECT MERGE_THRESHOLD from INFORMATION_SCHEMA.INNODB_SYS_INDEXES WHERE NAME='key1';
+DROP TABLE t1;
+
+CREATE TABLE t1(fld1 int, key key1(fld1) COMMENT 'MERGE_THRESHOLD=40') 
+ENGINE=INNODB;
+SHOW INDEX FROM t1;
+SELECT MERGE_THRESHOLD from INFORMATION_SCHEMA.INNODB_SYS_INDEXES WHERE NAME='key1';
+ALTER TABLE t1 DROP INDEX key1, ADD INDEX key1(fld1);
+SHOW INDEX FROM t1;
+SELECT MERGE_THRESHOLD from INFORMATION_SCHEMA.INNODB_SYS_INDEXES WHERE NAME='key1';
+DROP TABLE t1;
+
+CREATE TABLE t1(fld1 int, key key1(fld1) COMMENT 'MERGE_THRESHOLD=40')
+ENGINE=INNODB;
+SHOW INDEX FROM t1;
+SELECT MERGE_THRESHOLD from INFORMATION_SCHEMA.INNODB_SYS_INDEXES WHERE NAME='key1';
+ALTER TABLE t1 DROP INDEX key1, ADD INDEX key1(fld1) COMMENT
+'MERGE_THRESHOLD=45';
+SHOW INDEX FROM t1;
+SELECT MERGE_THRESHOLD from INFORMATION_SCHEMA.INNODB_SYS_INDEXES WHERE NAME='key1';
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#20748660 THD->MDL_CONTEXT.OWNS_EQUAL_OR_STRONGER_LOCK | CREATE_INFO->TABLESPACE
+--echo #
+--echo # A failing DISCARD/IMPORT TABLESPACE may leave the flag THD::tablespace_op
+--echo # in an incorrect state, causing a succeeding statement to fail.
+--echo
+--echo # Create a tablespace with a table.
+CREATE TABLESPACE s ADD DATAFILE 's.ibd' ENGINE InnoDB;
+CREATE TABLE t (i int) TABLESPACE s ENGINE InnoDB;
+
+--echo # The following statent will fail because the table is not partitioned.
+--echo # Without the fix, the THD::tablespace_op flag will be left set.
+--error ER_PARTITION_MGMT_ON_NONPARTITIONED
+ALTER TABLE t DISCARD PARTITION p TABLESPACE;
+
+--echo # Without the patch, this statement will inherit the tablespace_op flag
+--echo # from the previous statement, causing the statement below to fail due
+--echo # to not acquiring the required MDL lock.
+ALTER TABLE t TABLESPACE s;
+
+--echo # Drop table and tablespace.
+DROP TABLE t;
+DROP TABLESPACE s ENGINE InnoDB;
+
+
+--echo #
+--echo # BUG#20106837: ALTER TABLE WHICH DROPS AND ADDS THE SAME FULLTEXT
+--echo #               INDEX IS NOT INPLACE/FAST.
+
+CREATE TABLE t1(fld1 varchar(200), FULLTEXT(fld1)) ENGINE=MyISAM;
+INSERT INTO t1 VALUES('ABCD');
+
+--enable_info
+--echo #Without patch, it was not fast a INPLACE ALTER.
+ALTER TABLE t1 DROP INDEX fld1, ADD FULLTEXT INDEX fld1(fld1);
+--disable_info
+
+--echo #Without patch, reports an error 'ER_ALTER_OPERATION_NOT_SUPPORTED'.
+ALTER TABLE t1 ALGORITHM=INPLACE, DROP INDEX fld1,
+ADD FULLTEXT INDEX fld1(fld1);
+DROP TABLE t1;
+
+--echo #Test with InnoDB engine.
+CREATE TABLE t1(fld1 varchar(200), FULLTEXT(fld1)) ENGINE=INNODB;
+INSERT INTO t1 VALUES('ABCD');
+
+--enable_info
+--echo #Without patch, it was not fast a INPLACE ALTER.
+ALTER TABLE t1 DROP INDEX fld1, ADD FULLTEXT INDEX fld1(fld1);
+--disable_info
+
+--echo #Without patch, reports an error 'ER_ALTER_OPERATION_NOT_SUPPORTED'.
+ALTER TABLE t1 ALGORITHM=INPLACE, DROP INDEX fld1,
+ADD FULLTEXT INDEX fld1(fld1);
+DROP TABLE t1;
+
+
+--echo #
+--echo # Bug#20146455: FIND_KEY_CI RETURNS NULL, CAUSES CRASH IN
+--echo #               FILL_ALTER_INPLACE_INFO
+--echo #
+
+CREATE TABLE t1 (a INT PRIMARY KEY, b INT,
+                 FOREIGN KEY (b) REFERENCES t1(a)) ENGINE= MyISAM;
+ALTER TABLE t1 RENAME INDEX b TO w, ADD FOREIGN KEY (b) REFERENCES t1(a);
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 (a INT PRIMARY KEY, b INT,
+                 FOREIGN KEY (b) REFERENCES t1(a)) ENGINE= InnoDB;
+ALTER TABLE t1 RENAME INDEX b TO w, ADD FOREIGN KEY (b) REFERENCES t1(a);
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+
+--echo #
+--echo # Bug#22017616: ASSERTION FAILED: TABLE_SHARE->IS_MISSING_PRIMARY_KEY()
+--echo # == M_PREBUILT->CLUST_IND
+--echo #
+--echo # Ensure that adding indexes with virtual columns are not promoted to
+--echo # primary keys
+--echo #
+--echo # Base line with normal column - should be promoted
+CREATE TABLE t0(a INT NOT NULL) ENGINE=INNODB;
+ALTER TABLE t0 ADD UNIQUE INDEX (a);
+
+--echo # Case a: Create table with virtual unique not null column
+CREATE TABLE t1(a POINT GENERATED ALWAYS AS (POINT(1,1)) VIRTUAL UNIQUE NOT NULL) ENGINE=INNODB;
+SELECT * FROM t1;
+
+--echo # Case b: Create table with index on virtual point column
+CREATE TABLE t2(a POINT GENERATED ALWAYS AS (POINT(1,1)) VIRTUAL NOT NULL, UNIQUE INDEX no_pk(a(1))) ENGINE=INNODB;
+SELECT * FROM t2;
+
+--echo # Case c: Add unique index on virtual point column
+CREATE TABLE t3(a POINT GENERATED ALWAYS AS (POINT(1,1)) VIRTUAL NOT NULL)
+ENGINE=INNODB;
+ALTER TABLE t3 ADD UNIQUE INDEX (a(1));
+SELECT * FROM t3;
+
+--echo # Case d: Add unique index on virtual blob column
+CREATE TABLE t4 (a BLOB, b BLOB GENERATED ALWAYS AS (a) VIRTUAL NOT NULL) ENGINE=INNODB;
+ALTER TABLE t4 ADD UNIQUE INDEX (b(1));
+SELECT * FROM t4;
+
+--echo # Query I_S to verify that 'a' is promoted to pk only when it
+--echo # isn't virtual
+SELECT T.NAME AS TABLE_NAME, I.NAME AS INDEX_NAME,
+       CASE (I.TYPE & 3)
+            WHEN 3 THEN "yes"
+            ELSE "no" END AS IS_PRIMARY_KEY,
+       F.NAME AS FIELD_NAME, F.POS AS FIELD_POS FROM
+              INFORMATION_SCHEMA.INNODB_SYS_TABLES AS T JOIN
+              INFORMATION_SCHEMA.INNODB_SYS_INDEXES AS I JOIN
+              INFORMATION_SCHEMA.INNODB_SYS_FIELDS AS F
+              ON I.INDEX_ID = F.INDEX_ID AND I.TABLE_ID = T.TABLE_ID
+       WHERE T.NAME LIKE 'test/%';
+
+
+DROP TABLE t0;
+DROP TABLE t1;
+DROP TABLE t2;
+DROP TABLE t3;
+DROP TABLE t4;
+
+
+--echo #
 --echo # Bug#21345391: ALTER TABLE ... CONVERT TO CHARACTER SET NOT EFFECT
 --echo #               AND REMAIN A TEMP TABLE
 
@@ -2119,3 +2806,415 @@ let $test_dir =
 --list_files $test_dir `#sql-*.frm`
 
 DROP TABLE t1;
+
+--echo #
+--echo # Bug#22740093: ERROR 1071 (42000): SPECIFIED KEY WAS TOO LONG
+--echo #               ERROR WHILE DROPPING INDEX IN 5.7
+--echo #
+
+# Before you were allowed to create a prefix key for TEXT columns
+# which were larger than the column length. The column length
+# for TINYBLOB is 255 bytes, while prefix length is in characters.
+--error ER_TOO_LONG_KEY
+CREATE TABLE t1(id INT PRIMARY KEY,
+                name TINYTEXT,
+                KEY nameloc (name(64))
+) DEFAULT CHARSET=utf8mb4;
+
+# 63 characters of 4 bytes each fit in 255 bytes.
+CREATE TABLE t1(id INT PRIMARY KEY,
+                name TINYTEXT,
+                KEY nameloc (name(63))
+) DEFAULT CHARSET=utf8mb4;
+
+# Check that we can rebuild the table without issue
+ALTER TABLE t1 FORCE;
+
+# Also check ALTER TABLE
+--error ER_TOO_LONG_KEY
+ALTER TABLE t1 ADD INDEX idx (name(64), id);
+ALTER TABLE t1 ADD INDEX idx (name(63), id);
+DROP TABLE t1;
+
+# Check that we can create a table with a prefix index of
+# 64 4-byte characters for a TEXT column.
+
+# 64 characters of 4 bytes each fit in 65535 bytes.
+CREATE TABLE t1(id INT PRIMARY KEY,
+                name TEXT,
+                KEY nameloc (name(64))
+) DEFAULT CHARSET=utf8mb4;
+
+# Check ALTER TABLE where we change the type of the
+# base column, reducing max field length, keeping the
+# length of the prefix key the same.
+--error ER_TOO_LONG_KEY
+ALTER TABLE t1 MODIFY COLUMN name TINYTEXT;
+DROP TABLE t1;
+
+
+--echo #
+--echo # BUG#16888677: OUT OF RANGE VALUE ACCEPTED FOR DATETIME COLUMN IN
+--echo #               ALTER TABLE...ADD COLUMN
+
+SET @saved_sql_mode = @@session.sql_mode;
+
+--echo # Test case with no SQL_MODE enabled.
+SET SESSION sql_mode= '';
+CREATE TABLE t1(fld1 DATE NOT NULL) ENGINE= INNODB;
+INSERT INTO t1 VALUES('2000-01-01');
+
+--echo # No warnings or error is reported
+ALTER TABLE t1 ADD COLUMN fld2 DATETIME NOT NULL, ALGORITHM=INPLACE;
+ALTER TABLE t1 ADD COLUMN fld3 DATETIME NOT NULL, ALGORITHM=COPY;
+
+DROP TABLE t1;
+
+--echo # Test case with strict mode enabled.
+
+SET SESSION sql_mode= 'STRICT_ALL_TABLES';
+CREATE TABLE t1(fld1 DATE NOT NULL) ENGINE= INNODB;
+INSERT INTO t1 VALUES('2000-01-01');
+
+--echo # No warnings or error is reported
+ALTER TABLE t1 ADD COLUMN fld2 DATETIME NOT NULL, ALGORITHM=INPLACE;
+ALTER TABLE t1 ADD COLUMN fld3 DATETIME NOT NULL, ALGORITHM=COPY;
+
+DROP TABLE t1;
+
+--echo # Test case with 'NO_ZERO_DATE' enabled.
+
+SET SESSION sql_mode= 'NO_ZERO_DATE';
+CREATE TABLE t1(fld1 DATE NOT NULL) ENGINE= INNODB;
+INSERT INTO t1 VALUES('2000-01-01');
+
+--echo # Warnings are reported after patch.
+ALTER TABLE t1 ADD COLUMN fld2 DATETIME NOT NULL, ALGORITHM=INPLACE;
+ALTER TABLE t1 ADD COLUMN fld3 DATETIME NOT NULL, ALGORITHM=COPY;
+
+DROP TABLE t1;
+
+--echo # Test case with both 'NO_ZERO_DATE and strict mode' enabled.
+
+SET SESSION sql_mode= @saved_sql_mode;
+
+CREATE TABLE t1(fld1 DATE NOT NULL) ENGINE= INNODB;
+INSERT INTO t1 VALUES('2000-01-01');
+
+--echo # Without patch, the following statement succeeds.
+--error ER_TRUNCATED_WRONG_VALUE
+ALTER TABLE t1 ADD COLUMN fld2 DATETIME NOT NULL, ALGORITHM=INPLACE;
+--error ER_TRUNCATED_WRONG_VALUE
+ALTER TABLE t1 ADD COLUMN fld2 DATETIME NOT NULL, ALGORITHM=COPY;
+
+TRUNCATE TABLE t1;
+--echo # Operation below succeeds, since the table has no records.
+ALTER TABLE t1 ADD COLUMN fld4 DATETIME NOT NULL, ALGORITHM=INPLACE;
+DROP TABLE t1;
+
+
+--echo #
+--echo # BUG#25385334: MYSQL 5.7 ERROR WITH ALTER TABLE MODIFY SYNTAX
+--echo #               AND DATETIME TYPE.
+
+SET @saved_sql_mode = @@session.sql_mode;
+
+--echo # Test case with both strict mode and 'NO_ZERO_DATE' enabled.
+CREATE TABLE t1 (fld1 INT, fld2 DATETIME NOT NULL) ENGINE= INNODB;
+CREATE TABLE t2 (fld1 INT, fld2 POINT NOT NULL) ENGINE= INNODB;
+
+INSERT INTO t1 VALUES(1, '2000-01-01');
+INSERT INTO t2 values(1,  ST_PointFromText('POINT(10 10)'));
+
+--echo # Without patch, the following statments report error.
+ALTER TABLE t1 MODIFY fld2 DATETIME NOT NULL AFTER fld1;
+ALTER TABLE t2 MODIFY fld2 POINT NOT NULL AFTER fld1;
+
+--echo # Without patch, the following statments report error.
+ALTER TABLE t1 MODIFY fld2 DATETIME NOT NULL FIRST, ALGORITHM= COPY;
+ALTER TABLE t2 MODIFY fld2 POINT NOT NULL FIRST, ALGORITHM= COPY;
+
+--echo # Tests added for coverage.
+--error ER_TRUNCATED_WRONG_VALUE
+ALTER TABLE t1 MODIFY fld2 DATETIME NOT NULL AFTER fld1,
+               ADD COLUMN fld3 DATETIME NOT NULL;
+--error ER_INVALID_USE_OF_NULL
+ALTER TABLE t2 MODIFY fld2 POINT NOT NULL AFTER fld1,
+               ADD COLUMN fld3 MULTIPOINT NOT NULL;
+
+--error ER_TRUNCATED_WRONG_VALUE
+ALTER TABLE t1 MODIFY fld2 DATETIME NOT NULL AFTER fld1,
+               ADD COLUMN fld3 DATETIME NOT NULL, ALGORITHM= COPY;
+--error ER_INVALID_USE_OF_NULL
+ALTER TABLE t2 MODIFY fld2 POINT NOT NULL AFTER fld1,
+               ADD COLUMN fld3 MULTIPOINT NOT NULL, ALGORITHM= COPY;
+
+TRUNCATE TABLE t1;
+TRUNCATE TABLE t2;
+
+--echo # Without patch, the following statments report error.
+ALTER TABLE t1 MODIFY fld2 DATETIME NOT NULL AFTER fld1;
+ALTER TABLE t2 MODIFY fld2 POINT NOT NULL AFTER fld1;
+
+--echo # Without patch, the following statments report error.
+ALTER TABLE t1 MODIFY fld2 DATETIME NOT NULL FIRST, ALGORITHM= COPY;
+ALTER TABLE t2 MODIFY fld2 POINT NOT NULL FIRST, ALGORITHM= COPY;
+
+--echo # Tests added for coverage.
+ALTER TABLE t1 MODIFY fld2 DATETIME NOT NULL AFTER fld1,
+               ADD COLUMN fld3 DATETIME NOT NULL;
+ALTER TABLE t2 MODIFY fld2 POINT NOT NULL AFTER fld1,
+               ADD COLUMN fld3 MULTIPOINT NOT NULL;
+
+ALTER TABLE t1 MODIFY fld2 DATETIME NOT NULL AFTER fld1,
+               ADD COLUMN fld4 DATETIME NOT NULL, ALGORITHM= COPY;
+ALTER TABLE t2 MODIFY fld2 POINT NOT NULL AFTER fld1,
+               ADD COLUMN fld4 MULTIPOINT NOT NULL, ALGORITHM= COPY;
+
+DROP TABLE t1, t2;
+
+--echo # Test case when a non date column is converted to datetime column.
+
+--echo # Test case without any sql mode enabled.
+SET SESSION sql_mode= '';
+CREATE TABLE t1 (fld1 char(25)) ENGINE= INNODB;
+INSERT INTO t1 VALUES('0000-00-00');
+
+--echo # No error or warning is reported.
+ALTER TABLE t1 MODIFY fld1 DATETIME NOT NULL;
+
+DROP TABLE t1;
+
+--echo # Test case with only 'NO_ZERO_DATE' enabled.
+SET SESSION sql_mode= 'NO_ZERO_DATE';
+CREATE TABLE t1 (fld1 char(25)) ENGINE= INNODB;
+INSERT INTO t1 VALUES('0000-00-00');
+
+--echo # Reports only a warning.
+ALTER TABLE t1 MODIFY fld1 DATETIME NOT NULL;
+
+DROP TABLE t1;
+
+SET SESSION sql_mode= 'STRICT_ALL_TABLES';
+CREATE TABLE t1 (fld1 char(25)) ENGINE= INNODB;
+INSERT INTO t1 VALUES('0000-00-00');
+
+--echo # No error or warning is reported.
+ALTER TABLE t1 MODIFY fld1 DATETIME NOT NULL;
+
+DROP TABLE t1;
+
+--echo # Test case with both STRICT MODE and 'NO_ZERO_DATE' enabled.
+SET SESSION sql_mode= @saved_sql_mode;
+CREATE TABLE t1 (fld1 char(25)) ENGINE= INNODB;
+INSERT INTO t1 VALUES('0000-00-00');
+
+--echo # Reports an error.
+--error ER_TRUNCATED_WRONG_VALUE
+ALTER TABLE t1 MODIFY fld1 DATETIME NOT NULL;
+
+DROP TABLE t1;
+
+--echo # Test case when a NULL column is converted to NOT NULL column
+CREATE TABLE t1 (fld0 DATETIME, fld1 INT, fld2 DATETIME NOT NULL) ENGINE= INNODB;
+CREATE TABLE t2 (fld0 POINT, fld1 INT, fld2 POINT NOT NULL) ENGINE= INNODB;
+INSERT INTO t1 VALUES('2000-01-01', 1, '2000-01-01');
+INSERT INTO t2 values(ST_PointFromText('POINT(10 10)'), 1,
+                      ST_PointFromText('POINT(10 10)'));
+
+--echo # Reports an error without patch.
+ALTER TABLE t1 MODIFY fld0 DATETIME NOT NULL AFTER fld2;
+
+--echo # Reports an error without patch
+ALTER TABLE t2 MODIFY fld0 POINT NOT NULL AFTER fld2;
+
+DROP TABLE t1, t2;
+
+--echo # Test case demonstrating the NULL constraint check done by SE.
+CREATE TABLE t1 (fld0 DATETIME, fld1 INT, fld2 DATETIME NOT NULL) ENGINE= INNODB;
+CREATE TABLE t2 (fld0 POINT, fld1 INT, fld2 POINT NOT NULL) ENGINE= INNODB;
+
+INSERT INTO t1 VALUES(NULL, 1, '2000-01-01');
+INSERT INTO t2 values(NULL, 1, ST_PointFromText('POINT(10 10)'));
+
+--error ER_INVALID_USE_OF_NULL
+ALTER TABLE t1 MODIFY fld0 DATETIME NOT NULL;
+
+--error ER_INVALID_USE_OF_NULL
+ALTER TABLE t2 MODIFY fld0 POINT NOT NULL;
+
+DROP TABLE t1, t2;
+
+
+--echo #
+--echo # BUG#26848813: INDEXED COLUMN CAN'T BE CHANGED FROM VARCHAR(15)
+--echo #               TO VARCHAR(40) INSTANTANEOUSLY
+
+SET @orig_sql_mode= @@sql_mode;
+SET @orig_innodb_large_prefix= @@global.innodb_large_prefix;
+
+SET GLOBAL innodb_large_prefix= ON;
+
+--echo # Tests where an error is reported under strict mode when the index
+--echo # limit exceeds the maximum supported length by SE.
+
+--error ER_TOO_LONG_KEY
+CREATE TABLE t1 (fld1 VARCHAR(768), KEY(fld1)) CHARSET latin1 ENGINE =InnoDB
+ROW_FORMAT= COMPACT;
+
+--error ER_TOO_LONG_KEY
+CREATE TABLE t2 (fld1 VARCHAR(3073), KEY(fld1)) CHARSET latin1 ENGINE= InnoDB;
+
+--echo # Test with innodb prefix indexes where the index limit is 767 bytes
+CREATE TABLE t1 (fld1 VARCHAR(767), KEY(fld1)) CHARSET latin1 ENGINE=INNODB
+ROW_FORMAT=COMPACT;
+
+--error ER_TOO_LONG_KEY
+ALTER TABLE t1 MODIFY fld1 VARCHAR(768), ALGORITHM= INPLACE;
+
+--error ER_TOO_LONG_KEY
+ALTER TABLE t1 MODIFY fld1 VARCHAR(768), ALGORITHM= COPY;
+
+--echo # Test with innodb prefix indexes where the index limit is 3072 bytes
+CREATE TABLE t2 (fld1 VARCHAR(3072), KEY(fld1)) CHARSET latin1 ENGINE=INNODB
+ROW_FORMAT=DYNAMIC;
+
+--error ER_TOO_LONG_KEY
+ALTER TABLE t2 MODIFY fld1 VARCHAR(3073), ALGORITHM= INPLACE;
+
+--error ER_TOO_LONG_KEY
+ALTER TABLE t2 MODIFY fld1 VARCHAR(3073), ALGORITHM= COPY;
+
+--echo # Tests with innodb_large_prefix disabled and strict mode.
+SET GLOBAL innodb_large_prefix= OFF;
+--error ER_TOO_LONG_KEY
+CREATE TABLE t3 (fld1 VARCHAR(3072), KEY(fld1)) CHARSET latin1 ENGINE= InnoDB;
+
+DROP TABLE t1, t2;
+
+SET sql_mode= '';
+SET GLOBAL innodb_large_prefix= ON;
+
+--enable_warnings
+
+--echo # Test where the indexes are truncated to fit the index limit and
+--echo # a warning is reported under non-strict mode when the index exceeds
+--echo # the SE limit.
+CREATE TABLE t1 (fld1 VARCHAR(768), KEY(fld1)) ENGINE= InnoDB
+ROW_FORMAT=COMPACT;
+CREATE TABLE t2 (fld1 VARCHAR(3073), KEY(fld1)) ENGINE= InnoDB;
+
+--echo # Test with innodb prefix indexes where the index limit is 767 bytes.
+CREATE TABLE t3 (fld1 VARCHAR(767), KEY(fld1))ENGINE=INNODB ROW_FORMAT=COMPACT;
+
+ALTER TABLE t3 MODIFY fld1 VARCHAR(768), ALGORITHM= INPLACE;
+
+ALTER TABLE t3 MODIFY fld1 VARCHAR(800), ALGORITHM= COPY;
+
+--echo # Test with innodb prefix indexes where the index limit is 3072 bytes.
+CREATE TABLE t4 (fld1 VARCHAR(3072), KEY(fld1))ENGINE=INNODB
+ROW_FORMAT=DYNAMIC;
+
+ALTER TABLE t4 MODIFY fld1 VARCHAR(3073), ALGORITHM= INPLACE;
+
+ALTER TABLE t4 MODIFY fld1 VARCHAR(3074), ALGORITHM= COPY;
+
+--echo # For unique and primary keys, an error is reported even in non-strict
+--echo # mode.
+
+--error ER_TOO_LONG_KEY
+CREATE TABLE t5(fld1 VARCHAR(768) PRIMARY KEY) ENGINE= InnoDB
+ROW_FORMAT=COMPACT;
+
+--error ER_TOO_LONG_KEY
+CREATE TABLE t5(fld1 VARCHAR(3073), UNIQUE KEY(fld1)) ENGINE= InnoDB;
+
+--echo # Tests with innodb_large_prefix disabled and strict mode.
+SET GLOBAL innodb_large_prefix= OFF;
+CREATE TABLE t5 (fld1 VARCHAR(3072), KEY(fld1)) CHARSET latin1 ENGINE= InnoDB;
+
+--disable_warnings
+DROP TABLE t1, t2, t3, t4, t5;
+
+SET sql_mode= @orig_sql_mode;
+SET GLOBAL innodb_large_prefix= ON;
+
+--echo # Tests added for coverage.
+CREATE TABLE t1(fld1 VARCHAR(3), KEY(fld1)) ENGINE=MYISAM;
+
+--echo # Conversion of unpacked keys to packed keys reports
+--echo # error for INPLACE Alter.
+--error ER_ALTER_OPERATION_NOT_SUPPORTED
+ALTER TABLE t1 MODIFY fld1 VARCHAR(10), ALGORITHM=INPLACE;
+
+--echo # Succeeds with index rebuild.
+ALTER TABLE t1 MODIFY fld1 VARCHAR(10), ALGORITHM=COPY;
+
+--echo # Succeeds since the row format is dynamic.
+CREATE TABLE t2(fld1 VARCHAR(768), KEY(fld1)) ENGINE= InnoDB ROW_FORMAT= DYNAMIC;
+
+--echo # An error is reported when the index exceeds the column size
+--echo # in both strict and non-strict mode.
+--error ER_WRONG_SUB_KEY
+ALTER TABLE t2 ADD INDEX idx1(fld1(769));
+
+SET sql_mode= '';
+
+--error ER_WRONG_SUB_KEY
+ALTER TABLE t2 ADD INDEX idx1(fld1(769));
+
+--echo # Cleanup.
+DROP TABLE t1, t2;
+SET sql_mode= @orig_sql_mode;
+SET GLOBAL innodb_large_prefix= @orig_innodb_large_prefix;
+
+--echo #
+--echo # BUG#27788685: NO WARNING WHEN TRUNCATING A STRING WITH DATA LOSS
+--echo #
+
+--enable_warnings
+SET GLOBAL max_allowed_packet=17825792;
+
+--connect(con1, localhost, root,,)
+CREATE TABLE t1 (t1_fld1 TEXT) ENGINE=InnoDB;
+CREATE TABLE t2 (t2_fld1 MEDIUMTEXT) ENGINE=InnoDB;
+CREATE TABLE t3 (t3_fld1 LONGTEXT) ENGINE=InnoDB;
+
+INSERT INTO t1 VALUES (REPEAT('a',300));
+INSERT INTO t2 VALUES (REPEAT('b',65680));
+INSERT INTO t3 VALUES (REPEAT('c',16777300));
+
+SELECT LENGTH(t1_fld1) FROM t1;
+SELECT LENGTH(t2_fld1) FROM t2;
+SELECT LENGTH(t3_fld1) FROM t3;
+
+--echo # With strict mode
+SET SQL_MODE='STRICT_ALL_TABLES';
+
+--error ER_DATA_TOO_LONG
+ALTER TABLE t1 CHANGE `t1_fld1` `my_t1_fld1` TINYTEXT;
+--error ER_DATA_TOO_LONG
+ALTER TABLE t2 CHANGE `t2_fld1` `my_t2_fld1` TEXT;
+--error ER_DATA_TOO_LONG
+ALTER TABLE t3 CHANGE `t3_fld1` `my_t3_fld1` MEDIUMTEXT;
+
+--echo # With non-strict mode
+SET SQL_MODE='';
+
+ALTER TABLE t1 CHANGE `t1_fld1` `my_t1_fld1` TINYTEXT;
+ALTER TABLE t2 CHANGE `t2_fld1` `my_t2_fld1` TEXT;
+ALTER TABLE t3 CHANGE `t3_fld1` `my_t3_fld1` MEDIUMTEXT;
+
+SELECT LENGTH(my_t1_fld1) FROM t1;
+SELECT LENGTH(my_t2_fld1) FROM t2;
+SELECT LENGTH(my_t3_fld1) FROM t3;
+
+# Cleanup
+--disconnect con1
+--source include/wait_until_disconnected.inc
+
+--connection default
+DROP TABLE t1, t2, t3;
+
+SET SQL_MODE=default;
+SET GLOBAL max_allowed_packet=default;

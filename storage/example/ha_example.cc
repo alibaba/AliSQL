@@ -1,13 +1,20 @@
-/* Copyright (c) 2004, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2004, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation; version 2 of the License.
+  it under the terms of the GNU General Public License, version 2.0,
+  as published by the Free Software Foundation.
+
+  This program is also distributed with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an additional
+  permission to link the program and your derivative works with the
+  separately licensed software that they have included with MySQL.
 
   This program is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
+  GNU General Public License, version 2.0, for more details.
 
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software
@@ -87,7 +94,6 @@
     -Brian
 */
 
-#include "sql_priv.h"
 #include "sql_class.h"           // MYSQL_HANDLERTON_INTERFACE_VERSION
 #include "ha_example.h"
 #include "probes_mysql.h"
@@ -104,39 +110,16 @@ static const char* example_system_database();
 static bool example_is_supported_system_table(const char *db,
                                       const char *table_name,
                                       bool is_sql_layer_system_table);
-#ifdef HAVE_PSI_INTERFACE
-static PSI_mutex_key ex_key_mutex_Example_share_mutex;
-
-static PSI_mutex_info all_example_mutexes[]=
-{
-  { &ex_key_mutex_Example_share_mutex, "Example_share::mutex", 0}
-};
-
-static void init_example_psi_keys()
-{
-  const char* category= "example";
-  int count;
-
-  count= array_elements(all_example_mutexes);
-  mysql_mutex_register(category, all_example_mutexes, count);
-}
-#endif
 
 Example_share::Example_share()
 {
   thr_lock_init(&lock);
-  mysql_mutex_init(ex_key_mutex_Example_share_mutex,
-                   &mutex, MY_MUTEX_INIT_FAST);
 }
 
 
 static int example_init_func(void *p)
 {
   DBUG_ENTER("example_init_func");
-
-#ifdef HAVE_PSI_INTERFACE
-  init_example_psi_keys();
-#endif
 
   example_hton= (handlerton *)p;
   example_hton->state=                     SHOW_OPTION_YES;
@@ -237,7 +220,7 @@ const char* example_system_database()
 
   This array is optional, so every SE need not implement it.
 */
-static st_system_tablename ha_example_system_tables[]= {
+static st_handler_tablename ha_example_system_tables[]= {
   {(const char*)NULL, (const char*)NULL}
 };
 
@@ -257,7 +240,7 @@ static bool example_is_supported_system_table(const char *db,
                                               const char *table_name,
                                               bool is_sql_layer_system_table)
 {
-  st_system_tablename *systab;
+  st_handler_tablename *systab;
 
   // Does this SE support "ALL" SQL layer system tables ?
   if (is_sql_layer_system_table)
@@ -994,10 +977,40 @@ static int show_func_example(MYSQL_THD thd, struct st_mysql_show_var *var,
   return 0;
 }
 
+struct example_vars_t
+{
+	ulong  var1;
+	double var2;
+	char   var3[64];
+  bool   var4;
+  bool   var5;
+  ulong  var6;
+};
+
+example_vars_t example_vars= {100, 20.01, "three hundred", true, 0, 8250};
+
+static st_mysql_show_var show_status_example[]=
+{
+  {"var1", (char *)&example_vars.var1, SHOW_LONG, SHOW_SCOPE_GLOBAL},
+  {"var2", (char *)&example_vars.var2, SHOW_DOUBLE, SHOW_SCOPE_GLOBAL},
+  {0,0,SHOW_UNDEF, SHOW_SCOPE_UNDEF} // null terminator required
+};
+
+static struct st_mysql_show_var show_array_example[]=
+{
+  {"array", (char *)show_status_example, SHOW_ARRAY, SHOW_SCOPE_GLOBAL},
+  {"var3", (char *)&example_vars.var3, SHOW_CHAR, SHOW_SCOPE_GLOBAL},
+  {"var4", (char *)&example_vars.var4, SHOW_BOOL, SHOW_SCOPE_GLOBAL},
+  {0,0,SHOW_UNDEF, SHOW_SCOPE_UNDEF}
+};
+
 static struct st_mysql_show_var func_status[]=
 {
-  {"example_func_example",  (char *)show_func_example, SHOW_FUNC},
-  {0,0,SHOW_UNDEF}
+  {"example_func_example", (char *)show_func_example, SHOW_FUNC, SHOW_SCOPE_GLOBAL},
+  {"example_status_var5", (char *)&example_vars.var5, SHOW_BOOL, SHOW_SCOPE_GLOBAL},
+  {"example_status_var6", (char *)&example_vars.var6, SHOW_LONG, SHOW_SCOPE_GLOBAL},
+  {"example_status",  (char *)show_array_example, SHOW_ARRAY, SHOW_SCOPE_GLOBAL},
+  {0,0,SHOW_UNDEF, SHOW_SCOPE_UNDEF}
 };
 
 mysql_declare_plugin(example)

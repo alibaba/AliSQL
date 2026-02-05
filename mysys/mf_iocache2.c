@@ -1,13 +1,25 @@
-/* Copyright (c) 2000, 2014, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -18,9 +30,12 @@
 */
 
 #include "mysys_priv.h"
+#include "my_sys.h"
 #include <m_string.h>
 #include <stdarg.h>
 #include <m_ctype.h>
+
+#include "mysql/psi/mysql_file.h"
 
 /*
   Copy contents of an IO_CACHE to a file.
@@ -75,7 +90,7 @@ my_off_t my_b_append_tell(IO_CACHE* info)
     Sometimes we want to make sure that the variable is not put into
     a register in debugging mode so we can see its value in the core
   */
-#ifndef DBUG_OFF
+#ifndef NDEBUG
 # define dbug_volatile volatile
 #else
 # define dbug_volatile
@@ -94,7 +109,7 @@ my_off_t my_b_append_tell(IO_CACHE* info)
   */
   mysql_mutex_lock(&info->append_buffer_lock);
 
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   /*
     Make sure EOF is where we think it is. Note that we cannot just use
     my_tell() because we have a reader thread that could have left the
@@ -102,14 +117,14 @@ my_off_t my_b_append_tell(IO_CACHE* info)
   */
   {
     volatile my_off_t save_pos;
-    save_pos = my_tell(info->file,MYF(0));
-    my_seek(info->file,(my_off_t)0,MY_SEEK_END,MYF(0));
+    save_pos = mysql_file_tell(info->file,MYF(0));
+    mysql_file_seek(info->file,(my_off_t)0,MY_SEEK_END,MYF(0));
     /*
       Save the value of my_tell in res so we can see it when studying coredump
     */
-    DBUG_ASSERT(info->end_of_file - (info->append_read_pos-info->write_buffer)
-		== (res=my_tell(info->file,MYF(0))));
-    my_seek(info->file,save_pos,MY_SEEK_SET,MYF(0));
+    assert(info->end_of_file - (info->append_read_pos-info->write_buffer)
+           == (res=mysql_file_tell(info->file,MYF(0))));
+    mysql_file_seek(info->file,save_pos,MY_SEEK_SET,MYF(0));
   }
 #endif  
   res = info->end_of_file + (info->write_pos-info->append_read_pos);
@@ -203,7 +218,7 @@ size_t my_b_fill(IO_CACHE *info)
 
   if (info->seek_not_done)
   {					/* File touched, do seek */
-    if (my_seek(info->file,pos_in_file,MY_SEEK_SET,MYF(0)) ==
+    if (mysql_file_seek(info->file,pos_in_file,MY_SEEK_SET,MYF(0)) ==
 	MY_FILEPOS_ERROR)
     {
       info->error= 0;
@@ -223,7 +238,7 @@ size_t my_b_fill(IO_CACHE *info)
   }
   DBUG_EXECUTE_IF ("simulate_my_b_fill_error",
                    {DBUG_SET("+d,simulate_file_read_error");});
-  if ((length= my_read(info->file,info->buffer,max_length,
+  if ((length= mysql_file_read(info->file,info->buffer,max_length,
                        info->myflags)) == (size_t) -1)
   {
     info->error= -1;
@@ -287,14 +302,19 @@ my_off_t my_b_filelength(IO_CACHE *info)
     return my_b_tell(info);
 
   info->seek_not_done= 1;
-  return my_seek(info->file, 0L, MY_SEEK_END, MYF(0));
+  return mysql_file_seek(info->file, 0L, MY_SEEK_END, MYF(0));
 }
 
 
-/*
-  Simple printf version.  Supports '%s', '%d', '%u', "%ld", "%lu" and "%llu"
-  Used for logging in MySQL
-  returns number of written character, or (size_t) -1 on error
+/**
+  Simple printf version. Used for logging in MySQL.
+  Supports '%c', '%s', '%b', '%d', '%u', '%ld', '%lu' and '%llu'.
+  Returns number of written characters, or (size_t) -1 on error.
+
+  @param info           The IO_CACHE to write to
+  @param fmt            format string
+  @param ...            variable list of arguments
+  @return               number of bytes written, -1 if an error occurred
 */
 
 size_t my_b_printf(IO_CACHE *info, const char* fmt, ...)
@@ -307,6 +327,15 @@ size_t my_b_printf(IO_CACHE *info, const char* fmt, ...)
   return result;
 }
 
+
+/**
+  Implementation of my_b_printf.
+
+  @param info           The IO_CACHE to write to
+  @param fmt            format string
+  @param args           variable list of arguments
+  @return               number of bytes written, -1 if an error occurred
+*/
 
 size_t my_b_vprintf(IO_CACHE *info, const char* fmt, va_list args)
 {
@@ -344,7 +373,7 @@ size_t my_b_vprintf(IO_CACHE *info, const char* fmt, va_list args)
       By this point, *fmt must be a percent;  Keep track of this location and
       skip over the percent character. 
     */
-    DBUG_ASSERT(*fmt == '%');
+    assert(*fmt == '%');
     backtrack= fmt;
     fmt++;
 
@@ -371,7 +400,7 @@ process_flags:
 
     if (*fmt == '*')
     {
-      precision= (int) va_arg(args, int);
+      minimum_width= (int) va_arg(args, int);
       fmt++;
     }
     else
@@ -401,7 +430,7 @@ process_flags:
 
     if (*fmt == 's')				/* String parameter */
     {
-      reg2 char *par = va_arg(args, char *);
+      char *par = va_arg(args, char *);
       size_t length2 = strlen(par);
       /* TODO: implement precision */
       out_length+= length2;
@@ -412,6 +441,7 @@ process_flags:
     {
       char par[2];
       par[0] = va_arg(args, int);
+      out_length++;
       if (my_b_write(info, (uchar*) par, 1))
         goto err;
     }
@@ -424,7 +454,7 @@ process_flags:
     }
     else if (*fmt == 'd' || *fmt == 'u')	/* Integer parameter */
     {
-      register int iarg;
+      int iarg;
       size_t length2;
       char buff[32];
 
@@ -446,10 +476,8 @@ process_flags:
           memset(buffz, ' ', minimum_width - length2);
         if (my_b_write(info, buffz, minimum_width - length2))
         {
-          my_afree(buffz);
           goto err;
         }
-        my_afree(buffz);
       }
 
       out_length+= length2;
@@ -459,7 +487,7 @@ process_flags:
     else if ((*fmt == 'l' && fmt[1] == 'd') || fmt[1] == 'u')
       /* long parameter */
     {
-      register long iarg;
+      long iarg;
       size_t length2;
       char buff[32];
 

@@ -1,13 +1,20 @@
-/* Copyright (c) 2004, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2004, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
@@ -19,6 +26,7 @@
 */
 
 #include <stdarg.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -65,7 +73,7 @@ static void die(const char *fmt, ...)
 
 char *fgets_fn(char *buffer, size_t size, fgets_input_t input, int *error)
 {
-  char *line= fgets(buffer, size, (FILE*) input);
+  char *line= fgets(buffer, (int)size, (FILE*) input);
   if (error)
     *error= (line == NULL) ? ferror((FILE*)input) : 0;
   return line;
@@ -79,11 +87,12 @@ static void print_query(FILE *out, const char *query)
   fprintf(out, "\"");
   while (*ptr)
   {
-    if (column >= 120)
+    /* utf-8 encoded characters are always >= 0x80 unsigned */
+    if (column >= 120 && (uint8_t)(*ptr) < 0x80)
     {
       /* Wrap to the next line, tabulated. */
       fprintf(out, "\"\n  \"");
-      column= 2;
+      column= 3;
     }
     switch(*ptr)
     {
@@ -93,13 +102,17 @@ static void print_query(FILE *out, const char *query)
         and wrap to the next line, tabulated.
       */
       fprintf(out, "\\n\"\n  \"");
-      column= 2;
+      column= 3;
       break;
     case '\r':
       /* Skipped */
       break;
     case '\"':
       fprintf(out, "\\\"");
+      column+= 2;
+      break;
+    case '\\':
+      fprintf(out, "\\\\");
       column++;
       break;
     default:
@@ -119,7 +132,7 @@ int main(int argc, char *argv[])
   char* infile_name= argv[2];
   char* outfile_name= argv[3];
   int rc;
-  int query_length= 0;
+  size_t query_length= 0;
   int error= 0;
   char *err_ptr;
 
@@ -159,12 +172,12 @@ int main(int argc, char *argv[])
         break;
 
       case READ_BOOTSTRAP_QUERY_SIZE:
-        die("Failed to read the boostrap input file. Query size exceeded %d bytes.\n"
+        die("Failed to read the bootstrap input file. Query size exceeded %d bytes.\n"
             "Last query: '%s'.\n", MAX_BOOTSTRAP_LINE_SIZE, err_ptr);
         break;
-    
+
       default:
-        die("Failed to read the boostrap input file. Unknown error.\n");
+        die("Failed to read the bootstrap input file. Unknown error.\n");
         break;
       }
     }

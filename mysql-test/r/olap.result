@@ -86,10 +86,14 @@ TV	2	2000	200
 TV	2	NULL	200
 TV	NULL	NULL	600
 NULL	NULL	NULL	7785
+analyze table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
 explain extended select product, country_id , year, sum(profit) from t1 group by product, country_id, year with rollup;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	SIMPLE	t1	ALL	NULL	NULL	NULL	NULL	15	100.00	Using filesort
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	15	100.00	Using filesort
 Warnings:
+Warning	1681	'EXTENDED' is deprecated and will be removed in a future release.
 Note	1003	/* select#1 */ select `test`.`t1`.`product` AS `product`,`test`.`t1`.`country_id` AS `country_id`,`test`.`t1`.`year` AS `year`,sum(`test`.`t1`.`profit`) AS `sum(profit)` from `test`.`t1` group by `test`.`t1`.`product`,`test`.`t1`.`country_id`,`test`.`t1`.`year` with rollup
 select product, country_id , sum(profit) from t1 group by product desc, country_id with rollup;
 product	country_id	sum(profit)
@@ -105,6 +109,8 @@ Calculator	1	125
 Calculator	2	150
 Calculator	NULL	275
 NULL	NULL	7785
+Warnings:
+Warning	1287	'GROUP BY with ASC/DESC' is deprecated and will be removed in a future release. Please use GROUP BY ... ORDER BY ... ASC/DESC instead
 select product, country_id , year, sum(profit) from t1 group by product, country_id, year with rollup limit 5;
 product	country_id	year	sum(profit)
 Calculator	1	1999	50
@@ -623,9 +629,16 @@ A
 B
 C
 NULL
+analyze table v1,t1;
+Table	Op	Msg_type	Msg_text
+test.v1	analyze	Error	'test.v1' is not BASE TABLE
+test.v1	analyze	status	Operation failed
+test.t1	analyze	status	OK
 EXPLAIN SELECT type FROM v1 GROUP BY type WITH ROLLUP;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ALL	NULL	NULL	NULL	NULL	10	Using filesort
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	10	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`type` AS `type` from `test`.`t1` group by `test`.`t1`.`type` with rollup
 DROP VIEW v1;
 DROP TABLE t1;
 CREATE TABLE t1 (a int(11) NOT NULL);
@@ -708,7 +721,7 @@ End of 5.0 tests
 #
 # Bug#13011553 CRASH IN SORTCMP OR CACHED_ITEM_STR::CMP IF GROUP BY SUBQUERY WITH ROLLUP
 #
-CREATE TABLE t1 (f1 DATETIME) ENGINE = MyISAM;
+CREATE TABLE t1 (f1 DATETIME);
 INSERT INTO  t1 VALUES ('2012-12-20 00:00:00'), (NULL);
 SELECT f1 FROM t1 GROUP BY
 (SELECT f1 FROM t1 HAVING f1 < '2012-12-21 00:00:00') WITH ROLLUP;
@@ -716,7 +729,7 @@ f1
 2012-12-20 00:00:00
 2012-12-20 00:00:00
 DROP TABLE t1;
-CREATE TABLE t1 (f1 DATE) ENGINE = MyISAM;
+CREATE TABLE t1 (f1 DATE);
 INSERT INTO  t1 VALUES ('2012-12-20'), (NULL);
 SELECT f1 FROM t1 GROUP BY
 (SELECT f1 FROM t1 HAVING f1 < '2012-12-21') WITH ROLLUP;
@@ -724,7 +737,7 @@ f1
 2012-12-20
 2012-12-20
 DROP TABLE t1;
-CREATE TABLE t1 (f1 TIME) ENGINE = MyISAM;
+CREATE TABLE t1 (f1 TIME);
 INSERT INTO  t1 VALUES ('11:11:11'), (NULL);
 SELECT f1 FROM t1 GROUP BY
 (SELECT f1 FROM t1 HAVING f1 < '12:12:12') WITH ROLLUP;
@@ -733,3 +746,26 @@ f1
 11:11:11
 DROP TABLE t1;
 End of 5.5 tests
+# Bug#20034943 Assertion failed: argument_count() > 0
+CREATE TABLE t1(a INTEGER) engine=innodb;
+SELECT NOW() FROM t1 GROUP BY (select 1) WITH ROLLUP;
+NOW()
+DROP TABLE t1;
+CREATE TABLE t1(a INTEGER) engine=innodb;
+SELECT RELEASE_ALL_LOCKS() FROM t1 GROUP BY a WITH ROLLUP;
+RELEASE_ALL_LOCKS()
+DROP TABLE t1;
+#
+# Bug#21143151 ASSERTION FAILED: BITMAP_IS_CLEAR_ALL(&SORT_FORM->TMP_SET)
+#
+CREATE TABLE t1(a INT);
+INSERT INTO t1 VALUES(0);
+INSERT INTO t1 VALUES(1);
+SELECT NOT EXISTS (SELECT 1) FROM t1 JOIN t1 a USING(a)
+GROUP BY 1 DESC WITH ROLLUP;
+NOT EXISTS (SELECT 1)
+0
+NULL
+Warnings:
+Warning	1287	'GROUP BY with ASC/DESC' is deprecated and will be removed in a future release. Please use GROUP BY ... ORDER BY ... ASC/DESC instead
+DROP TABLE t1;

@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2004, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2004, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -98,6 +105,11 @@ static const char* empty_string = "";
  * 4700 - "" Event
  * 4800 - API, QueryBuilder
  * 5000 - Management server
+ * 6000 - 6999 User error codes, to be used with 
+ *   NdbInterpretedCode::interpret_exit_nok(). Do not define internal error 
+ *   codes in this range!
+ * 20000 - SPJ
+ * 21000 - DICT FK
  */
 
 static
@@ -120,6 +132,8 @@ ErrorBundle ErrorCodes[] = {
   { 839,  DMEC, CV, "Illegal null attribute" },
   { 840,  DMEC, CV, "Trying to set a NOT NULL attribute to NULL" },
   { 893,  HA_ERR_FOUND_DUPP_KEY, CV, "Constraint violation e.g. duplicate value in unique index" },
+  { 255,  HA_ERR_NO_REFERENCED_ROW, CV, "Foreign key constraint violated: No parent row found" },
+  { 256,  HA_ERR_ROW_IS_REFERENCED, CV, "Foreign key constraint violated: Referenced row exists" },
 
   /**
    * Node recovery errors
@@ -129,18 +143,80 @@ ErrorBundle ErrorCodes[] = {
   {  499, DMEC, NR, "Scan take over error, restart scan transaction" },  
   { 1204, DMEC, NR, "Temporary failure, distribution changed" },
   { 4002, DMEC, NR, "Send to NDB failed" },
+  { 4007, DMEC, NR, "Send to ndbd node failed" },
   { 4010, DMEC, NR, "Node failure caused abort of transaction" }, 
+  { 4013, DMEC, NR, "Request timed out in waiting for node failure"}, 
   { 4025, DMEC, NR, "Node failure caused abort of transaction" }, 
   { 4027, DMEC, NR, "Node failure caused abort of transaction" },
   { 4028, DMEC, NR, "Node failure caused abort of transaction" },
   { 4029, DMEC, NR, "Node failure caused abort of transaction" },
   { 4031, DMEC, NR, "Node failure caused abort of transaction" },
   { 4033, DMEC, NR, "Send to NDB failed" },
+  { 4035, DMEC, NR, "Cluster temporary unavailable" },
   { 4115, DMEC, NR, 
     "Transaction was committed but all read information was not "
     "received due to node crash" },
   { 4119, DMEC, NR, "Simple/dirty read failed due to node failure" },
+
+  /**
+   * SPJ error codes
+   */ 
+
+  { 20000, DMEC, TR, "Query aborted due out of operation records" },
+  { 20001, DMEC, IE, "Query aborted due to empty query tree" },
+  { 20002, DMEC, IE, "Query aborted due to invalid request" },
+  { 20003, DMEC, IE, "Query aborted due to  unknown query operation" },
+  { 20004, DMEC, IE, "Query aborted due to invalid tree node specification" },
+  { 20005, DMEC, IE, "Query aborted due to invalid tree parameter specification" },
+  { 20006, DMEC, TR, "Query aborted due to out of LongMessageBuffer" },
+  { 20007, DMEC, IE, "Query aborted due to invalid pattern" },
+  { 20008, DMEC, TR, "Query aborted due to out of query memory" },
+  { 20009, DMEC, IE, "Query aborted due to query node too big" },
+  { 20010, DMEC, IE, "Query aborted due to query node parameters too big" },
+  { 20011, DMEC, IE, "Query aborted due to both tree and parameters contain interpreted program" },
+  { 20012, DMEC, IE, "Query aborted due to invalid tree parameter specification: Key parameter bits mismatch" },
+  { 20013, DMEC, IE, "Query aborted due to invalid tree parameter specification: Incorrect key parameter count" },
+  { 20014, DMEC, IE, "Query aborted due to internal error" },
+  { 20015, DMEC, TR, "Query aborted due to out of row memory" },
   { 20016, DMEC, NR, "Query aborted due to node failure" },
+  { 20017, DMEC, IE, "Query aborted due to invalid node count" },
+  { 20018, DMEC, IE, "Query aborted due to index fragment not found" },
+  { 20019, HA_ERR_NO_SUCH_TABLE, SE, "Query table not defined" },
+  { 20020, HA_ERR_NO_SUCH_TABLE, SE, "Query table is being dropped" },
+  { 20021, HA_ERR_TABLE_DEF_CHANGED, SE, "Query table definition has changed" },
+
+  /**
+   * DICT FK kernel and ndbapi error codes
+   */
+  { 21000, HA_ERR_CANNOT_ADD_FOREIGN, AE, "Create foreign key failed - parent key is primary key and on-update-cascade is not allowed" },
+  /* CreateFKRef + CreateFKImplRef */
+  { 21020, DMEC, TR, "Create foreign key failed in NDB - no more object records" },
+  { 21021, DMEC, IE, "Create foreign key failed in NDB - invalid request" },
+  { 21022, DMEC, SE, "Create foreign key failed in NDB - parent table is not table" },
+  { 21023, DMEC, SE, "Create foreign key failed in NDB - invalid parent table version" },
+  { 21024, DMEC, SE, "Create foreign key failed in NDB - child table is not table" },
+  { 21025, DMEC, SE, "Create foreign key failed in NDB - invalid child table version" },
+  { 21026, HA_ERR_CANNOT_ADD_FOREIGN, AE, "Create foreign key failed in NDB - parent index is not unique index" },
+  { 21027, DMEC, SE, "Create foreign key failed in NDB - invalid parent index version" },
+  { 21028, DMEC, SE, "Create foreign key failed in NDB - child index is not index" },
+  { 21029, DMEC, SE, "Create foreign key failed in NDB - invalid child index version" },
+  { 21030, DMEC, IE, "Create foreign key failed in NDB - object already exists in TC" },
+  { 21031, DMEC, IE, "Create foreign key failed in NDB - no more object records in TC" },
+  { 21032, DMEC, IE, "Create foreign key failed in NDB - invalid request to TC" },
+  /* DropFKRef + DropFKImplRef */
+  { 21040, DMEC, AE, "Drop foreign key failed in NDB - foreign key not found" },
+  { 21041, DMEC, SE, "Drop foreign key failed in NDB - invalid foreign key version" },
+  { 21042, DMEC, SE, "Drop foreign key failed in NDB - foreign key not found in TC" },
+  /* BuildFKRef + BuildFKImplRef */
+  { 21060, DMEC, AE, "Build foreign key failed in NDB - foreign key not found" },
+  { 21061, DMEC, SE, "Build foreign key failed in NDB - invalid foreign key version" },
+  /* Referential integrity */
+  { 21080, HA_ERR_ROW_IS_REFERENCED, SE, "Drop table not allowed in NDB - referenced by foreign key on another table" },
+  /* Drop index */
+  { 21081, HA_ERR_DROP_INDEX_FK, AE, "Drop index not allowed in NDB - used as parent index of a foreign key" },
+  { 21082, HA_ERR_DROP_INDEX_FK, AE, "Drop index not allowed in NDB - used as child index of a foreign key" },
+  /* Misc */
+  { 21090, HA_ERR_CANNOT_ADD_FOREIGN, AE, "Create foreign key failed in NDB - name contains invalid character (/)" },
   
   /**
    * Node shutdown
@@ -157,15 +233,31 @@ ErrorBundle ErrorCodes[] = {
   
   /**
    * Unknown result
+   * 
+   * We want to avoid reporting these error codes as much as possible. There
+   * are two cases where we report this as the error code.
+   *
+   * 1) We have sent a request to NDB, but for some reason we got no response,
+   *    the node is still alive and the send was successful, so what happened
+   *    is simply unknown, it shouldn't happen, most likely it is caused by
+   *    some bug somewhere.
+   *    4008 and 4012 are indications of this problem.
+   *
+   * 2) We have no connection to the cluster at all or all nodes we're
+   *    connected to are shutting down. So we have no communication to
+   *    the cluster. We will avoid reporting this error if we even only
+   *    have a starting node that we're connected since this is and
+   *    indication that we're very close to having a cluster up and
+   *    running again.
+   *    The cluster can still be up, but our API node have no ability to
+   *    see any nodes being up, we don't know whether this depends on the
+   *    cluster actually being down or if we simply have no communication
+   *    link to it at present.
    */
-  { 4007, DMEC, UR, "Send to ndbd node failed" },
   { 4008, DMEC, UR, "Receive from NDB failed" },
   { 4009, HA_ERR_NO_CONNECTION, UR, "Cluster Failure" },
   { 4012, DMEC, UR, 
     "Request ndbd time-out, maybe due to high load or communication problems"}, 
-  { 4013, DMEC, UR, "Request timed out in waiting for node failure"}, 
-  { 4024, DMEC, UR, 
-    "Time-out, most likely caused by simple read or cluster failure" }, 
   
   /**
    * TemporaryResourceError
@@ -173,10 +265,14 @@ ErrorBundle ErrorCodes[] = {
   { 217,  DMEC, TR, "217" },
   { 218,  DMEC, TR, "Out of LongMessageBuffer" },
   { 219,  DMEC, TR, "219" },
+  { 221,  DMEC, TR, "Too many concurrently fired triggers (increase "
+    "MaxNoOfFiredTriggers)" },
   { 233,  DMEC, TR,
     "Out of operation records in transaction coordinator (increase MaxNoOfConcurrentOperations)" },
   { 275,  DMEC, TR, "Out of transaction records for complete phase (increase MaxNoOfConcurrentTransactions)" },
   { 279,  DMEC, TR, "Out of transaction markers in transaction coordinator" },
+  { 273,  DMEC, TR, "Out of transaction markers databuffer in transaction coordinator" },
+  { 312,  DMEC, TR, "Out of LongMessageBuffer" },
   { 414,  DMEC, TR, "414" },
   { 418,  DMEC, TR, "Out of transaction buffers in LQH" },
   { 419,  DMEC, TR, "419" },
@@ -187,7 +283,7 @@ ErrorBundle ErrorCodes[] = {
   { 805,  DMEC, TR, "Out of attrinfo records in tuple manager" },
   { 830,  DMEC, TR, "Out of add fragment operation records" },
   { 873,  DMEC, TR, "Out of attrinfo records for scan in tuple manager" },
-  { 899,  DMEC, IE, "Internal error: rowid already allocated" },
+  { 899,  DMEC, TR, "Rowid already allocated" },
   { 1217, DMEC, TR, "Out of operation records in local data manager (increase MaxNoOfLocalOperations)" },
   { 1218, DMEC, TR, "Send Buffers overloaded in NDB kernel" },
   { 1220, DMEC, TR, "REDO log files overloaded (increase FragmentLogFileSize)" },
@@ -210,16 +306,21 @@ ErrorBundle ErrorCodes[] = {
   { 623,  HA_ERR_RECORD_FILE_FULL, IS, "623" },
   { 624,  HA_ERR_RECORD_FILE_FULL, IS, "624" },
   { 625,  HA_ERR_INDEX_FILE_FULL, IS, "Out of memory in Ndb Kernel, hash index part (increase IndexMemory)" },
-  { 633,  HA_ERR_INDEX_FILE_FULL, IS, "Table fragment hash index has reached maximum possible size" },
+  { 633,  HA_ERR_INDEX_FILE_FULL, IS,
+    "Table fragment hash index has reached maximum possible size" },
   { 640,  DMEC, IS, "Too many hash indexes (should not happen)" },
   { 826,  HA_ERR_RECORD_FILE_FULL, IS, "Too many tables and attributes (increase MaxNoOfAttributes or MaxNoOfTables)" },
   { 827,  HA_ERR_RECORD_FILE_FULL, IS, "Out of memory in Ndb Kernel, table data (increase DataMemory)" },
+  { 889,  HA_ERR_RECORD_FILE_FULL, IS,
+    "Table fragment fixed data reference has reached maximum possible value (specify MAXROWS or increase no of partitions)"},
   { 902,  HA_ERR_RECORD_FILE_FULL, IS, "Out of memory in Ndb Kernel, ordered index data (increase DataMemory)" },
   { 903,  HA_ERR_INDEX_FILE_FULL, IS, "Too many ordered indexes (increase MaxNoOfOrderedIndexes)" },
   { 904,  HA_ERR_INDEX_FILE_FULL, IS, "Out of fragment records (increase MaxNoOfOrderedIndexes)" },
   { 905,  DMEC, IS, "Out of attribute records (increase MaxNoOfAttributes)" },
   { 1601, HA_ERR_RECORD_FILE_FULL, IS, "Out extents, tablespace full" },
   { 1602, DMEC, IS,"No datafile in tablespace" },
+  { 1603, HA_ERR_RECORD_FILE_FULL, IS,
+    "Table fragment fixed data reference has reached maximum possible value (specify MAXROWS or increase no of partitions)"},
 
   /**
    * TimeoutExpired 
@@ -325,7 +426,7 @@ ErrorBundle ErrorCodes[] = {
   { 831,  DMEC, AE, "Too many nullable/bitfields in table definition" },
   { 850,  DMEC, AE, "Too long or too short default value"},
   { 851,  DMEC, AE, "Maximum 8052 bytes of FIXED columns supported"
-    ", use varchar or COLUMN_FORMAT DYNMIC instead" },
+    ", use varchar or COLUMN_FORMAT DYNAMIC instead" },
   { 876,  DMEC, AE, "876" },
   { 877,  DMEC, AE, "877" },
   { 878,  DMEC, AE, "878" },
@@ -402,6 +503,7 @@ ErrorBundle ErrorCodes[] = {
   { 708,  DMEC, SE, "No more attribute metadata records (increase MaxNoOfAttributes)" },
   { 709,  HA_ERR_NO_SUCH_TABLE, SE, "No such table existed" },
   { 710,  DMEC, SE, "Internal: Get by table name not supported, use table id." },
+  { 712,  DMEC, SE, "No more hashmap metadata records" },
   { 721,  HA_ERR_TABLE_EXIST,   OE, "Schema object with given name already exists" },
   { 723,  HA_ERR_NO_SUCH_TABLE, SE, "No such table existed" },
   { 736,  DMEC, SE, "Unsupported array size" },
@@ -427,7 +529,7 @@ ErrorBundle ErrorCodes[] = {
   { 752,  DMEC, SE, "Invalid file format" },
   { 753,  IE, SE, "Invalid filegroup for file" },
   { 754,  IE, SE, "Invalid filegroup version when creating file" },
-  { 755,  HA_WRONG_CREATE_OPTION, SE, "Invalid tablespace" },
+  { 755,  HA_MISSING_CREATE_OPTION, SE, "Invalid tablespace" },
   { 756,  DMEC, SE, "Index on disk column is not supported" },
   { 757,  DMEC, SE, "Varsize bitfield not supported" },
   { 758,  DMEC, SE, "Tablespace has changed" },
@@ -453,7 +555,7 @@ ErrorBundle ErrorCodes[] = {
   { 908,  DMEC, IS, "Invalid ordered index tree node size" },
   { 909,  DMEC, IE, "No free index scan op" },
   { 910, HA_ERR_NO_SUCH_TABLE, SE, "Index is being dropped" },
-  { 913,  DMEC, AE, "Invalid index for index state update" },
+  { 913,  DMEC, AE, "Invalid index for index stats update" },
   { 914,  DMEC, IE, "Invalid index stats request" },
   { 915,  DMEC, TR, "No free index stats op" },
   { 916,  DMEC, IE, "Invalid index stats sys tables" },
@@ -462,7 +564,7 @@ ErrorBundle ErrorCodes[] = {
   { 919,  DMEC, TR, "Cannot execute index stats update" },
   { 1224, HA_WRONG_CREATE_OPTION, SE, "Too many fragments" },
   { 1225, DMEC, SE, "Table not defined in local query handler" },
-  { 1226, DMEC, SE, "Table is being dropped" },
+  { 1226, HA_ERR_NO_SUCH_TABLE, SE, "Table is being dropped" },
   { 1227, HA_WRONG_CREATE_OPTION, SE, "Invalid schema version" },
   { 1228, DMEC, SE, "Cannot use drop table for drop index" },
   { 1229, DMEC, SE, "Too long frm data supplied" },
@@ -471,7 +573,7 @@ ErrorBundle ErrorCodes[] = {
 
   { 1502, DMEC, IE, "Filegroup already exists" },
   { 1503, DMEC, SE, "Out of filegroup records" },
-  { 1504, DMEC, SE, "Out of logbuffer memory" },
+  { 1504, DMEC, SE, "Out of logbuffer memory(specify smaller undo_buffer_size or increase SharedGlobalMemory)" },
   { 1505, DMEC, IE, "Invalid filegroup" },
   { 1506, DMEC, IE, "Invalid filegroup version" },
   { 1507, DMEC, IE, "File no already inuse" },
@@ -493,7 +595,8 @@ ErrorBundle ErrorCodes[] = {
   { 786,  DMEC, NR, "Schema transaction aborted due to node-failure" },
   { 792,  DMEC, SE, "Default value for primary key column not supported" },
   { 794,  DMEC, AE, "Schema feature requires data node upgrade" },
-  
+  { 796,  DMEC, SE, "Out of schema transaction memory" },
+
   /**
    * FunctionNotImplemented
    */
@@ -516,7 +619,7 @@ ErrorBundle ErrorCodes[] = {
   { 1323, DMEC, IE, "1323" },
   { 1324, DMEC, IE, "Backup log buffer full" },
   { 1325, DMEC, IE, "File or scan error" },
-  { 1326, DMEC, IE, "Backup abortet due to node failure" },
+  { 1326, DMEC, IE, "Backup aborted due to node failure" },
   { 1327, DMEC, IE, "1327" },
   
   { 1340, DMEC, IE, "Backup undefined error" },
@@ -551,6 +654,11 @@ ErrorBundle ErrorCodes[] = {
   { 4718, DMEC, IE, "Index stats samples data or memory cache is invalid" },
   { 4719, DMEC, IE, "Index stats internal error" },
   { 4720, DMEC, AE, "Index stats sys tables " NDB_INDEX_STAT_PREFIX " partly missing or invalid" },
+  { 4721, DMEC, IE, "Mysqld: index stats thread not open for requests" },
+  { 4722, DMEC, IE, "Mysqld: index stats entry unexpectedly not found" },
+  { 4723, DMEC, AE, "Mysqld: index stats request ignored due to recent error" },
+  { 4724, DMEC, AE, "Mysqld: index stats request aborted by stats thread" },
+  { 4725, DMEC, AE, "Index stats were deleted by another process" },
   
   /**
    * Still uncategorized
@@ -577,6 +685,7 @@ ErrorBundle ErrorCodes[] = {
   { 1426, DMEC, SE, "No such subscriber" },
   { 1427, DMEC, NR, "Api node died, when SUB_START_REQ reached node "},
   { 1428, DMEC, IE, "No replica to scan on this node (internal index stats error)" },
+  { 1429, DMEC, IE, "Subscriber node undefined in SubStartReq (config change?)" },
 
   { 4004, DMEC, AE, "Attribute name or id not found in the table" },
   
@@ -585,12 +694,16 @@ ErrorBundle ErrorCodes[] = {
   { 4102, DMEC, AE, "Type in NdbTamper not correct" },
   { 4103, DMEC, AE, "No schema connections to NDB available and connect failed" },
   { 4104, DMEC, AE, "Ndb Init in wrong state, destroy Ndb object and create a new" },
+  { 4121, DMEC, AE, "Cannot set name twice for an Ndb object" },
+  { 4122, DMEC, AE, "Cannot set name after Ndb object is initialised" },
+  { 4123, DMEC, AE, "Free percent out of range. Allowed range is 1-99" },
   { 4105, DMEC, AE, "Too many Ndb objects" },
   { 4106, DMEC, AE, "All Not NULL attribute have not been defined" },
   { 4114, DMEC, AE, "Transaction is already completed" },
   { 4116, DMEC, AE, "Operation was not defined correctly, probably missing a key" },
   { 4117, DMEC, AE, "Could not start transporter, configuration error"}, 
   { 4118, DMEC, AE, "Parameter error in API call" },
+  { 4120, DMEC, AE, "Scan already complete" },
   { 4300, DMEC, AE, "Tuple Key Type not correct" },
   { 4301, DMEC, AE, "Fragment Type not correct" },
   { 4302, DMEC, AE, "Minimum Load Factor not correct" },
@@ -672,6 +785,7 @@ ErrorBundle ErrorCodes[] = {
   { 4553, DMEC, AE, "NdbLockHandle original operation not executed successfully" },
   { 4554, DMEC, AE, "NdbBlob can only be closed from Active state" },
   { 4555, DMEC, AE, "NdbBlob cannot be closed with pending operations" },
+  { 4556, DMEC, AE, "RecordSpecification has illegal value in column_flags" },
 
   { 4200, DMEC, AE, "Status Error when defining an operation" },
   { 4201, DMEC, AE, "Variable Arrays not yet supported" },
@@ -792,10 +906,8 @@ ErrorBundle ErrorCodes[] = {
     "Numeric operand out of range" },
   { QRY_MULTIPLE_PARENTS, DMEC, AE, 
     "Multiple 'parents' specified in linkedValues for this operation" },
-  { QRY_UNKONWN_PARENT, DMEC, AE, 
+  { QRY_UNKNOWN_PARENT, DMEC, AE,
     "Unknown 'parent' specified in linkedValue" },
-  { QRY_UNKNOWN_COLUMN, DMEC, AE, 
-    "Unknown 'column' specified in linkedValue" },
   { QRY_UNRELATED_INDEX, DMEC, AE, 
     "Specified 'index' does not belong to specified 'table'" },
   { QRY_WRONG_INDEX_TYPE, DMEC, AE, 
@@ -827,6 +939,8 @@ ErrorBundle ErrorCodes[] = {
     "Parallelism cannot be restricted for sorted scans." },
   { QRY_BATCH_SIZE_TOO_SMALL, DMEC, AE, 
     "Batch size for sub scan cannot be smaller than number of fragments." },
+  { QRY_EMPTY_PROJECTION, DMEC, AE,
+    "Query has operation with empty projection." },
 
   { NO_CONTACT_WITH_PROCESS, DMEC, AE,
     "No contact with the process (dead ?)."},
@@ -978,17 +1092,17 @@ int ndb_error_string(int err_no, char *str, int size)
   int len;
 
   assert(size > 1);
-  if(size <= 1) 
+  if(size <= 1)
     return 0;
+
   error.code = err_no;
   ndberror_update(&error);
 
-  len =
-    my_snprintf(str, size-1, "%s: %s: %s", error.message,
+  len = (int)my_snprintf(str, size-1, "%s: %s: %s", error.message,
 		ndberror_status_message(error.status),
 		ndberror_classification_message(error.classification));
   str[size-1]= '\0';
-  
+
   if (error.classification != UE)
     return len;
   return -len;

@@ -7,25 +7,31 @@ INSERT INTO t1 VALUES ('test');
 EXPLAIN SELECT 1 FROM t1
 WHERE 1 > ALL((SELECT 1 FROM t1 JOIN t1 a ON (MATCH(t1.f1) AGAINST (""))
 WHERE t1.f1 GROUP BY t1.f1));
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	PRIMARY	t1	index	NULL	f1_2	8	NULL	1	Using index
-2	SUBQUERY	t1	fulltext	f1	f1	0	NULL	1	Using where
-2	SUBQUERY	a	index	NULL	f1_2	8	NULL	1	Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	t1	NULL	index	NULL	f1_2	8	NULL	1	100.00	Using index
+2	SUBQUERY	t1	NULL	fulltext	f1	f1	0	const	1	100.00	Using where; Ft_hints: no_ranking
+2	SUBQUERY	a	NULL	index	NULL	f1_2	8	NULL	1	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select 1 AS `1` from `test`.`t1` where 1
 PREPARE stmt FROM
 'EXPLAIN SELECT 1 FROM t1
  WHERE 1 > ALL((SELECT 1 FROM t1 RIGHT OUTER JOIN t1 a
  ON (MATCH(t1.f1) AGAINST (""))
  WHERE t1.f1 GROUP BY t1.f1))';
 EXECUTE stmt;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	PRIMARY	t1	index	NULL	f1_2	8	NULL	1	Using index
-2	SUBQUERY	t1	fulltext	f1	f1	0	NULL	1	Using where
-2	SUBQUERY	a	index	NULL	f1_2	8	NULL	1	Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	t1	NULL	index	NULL	f1_2	8	NULL	1	100.00	Using index
+2	SUBQUERY	t1	NULL	fulltext	f1	f1	0	const	1	100.00	Using where; Ft_hints: no_ranking
+2	SUBQUERY	a	NULL	index	NULL	f1_2	8	NULL	1	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select 1 AS `1` from `test`.`t1` where 1
 EXECUTE stmt;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	PRIMARY	t1	index	NULL	f1_2	8	NULL	1	Using index
-2	SUBQUERY	t1	fulltext	f1	f1	0	NULL	1	Using where
-2	SUBQUERY	a	index	NULL	f1_2	8	NULL	1	Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	t1	NULL	index	NULL	f1_2	8	NULL	1	100.00	Using index
+2	SUBQUERY	t1	NULL	fulltext	f1	f1	0	const	1	100.00	Using where; Ft_hints: no_ranking
+2	SUBQUERY	a	NULL	index	NULL	f1_2	8	NULL	1	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select 1 AS `1` from `test`.`t1` where 1
 DEALLOCATE PREPARE stmt;
 PREPARE stmt FROM
 'EXPLAIN SELECT 1 FROM t1
@@ -33,15 +39,19 @@ PREPARE stmt FROM
  ON (MATCH(t1.f1) AGAINST (""))
  WHERE t1.f1 GROUP BY t1.f1))';
 EXECUTE stmt;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	PRIMARY	t1	index	NULL	f1_2	8	NULL	1	Using index
-2	SUBQUERY	t1	fulltext	f1	f1	0	NULL	1	Using where
-2	SUBQUERY	a	index	NULL	f1_2	8	NULL	1	Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	t1	NULL	index	NULL	f1_2	8	NULL	1	100.00	Using index
+2	SUBQUERY	t1	NULL	fulltext	f1	f1	0	const	1	100.00	Using where; Ft_hints: no_ranking
+2	SUBQUERY	a	NULL	index	NULL	f1_2	8	NULL	1	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select 1 AS `1` from `test`.`t1` where 1
 EXECUTE stmt;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	PRIMARY	t1	index	NULL	f1_2	8	NULL	1	Using index
-2	SUBQUERY	t1	fulltext	f1	f1	0	NULL	1	Using where
-2	SUBQUERY	a	index	NULL	f1_2	8	NULL	1	Using index
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	t1	NULL	index	NULL	f1_2	8	NULL	1	100.00	Using index
+2	SUBQUERY	t1	NULL	fulltext	f1	f1	0	const	1	100.00	Using where; Ft_hints: no_ranking
+2	SUBQUERY	a	NULL	index	NULL	f1_2	8	NULL	1	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select 1 AS `1` from `test`.`t1` where 1
 DEALLOCATE PREPARE stmt;
 DROP TABLE t1;
 drop table if exists t1;
@@ -118,10 +128,8 @@ SELECT * FROM t1 WHERE MATCH(a) AGAINST ('+abcd' IN BOOLEAN MODE);
 ERROR HY000: Can't find FULLTEXT index matching the column list
 DROP TABLE t1;
 create table t1 (a varchar(10), key(a), fulltext (a)) ENGINE = InnoDB;
-analyze table t1;
-Table	Op	Msg_type	Msg_text
-test.t1	analyze	status	OK
 insert into t1 values ("a"),("abc"),("abcd"),("hello"),("test");
+ANALYZE TABLE t1;
 select * from t1 where a like "abc%";
 a
 abc
@@ -146,11 +154,12 @@ INSERT INTO t2 VALUES (1),(2);
 # Should not crash
 EXPLAIN EXTENDED
 SELECT * FROM t1 UNION SELECT * FROM t1 ORDER BY a + 12;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	PRIMARY	t1	ALL	NULL	NULL	NULL	NULL	2	100.00	NULL
-2	UNION	t1	ALL	NULL	NULL	NULL	NULL	2	100.00	NULL
-NULL	UNION RESULT	<union1,2>	ALL	NULL	NULL	NULL	NULL	NULL	NULL	Using temporary; Using filesort
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	t1	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	NULL
+2	UNION	t1	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	NULL
+NULL	UNION RESULT	<union1,2>	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	Using temporary; Using filesort
 Warnings:
+Warning	1681	'EXTENDED' is deprecated and will be removed in a future release.
 Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` union /* select#2 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` order by (`a` + 12)
 # Should not crash
 SELECT * FROM t1 UNION SELECT * FROM t1 ORDER BY a + 12;
@@ -161,23 +170,32 @@ a
 EXPLAIN EXTENDED
 SELECT * FROM t1 UNION SELECT * FROM t1
 ORDER BY MATCH(a) AGAINST ('+abc' IN BOOLEAN MODE);
-ERROR 42000: Incorrect usage/placement of 'MATCH()'
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	t1	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	NULL
+2	UNION	t1	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	NULL
+NULL	UNION RESULT	<union1,2>	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	Using temporary; Using filesort
+Warnings:
+Warning	1681	'EXTENDED' is deprecated and will be removed in a future release.
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` union /* select#2 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` order by (match `a` against ('+abc' in boolean mode))
 # Should not crash
 SELECT * FROM t1 UNION SELECT * FROM t1
 ORDER BY MATCH(a) AGAINST ('+abc' IN BOOLEAN MODE);
-ERROR 42000: Incorrect usage/placement of 'MATCH()'
+a
+1
+2
 # Should not crash
 EXPLAIN EXTENDED
 SELECT * FROM t1 UNION SELECT * FROM t1
 ORDER BY (SELECT a FROM t2 WHERE b = 12);
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	PRIMARY	t1	ALL	NULL	NULL	NULL	NULL	2	100.00	NULL
-2	UNION	t1	ALL	NULL	NULL	NULL	NULL	2	100.00	NULL
-3	DEPENDENT SUBQUERY	t2	ALL	NULL	NULL	NULL	NULL	2	100.00	Using where
-NULL	UNION RESULT	<union1,2>	ALL	NULL	NULL	NULL	NULL	NULL	NULL	Using temporary; Using filesort
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	t1	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	NULL
+2	UNION	t1	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	NULL
+NULL	UNION RESULT	<union1,2>	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	Using temporary; Using filesort
+3	DEPENDENT SUBQUERY	t2	NULL	ALL	NULL	NULL	NULL	NULL	2	50.00	Using where
 Warnings:
-Note	1276	Field or reference 'test.t1.a' of SELECT #3 was resolved in SELECT #2
-Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` union /* select#2 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` order by (/* select#3 */ select `test`.`t1`.`a` from `test`.`t2` where (`test`.`t2`.`b` = 12))
+Warning	1681	'EXTENDED' is deprecated and will be removed in a future release.
+Note	1276	Field or reference 'a' of SELECT #3 was resolved in SELECT #1
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` union /* select#2 */ select `test`.`t1`.`a` AS `a` from `test`.`t1` order by (/* select#3 */ select `a` from `test`.`t2` where (`test`.`t2`.`b` = 12))
 # Should not crash
 SELECT * FROM t1 UNION SELECT * FROM t1
 ORDER BY (SELECT a FROM t2 WHERE b = 12);
@@ -189,115 +207,3 @@ b
 2
 DROP TABLE t1,t2;
 End of 5.1 tests
-# Bug #19950568 WRONG RELEVANCE RANKING FOR INNODB FULL TEXT
-#               SEARCHES UNDER CERTAIN CONDITIONS
-#
-CREATE TABLE t1 (
-id int(11) NOT NULL AUTO_INCREMENT,
-first_name VARCHAR(50) NOT NULL,
-last_name VARCHAR(50) NOT NULL,
-PRIMARY KEY (id),
-UNIQUE KEY idx_1 (first_name, last_name),
-FULLTEXT KEY `idx_2` (first_name)
-) ENGINE=InnoDB;
-INSERT INTO t1 (id, first_name, last_name) VALUES
-(1, 'Bart', 'Simpson'),
-(2, 'Homer', 'Simpson'),
-(3, 'Marge', 'Simpson'),
-(4, 'Lisa', 'Simpson'),
-(5, 'Maggie', 'Simpson'),
-(6, 'Ned', 'Flanders'),
-(7, 'Nelson', 'Muntz');
-ANALYZE TABLE t1;
-Table	Op	Msg_type	Msg_text
-test.t1	analyze	status	OK
-EXPLAIN SELECT id, first_name, last_name, MATCH(first_name) AGAINST('Homer' IN
-BOOLEAN MODE) AS score FROM t1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ALL	NULL	NULL	NULL	NULL	7	NULL
-SELECT id, first_name, last_name, MATCH(first_name) AGAINST('Homer' IN
-BOOLEAN MODE) AS score FROM t1;
-id	first_name	last_name	score
-1	Bart	Simpson	0
-2	Homer	Simpson	0.7141907215118408
-3	Marge	Simpson	0
-4	Lisa	Simpson	0
-5	Maggie	Simpson	0
-6	Ned	Flanders	0
-7	Nelson	Muntz	0
-EXPLAIN SELECT id, first_name, last_name, MATCH(first_name) AGAINST('Homer' IN
-BOOLEAN MODE) AS score FROM t1 ORDER BY id;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	index	NULL	PRIMARY	4	NULL	7	NULL
-SELECT id, first_name, last_name, MATCH(first_name) AGAINST('Homer' IN
-BOOLEAN MODE) AS score FROM t1 ORDER BY id;
-id	first_name	last_name	score
-1	Bart	Simpson	0
-2	Homer	Simpson	0.7141907215118408
-3	Marge	Simpson	0
-4	Lisa	Simpson	0
-5	Maggie	Simpson	0
-6	Ned	Flanders	0
-7	Nelson	Muntz	0
-DROP TABLE t1;
-CREATE TABLE t1 (
-FTS_DOC_ID  BIGINT(11) UNSIGNED NOT NULL AUTO_INCREMENT,
-id int(11) NOT NULL ,
-first_name VARCHAR(50) NOT NULL,
-last_name VARCHAR(50) NOT NULL,
-PRIMARY KEY (ID),
-UNIQUE KEY (FTS_DOC_ID),
-UNIQUE KEY idx_1 (first_name, last_name),
-FULLTEXT KEY `idx_2` (first_name)
-) ENGINE=InnoDB;
-INSERT INTO t1 (id, first_name, last_name) VALUES
-(1, 'Bart', 'Simpson'),
-(2, 'Homer', 'Simpson'),
-(3, 'Marge', 'Simpson'),
-(4, 'Lisa', 'Simpson'),
-(5, 'Maggie', 'Simpson'),
-(6, 'Ned', 'Flanders'),
-(7, 'Nelson', 'Muntz');
-ANALYZE TABLE t1;
-Table	Op	Msg_type	Msg_text
-test.t1	analyze	status	OK
-EXPLAIN SELECT id, first_name, last_name, MATCH(first_name) AGAINST('Homer' IN
-BOOLEAN MODE) AS score FROM t1;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ALL	NULL	NULL	NULL	NULL	7	NULL
-SELECT id, first_name, last_name, MATCH(first_name) AGAINST('Homer' IN
-BOOLEAN MODE) AS score FROM t1;
-id	first_name	last_name	score
-1	Bart	Simpson	0
-2	Homer	Simpson	0.7141907215118408
-3	Marge	Simpson	0
-4	Lisa	Simpson	0
-5	Maggie	Simpson	0
-6	Ned	Flanders	0
-7	Nelson	Muntz	0
-EXPLAIN SELECT id, first_name, last_name, MATCH(first_name) AGAINST('Homer' IN
-BOOLEAN MODE) AS score FROM t1 ORDER BY fts_doc_id;
-id	select_type	table	type	possible_keys	key	key_len	ref	rows	Extra
-1	SIMPLE	t1	ALL	NULL	NULL	NULL	NULL	7	Using filesort
-SELECT id, first_name, last_name, MATCH(first_name) AGAINST('Homer' IN
-BOOLEAN MODE) AS score FROM t1 ORDER BY fts_doc_id;
-id	first_name	last_name	score
-1	Bart	Simpson	0
-2	Homer	Simpson	0.7141907215118408
-3	Marge	Simpson	0
-4	Lisa	Simpson	0
-5	Maggie	Simpson	0
-6	Ned	Flanders	0
-7	Nelson	Muntz	0
-DROP TABLE t1;
-# Adding test case for Bug#20261601
-CREATE TABLE t1(a INT PRIMARY KEY)ENGINE=INNODB;
-INSERT INTO t1 VALUES(1),(2);
-SELECT (SELECT MATCH(`a`)AGAINST('1') FROM t1) FROM t1;
-ERROR HY000: Can't find FULLTEXT index matching the column list
-SELECT 1, a IN (SELECT a FROM t1) FROM t1;
-1	a IN (SELECT a FROM t1)
-1	1
-1	1
-DROP TABLE t1;
-# End of test for Bug#19950568 and Bug#20261601

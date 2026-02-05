@@ -1,14 +1,22 @@
 /*****************************************************************************
 
-Copyright (c) 1994, 2012, Oracle and/or its affiliates. All Rights Reserved.
+Copyright (c) 1994, 2023, Oracle and/or its affiliates.
 
-This program is free software; you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation; version 2 of the License.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License, version 2.0,
+as published by the Free Software Foundation.
 
-This program is distributed in the hope that it will be useful, but WITHOUT
-ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+This program is also distributed with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have included with MySQL.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License, version 2.0, for more details.
 
 You should have received a copy of the GNU General Public License along with
 this program; if not, write to the Free Software Foundation, Inc.,
@@ -67,8 +75,7 @@ enum rec_format_enum {
 	REC_FORMAT_REDUNDANT	= 0,	/*!< REDUNDANT row format */
 	REC_FORMAT_COMPACT	= 1,	/*!< COMPACT row format */
 	REC_FORMAT_COMPRESSED	= 2,	/*!< COMPRESSED row format */
-	REC_FORMAT_DYNAMIC	= 3,	/*!< DYNAMIC row format */
-	REC_FORMAT_COMFORT	= 4	/*!< COMFORT row format */
+	REC_FORMAT_DYNAMIC	= 3	/*!< DYNAMIC row format */
 };
 typedef enum rec_format_enum rec_format_t;
 

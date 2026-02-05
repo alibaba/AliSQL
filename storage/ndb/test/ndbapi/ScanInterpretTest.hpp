@@ -1,15 +1,22 @@
 /*
-   Copyright (C) 2003-2006, 2008 MySQL AB, 2008 Sun Microsystems, Inc.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
     All rights reserved. Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -59,13 +66,13 @@ ScanInterpretTest::addRowToInsert(Ndb* pNdb,
   NdbOperation* pOp = 
     pInsTrans->getNdbOperation(restab.getName());	
   if (pOp == NULL) {
-    ERR(pInsTrans->getNdbError());
+    NDB_ERR(pInsTrans->getNdbError());
     pNdb->closeTransaction(pInsTrans);
     return NDBT_FAILED;
   }
   
   if( pOp->insertTuple() == -1 ) {
-    ERR(pInsTrans->getNdbError());
+    NDB_ERR(pInsTrans->getNdbError());
     pNdb->closeTransaction(pInsTrans);
     return NDBT_FAILED;
   }
@@ -114,7 +121,7 @@ ScanInterpretTest::addRowToInsert(Ndb* pNdb,
       break;
     }
     if(check != 0){
-      ERR(pInsTrans->getNdbError());
+      NDB_ERR(pInsTrans->getNdbError());
       pNdb->closeTransaction(pInsTrans);
       return NDBT_FAILED;
     }
@@ -131,12 +138,12 @@ ScanInterpretTest::addRowToCheckTrans(Ndb* pNdb,
   NdbOperation* pOp = 
     pCheckTrans->getNdbOperation(restab.getName());	
   if (pOp == NULL) {
-    ERR(pNdb->getNdbError());
+    NDB_ERR(pNdb->getNdbError());
     return NDBT_FAILED;
   }
   
   if(pOp->readTuple() != 0) {
-    ERR(pNdb->getNdbError());
+    NDB_ERR(pNdb->getNdbError());
     return NDBT_FAILED;
   }
   
@@ -180,7 +187,7 @@ ScanInterpretTest::addRowToCheckTrans(Ndb* pNdb,
 	break;
       }
       if(check != 0){
-	ERR(pNdb->getNdbError());
+	NDB_ERR(pNdb->getNdbError());
 	return NDBT_FAILED;
       }
     }
@@ -213,30 +220,30 @@ ScanInterpretTest::scanRead(Ndb* pNdb,
     if (pTrans == NULL) {
       const NdbError err = pNdb->getNdbError();
       if (err.status == NdbError::TemporaryError){
-	ERR(err);
+	NDB_ERR(err);
 	NdbSleep_MilliSleep(50);
 	retryAttempt++;
 	continue;
       }
-      ERR(err);
+      NDB_ERR(err);
       return NDBT_FAILED;
     }
     
     pOp = pTrans->getNdbScanOperation(tab.getName());	
     if (pOp == NULL) {
-      ERR(pTrans->getNdbError());
+      NDB_ERR(pTrans->getNdbError());
       pNdb->closeTransaction(pTrans);
       return NDBT_FAILED;
     }
    
     if( pOp->readTuples(NdbScanOperation::LM_Read, 0, parallelism) ) {
-      ERR(pTrans->getNdbError());
+      NDB_ERR(pTrans->getNdbError());
       pNdb->closeTransaction(pTrans);
       return NDBT_FAILED;
     }
 
     if (filter.filterOp(pOp) != 0){
-      ERR(pTrans->getNdbError());
+      NDB_ERR(pTrans->getNdbError());
       pNdb->closeTransaction(pTrans);
       return NDBT_FAILED;
     }
@@ -245,14 +252,14 @@ ScanInterpretTest::scanRead(Ndb* pNdb,
     for(int a = 0; a<tab.getNoOfColumns(); a++){
       if((row.attributeStore(a) = 
 	  pOp->getValue(tab.getColumn(a)->getName())) == 0) {
-	ERR(pTrans->getNdbError());
+	NDB_ERR(pTrans->getNdbError());
 	pNdb->closeTransaction(pTrans);
 	return NDBT_FAILED;
       }
     }      
     check = pTrans->execute(NoCommit);   
     if( check == -1 ) {
-      ERR(pTrans->getNdbError());
+      NDB_ERR(pTrans->getNdbError());
       pNdb->closeTransaction(pTrans);
       return NDBT_FAILED;
     }
@@ -272,7 +279,7 @@ ScanInterpretTest::scanRead(Ndb* pNdb,
       check = pTrans->execute(Commit);   
       if( check == -1 ) {
 	const NdbError err = pTrans->getNdbError();    
-	ERR(err);
+	NDB_ERR(err);
 	pNdb->closeTransaction(pTrans);
 	return NDBT_FAILED;
       }
@@ -281,13 +288,13 @@ ScanInterpretTest::scanRead(Ndb* pNdb,
       const NdbError err = pTrans->getNdbError();
 
       if (err.status == NdbError::TemporaryError){
-	ERR(err);
+	NDB_ERR(err);
 	pNdb->closeTransaction(pTrans);
 	NdbSleep_MilliSleep(50);
 	retryAttempt++;
 	continue;
       }
-      ERR(err);
+      NDB_ERR(err);
       pNdb->closeTransaction(pTrans);
       return NDBT_FAILED;
     }
@@ -325,30 +332,30 @@ ScanInterpretTest::scanReadVerify(Ndb* pNdb,
     if (pTrans == NULL) {
       const NdbError err = pNdb->getNdbError();
       if (err.status == NdbError::TemporaryError){
-	ERR(err);
+	NDB_ERR(err);
 	NdbSleep_MilliSleep(50);
 	retryAttempt++;
 	continue;
       }
-      ERR(err);
+      NDB_ERR(err);
       return NDBT_FAILED;
     }
     
     
     pOp = pTrans->getNdbScanOperation(tab.getName());	
     if (pOp == NULL) {  if (pOp->getValue("KOL2") == 0){
-    ERR(pNdb->getNdbError());
+    NDB_ERR(pNdb->getNdbError());
     return NDBT_FAILED;
   }
   
 
-      ERR(pTrans->getNdbError());
+      NDB_ERR(pTrans->getNdbError());
       pNdb->closeTransaction(pTrans);
       return NDBT_FAILED;
     }
    
     if( pOp->readTuples(NdbScanOperation::LM_Read, 0, parallelism) ) {
-      ERR(pTrans->getNdbError());
+      NDB_ERR(pTrans->getNdbError());
       pNdb->closeTransaction(pTrans);
       return NDBT_FAILED;
     }
@@ -357,14 +364,14 @@ ScanInterpretTest::scanReadVerify(Ndb* pNdb,
     for(int a = 0; a<tab.getNoOfColumns(); a++){
       if((row.attributeStore(a) = 
 	  pOp->getValue(tab.getColumn(a)->getName())) == 0) {
-	ERR(pTrans->getNdbError());
+	NDB_ERR(pTrans->getNdbError());
 	pNdb->closeTransaction(pTrans);
 	return NDBT_FAILED;
       }
     }      
     check = pTrans->execute(NoCommit);   
     if( check == -1 ) {
-      ERR(pTrans->getNdbError());
+      NDB_ERR(pTrans->getNdbError());
       pNdb->closeTransaction(pTrans);
       return NDBT_FAILED;
     }
@@ -384,13 +391,13 @@ ScanInterpretTest::scanReadVerify(Ndb* pNdb,
       pExistTrans = pNdb->startTransaction();
       if (pExistTrans == NULL) {
 	const NdbError err = pNdb->getNdbError();
-	ERR(err);
+	NDB_ERR(err);
 	return NDBT_FAILED;
       }
       pNoExistTrans = pNdb->startTransaction();
       if (pNoExistTrans == NULL) {
 	const NdbError err = pNdb->getNdbError();
-	ERR(err);
+	NDB_ERR(err);
 	return NDBT_FAILED;
       }
       do {
@@ -420,7 +427,7 @@ ScanInterpretTest::scanReadVerify(Ndb* pNdb,
       check = pExistTrans->execute(Commit);   
       if( check == -1 ) {
 	const NdbError err = pExistTrans->getNdbError();    
-	ERR(err);
+	NDB_ERR(err);
 	if (err.code != 626){
 	  pNdb->closeTransaction(pExistTrans);
 	  pNdb->closeTransaction(pNoExistTrans);
@@ -441,7 +448,7 @@ ScanInterpretTest::scanReadVerify(Ndb* pNdb,
 	const NdbError err = pNoExistTrans->getNdbError();    
 	// The transactions error code should be zero
 	if (err.code != 626){
-	  ERR(err);
+	  NDB_ERR(err);
 	  pNdb->closeTransaction(pNoExistTrans);
 	  pNdb->closeTransaction(pTrans);
 	  return NDBT_FAILED;
@@ -466,13 +473,13 @@ ScanInterpretTest::scanReadVerify(Ndb* pNdb,
       const NdbError err = pTrans->getNdbError();
       
       if (err.status == NdbError::TemporaryError){
-	ERR(err);
+	NDB_ERR(err);
 	pNdb->closeTransaction(pTrans);
 	NdbSleep_MilliSleep(50);
 	retryAttempt++;
 	continue;
       }
-      ERR(err);
+      NDB_ERR(err);
       pNdb->closeTransaction(pTrans);
       return NDBT_FAILED;
     }

@@ -1,13 +1,20 @@
-/* Copyright (c) 2004, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2004, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation; version 2 of the License.
+  it under the terms of the GNU General Public License, version 2.0,
+  as published by the Free Software Foundation.
+
+  This program is also distributed with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an additional
+  permission to link the program and your derivative works with the
+  separately licensed software that they have included with MySQL.
 
   This program is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
+  GNU General Public License, version 2.0, for more details.
 
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software
@@ -42,7 +49,6 @@ TODO:
 */
 
 #include "my_global.h"
-#include "sql_priv.h"
 #include "sql_class.h"                          // SSV
 #include <mysql/plugin.h>
 #include <mysql/psi/mysql_file.h>
@@ -108,6 +114,11 @@ static uchar* tina_get_key(TINA_SHARE *share, size_t *length,
   return (uchar*) share->table_name;
 }
 
+static PSI_memory_key csv_key_memory_tina_share;
+static PSI_memory_key csv_key_memory_blobroot;
+static PSI_memory_key csv_key_memory_tina_set;
+static PSI_memory_key csv_key_memory_row;
+
 #ifdef HAVE_PSI_INTERFACE
 
 static PSI_mutex_key csv_key_mutex_tina, csv_key_mutex_TINA_SHARE_mutex;
@@ -128,6 +139,15 @@ static PSI_file_info all_tina_files[]=
   { &csv_key_file_update, "update", 0}
 };
 
+static PSI_memory_info all_tina_memory[]=
+{
+  { &csv_key_memory_tina_share, "TINA_SHARE", PSI_FLAG_GLOBAL},
+  { &csv_key_memory_blobroot, "blobroot", 0},
+  { &csv_key_memory_tina_set, "tina_set", 0},
+  { &csv_key_memory_row, "row", 0},
+  { &csv_key_memory_Transparent_file, "Transparent_file", 0}
+};
+
 static void init_tina_psi_keys(void)
 {
   const char* category= "csv";
@@ -138,6 +158,9 @@ static void init_tina_psi_keys(void)
 
   count= array_elements(all_tina_files);
   mysql_file_register(category, all_tina_files, count);
+
+  count= array_elements(all_tina_memory);
+  mysql_memory_register(category, all_tina_memory, count);
 }
 #endif /* HAVE_PSI_INTERFACE */
 
@@ -152,7 +175,8 @@ static int tina_init_func(void *p)
   tina_hton= (handlerton *)p;
   mysql_mutex_init(csv_key_mutex_tina, &tina_mutex, MY_MUTEX_INIT_FAST);
   (void) my_hash_init(&tina_open_tables,system_charset_info,32,0,0,
-                      (my_hash_get_key) tina_get_key,0,0);
+                      (my_hash_get_key) tina_get_key,0,0,
+                      csv_key_memory_tina_share);
   tina_hton->state= SHOW_OPTION_YES;
   tina_hton->db_type= DB_TYPE_CSV_DB;
   tina_hton->create= tina_create_handler;
@@ -192,7 +216,8 @@ static TINA_SHARE *get_share(const char *table_name, TABLE *table)
                                            (uchar*) table_name,
                                            length)))
   {
-    if (!my_multi_malloc(MYF(MY_WME | MY_ZEROFILL),
+    if (!my_multi_malloc(csv_key_memory_tina_share,
+                         MYF(MY_WME | MY_ZEROFILL),
                          &share, sizeof(*share),
                          &tmp_name, length+1,
                          NullS))
@@ -210,7 +235,7 @@ static TINA_SHARE *get_share(const char *table_name, TABLE *table)
     share->update_file_opened= FALSE;
     share->tina_write_opened= FALSE;
     share->data_file_version= 0;
-    strmov(share->table_name, table_name);
+    my_stpcpy(share->table_name, table_name);
     fn_format(share->data_file_name, table_name, "", CSV_EXT,
               MY_REPLACE_EXT|MY_UNPACK_FILENAME);
     fn_format(meta_file_name, table_name, "", CSM_EXT,
@@ -388,7 +413,7 @@ int ha_tina::init_tina_writer()
   {
     DBUG_PRINT("info", ("Could not open tina file writes"));
     share->crashed= TRUE;
-    DBUG_RETURN(my_errno ? my_errno : -1);
+    DBUG_RETURN(my_errno() ? my_errno() : -1);
   }
   share->tina_write_opened= TRUE;
 
@@ -494,7 +519,8 @@ ha_tina::ha_tina(handlerton *hton, TABLE_SHARE *table_arg)
   buffer.set((char*)byte_buffer, IO_SIZE, &my_charset_bin);
   chain= chain_buffer;
   file_buff= new Transparent_file();
-  init_alloc_root(&blobroot, BLOB_MEMROOT_ALLOC_SIZE, 0);;
+  init_alloc_root(csv_key_memory_blobroot,
+                  &blobroot, BLOB_MEMROOT_ALLOC_SIZE, 0);
 }
 
 
@@ -595,20 +621,22 @@ int ha_tina::chain_append()
   else
   {
     /* We set up for the next position */
-    if ((off_t)(chain_ptr - chain) == (chain_size -1))
+    if ((size_t)(chain_ptr - chain) == (chain_size -1))
     {
       my_off_t location= chain_ptr - chain;
       chain_size += DEFAULT_CHAIN_LENGTH;
       if (chain_alloced)
       {
         /* Must cast since my_malloc unlike malloc doesn't have a void ptr */
-        if ((chain= (tina_set *) my_realloc((uchar*)chain,
-                                            chain_size, MYF(MY_WME))) == NULL)
+        if ((chain= (tina_set *) my_realloc(csv_key_memory_tina_set,
+                                            (uchar*)chain,
+                                            chain_size*sizeof(tina_set), MYF(MY_WME))) == NULL)
           return -1;
       }
       else
       {
-        tina_set *ptr= (tina_set *) my_malloc(chain_size * sizeof(tina_set),
+        tina_set *ptr= (tina_set *) my_malloc(csv_key_memory_tina_set,
+                                              chain_size * sizeof(tina_set),
                                               MYF(MY_WME));
         memcpy(ptr, chain, DEFAULT_CHAIN_LENGTH * sizeof(tina_set));
         chain= ptr;
@@ -807,7 +835,7 @@ int ha_tina::find_current_row(uchar *buf)
         if (src)
         {
           tgt= (uchar*) alloc_root(&blobroot, length);
-          bmove(tgt, src, length);
+          memmove(tgt, src, length);
           memcpy(blob->ptr + packlength, &tgt, sizeof(char*));
         }
       }
@@ -941,7 +969,7 @@ int ha_tina::open(const char *name, int mode, uint open_options)
                                   O_RDONLY, MYF(MY_WME))) == -1)
   {
     free_share(share);
-    DBUG_RETURN(my_errno ? my_errno : -1);
+    DBUG_RETURN(my_errno() ? my_errno() : -1);
   }
 
   /*
@@ -1071,7 +1099,7 @@ int ha_tina::update_row(const uchar * old_data, uchar * new_data)
   rc= 0;
 
   /* UPDATE should never happen on the log tables */
-  DBUG_ASSERT(!share->is_log_table);
+  assert(!share->is_log_table);
 
 err:
   DBUG_PRINT("info",("rc = %d", rc));
@@ -1098,13 +1126,13 @@ int ha_tina::delete_row(const uchar * buf)
 
   stats.records--;
   /* Update shared info */
-  DBUG_ASSERT(share->rows_recorded);
+  assert(share->rows_recorded);
   mysql_mutex_lock(&share->mutex);
   share->rows_recorded--;
   mysql_mutex_unlock(&share->mutex);
 
   /* DELETE should never happen on the log table */
-  DBUG_ASSERT(!share->is_log_table);
+  assert(!share->is_log_table);
 
   DBUG_RETURN(0);
 }
@@ -1132,7 +1160,7 @@ int ha_tina::init_data_file()
         (data_file= mysql_file_open(csv_key_file_data,
                                     share->data_file_name, O_RDONLY,
                                     MYF(MY_WME))) == -1)
-      return my_errno ? my_errno : -1;
+      return my_errno() ? my_errno() : -1;
   }
   file_buff->init_buff(data_file);
   return 0;
@@ -1420,7 +1448,7 @@ int ha_tina::rnd_end()
     if ((data_file= mysql_file_open(csv_key_file_data,
                                     share->data_file_name,
                                     O_RDONLY, MYF(MY_WME))) == -1)
-      DBUG_RETURN(my_errno ? my_errno : -1);
+      DBUG_RETURN(my_errno() ? my_errno() : -1);
     /*
       As we reopened the data file, increase share->data_file_version 
       in order to force other threads waiting on a table lock and  
@@ -1489,7 +1517,8 @@ int ha_tina::repair(THD* thd, HA_CHECK_OPT* check_opt)
 
   /* Don't assert in field::val() functions */
   table->use_all_columns();
-  if (!(buf= (uchar*) my_malloc(table->s->reclength, MYF(MY_WME))))
+  if (!(buf= (uchar*) my_malloc(csv_key_memory_row,
+                                table->s->reclength, MYF(MY_WME))))
     DBUG_RETURN(HA_ERR_OUT_OF_MEM);
 
   /* position buffer to the start of the file */
@@ -1576,7 +1605,7 @@ int ha_tina::repair(THD* thd, HA_CHECK_OPT* check_opt)
       to satisfy Win.
     */
     if (mysql_file_close(share->tina_write_filedes, MYF(0)))
-      DBUG_RETURN(my_errno ? my_errno : -1);
+      DBUG_RETURN(my_errno() ? my_errno() : -1);
     share->tina_write_opened= FALSE;
   }
   if (mysql_file_close(data_file, MYF(0)) ||
@@ -1589,7 +1618,7 @@ int ha_tina::repair(THD* thd, HA_CHECK_OPT* check_opt)
   if ((data_file= mysql_file_open(csv_key_file_data,
                                   share->data_file_name, O_RDWR|O_APPEND,
                                   MYF(MY_WME))) == -1)
-     DBUG_RETURN(my_errno ? my_errno : -1);
+    DBUG_RETURN(my_errno() ? my_errno() : -1);
 
   /* Set new file size. The file size will be updated by ::update_status() */
   local_saved_data_file_length= (size_t) current_position;
@@ -1609,7 +1638,10 @@ int ha_tina::delete_all_rows()
   DBUG_ENTER("ha_tina::delete_all_rows");
 
   if (!records_is_known)
-    DBUG_RETURN(my_errno=HA_ERR_WRONG_COMMAND);
+  {
+    set_my_errno(HA_ERR_WRONG_COMMAND);
+    DBUG_RETURN(HA_ERR_WRONG_COMMAND);
+  }
 
   if (!share->tina_write_opened)
     if (init_tina_writer())
@@ -1695,7 +1727,8 @@ int ha_tina::check(THD* thd, HA_CHECK_OPT* check_opt)
   DBUG_ENTER("ha_tina::check");
 
   old_proc_info= thd_proc_info(thd, "Checking table");
-  if (!(buf= (uchar*) my_malloc(table->s->reclength, MYF(MY_WME))))
+  if (!(buf= (uchar*) my_malloc(csv_key_memory_row,
+                                table->s->reclength, MYF(MY_WME))))
     DBUG_RETURN(HA_ERR_OUT_OF_MEM);
 
   /* position buffer to the start of the file */

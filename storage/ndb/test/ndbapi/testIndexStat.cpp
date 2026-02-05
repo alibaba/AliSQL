@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2006, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2006, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -28,15 +35,6 @@
 #undef max
 #define min(a, b) ((a) <= (b) ? (a) : (b))
 #define max(a, b) ((a) >= (b) ? (a) : (b))
-
-inline NdbOut&
-NdbOut::operator<<(double x)
-{
-  char buf[100];
-  sprintf(buf, "%.2f", x);
-  *this << buf;
-  return *this;
-}
 
 struct Opts {
   int loglevel;
@@ -137,18 +135,11 @@ static bool g_has_created_stat_tables = false;
 static bool g_has_created_stat_events = false;
 
 static uint
-urandom()
-{
-  uint r = (uint)random();
-  return r;
-}
-
-static uint
 urandom(uint m)
 {
   if (m == 0)
     return 0;
-  uint r = urandom();
+  uint r = (uint)rand();
   r = r % m;
   return r;
 }
@@ -483,7 +474,7 @@ Val::make(uint numattrs, const Lim& lim)
       const uint len = urandom(urandom(g_charlen + 1) + 1);
       c[0] = len;
       for (uint j = 0; j < len; j++) {
-        uint k = urandom(strlen(lim.c_char));
+        uint k = urandom((uint)strlen(lim.c_char));
         c[1 + j] = lim.c_char[k];
       }
       c_null = 0;
@@ -529,7 +520,7 @@ Val::cmp(const Val& val2, uint numattrs, uint* num_eq) const
       const uchar* s2 = &val2.c[1];
       const uint l1 = (uint)c[0];
       const uint l2 = (uint)val2.c[0];
-      assert(l1 <= g_charlen && l2 <= g_charlen);
+      require(l1 <= g_charlen && l2 <= g_charlen);
       k = g_cs->coll->strnncollsp(g_cs, s1, l1, s2, l2, 0);
     } else if (! c_null) {
       k = +1;
@@ -793,7 +784,7 @@ verifydata()
     chkrc(key.m_flag == true);
     key.m_flag = -1; // forget
   }
-  assert(count == g_opts.rows);
+  require(count == g_opts.rows);
   ll3("verifydata: " << g_opts.rows << " rows");
   return 0;
 }
@@ -968,7 +959,7 @@ Bnd::cmp(const Key& key) const
     }
     place = 3;
     ret = 0;
-    assert(m_val.m_numattrs == 0);
+    require(m_val.m_numattrs == 0);
   } while (0);
   ll3("bnd: " << *this << " cmp key: " << key
       << " ret: " << ret << " place: " << place);
@@ -1401,7 +1392,7 @@ setbounds(const Rng& rng)
       else if (no == 2)
         addr = ! val.d_null ? (const void*)&val.d : 0;
       else
-        assert(false);
+        require(false);
       ll3("setBound attr:" << no << " type:" << t << " val: " << val);
       chkdb(g_rangescan_op->setBound(no, t, addr) == 0);
     }
@@ -1748,7 +1739,7 @@ querystat_v2(Rng& rng)
 
   Stval& st = rng.m_st_stat;
   chkrc(count < (1 << 30));
-  st.rir_v2 = count;
+  st.rir_v2 = (Uint32)count;
   ll2("querystat_v2: " << st.rir_v2 << " rows");
   return 0;
 }
@@ -2101,7 +2092,7 @@ runtest()
       seed = 2 + (ushort)getpid();
     }
     ll0("random seed is " << seed);
-    srandom(seed);
+    srand(seed);
   } else {
     ll0("random seed is " << "loop number");
   }
@@ -2123,7 +2114,7 @@ runtest()
     uint seed = g_opts.seed;
     if (seed == 1) { // loop number
       seed = g_loop;
-      srandom(seed);
+      srand(seed);
     }
     makekeys();
     chkrc(loaddata(g_loop != 0) == 0);

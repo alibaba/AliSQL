@@ -746,19 +746,13 @@ Success: FTWRL is blocked when 'insert into t1_base values (1)' is active in ano
 Success: Was able to run 'insert into t1_temp values (1)' under FTWRL.
 Success: Was able to run 'insert into t1_temp values (1)' with FTWRL active in another connection.
 Success: Was able to run FTWRL while 'insert into t1_temp values (1)' was active in another connection.
-#
-# 18.c) INSERT DELAYED is incompatible with FTWRL.
-Success: Was not able to run 'insert delayed into t1_base values (1)' under FTWRL.
-Success: 'insert delayed into t1_base values (1)' is blocked by FTWRL active in another connection.
-Success: FTWRL is blocked when 'insert delayed into t1_base values (1)' is active in another connection.
-delete from t1_base;
 # 
-# 18.d) INSERT SELECT into base table is incompatible with FTWRL.
+# 18.c) INSERT SELECT into base table is incompatible with FTWRL.
 Success: Was not able to run 'insert into t1_base select * from t1_temp' under FTWRL.
 Success: 'insert into t1_base select * from t1_temp' is blocked by FTWRL active in another connection.
 Success: FTWRL is blocked when 'insert into t1_base select * from t1_temp' is active in another connection.
 #
-# 18.e) INSERT SELECT into temp table is compatible with FTWRL.
+# 18.d) INSERT SELECT into temp table is compatible with FTWRL.
 Success: Was able to run 'insert into t1_temp select * from t1_base' under FTWRL.
 Success: Was able to run 'insert into t1_temp select * from t1_base' with FTWRL active in another connection.
 Success: Was able to run FTWRL while 'insert into t1_temp select * from t1_base' was active in another connection.
@@ -1064,7 +1058,16 @@ Success: Was able to run FTWRL while 'replace into t1_temp select * from t1_base
 # 29) REVOKE variants.
 # 
 # 29.1) REVOKE privileges is incompatible with FTWRL. 
+set @orig_sql_mode= @@sql_mode;
+set sql_mode= (select replace(@@sql_mode,'NO_AUTO_CREATE_USER',''));
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 grant all privileges on t1_base to mysqltest_u1;
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
+set sql_mode= @orig_sql_mode;
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 # Skip last part of testing as this statement does
 # implicit commit and releases metadata locks in
 # non-standard place.
@@ -1138,8 +1141,8 @@ Success: Was able to run 'set @a:= f2_temp()' with FTWRL active in another conne
 create user mysqltest_u1;
 # Skip last part of compatibility testing as our helper debug
 # sync-point doesn't work for SET statements.
-Success: Was not able to run 'set password for 'mysqltest_u1' = password('')' under FTWRL.
-Success: 'set password for 'mysqltest_u1' = password('')' is blocked by FTWRL active in another connection.
+Success: Was not able to run 'ALTER USER 'mysqltest_u1' IDENTIFIED BY ''' under FTWRL.
+Success: 'ALTER USER 'mysqltest_u1' IDENTIFIED BY ''' is blocked by FTWRL active in another connection.
 drop user mysqltest_u1;
 #
 # 31.d.II) SET READ_ONLY is compatible with FTWRL (but has no
@@ -1321,6 +1324,9 @@ unlock tables;
 # Check that XA non-COMMIT statements are not and COMMIT is
 # blocked by active FTWRL in another connection
 #
+# XA COMMIT, XA ROLLBACK and XA PREPARE does take COMMIT lock to ensure
+# that nothing is written to bin log and redo log under FTWRL mode.
+#
 # Switching to connection 'con1'.
 flush tables with read lock;
 # Switching to connection 'default'.
@@ -1333,20 +1339,76 @@ insert into t3_trans values (1);
 flush tables with read lock;
 # Switching to connection 'default'.
 xa end 'test1';
+# Send XA PREPARE 'test1'
 xa prepare 'test1';
+# Switching to connection 'con1'.
+# Wait until XA PREPARE is blocked.
+unlock tables;
+# Switching to connection 'default'.
+# Reap XA PREPARE.
+# Switching to connection 'con1'.
+flush tables with read lock;
+# Switching to connection 'default'.
+# Send XA ROLLBACK 'test1'
 xa rollback 'test1';
 # Switching to connection 'con1'.
+# Wait until XA ROLLBACK is blocked.
 unlock tables;
 # Switching to connection 'default'.
+# Reap XA ROLLBACK
 xa start 'test1';
 insert into t3_trans values (1);
 # Switching to connection 'con1'.
 flush tables with read lock;
 # Switching to connection 'default'.
 xa end 'test1';
+# Send XA PREPARE 'test1'
 xa prepare 'test1';
+# Switching to connection 'con1'.
+# Wait until XA PREPARE is blocked.
+unlock tables;
+# Switching to connection 'default'.
+# Reap XA PREPARE.
+# Switching to connection 'con1'.
+flush tables with read lock;
+# Switching to connection 'default'.
 # Send:
 xa commit 'test1';;
+# Switching to connection 'con1'.
+# Wait until XA COMMIT is blocked.
+unlock tables;
+# Switching to connection 'default'.
+# Reap XA COMMIT.
+delete from t3_trans;
+#
+# Check that XA COMMIT / ROLLBACK for prepared transaction from a
+# disconnected session is blocked by active FTWRL in another connection.
+#
+# Create temporary connection for XA transaction.
+xa start 'test1';
+insert into t3_trans values (1);
+xa end 'test1';
+xa prepare 'test1';
+# Disconnect temporary connection
+# Create temporary connection for XA transaction.
+xa start 'test2';
+insert into t3_trans values (2);
+xa end 'test2';
+xa prepare 'test2';
+# Disconnect temporary connection
+# Switching to connection 'con1'.
+flush tables with read lock;
+# Switching to connection 'default'.
+# Send XA ROLLBACK 'test1'
+xa rollback 'test1';
+# Switching to connection 'con1'.
+# Wait until XA ROLLBACK is blocked.
+unlock tables;
+flush tables with read lock;
+# Switching to connection 'default'.
+# Reap XA ROLLBACK
+# Send XA COMMIT
+xa commit 'test2';;
 # Switching to connection 'con1'.
 # Wait until XA COMMIT is blocked.
 unlock tables;

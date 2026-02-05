@@ -116,13 +116,13 @@ i	s1
 |    2 | NULL |
 |    3 |      |
 +------+------+
-unhex('zz')
+concat(null)
 NULL
-+-------------+
-| unhex('zz') |
-+-------------+
-| NULL        |
-+-------------+
++--------------+
+| concat(null) |
++--------------+
+| NULL         |
++--------------+
 create table t1(a int, b varchar(255), c int);
 Field	Type	Null	Key	Default	Extra
 a	int(11)	YES		NULL	
@@ -398,6 +398,8 @@ WARNING: --server-arg option not supported in this configuration.
 | 1 |
 +---+
 SET @@global.sql_mode='';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 Warning (Code 1286): Unknown storage engine 'nonexistent'
 Warning (Code 1266): Using storage engine MyISAM for table 't2'
 Warning (Code 1286): Unknown storage engine 'nonexistent2'
@@ -508,11 +510,32 @@ Connected
 #
 # Bug#12688860 : SECURITY RECOMMENDATION: PASSWORDS ON CLI
 #
-Warning: Using a password on the command line interface can be insecure.
+mysql: [Warning] Using a password on the command line interface can be insecure.
 1
 1
-Warning: Using a password on the command line interface can be insecure.
+mysql: [Warning] Using a password on the command line interface can be insecure.
 1
 1
+ERROR 1243 (HY000) at line 15: Unknown prepared statement handler (x) given to EXECUTE
+a
+1
+2
+#
+# Bug #16102788: INDETERMINATE BEHAVIOR DUE TO EMPTY OPTION VALUES
+# Bug #23023457: DEBIAN/UBUNTU PACKAGES FAIL TO INSTALL BECAUSE OF EMPTY CONFIG VALUES
+#
+mysql: [Warning] mysql: Empty value for 'port' specified. Will throw an error in future versions
+mysql: [Warning] mysql: Empty value for 'port' specified. Will throw an error in future versions
+#
+# Bug #21464621: MYSQL CLI SHOULD SUGGEST CONNECT-EXPIRED-PASSWORD WHEN ERROR 1862 OCCURS
+#
+CREATE USER bug21464621 IDENTIFIED BY 'password' PASSWORD EXPIRE;
+mysql: [Warning] Using a password on the command line interface can be insecure.
+Please use --connect-expired-password option or invoke mysql in interactive mode.
+mysql: [Warning] Using a password on the command line interface can be insecure.
+mysql: [Warning] Using a password on the command line interface can be insecure.
+user()
+bug21464621@localhost
+DROP USER bug21464621;
 
 End of tests

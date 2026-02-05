@@ -1,13 +1,25 @@
-/* Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -20,6 +32,7 @@
 */
 
 #include "mysys_priv.h"
+#include "my_sys.h"
 #include <m_string.h>
 
 my_bool init_dynamic_string(DYNAMIC_STRING *str, const char *init_str,
@@ -36,7 +49,8 @@ my_bool init_dynamic_string(DYNAMIC_STRING *str, const char *init_str,
   if (!init_alloc)
     init_alloc=alloc_increment;
 
-  if (!(str->str=(char*) my_malloc(init_alloc,MYF(MY_WME))))
+  if (!(str->str=(char*) my_malloc(key_memory_DYNAMIC_STRING,
+                                   init_alloc,MYF(MY_WME))))
     DBUG_RETURN(TRUE);
   str->length=length-1;
   if (init_str)
@@ -58,7 +72,8 @@ my_bool dynstr_set(DYNAMIC_STRING *str, const char *init_str)
       str->alloc_increment;
     if (!str->max_length)
       str->max_length=str->alloc_increment;
-    if (!(str->str=(char*) my_realloc(str->str,str->max_length,MYF(MY_WME))))
+    if (!(str->str=(char*) my_realloc(key_memory_DYNAMIC_STRING,
+                                      str->str,str->max_length,MYF(MY_WME))))
       DBUG_RETURN(TRUE);
   }
   if (init_str)
@@ -81,7 +96,8 @@ my_bool dynstr_realloc(DYNAMIC_STRING *str, size_t additional_size)
   {
     str->max_length=((str->length + additional_size+str->alloc_increment-1)/
 		     str->alloc_increment)*str->alloc_increment;
-    if (!(str->str=(char*) my_realloc(str->str,str->max_length,MYF(MY_WME))))
+    if (!(str->str=(char*) my_realloc(key_memory_DYNAMIC_STRING,
+                                      str->str,str->max_length,MYF(MY_WME))))
       DBUG_RETURN(TRUE);
   }
   DBUG_RETURN(FALSE);
@@ -103,7 +119,8 @@ my_bool dynstr_append_mem(DYNAMIC_STRING *str, const char *append,
     size_t new_length=(str->length+length+str->alloc_increment)/
       str->alloc_increment;
     new_length*=str->alloc_increment;
-    if (!(new_ptr=(char*) my_realloc(str->str,new_length,MYF(MY_WME))))
+    if (!(new_ptr=(char*) my_realloc(key_memory_DYNAMIC_STRING,
+                                     str->str,new_length,MYF(MY_WME))))
       return TRUE;
     str->str=new_ptr;
     str->max_length=new_length;
@@ -140,13 +157,13 @@ my_bool dynstr_trunc(DYNAMIC_STRING *str, size_t n)
 
 my_bool dynstr_append_os_quoted(DYNAMIC_STRING *str, const char *append, ...)
 {
-#ifdef __WIN__
+#ifdef _WIN32
   const char *quote_str= "\"";
   const uint  quote_len= 1;
 #else
   const char *quote_str= "\'";
   const uint  quote_len= 1;
-#endif /* __WIN__ */
+#endif /* _WIN32 */
   my_bool ret= TRUE;
   va_list dirty_text;
 

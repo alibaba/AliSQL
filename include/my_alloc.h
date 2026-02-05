@@ -1,13 +1,25 @@
-/* Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -22,6 +34,9 @@
 
 #define ALLOC_MAX_BLOCK_TO_DROP			4096
 #define ALLOC_MAX_BLOCK_USAGE_BEFORE_DROP	10
+
+/* PSI_memory_key */
+#include "mysql/psi/psi_memory.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -50,7 +65,22 @@ typedef struct st_mem_root
   */
   unsigned int first_block_usage;
 
+  /*
+    Maximum amount of memory this mem_root can hold. A value of 0
+    implies there is no limit.
+  */
+  size_t max_capacity;
+
+  /* Allocated size for this mem_root */
+
+  size_t allocated_size;
+
+  /* Enable this for error reporting if capacity is exceeded */
+  my_bool error_for_capacity_exceeded;
+
   void (*error_handler)(void);
+
+  PSI_memory_key m_psi_key;
 } MEM_ROOT;
 
 #ifdef  __cplusplus

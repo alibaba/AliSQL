@@ -1,15 +1,22 @@
 #ifndef INCLUDES_MYSQL_SQL_LIST_H
 #define INCLUDES_MYSQL_SQL_LIST_H
-/* Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
@@ -168,11 +175,19 @@ public:
     relies on this behaviour. This logic is quite tricky: please do not use
     it in any new code.
   */
-  inline base_list(const base_list &tmp) :Sql_alloc()
+  base_list(const base_list &tmp)
+    : Sql_alloc(),
+      first(tmp.first),
+      last(tmp.elements ? tmp.last : &first),
+      elements(tmp.elements)
+  {
+  }
+  base_list &operator=(const base_list &tmp)
   {
     elements= tmp.elements;
     first= tmp.first;
     last= elements ? tmp.last : &first;
+    return *this;
   }
   /**
     Construct a deep copy of the argument in memory root mem_root.
@@ -215,6 +230,20 @@ public:
     }
     return 1;
   }
+  inline bool push_front(void *info, MEM_ROOT *mem_root)
+  {
+    list_node *node=new (mem_root) list_node(info, first);
+    if (node)
+    {
+      if (last == &first)
+        last= &node->next;
+      first=node;
+      elements++;
+      return false;
+    }
+    return true;
+  }
+
   void remove(list_node **prev)
   {
     list_node *node=(*prev)->next;
@@ -375,6 +404,19 @@ protected:
     if (last == &(node->next))
       last= &new_node->next;
   }
+  bool after(void *info,list_node *node, MEM_ROOT *mem_root)
+  {
+    list_node *new_node=new (mem_root) list_node(info,node->next);
+    if (!new_node)
+      return true; // OOM
+
+    node->next=new_node;
+    elements++;
+    if (last == &(node->next))
+      last= &new_node->next;
+
+    return false;
+  }
 };
 
 class base_list_iterator
@@ -425,7 +467,7 @@ public:
   inline void *replace(void *element)
   {						// Return old element
     void *tmp=current->info;
-    DBUG_ASSERT(current->info != 0);
+    assert(current->info != 0);
     current->info=element;
     return tmp;
   }
@@ -455,6 +497,15 @@ public:
     current=current->next;
     el= &current->next;
   }
+  bool after(void *a, MEM_ROOT *mem_root)
+  {
+    if (list->after(a, current, mem_root))
+      return true;
+
+    current=current->next;
+    el= &current->next;
+    return false;
+  }
   inline void **ref(void)			// Get reference pointer
   {
     return &current->info;
@@ -463,14 +514,34 @@ public:
   {
     return el == &list->last_ref()->next;
   }
+  inline bool is_before_first() const
+  {
+    return current == NULL;
+  }
+  bool prepend(void *a, MEM_ROOT *mem_root)
+  {
+    if (list->push_front(a, mem_root))
+      return true;
+
+    el= &list->first;
+    prev=el;
+    el= &(*el)->next;
+
+    return false;
+  }
   friend class error_list_iterator;
 };
+
 
 template <class T> class List :public base_list
 {
 public:
-  inline List() :base_list() {}
+  List() :base_list() {}
   inline List(const List<T> &tmp) :base_list(tmp) {}
+  List &operator=(const List &tmp)
+  {
+    return static_cast<List &>(base_list::operator=(tmp));
+  }
   inline List(const List<T> &tmp, MEM_ROOT *mem_root) :
     base_list(tmp, mem_root) {}
   /*
@@ -482,6 +553,10 @@ public:
   inline bool push_back(T *a, MEM_ROOT *mem_root)
   { return base_list::push_back((void *) a, mem_root); }
   inline bool push_front(T *a) { return base_list::push_front((void *) a); }
+  inline bool push_front(T *a, MEM_ROOT *mem_root)
+  {
+    return base_list::push_front((void *) a, mem_root);
+  }
   inline T* head() {return (T*) base_list::head(); }
   inline T** head_ref() {return (T**) base_list::head_ref(); }
   inline T* pop()  {return (T*) base_list::pop(); }
@@ -515,6 +590,10 @@ public:
   inline void rewind(void)  { base_list_iterator::rewind(); }
   inline void remove()      { base_list_iterator::remove(); }
   inline void after(T *a)   { base_list_iterator::after(a); }
+  inline bool after(T *a, MEM_ROOT *mem_root)
+  {
+    return base_list_iterator::after(a, mem_root);
+  }
   inline T** ref(void)	    { return (T**) base_list_iterator::ref(); }
 };
 
@@ -652,7 +731,7 @@ public:
 
   void move_elements_to(base_ilist *new_owner)
   {
-    DBUG_ASSERT(new_owner->is_empty());
+    assert(new_owner->is_empty());
     new_owner->first= first;
     new_owner->sentinel= sentinel;
     empty();
@@ -707,9 +786,7 @@ public:
   void move_elements_to(I_List<T>* new_owner) {
     base_ilist<T>::move_elements_to(new_owner);
   }
-#ifndef _lint
   friend class I_List_iterator<T>;
-#endif
 };
 
 
@@ -750,5 +827,13 @@ list_copy_and_replace_each_value(List<T> &list, MEM_ROOT *mem_root)
 
 void free_list(I_List <i_string_pair> *list);
 void free_list(I_List <i_string> *list);
+
+
+template <class T>
+List<T> *List_merge(T *head, List<T> *tail)
+{
+  tail->push_front(head);
+  return tail;
+}
 
 #endif // INCLUDES_MYSQL_SQL_LIST_H

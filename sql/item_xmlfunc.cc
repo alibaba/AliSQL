@@ -1,30 +1,32 @@
-/* Copyright (c) 2005, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2005, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include "sql_priv.h"
-/*
-  It is necessary to include set_var.h instead of item.h because there
-  are dependencies on include order for set_var.h and item.h. This
-  will be resolved later.
-*/
-#include "sql_class.h"                          // set_var.h: THD
-#include "sql_parse.h"                          // check_stack_overrun 
-#include "set_var.h"
-#include "my_xml.h"
-#include "sp_pcontext.h"
-#include "sql_class.h"                          // THD
+#include "item_xmlfunc.h"
+
+#include "my_xml.h"             // my_xml_node_type
+#include "item_cmpfunc.h"       // Item_bool_func
+#include "sp_pcontext.h"        // sp_variable
+#include "sql_class.h"          // THD
+#include "sql_parse.h"          // check_stack_overrun
 
 /*
   TODO: future development directions:
@@ -120,7 +122,7 @@ public:
   inline bool append_element(MY_XPATH_FLT *flt)
   {
     String *str= this;
-    return str->append((const char*)flt, (uint32) sizeof(MY_XPATH_FLT));
+    return str->append((const char*)flt, sizeof(MY_XPATH_FLT));
   }
   inline bool append_element(uint32 num, uint32 pos)
   {
@@ -130,7 +132,7 @@ public:
     add.size= 0;
     return append_element(&add);
   }
-  inline bool append_element(uint32 num, uint32 pos, uint32 size)
+  inline bool append_element(uint32 num, uint32 pos, size_t size)
   {
     MY_XPATH_FLT add;
     add.num= num;
@@ -142,7 +144,7 @@ public:
   { 
     return (MY_XPATH_FLT*) (ptr() + i * sizeof(MY_XPATH_FLT));
   }
-  inline uint32 numelements()
+  inline size_t numelements()
   {
     return length() / sizeof(MY_XPATH_FLT);
   }
@@ -395,11 +397,10 @@ public:
 */
 class Item_xpath_cast_bool :public Item_int_func
 {
-  String *pxml;
   String tmp_value;
 public:
-  Item_xpath_cast_bool(Item *a, String *pxml_arg)
-    :Item_int_func(a), pxml(pxml_arg) {}
+  Item_xpath_cast_bool(Item *a)
+    :Item_int_func(a) {}
   const char *func_name() const { return "xpath_cast_bool"; }
   bool is_bool_func() { return 1; }
   longlong val_int()
@@ -443,11 +444,10 @@ public:
 
 class Item_func_xpath_position :public Item_int_func
 {
-  String *pxml;
   String tmp_value;
 public:
-  Item_func_xpath_position(Item *a, String *p)
-    :Item_int_func(a), pxml(p) {}
+  Item_func_xpath_position(Item *a)
+    :Item_int_func(a) {}
   const char *func_name() const { return "xpath_position"; }
   void fix_length_and_dec() { max_length=10; }
   longlong val_int()
@@ -462,11 +462,10 @@ public:
 
 class Item_func_xpath_count :public Item_int_func
 {
-  String *pxml;
   String tmp_value;
 public:
-  Item_func_xpath_count(Item *a, String *p)
-    :Item_int_func(a), pxml(p) {}
+  Item_func_xpath_count(Item *a)
+    :Item_int_func(a) {}
   const char *func_name() const { return "xpath_count"; }
   void fix_length_and_dec() { max_length=10; }
   longlong val_int()
@@ -496,7 +495,7 @@ public:
     String *res= args[0]->val_nodeset(&tmp_value);
     MY_XPATH_FLT *fltbeg= (MY_XPATH_FLT*) res->ptr();
     MY_XPATH_FLT *fltend= (MY_XPATH_FLT*) (res->ptr() + res->length());
-    uint numnodes= pxml->length() / sizeof(MY_XML_NODE);
+    size_t numnodes= pxml->length() / sizeof(MY_XML_NODE);
     MY_XML_NODE *nodebeg= (MY_XML_NODE*) pxml->ptr();
   
     for (MY_XPATH_FLT *flt= fltbeg; flt < fltend; flt++)
@@ -543,7 +542,7 @@ public:
     MY_XPATH_FLT *fltbeg= (MY_XPATH_FLT*) res->ptr();
     MY_XPATH_FLT *fltend= (MY_XPATH_FLT*) (res->ptr() + res->length());
     MY_XML_NODE *nodebeg= (MY_XML_NODE*) pxml->ptr();
-    uint numnodes= pxml->length() / sizeof(MY_XML_NODE);
+    size_t numnodes= pxml->length() / sizeof(MY_XML_NODE);
 
     for (MY_XPATH_FLT *flt= fltbeg; flt < fltend; flt++)
     {
@@ -578,7 +577,7 @@ String *Item_nodeset_func_rootelement::val_nodeset(String *nodeset)
 
 String * Item_nodeset_func_union::val_nodeset(String *nodeset)
 {
-  uint num_nodes= pxml->length() / sizeof(MY_XML_NODE);
+  size_t num_nodes= pxml->length() / sizeof(MY_XML_NODE);
   String set0, *s0= args[0]->val_nodeset(&set0);
   String set1, *s1= args[1]->val_nodeset(&set1);
   String both_str;
@@ -754,7 +753,8 @@ String *Item_nodeset_func_predicate::val_nodeset(String *str)
 {
   Item_nodeset_func *nodeset_func= (Item_nodeset_func*) args[0];
   Item_func *comp_func= (Item_func*)args[1];
-  uint pos= 0, size;
+  uint pos= 0;
+  size_t size;
   prepare(str);
   size= fltend - fltbeg;
   for (MY_XPATH_FLT *flt= fltbeg; flt < fltend; flt++)
@@ -775,7 +775,7 @@ String *Item_nodeset_func_elementbyindex::val_nodeset(String *nodeset)
   Item_nodeset_func *nodeset_func= (Item_nodeset_func*) args[0];
   prepare(nodeset);
   MY_XPATH_FLT *flt;
-  uint pos, size= fltend - fltbeg;
+  size_t pos, size= fltend - fltbeg;
   for (pos= 0, flt= fltbeg; flt < fltend; flt++)
   {
     nodeset_func->context_cache.length(0);
@@ -797,7 +797,7 @@ String *Item_nodeset_func_elementbyindex::val_nodeset(String *nodeset)
 static Item* nodeset2bool(MY_XPATH *xpath, Item *item)
 {
   if (item->type() == Item::XPATH_NODESET)
-    return new Item_xpath_cast_bool(item, xpath->pxml);
+    return new Item_xpath_cast_bool(item);
   return item;
 }
 
@@ -931,12 +931,12 @@ static Item *create_comparator(MY_XPATH *xpath,
   else if (a->type() == Item::XPATH_NODESET &&
            b->type() == Item::XPATH_NODESET)
   {
-    uint len= xpath->query.end - context->beg;
+    size_t len= xpath->query.end - context->beg;
     set_if_smaller(len, 32);
     my_printf_error(ER_UNKNOWN_ERROR,
                     "XPATH error: "
                     "comparison of two nodesets is not supported: '%.*s'",
-                    MYF(0), len, context->beg);
+                    MYF(0), static_cast<int>(len), context->beg);
 
     return 0; // TODO: Comparison of two nodesets
   }
@@ -981,12 +981,12 @@ static Item *create_comparator(MY_XPATH *xpath,
     The newly created item.
 */
 static Item* nametestfunc(MY_XPATH *xpath,
-                          int type, Item *arg, const char *beg, uint len)
+                          int type, Item *arg, const char *beg, size_t len)
 {
-  DBUG_ASSERT(arg != 0);
-  DBUG_ASSERT(arg->type() == Item::XPATH_NODESET);
-  DBUG_ASSERT(beg != 0);
-  DBUG_ASSERT(len > 0);
+  assert(arg != 0);
+  assert(arg->type() == Item::XPATH_NODESET);
+  assert(beg != 0);
+  assert(len > 0);
 
   Item *res;
   switch (type)
@@ -1106,7 +1106,7 @@ my_xpath_keyword(MY_XPATH *x,
   size_t length= end-beg;
   for (k= keyword_names; k->name; k++)
   {
-    if (length == k->length && !strncasecmp(beg, k->name, length))
+    if (length == k->length && !native_strncasecmp(beg, k->name, length))
     {
       x->extra= k->extra;
       return k->tok;
@@ -1152,13 +1152,23 @@ static Item *create_func_floor(MY_XPATH *xpath, Item **args, uint nargs)
 
 static Item *create_func_bool(MY_XPATH *xpath, Item **args, uint nargs)
 {
-  return new Item_xpath_cast_bool(args[0], xpath->pxml);
+  return new Item_xpath_cast_bool(args[0]);
 }
 
 
 static Item *create_func_number(MY_XPATH *xpath, Item **args, uint nargs)
 {
-  return new Item_xpath_cast_number(args[0]);
+  Item *arg;
+
+  if (nargs > 0)
+  {
+    arg= args[0];
+  }
+  else
+  {
+    arg= xpath->context != NULL ? xpath->context : xpath->rootelement;
+  }
+  return new Item_xpath_cast_number(arg);
 }
 
 
@@ -1178,21 +1188,20 @@ static Item *create_func_round(MY_XPATH *xpath, Item **args, uint nargs)
 static Item *create_func_last(MY_XPATH *xpath, Item **args, uint nargs)
 {
   return xpath->context ? 
-         new Item_func_xpath_count(xpath->context, xpath->pxml) : NULL;
+         new Item_func_xpath_count(xpath->context) : NULL;
 }
 
 
 static Item *create_func_position(MY_XPATH *xpath, Item **args, uint nargs)
 {
   return xpath->context ? 
-         new Item_func_xpath_position(xpath->context, xpath->pxml) : NULL;
+         new Item_func_xpath_position(xpath->context) : NULL;
 }
 
 
 static Item *create_func_contains(MY_XPATH *xpath, Item **args, uint nargs)
 {
-  return new Item_xpath_cast_bool(new Item_func_locate(args[0], args[1]),
-                                  xpath->pxml);
+  return new Item_xpath_cast_bool(new Item_func_locate(args[0], args[1]));
 }
 
 
@@ -1215,7 +1224,7 @@ static Item *create_func_count(MY_XPATH *xpath, Item **args, uint nargs)
 {  
   if (args[0]->type() != Item::XPATH_NODESET)
     return 0;
-  return new Item_func_xpath_count(args[0], xpath->pxml);
+  return new Item_func_xpath_count(args[0]);
 }
 
 
@@ -1306,7 +1315,7 @@ MY_XPATH_FUNC *
 my_xpath_function(const char *beg, const char *end)
 {
   MY_XPATH_FUNC *k, *function_names;
-  uint length= end-beg;
+  size_t length= end-beg;
   switch (length)
   {
     case 1: return 0;
@@ -1317,7 +1326,7 @@ my_xpath_function(const char *beg, const char *end)
     default: function_names= my_func_names;
   }
   for (k= function_names; k->name; k++)
-    if (k->create && length == k->length && !strncasecmp(beg, k->name, length))
+    if (k->create && length == k->length && !native_strncasecmp(beg, k->name, length))
       return k;
   return NULL;
 }
@@ -2362,6 +2371,12 @@ static int my_xpath_parse_MultiplicativeExpr(MY_XPATH *xpath)
 */
 static int my_xpath_parse_UnaryExpr(MY_XPATH *xpath)
 {
+  THD *thd= current_thd;
+  uchar stack_top;
+
+  if (check_stack_overrun(thd, STACK_MIN_SIZE, &stack_top))
+    return 0;
+
   if (!my_xpath_parse_term(xpath, MY_XPATH_LEX_MINUS))
     return my_xpath_parse_UnionExpr(xpath);
   if (!my_xpath_parse_UnaryExpr(xpath))
@@ -2525,7 +2540,7 @@ my_xpath_parse_VariableReference(MY_XPATH *xpath)
     {
       Item_splocal *splocal= new Item_splocal(Name_string(name, false),
                                               spv->offset, spv->type, 0);
-#ifndef DBUG_OFF
+#ifndef NDEBUG
       if (splocal)
         splocal->m_sp= lex->sphead;
 #endif
@@ -2534,11 +2549,11 @@ my_xpath_parse_VariableReference(MY_XPATH *xpath)
     else
     {
       xpath->item= NULL;
-      DBUG_ASSERT(xpath->query.end > dollar_pos);
-      uint len= xpath->query.end - dollar_pos;
+      assert(xpath->query.end > dollar_pos);
+      size_t len= xpath->query.end - dollar_pos;
       set_if_smaller(len, 32);
-      my_printf_error(ER_UNKNOWN_ERROR, "Unknown XPATH variable at: '%.*s'", 
-                      MYF(0), len, dollar_pos);
+      my_printf_error(ER_UNKNOWN_ERROR, "Unknown XPATH variable at: '%.*s'",
+                      MYF(0), static_cast<int>(len), dollar_pos);
     }
   }
   return xpath->item ? 1 : 0;
@@ -2562,8 +2577,8 @@ my_xpath_parse_NodeTest_QName(MY_XPATH *xpath)
 {
   if (!my_xpath_parse_QName(xpath))
     return 0;
-  DBUG_ASSERT(xpath->context);
-  uint len= xpath->prevtok.end - xpath->prevtok.beg;
+  assert(xpath->context);
+  size_t len= xpath->prevtok.end - xpath->prevtok.beg;
   xpath->context= nametestfunc(xpath, xpath->axis, xpath->context,
                                xpath->prevtok.beg, len);
   return 1;
@@ -2573,7 +2588,7 @@ my_xpath_parse_NodeTest_asterisk(MY_XPATH *xpath)
 {
   if (!my_xpath_parse_term(xpath, MY_XPATH_LEX_ASTERISK))
     return 0;
-  DBUG_ASSERT(xpath->context);
+  assert(xpath->context);
   xpath->context= nametestfunc(xpath, xpath->axis, xpath->context, "*", 1);
   return 1;
 }
@@ -2642,10 +2657,10 @@ void Item_xml_str_func::fix_length_and_dec()
 
 void Item_xml_str_func::parse_xpath(Item* xpath_expr)
 {
-  String *xp, tmp;
+  String *xp;
   MY_XPATH xpath;
 
-  if (!(xp= xpath_expr->val_str(&tmp)))
+  if (!(xp= xpath_expr->val_str(&xpath_tmp_value)))
     return;
 
   my_xpath_init(&xpath);
@@ -2658,10 +2673,10 @@ void Item_xml_str_func::parse_xpath(Item* xpath_expr)
 
   if (!rc)
   {
-    uint clen= xpath.query.end - xpath.lasttok.beg;
+    size_t clen= xpath.query.end - xpath.lasttok.beg;
     set_if_smaller(clen, 32);
     my_printf_error(ER_UNKNOWN_ERROR, "XPATH syntax error: '%.*s'",
-                    MYF(0), clen, xpath.lasttok.beg);
+                    MYF(0), static_cast<int>(clen), xpath.lasttok.beg);
     return;
   }
 
@@ -2719,14 +2734,14 @@ extern "C" int xml_enter(MY_XML_PARSER *st,const char *attr, size_t len);
 int xml_enter(MY_XML_PARSER *st,const char *attr, size_t len)
 {
   MY_XML_USER_DATA *data= (MY_XML_USER_DATA*)st->user_data;
-  uint numnodes= data->pxml->length() / sizeof(MY_XML_NODE);
+  size_t numnodes= data->pxml->length() / sizeof(MY_XML_NODE);
   MY_XML_NODE node;
 
   node.parent= data->parent; // Set parent for the new node to old parent
   data->parent= numnodes;    // Remember current node as new parent
-  DBUG_ASSERT(data->level <= MAX_LEVEL);
+  assert(data->level < MAX_LEVEL);
   data->pos[data->level]= numnodes;
-  if (data->level < MAX_LEVEL)
+  if (data->level < MAX_LEVEL - 1)
     node.level= data->level++;
   else
     return MY_XML_ERROR;
@@ -2782,7 +2797,7 @@ extern "C" int xml_leave(MY_XML_PARSER *st,const char *attr, size_t len);
 int xml_leave(MY_XML_PARSER *st,const char *attr, size_t len)
 {
   MY_XML_USER_DATA *data= (MY_XML_USER_DATA*)st->user_data;
-  DBUG_ASSERT(data->level > 0);
+  assert(data->level > 0);
   data->level--;
 
   MY_XML_NODE *nodes= (MY_XML_NODE*) data->pxml->ptr();
@@ -2835,7 +2850,7 @@ String *Item_xml_str_func::parse_xml(String *raw_xml, String *parsed_xml_buf)
                 my_xml_error_lineno(&p) + 1,
                 (ulong) my_xml_error_pos(&p) + 1,
                 my_xml_error_string(&p));
-    push_warning_printf(current_thd, Sql_condition::WARN_LEVEL_WARN,
+    push_warning_printf(current_thd, Sql_condition::SL_WARNING,
                         ER_WRONG_VALUE,
                         ER(ER_WRONG_VALUE), "XML", buf);
   }

@@ -1,13 +1,20 @@
-/* Copyright (c) 2008, 2015, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation; version 2 of the License.
+  it under the terms of the GNU General Public License, version 2.0,
+  as published by the Free Software Foundation.
+
+  This program is also distributed with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an additional
+  permission to link the program and your derivative works with the
+  separately licensed software that they have included with MySQL.
 
   This program is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
+  GNU General Public License, version 2.0, for more details.
 
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software Foundation,
@@ -26,8 +33,6 @@
 
 /** True when the performance schema is initialized. */
 extern bool pfs_initialized;
-/** Total memory allocated by the performance schema, in bytes. */
-extern size_t pfs_allocated_memory;
 
 #if defined(HAVE_POSIX_MEMALIGN) || defined(HAVE_MEMALIGN) || defined(HAVE_ALIGNED_MALLOC)
 #define PFS_ALIGNEMENT 64
@@ -41,23 +46,74 @@ extern size_t pfs_allocated_memory;
 #define PFS_ALIGNED
 #endif /* HAVE_POSIX_MEMALIGN || HAVE_MEMALIGN || HAVE_ALIGNED_MALLOC */
 
-void *pfs_malloc(size_t size, myf flags);
+#ifdef CPU_LEVEL1_DCACHE_LINESIZE
+#define PFS_CACHE_LINE_SIZE CPU_LEVEL1_DCACHE_LINESIZE
+#else
+#define PFS_CACHE_LINE_SIZE 128
+#endif
+
+/**
+  A uint32 variable, guaranteed to be alone in a CPU cache line.
+  This is for performance, for variables accessed very frequently.
+*/
+struct PFS_cacheline_uint32
+{
+  uint32 m_u32;
+  char m_full_cache_line[PFS_CACHE_LINE_SIZE - sizeof(uint32)];
+
+  PFS_cacheline_uint32()
+  : m_u32(0)
+  {}
+};
+
+/**
+  A uint64 variable, guaranteed to be alone in a CPU cache line.
+  This is for performance, for variables accessed very frequently.
+*/
+struct PFS_cacheline_uint64
+{
+  uint64 m_u64;
+  char m_full_cache_line[PFS_CACHE_LINE_SIZE - sizeof(uint64)];
+
+  PFS_cacheline_uint64()
+  : m_u64(0)
+  {}
+};
+
+struct PFS_builtin_memory_class;
+
+/** Memory allocation for the performance schema. */
+void *pfs_malloc(PFS_builtin_memory_class *klass, size_t size, myf flags);
 
 /** Allocate an array of structures with overflow check. */
-void *pfs_malloc_array(size_t n, size_t size, myf flags);
+void *pfs_malloc_array(PFS_builtin_memory_class *klass, size_t n, size_t size, myf flags);
 
 /**
   Helper, to allocate an array of structures.
+  @param k memory class
   @param n number of elements in the array
   @param s size of array element
   @param T type of an element
   @param f flags to use when allocating memory
 */
-#define PFS_MALLOC_ARRAY(n, s, T, f) \
-  reinterpret_cast<T*>(pfs_malloc_array((n), (s), (f)))
+#define PFS_MALLOC_ARRAY(k, n, s, T, f) \
+  reinterpret_cast<T*>(pfs_malloc_array((k), (n), (s), (f)))
 
 /** Free memory allocated with @sa pfs_malloc. */
-void pfs_free(void *ptr);
+void pfs_free(PFS_builtin_memory_class *klass, size_t size, void *ptr);
+
+/** Free memory allocated with @sa pfs_malloc_array. */
+void pfs_free_array(PFS_builtin_memory_class *klass, size_t n, size_t size, void *ptr);
+
+/**
+  Helper, to free an array of structures.
+  @param k memory class
+  @param n number of elements in the array
+  @param s size of array element
+  @param p the array to free
+*/
+#define PFS_FREE_ARRAY(k, n, s, p) \
+  pfs_free_array((k), (n), (s), (p))
 
 /** Detect multiplication overflow. */
 bool is_overflow(size_t product, size_t n1, size_t n2);
@@ -79,7 +135,7 @@ inline uint randomized_index(const void *ptr, uint max_size)
   static uint seed1= 0;
   static uint seed2= 0;
   uint result;
-  register intptr value;
+  intptr value;
 
   if (unlikely(max_size == 0))
     return 0;
@@ -118,7 +174,7 @@ inline uint randomized_index(const void *ptr, uint max_size)
   seed2= seed1*seed1;
   seed1= result;
 
-  DBUG_ASSERT(result < max_size);
+  assert(result < max_size);
   return result;
 }
 

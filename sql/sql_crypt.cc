@@ -1,13 +1,20 @@
-/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
@@ -20,9 +27,11 @@
  The strongness of this crypt is large based on how good the random
  generator is.	It should be ok for short strings, but for communication one
  needs something like 'ssh'.
+
+ WARNING: This class is deprecated and will be removed in the next
+ server version. Please use AES encrypt/decrypt instead
 */
 
-#include "sql_priv.h"
 #include "sql_crypt.h"
 #include "password.h"
 
@@ -48,9 +57,9 @@ void SQL_CRYPT::init(ulong *rand_nr)
 }
 
 
-void SQL_CRYPT::encode(char *str,uint length)
+void SQL_CRYPT::encode(char *str, size_t length)
 {
-  for (uint i=0; i < length; i++)
+  for (size_t i=0; i < length; i++)
   {
     shift^=(uint) (my_rnd(&rand)*255.0);
     uint idx= (uint) (uchar) str[0];
@@ -60,9 +69,9 @@ void SQL_CRYPT::encode(char *str,uint length)
 }
 
 
-void SQL_CRYPT::decode(char *str,uint length)
+void SQL_CRYPT::decode(char *str, size_t length)
 {
-  for (uint i=0; i < length; i++)
+  for (size_t i=0; i < length; i++)
   {
     shift^=(uint) (my_rnd(&rand)*255.0);
     uint idx= (uint) ((uchar) str[0] ^ shift);

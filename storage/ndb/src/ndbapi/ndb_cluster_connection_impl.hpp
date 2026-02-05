@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2004, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2004, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -23,6 +30,7 @@
 #include <Vector.hpp>
 #include <NdbMutex.h>
 #include "DictCache.hpp"
+#include "kernel/ndb_limits.h"
 
 extern NdbMutex *g_ndb_connection_mutex;
 
@@ -43,7 +51,8 @@ struct NdbApiConfig
     m_batch_byte_size(SCAN_BATCH_SIZE),
     m_batch_size(DEF_BATCH_SIZE),
     m_waitfor_timeout(120000),
-    m_default_queue_option(0)
+    m_default_queue_option(0),
+    m_default_hashmap_size(0)
     {}
 
   Uint32 m_scan_batch_size;
@@ -51,6 +60,7 @@ struct NdbApiConfig
   Uint32 m_batch_size;
   Uint32 m_waitfor_timeout; // in milli seconds...
   Uint32 m_default_queue_option;
+  Uint32 m_default_hashmap_size;
 };
 
 class Ndb_cluster_connection_impl : public Ndb_cluster_connection
@@ -74,10 +84,12 @@ public:
 private:
   friend class Ndb;
   friend class NdbImpl;
+  friend class NdbWaitGroup;
   friend void* run_ndb_cluster_connection_connect_thread(void*);
   friend class Ndb_cluster_connection;
   friend class NdbEventBuffer;
   friend class SignalSender;
+  friend class NDBT_Context;
   
   struct Node
   {
@@ -97,6 +109,7 @@ private:
   void connect_thread();
   void set_name(const char *name);
   Uint32 get_db_nodes(Uint8 nodesarray[MAX_NDB_NODES]) const;
+  Uint32 get_unconnected_nodes() const;
 
   int connect(int no_retries,
               int retry_delay_in_seconds,
@@ -115,6 +128,7 @@ private:
   Uint64 m_latest_trans_gci;
 
   NdbMutex* m_new_delete_ndb_mutex;
+  NdbCondition* m_new_delete_ndb_cond;
   Ndb* m_first_ndb_object;
   void link_ndb_object(Ndb*);
   void unlink_ndb_object(Ndb*);
@@ -131,6 +145,8 @@ private:
   // Base offset for stats, from Ndb objects that are no 
   // longer with us
   Uint64 globalApiStatsBaseline[ Ndb::NumClientStatistics ];
+
+  NdbWaitGroup *m_multi_wait_group;
 };
 
 #endif

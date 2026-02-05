@@ -1,3 +1,4 @@
+
 #
 # Demonstrate how SIGNAL can be used to enforce integrity constraints.
 #
@@ -299,6 +300,9 @@ call po_add_order_line (@my_po, 2, 301, 20);
 # Raw data
 select * from po_order;
 select * from po_order_line;
+
+SELECT * FROM ab_physical_person;
+SELECT * FROM ab_moral_person;
 
 # Creative reporting ...
 

@@ -1,15 +1,22 @@
 /*
-   Copyright (C) 2004-2007 MySQL AB, 2008 Sun Microsystems, Inc.
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2004, 2021, Oracle and/or its affiliates.
+   Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -60,14 +67,33 @@ getTypeOf(Uint32 k) {
   return (ConfigValues::ValueType)((k >> KP_TYPE_SHIFT) & KP_TYPE_MASK);
 }
 
-ConfigValues::ConfigValues(Uint32 sz, Uint32 dsz){
-  m_size = sz;
-  m_dataSize = dsz;
+ConfigValues::ConfigValues(Uint32 sz, Uint32 dsz)
+: m_size(sz),
+  m_dataSize(dsz)
+{
+  assert(dsz % sizeof(char const*) == 0);
+  assert(dsz % sizeof(Uint64) == 0);
+  assert(my_offsetof(ConfigValues, m_values) % 8 == 0);
   m_stringCount = 0;
   m_int64Count = 0;
   for(Uint32 i = 0; i<m_size; i++){
-    m_values[i << 1] = CFV_KEY_FREE;
+   m_values[i << 1] = CFV_KEY_FREE;
   }
+}
+
+ConfigValues*
+ConfigValues::constructInPlace(Uint32 keys, Uint32 data, void* place, size_t size)
+{
+  assert(size >= sizeInBytes(keys, data));
+  return new (place) ConfigValues(keys, data);
+}
+
+size_t
+ConfigValues::sizeInBytes(Uint32 keys, Uint32 data)
+{
+  return my_offsetof(ConfigValues, m_values) +
+         keys * 2 * sizeof(Uint32) +
+         data * sizeof(char);
 }
 
 ConfigValues::~ConfigValues(){
@@ -129,12 +155,14 @@ ConfigValues::getString(Uint32 index) const {
   const Uint32 * data = m_values + (m_size << 1);
   char * ptr = (char*)data;
   ptr += m_dataSize; 
-  ptr -= (index * sizeof(char *));
+  ptr -= ((index + 1) * sizeof(char *));
   return (char**)ptr;
 }
 
 bool
 ConfigValues::ConstIterator::openSection(Uint32 key, Uint32 no){
+  // Nested section are not in use. See also ConfigValuesFactory::openSection().
+  assert(m_currentSection == 0);
   Uint32 curr = m_currentSection;
   
   Entry tmp;
@@ -317,13 +345,11 @@ ConfigValuesFactory::~ConfigValuesFactory()
 }
 
 ConfigValues *
-ConfigValuesFactory::create(Uint32 keys, Uint32 data){
-  Uint32 sz = sizeof(ConfigValues);
-  sz += (2 * keys * sizeof(Uint32)); 
-  sz += data;
-  
+ConfigValuesFactory::create(Uint32 keys, Uint32 data)
+{
+  size_t sz = ConfigValues::sizeInBytes(keys, data);
   void * tmp = malloc(sz);
-  return new (tmp) ConfigValues(keys, data);
+  return ConfigValues::constructInPlace(keys, data, tmp, sz);
 }
 
 void
@@ -366,6 +392,13 @@ ConfigValuesFactory::shrink(){
 
 bool
 ConfigValuesFactory::openSection(Uint32 key, Uint32 no){
+  /*
+    NOTE: The code seems to suggest that sections could be nested, so that
+    you could open a section and then call openSection() again to open
+    a subsection. But this pattern is currently not in use. The assert below 
+    prevents accidential use of nested sections.
+  */
+  assert(m_currentSection == 0);
   ConfigValues::Entry tmp;
   const Uint32 parent = m_currentSection;
 
@@ -478,6 +511,7 @@ ConfigValuesFactory::put(const ConfigValues::Entry & entry){
     }
   }
   
+  assert(m_freeKeys > 0);
   switch(entry.m_type){
   case ConfigValues::IntType:
   case ConfigValues::SectionType:
@@ -494,6 +528,7 @@ ConfigValuesFactory::put(const ConfigValues::Entry & entry){
     char **  ref = m_cfg->getString(index);
     * ref = strdup(entry.m_string ? entry.m_string : "");
     m_freeKeys--;
+    assert(m_freeData >= sizeof(char*));
     m_freeData -= sizeof(char *);
     DEBUG printf("Putting at: %d(%d) (loop = %d) key: %d value(%d): %s\n", 
 		   pos, sz, 0, 
@@ -507,6 +542,7 @@ ConfigValuesFactory::put(const ConfigValues::Entry & entry){
     m_cfg->m_values[pos+1] = index;
     * m_cfg->get64(index) = entry.m_int64;
     m_freeKeys--;
+    assert(m_freeData >= 8);
     m_freeData -= 8;
     DEBUG printf("Putting at: %d(%d) (loop = %d) key: %d value64(%d): %lld\n", 
 		   pos, sz, 0, 
@@ -566,7 +602,7 @@ ConfigValuesFactory::extractCurrentSection(const ConfigValues::ConstIterator & c
 ConfigValues *
 ConfigValuesFactory::getConfigValues(){
   ConfigValues * ret = m_cfg;
-  m_cfg = create(10, 10);
+  m_cfg = create(10, 16);
   return ret;
 }
 
@@ -580,8 +616,9 @@ Uint32
 ConfigValues::getPackedSize() const {
 
   Uint32 size = 0;
+  Uint32 const* values = m_values;
   for(Uint32 i = 0; i < 2 * m_size; i += 2){
-    Uint32 key = m_values[i];
+    Uint32 key = values[i];
     if(key != CFV_KEY_FREE){
       switch(::getTypeOf(key)){
       case IntType:
@@ -593,7 +630,7 @@ ConfigValues::getPackedSize() const {
 	break;
       case StringType:
 	size += 8; // key + len
-	size += mod4(strlen(* getString(m_values[i+1])) + 1);
+        size += mod4((unsigned)strlen(* getString(values[i+1])) + 1);
 	break;
       case InvalidType:
       default:
@@ -611,9 +648,10 @@ ConfigValues::pack(void * _dst, Uint32 _len) const {
   char * dst = (char*)_dst;
   memcpy(dst, Magic, sizeof(Magic)); dst += sizeof(Magic);
 
+  Uint32 const* values = m_values;
   for(i = 0; i < 2 * m_size; i += 2){
-    Uint32 key = m_values[i];
-    Uint32 val = m_values[i+1];
+    Uint32 key = values[i];
+    Uint32 val = values[i+1];
     if(key != CFV_KEY_FREE){
       switch(::getTypeOf(key)){
       case IntType:

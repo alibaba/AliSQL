@@ -1,7 +1,8 @@
 # This test assumes we are ignoring updates on table t2, but doing
 # updates on t1
-source include/master-slave.inc;
+--source include/not_group_replication_plugin.inc
 source include/not_gtid_enabled.inc;
+source include/master-slave.inc;
 
 --disable_warnings
 drop table if exists t11;
@@ -44,21 +45,25 @@ create trigger trg1 before insert on t1 for each row set new.b=2;
 create table t2 (a int, b int);
 create trigger trg2 before insert on t2 for each row set new.b=2;
 show tables;
+--replace_column 6 #
 show triggers;
 --source include/sync_slave_sql_with_master.inc
 --echo *** slave ***
 connection slave;
 show tables;
+--replace_column 6 #
 show triggers;
 --echo *** master ***
 connection master;
 drop trigger trg1;
 drop trigger trg2;
+--replace_column 6 #
 show triggers;
 --source include/sync_slave_sql_with_master.inc
 --echo *** slave ***
 connection slave;
 show tables;
+--replace_column 6 #
 show triggers;
 --echo *** master ***
 connection master;

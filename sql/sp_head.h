@@ -1,13 +1,20 @@
-/* Copyright (c) 2002, 2014, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2002, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -16,15 +23,9 @@
 #ifndef _SP_HEAD_H_
 #define _SP_HEAD_H_
 
-/*
-  It is necessary to include set_var.h instead of item.h because there
-  are dependencies on include order for set_var.h and item.h. This
-  will be resolved later.
-*/
 #include "my_global.h"                          /* NO_EMBEDDED_ACCESS_CHECKS */
-#include "sql_class.h"                          // THD, set_var.h: THD
-#include "set_var.h"                            // Item
-#include "sp_pcontext.h"                        // sp_pcontext
+#include "sql_class.h"                          // THD
+#include "mem_root_array.h"
 
 /**
   @defgroup Stored_Routines Stored Routines
@@ -32,9 +33,21 @@
   @{
 */
 
-class sp_instr;
 class sp_branch_instr;
+class sp_instr;
 class sp_lex_branch_instr;
+class sp_pcontext;
+
+/**
+  Number of PSI_statement_info instruments
+  for internal stored programs statements.
+*/
+#define SP_PSI_STATEMENT_INFO_COUNT 16
+
+#ifdef HAVE_PSI_INTERFACE
+void init_sp_psi_keys(void);
+#endif
+
 
 ///////////////////////////////////////////////////////////////////////////
 
@@ -107,12 +120,12 @@ class sp_name : public Sql_alloc
 {
 public:
 
-  LEX_STRING m_db;
+  LEX_CSTRING m_db;
   LEX_STRING m_name;
   LEX_STRING m_qname;
   bool       m_explicit_name;                   /**< Prepend the db name? */
 
-  sp_name(LEX_STRING db, LEX_STRING name, bool use_explicit_name)
+  sp_name(const LEX_CSTRING &db, const LEX_STRING &name, bool use_explicit_name)
     : m_db(db), m_name(name), m_explicit_name(use_explicit_name)
   {
     m_qname.str= 0;
@@ -225,8 +238,8 @@ public:
   */
   const char *pop_expr_start_ptr()
   {
-#ifndef DBUG_OFF
-    DBUG_ASSERT(m_expr_start_ptr);
+#ifndef NDEBUG
+    assert(m_expr_start_ptr);
     const char *p= m_expr_start_ptr;
     m_expr_start_ptr= NULL;
     return p;
@@ -245,7 +258,7 @@ public:
   */
   void push_expr_start_ptr(const char *expr_start_ptr)
   {
-    DBUG_ASSERT(!m_expr_start_ptr);
+    assert(!m_expr_start_ptr);
     m_expr_start_ptr= expr_start_ptr;
   }
 
@@ -483,6 +496,11 @@ public:
   uint m_flags;
 
   /**
+    Instrumentation interface for SP.
+  */
+  PSI_sp_share *m_sp_share;
+
+  /**
     Definition of the RETURN-field (from the RETURNS-clause).
     It's used (and valid) for stored functions only.
   */
@@ -570,9 +588,9 @@ public:
   /**
     List of item (Item_trigger_field objects)'s lists representing fields
     in old/new version of row in trigger. We use this list for checking
-    whether all such fields are valid or not at trigger creation time and
-    for binding these fields to TABLE object at table open (although for
-    latter pointer to table being opened is probably enough).
+    whether all such fields are valid or not at trigger creation time and for
+    binding these fields to TABLE object at table open (although for latter
+    pointer to table being opened is probably enough).
   */
   SQL_I_List<SQL_I_List<Item_trigger_field> > m_list_of_trig_fields_item_lists;
   /**
@@ -586,8 +604,8 @@ public:
   /// Trigger characteristics.
   st_trg_chistics m_trg_chistics;
 
-  /// The Table_triggers_list instance, where this trigger belongs to.
-  class Table_triggers_list *m_trg_list;
+  /// The Table_trigger_dispatcher instance, where this trigger belongs to.
+  class Table_trigger_dispatcher *m_trg_list;
 
 public:
   static void *operator new(size_t size) throw ();
@@ -603,11 +621,11 @@ public:
     Get the value of the SP cache version, as remembered
     when the routine was inserted into the cache.
   */
-  ulong sp_cache_version() const
+  int64 sp_cache_version() const
   { return m_sp_cache_version; }
 
   /// Set the value of the SP cache version.
-  void set_sp_cache_version(ulong sp_cache_version)
+  void set_sp_cache_version(int64 sp_cache_version)
   { m_sp_cache_version= sp_cache_version; }
 
   Stored_program_creation_ctx *get_creation_ctx()
@@ -621,6 +639,15 @@ public:
 
   /// Set the statement-definition (body-definition) end position.
   void set_body_end(THD *thd);
+
+  bool setup_trigger_fields(THD *thd,
+                            Table_trigger_field_support *tfs,
+                            GRANT_INFO *subject_table_grant,
+                            bool need_fix_fields);
+
+  void mark_used_trigger_fields(TABLE *subject_table);
+
+  bool has_updated_trigger_fields(const MY_BITMAP *used_fields) const;
 
   /**
     Execute trigger stored program.
@@ -645,8 +672,8 @@ public:
     @return Error status.
   */
   bool execute_trigger(THD *thd,
-                       const LEX_STRING *db_name,
-                       const LEX_STRING *table_name,
+                       const LEX_CSTRING &db_name,
+                       const LEX_CSTRING &table_name,
                        GRANT_INFO *grant_info);
 
   /**
@@ -730,10 +757,10 @@ public:
   { return m_flags & MODIFIES_DATA; }
 
   uint instructions()
-  { return m_instructions.elements(); }
+  { return static_cast<uint>(m_instructions.size()); }
 
   sp_instr *last_instruction()
-  { return *m_instructions.back(); }
+  { return m_instructions.back(); }
 
   /**
     Reset LEX-object during parsing, before we parse a sub statement.
@@ -773,7 +800,7 @@ public:
     @return newly created and initialized Field-instance,
     or NULL in case of error.
   */
-  Field *create_result_field(uint field_max_length,
+  Field *create_result_field(size_t field_max_length,
                              const char *field_name,
                              TABLE *table);
 
@@ -782,8 +809,8 @@ public:
 		st_sp_chistics *chistics,
                 sql_mode_t sql_mode);
 
-  void set_definer(const char *definer, uint definerlen);
-  void set_definer(const LEX_STRING *user_name, const LEX_STRING *host_name);
+  void set_definer(const char *definer, size_t definerlen);
+  void set_definer(const LEX_CSTRING &user_name, const LEX_CSTRING &host_name);
 
   /**
     Do some minimal optimization of the code:
@@ -820,7 +847,7 @@ public:
   */
   sp_instr *get_instr(uint i)
   {
-    return (i < (uint) m_instructions.elements()) ? m_instructions.at(i) : NULL;
+    return (i < (uint) m_instructions.size()) ? m_instructions.at(i) : NULL;
   }
 
   /**
@@ -836,14 +863,14 @@ public:
     @param[in,out] query_tables_last_ptr  Pointer to the next_global member of
                                           last element of the list where tables
                                           will be added (or to its root).
+    @param[in] sql_command                SQL-command for which we are adding
+                                          elements to the table list.
     @param[in] belong_to_view             Uppermost view which uses this routine,
                                           NULL if none.
-
-    @retval true  if some elements were added
-    @retval false otherwise.
   */
-  bool add_used_tables_to_table_list(THD *thd,
+  void add_used_tables_to_table_list(THD *thd,
                                      TABLE_LIST ***query_tables_last_ptr,
+                                     enum_sql_command sql_command,
                                      TABLE_LIST *belong_to_view);
 
   /**
@@ -871,7 +898,7 @@ public:
                     HAS_COMMIT_OR_ROLLBACK|HAS_SQLCOM_RESET|HAS_SQLCOM_FLUSH));
   }
 
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   /**
     Return the routine instructions as a result set.
     @return Error status.
@@ -959,7 +986,7 @@ private:
   sp_pcontext *m_root_parsing_ctx;
 
   /// The SP-instructions.
-  Dynamic_array<sp_instr *> m_instructions;
+  Mem_root_array<sp_instr *, true> m_instructions;
 
   /**
     Multi-set representing optimized list of tables to be locked by this
@@ -982,7 +1009,7 @@ private:
     is obsolete and should not be used --
     sp_cache_flush_obsolete() will purge it.
   */
-  ulong m_sp_cache_version;
+  int64 m_sp_cache_version;
 
   /// Snapshot of several system variables at CREATE-time.
   Stored_program_creation_ctx *m_creation_ctx;

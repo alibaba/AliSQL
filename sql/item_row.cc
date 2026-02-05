@@ -1,53 +1,45 @@
-/* Copyright (c) 2002, 2013, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2002, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
    51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
 
-#include "sql_priv.h"
-/*
-  It is necessary to include set_var.h instead of item.h because there
-  are dependencies on include order for set_var.h and item.h. This
-  will be resolved later.
-*/
-#include "sql_class.h"                          // THD, set_var.h: THD
-#include "set_var.h"
+#include "item_row.h"
 
-/**
-  Row items used for comparing rows and IN operations on rows:
+#include "sql_class.h"  // THD
 
-  @verbatim
-  (a, b, c) > (10, 10, 30)
-  (a, b, c) = (select c, d, e, from t1 where x=12)
-  (a, b, c) IN ((1,2,2), (3,4,5), (6,7,8)
-  (a, b, c) IN (select c, d, e, from t1)
-  @endverbatim
-
-  @todo
-    think placing 2-3 component items in item (as it done for function
-*/
-
-Item_row::Item_row(List<Item> &arg):
-  Item(), used_tables_cache(0), not_null_tables_cache(0),
+Item_row::Item_row(const POS &pos, Item *head, List<Item> &tail):
+  super(pos), used_tables_cache(0), not_null_tables_cache(0),
   const_item_cache(1), with_null(0)
 {
 
   //TODO: think placing 2-3 component items in item (as it done for function)
-  if ((arg_count= arg.elements))
-    items= (Item**) sql_alloc(sizeof(Item*)*arg_count);
-  else
-    items= 0;
-  List_iterator<Item> li(arg);
-  uint i= 0;
+  arg_count= 1 + tail.elements;
+  items= (Item**) sql_alloc(sizeof(Item*)*arg_count);
+  if (items == NULL)
+  {
+    arg_count= 0;
+    return; // OOM
+  }
+  items[0]= head;
+  List_iterator<Item> li(tail);
+  uint i= 1;
   Item *item;
   while ((item= li++))
   {
@@ -80,24 +72,39 @@ Item_row::Item_row(Item *head, List<Item> &tail):
   }
 }
 
+bool Item_row::itemize(Parse_context *pc, Item **res)
+{
+  if (skip_itemize(res))
+    return false;
+  if (super::itemize(pc, res))
+    return true;
+  for (uint i= 0; i < arg_count; i++)
+  {
+    if (items[i]->itemize(pc, &items[i]))
+      return true;
+  }
+  return false;
+}
+
+
 void Item_row::illegal_method_call(const char *method)
 {
   DBUG_ENTER("Item_row::illegal_method_call");
   DBUG_PRINT("error", ("!!! %s method was called for row item", method));
-  DBUG_ASSERT(0);
+  assert(0);
   my_error(ER_OPERAND_COLUMNS, MYF(0), 1);
   DBUG_VOID_RETURN;
 }
 
 bool Item_row::fix_fields(THD *thd, Item **ref)
 {
-  DBUG_ASSERT(fixed == 0);
+  assert(fixed == 0);
   null_value= 0;
   maybe_null= 0;
   Item **arg, **arg_end;
   for (arg= items, arg_end= items+arg_count; arg != arg_end ; arg++)
   {
-    if (!(*arg)->fixed && (*arg)->fix_fields(thd, arg))
+    if ((!(*arg)->fixed && (*arg)->fix_fields(thd, arg)))
       return TRUE;
     // we can't assign 'item' before, because fix_fields() can change arg
     Item *item= *arg;
@@ -201,20 +208,23 @@ void Item_row::print(String *str, enum_query_type query_type)
 }
 
 
-bool Item_row::walk(Item_processor processor, bool walk_subquery, uchar *arg)
+bool Item_row::walk(Item_processor processor, enum_walk walk, uchar *arg)
 {
+  if ((walk & WALK_PREFIX) && (this->*processor)(arg))
+    return true;
+
   for (uint i= 0; i < arg_count; i++)
   {
-    if (items[i]->walk(processor, walk_subquery, arg))
-      return 1;
+    if (items[i]->walk(processor, walk, arg))
+      return true;
   }
-  return (this->*processor)(arg);
+  return (walk & WALK_POSTFIX) && (this->*processor)(arg);
 }
 
 
 Item *Item_row::transform(Item_transformer transformer, uchar *arg)
 {
-  DBUG_ASSERT(!current_thd->stmt_arena->is_stmt_prepare());
+  assert(!current_thd->stmt_arena->is_stmt_prepare());
 
   for (uint i= 0; i < arg_count; i++)
   {

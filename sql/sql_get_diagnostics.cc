@@ -1,13 +1,20 @@
-/* Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -17,6 +24,7 @@
 #include "sql_cmd.h"                  // Sql_cmd
 #include "sql_class.h"                // Diagnostics_area
 #include "sql_get_diagnostics.h"      // Sql_cmd_get_diagnostics
+#include "sp_rcontext.h"              // sp_rcontext
 
 /**
   Execute this GET DIAGNOSTICS statement.
@@ -24,15 +32,15 @@
   @param thd The current thread.
 
   @remark Errors or warnings occurring during the execution of the GET
-          DIAGNOSTICS statement should not affect the diagnostics area
+          DIAGNOSTICS statement should not affect the Diagnostics Area
           of a previous statement as the diagnostics information there
           would be wiped out. Thus, in order to preserve the contents
-          of the diagnostics area from which information is being
+          of the Diagnostics Area from which information is being
           retrieved, the GET DIAGNOSTICS statement is executed under
-          a separate diagnostics area. If any errors or warnings occur
+          a separate Diagnostics Area. If any errors or warnings occur
           during the execution of the GET DIAGNOSTICS statement, these
           error or warnings (conditions) are appended to the list of
-          the original diagnostics area. The only exception to this is
+          the original Diagnostics Area. The only exception to this is
           fatal errors, which must always cause the statement to fail.
 
   @retval false on success.
@@ -42,48 +50,69 @@
 bool
 Sql_cmd_get_diagnostics::execute(THD *thd)
 {
-  bool rv;
-  Diagnostics_area new_stmt_da(thd->query_id, false);
-  Diagnostics_area *save_stmt_da= thd->get_stmt_da();
+  bool rc;
+  Diagnostics_area new_stmt_da(false);
+  Diagnostics_area *first_da= thd->get_stmt_da();
+  const Diagnostics_area *second_da= thd->get_stacked_da();
   DBUG_ENTER("Sql_cmd_get_diagnostics::execute");
 
-  /* Disable the unneeded read-only mode of the original DA. */
-  save_stmt_da->set_warning_info_read_only(false);
+  /* Push new Diagnostics Area, execute statement and pop. */
+  thd->push_diagnostics_area(&new_stmt_da);
+  /*
+    Reset the condition counter.
+    This statement has just started and has not generated any conditions
+    on its own. However the condition counter will have been updated by
+    push_diagnostics_area() to match the number of conditions present in
+    first_da. It is therefore necessary to reset so we don't inherit the
+    old counter value.
+  */
+  new_stmt_da.reset_statement_cond_count();
 
-  /* Set new diagnostics area, execute statement and restore. */
-  thd->set_stmt_da(&new_stmt_da);
-  rv= m_info->aggregate(thd, save_stmt_da);
-  thd->set_stmt_da(save_stmt_da);
+  if (m_info->get_which_da() == Diagnostics_information::STACKED_AREA)
+  {
+    // STACKED_AREA only allowed inside handlers
+    if (!thd->sp_runtime_ctx ||
+        !thd->sp_runtime_ctx->current_handler_frame())
+    {
+      my_error(ER_GET_STACKED_DA_WITHOUT_ACTIVE_HANDLER, MYF(ME_FATALERROR));
+      rc = true;
+    }
+    else
+      rc= m_info->aggregate(thd, second_da);
+  }
+  else
+    rc= m_info->aggregate(thd, first_da);
+  thd->pop_diagnostics_area();
 
   /* Bail out early if statement succeeded. */
-  if (! rv)
+  if (! rc)
   {
     thd->get_stmt_da()->set_ok_status(0, 0, NULL);
     DBUG_RETURN(false);
   }
 
   /* Statement failed, retrieve the error information for propagation. */
-  uint sql_errno= new_stmt_da.sql_errno();
-  const char *message= new_stmt_da.message();
-  const char *sqlstate= new_stmt_da.get_sqlstate();
+  uint sql_errno= new_stmt_da.mysql_errno();
+  const char *message= new_stmt_da.message_text();
+  const char *sqlstate= new_stmt_da.returned_sqlstate();
 
   /* In case of a fatal error, set it into the original DA.*/
   if (thd->is_fatal_error)
   {
-    save_stmt_da->set_error_status(sql_errno, message, sqlstate, NULL);
+    first_da->set_error_status(sql_errno, message, sqlstate);
     DBUG_RETURN(true);
   }
 
   /* Otherwise, just append the new error as a exception condition. */
-  save_stmt_da->push_warning(thd, sql_errno, sqlstate,
-                             Sql_condition::WARN_LEVEL_ERROR,
-                             message);
+  first_da->push_warning(thd, sql_errno, sqlstate,
+                         Sql_condition::SL_ERROR,
+                         message);
 
   /* Appending might have failed. */
-  if (! (rv= thd->is_error()))
+  if (! (rc= thd->is_error()))
     thd->get_stmt_da()->set_ok_status(0, 0, NULL);
 
-  DBUG_RETURN(rv);
+  DBUG_RETURN(rc);
 }
 
 
@@ -100,27 +129,27 @@ Sql_cmd_get_diagnostics::execute(THD *thd)
 bool
 Diagnostics_information_item::set_value(THD *thd, Item **value)
 {
-  bool rv;
+  bool rc;
   Settable_routine_parameter *srp;
   DBUG_ENTER("Diagnostics_information_item::set_value");
 
   /* Get a settable reference to the target. */
   srp= m_target->get_settable_routine_parameter();
 
-  DBUG_ASSERT(srp);
+  assert(srp);
 
   /* Set variable/parameter value. */
-  rv= srp->set_value(thd, thd->sp_runtime_ctx, value);
+  rc= srp->set_value(thd, thd->sp_runtime_ctx, value);
 
-  DBUG_RETURN(rv);
+  DBUG_RETURN(rc);
 }
 
 
 /**
-  Obtain statement information in the context of a given diagnostics area.
+  Obtain statement information in the context of a given Diagnostics Area.
 
   @param thd  The current thread.
-  @param da   The diagnostics area.
+  @param da   The Diagnostics Area.
 
   @retval false on success.
   @retval true on error
@@ -136,7 +165,7 @@ Statement_information::aggregate(THD *thd, const Diagnostics_area *da)
 
   /*
     Each specified target gets the value of each given
-    information item obtained from the diagnostics area.
+    information item obtained from the Diagnostics Area.
   */
   while ((stmt_info_item= it++))
   {
@@ -150,10 +179,10 @@ Statement_information::aggregate(THD *thd, const Diagnostics_area *da)
 
 /**
   Obtain the value of this statement information item in the context of
-  a given diagnostics area.
+  a given Diagnostics Area.
 
   @param thd  The current thread.
-  @param da   The diagnostics area.
+  @param da   The Diagnostics Area.
 
   @retval Item representing the value.
   @retval NULL on error.
@@ -169,7 +198,7 @@ Statement_information_item::get_value(THD *thd, const Diagnostics_area *da)
   {
   /*
     The number of condition areas that have information. That is,
-    the number of errors and warnings within the diagnostics area.
+    the number of errors and warnings within the Diagnostics Area.
   */
   case NUMBER:
   {
@@ -192,10 +221,10 @@ Statement_information_item::get_value(THD *thd, const Diagnostics_area *da)
 
 
 /**
-  Obtain condition information in the context of a given diagnostics area.
+  Obtain condition information in the context of a given Diagnostics Area.
 
   @param thd  The current thread.
-  @param da   The diagnostics area.
+  @param da   The Diagnostics Area.
 
   @retval false on success.
   @retval true on error
@@ -220,7 +249,7 @@ Condition_information::aggregate(THD *thd, const Diagnostics_area *da)
   cond_number= m_cond_number_expr->val_int();
 
   /*
-    Limit to the number of available conditions. Warning_info::warn_count()
+    Limit to the number of available conditions. Diagnostics_area::warn_count()
     is not used because it indicates the number of condition regardless of
     @@max_error_count, which prevents conditions from being pushed, but not
     counted.
@@ -235,7 +264,7 @@ Condition_information::aggregate(THD *thd, const Diagnostics_area *da)
   while (cond_number--)
     cond= it_conds++;
 
-  DBUG_ASSERT(cond);
+  assert(cond);
 
   /* Evaluate the requested information in the context of the condition. */
   while ((cond_info_item= it_items++))
@@ -278,7 +307,7 @@ Condition_information_item::make_utf8_string_item(THD *thd, const String *str)
   a given condition.
 
   @param thd  The current thread.
-  @param da   The diagnostics area.
+  @param da   The Diagnostics Area.
 
   @retval Item representing the value.
   @retval NULL on error.
@@ -327,10 +356,10 @@ Condition_information_item::get_value(THD *thd, const Sql_condition *cond)
     value= make_utf8_string_item(thd, &(cond->m_message_text));
     break;
   case MYSQL_ERRNO:
-    value= new (thd->mem_root) Item_uint(cond->m_sql_errno);
+    value= new (thd->mem_root) Item_uint(cond->m_mysql_errno);
     break;
   case RETURNED_SQLSTATE:
-    str.set_ascii(cond->get_sqlstate(), strlen(cond->get_sqlstate()));
+    str.set_ascii(cond->returned_sqlstate(), strlen(cond->returned_sqlstate()));
     value= make_utf8_string_item(thd, &str);
     break;
   }

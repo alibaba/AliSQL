@@ -4,15 +4,21 @@
 
       Copyright (C) 1984, 1989-1990, 2000-2011 Free Software Foundation, Inc.
 
-   This program is free software: you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation, either version 3 of the License, or
-   (at your option) any later version.
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
@@ -76,12 +82,13 @@
 /* Line 268 of yacc.c  */
 #line 26 "fts0pars.y"
 
-
+#include "ha_prototypes.h"
 #include "mem0mem.h"
 #include "fts0ast.h"
 #include "fts0blex.h"
 #include "fts0tlex.h"
 #include "fts0pars.h"
+#include <my_sys.h>
 
 extern	int fts_lexer(YYSTYPE*, fts_lexer_t*);
 extern	int fts_blexer(YYSTYPE*, yyscan_t);
@@ -271,8 +278,6 @@ YYID (yyi)
 #    define YYSTACK_ALLOC __builtin_alloca
 #   elif defined __BUILTIN_VA_ARG_INCR
 #    include <alloca.h> /* INFRINGES ON USER NAME SPACE */
-#   elif defined _AIX
-#    define YYSTACK_ALLOC __alloca
 #   elif defined _MSC_VER
 #    include <malloc.h> /* INFRINGES ON USER NAME SPACE */
 #    define alloca _alloca
@@ -1541,7 +1546,7 @@ yyreduce:
 /* Line 1806 of yacc.c  */
 #line 141 "fts0pars.y"
     {
-		fts_ast_term_set_distance((yyvsp[(1) - (3)].node), fts_ast_string_to_ul((yyvsp[(3) - (3)].token), 10));
+		fts_ast_text_set_distance((yyvsp[(1) - (3)].node), fts_ast_string_to_ul((yyvsp[(3) - (3)].token), 10));
 		fts_ast_string_free((yyvsp[(3) - (3)].token));
 	}
     break;
@@ -1574,7 +1579,7 @@ yyreduce:
     {
 		(yyval.node) = fts_ast_create_node_list(state, (yyvsp[(1) - (4)].node));
 		fts_ast_add_node((yyval.node), (yyvsp[(2) - (4)].node));
-		fts_ast_term_set_distance((yyvsp[(2) - (4)].node), fts_ast_string_to_ul((yyvsp[(4) - (4)].token), 10));
+		fts_ast_text_set_distance((yyvsp[(2) - (4)].node), fts_ast_string_to_ul((yyvsp[(4) - (4)].token), 10));
 		fts_ast_string_free((yyvsp[(4) - (4)].token));
 	}
     break;
@@ -1933,7 +1938,6 @@ ftserror(
 
 /********************************************************************
 Create a fts_lexer_t instance.*/
-
 fts_lexer_t*
 fts_lexer_create(
 /*=============*/
@@ -1942,7 +1946,7 @@ fts_lexer_create(
 	ulint		query_len)
 {
 	fts_lexer_t*	fts_lexer = static_cast<fts_lexer_t*>(
-		ut_malloc(sizeof(fts_lexer_t)));
+		ut_malloc_nokey(sizeof(fts_lexer_t)));
 
 	if (boolean_mode) {
 		fts0blex_init(&fts_lexer->yyscanner);
@@ -1984,7 +1988,6 @@ fts_lexer_free(
 
 /********************************************************************
 Call the appropaiate scanner.*/
-
 int
 fts_lexer(
 /*======*/

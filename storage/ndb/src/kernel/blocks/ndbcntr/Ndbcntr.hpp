@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -30,6 +37,9 @@
 
 #include <NodeState.hpp>
 #include <NdbTick.h>
+
+#define JAM_FILE_ID 457
+
 
 #ifdef NDBCNTR_C
 /*
@@ -75,7 +85,7 @@ public:
 
   struct StartRecord {
     StartRecord() {}
-    Uint64 m_startTime;
+    NDB_TICKS m_startTime;
     
     void reset();
     NdbNodeBitmask m_starting;
@@ -86,7 +96,8 @@ public:
     Uint32 m_lastGci;
     Uint32 m_lastGciNodeId;
 
-    Uint64 m_startPartialTimeout;
+    // Timeouts in ms since 'm_startTime' 
+    Uint64 m_startPartialTimeout;  // UNUSED!
     Uint64 m_startPartitionedTimeout;
     Uint64 m_startFailureTimeout;
     struct {
@@ -149,8 +160,9 @@ public:
   // schema trans
   Uint32 c_schemaTransId;
   Uint32 c_schemaTransKey;
-  Uint32 c_hashMapId;
-  Uint32 c_hashMapVersion;
+  // intersignal transient store of: hash_map, logfilegroup, tablesspace
+  Uint32 c_objectId; 
+  Uint32 c_objectVersion;;
 
 public:
   Ndbcntr(Block_context&);
@@ -234,7 +246,7 @@ private:
   void sendCntrStartReq(Signal* signal);
   void sendCntrStartRef(Signal*, Uint32 nodeId, CntrStartRef::ErrorCode);
   void sendNdbSttor(Signal* signal);
-  void sendSttorry(Signal* signal);
+  void sendSttorry(Signal* signal, Uint32 delayed = 0);
 
   bool trySystemRestart(Signal* signal);
   void startWaitingNodes(Signal* signal);
@@ -295,6 +307,8 @@ private:
 
   void updateNodeState(Signal* signal, const NodeState & newState) const ;
   void getNodeGroup(Signal* signal);
+
+  void send_node_started_rep(Signal *signal);
 
   // Initialisation
   void initData();
@@ -416,5 +430,8 @@ private:
   void execSTART_ORD(Signal* signal);
   void execREAD_CONFIG_CONF(Signal*);
 };
+
+
+#undef JAM_FILE_ID
 
 #endif

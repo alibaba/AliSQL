@@ -1,15 +1,22 @@
 /*
-   Copyright (c) 2009, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2009, 2021, Oracle and/or its affiliates.
 
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -24,6 +31,10 @@
 #include <NdbProcess.hpp>
 #include <NDBT_Find.hpp>
 #include <NDBT_Workingdir.hpp>
+#include <NdbEnv.h>
+
+static const char * exe_valgrind = 0;
+static const char * arg_valgrind = 0;
 
 static bool file_exists(const char* path, Uint32 timeout = 1)
 {
@@ -116,10 +127,27 @@ public:
       g_info << args.args()[i].c_str() << " ";
     g_info << endl;
 
-    m_proc = NdbProcess::create(name(),
-                                exe(),
-                                working_dir,
-                                args);
+    if (exe_valgrind == 0)
+    {
+      m_proc = NdbProcess::create(name(),
+                                  exe(),
+                                  working_dir,
+                                  args);
+    }
+    else
+    {
+      NdbProcess::Args copy;
+      if (arg_valgrind)
+      {
+        copy.add(arg_valgrind);
+      }
+      copy.add(exe());
+      copy.add(args);
+      m_proc = NdbProcess::create(name(),
+                                  BaseString(exe_valgrind),
+                                  working_dir,
+                                  copy);
+    }
     return (m_proc != NULL);
   }
 
@@ -127,6 +155,7 @@ public:
                              const char* first_extra_arg = NULL, ...)
   {
     NdbProcess::Args args;
+    args.add("--no-defaults");
     args.add("--configdir=.");
     args.add("-f config.ini");
     args.add("--ndb-nodeid=", m_nodeid);
@@ -154,6 +183,7 @@ public:
              const char* first_extra_arg = NULL, ...)
   {
     NdbProcess::Args args;
+    args.add("--no-defaults");
     args.add("--configdir=.");
     args.add("--ndb-nodeid=", m_nodeid);
     args.add("--nodaemon");
@@ -227,12 +257,12 @@ public:
   const BaseString connectstring(const Properties& config)
   {
     const char* hostname;
-    if (!get_section_string(config, m_name.c_str(), "HostName", &hostname))
-      return false;
+    require(get_section_string(config, m_name.c_str(),
+                               "HostName", &hostname));
 
     Uint32 port;
-    if (!get_section_uint32(config, m_name.c_str(), "PortNumber", &port))
-      return false;
+    require(get_section_uint32(config, m_name.c_str(),
+                               "PortNumber", &port));
 
     BaseString constr;
     constr.assfmt("%s:%d", hostname, port);
@@ -662,10 +692,101 @@ int runTestNoConfigCache(NDBT_Context* ctx, NDBT_Step* step)
                                         "ndb_1_config.bin.1", 
                                         NULL).c_str());
   CHECK(bin_conf_file == false);
-  
-  mgmd->stop();  
+
+  mgmd->stop();
   return NDBT_OK;
-}  
+}
+
+
+/* Test for BUG#13428853 */
+int runTestNoConfigCache_DontCreateConfigDir(NDBT_Context* ctx, NDBT_Step* step)
+{
+  NDBT_Workingdir wd("test_mgmd"); // temporary working directory
+
+  g_err << "** Create config.ini" << endl;
+  Properties config = ConfigFactory::create();
+  CHECK(ConfigFactory::write_config_ini(config,
+                                        path(wd.path(),
+                                             "config.ini",
+                                             NULL).c_str()));
+
+  g_err << "Test no configdir is created with --skip-config-cache" << endl;
+  Mgmd* mgmd = new Mgmd(1);
+  CHECK(mgmd->start_from_config_ini(wd.path(),
+                                    "--skip-config-cache",
+                                    "--config-dir=dir37",
+                                    NULL));
+
+  // Connect the ndb_mgmd(s)
+  CHECK(mgmd->connect(config));
+
+  // wait for confirmed config
+  CHECK(mgmd->wait_confirmed_config());
+
+  // Check configdir not created
+  CHECK(!file_exists(path(wd.path(), "dir37", NULL).c_str()));
+
+  mgmd->stop();
+
+  g_err << "Also test --initial --skip-config-cache" << endl;
+  // Also test starting ndb_mgmd --initial --skip-config-cache
+  CHECK(mgmd->start_from_config_ini(wd.path(),
+                                    "--skip-config-cache",
+                                    "--initial",
+                                    "--config-dir=dir37",
+                                    NULL));
+  // Connect the ndb_mgmd(s)
+  CHECK(mgmd->connect(config));
+
+  // wait for confirmed config
+  CHECK(mgmd->wait_confirmed_config());
+
+  // Check configdir not created
+  CHECK(!file_exists(path(wd.path(), "dir37", NULL).c_str()));
+
+  mgmd->stop();
+  return NDBT_OK;
+}
+
+
+int runTestNoConfigCache_Fetch(NDBT_Context* ctx, NDBT_Step* step)
+{
+  NDBT_Workingdir wd("test_mgmd"); // temporary working directory
+
+  Properties config = ConfigFactory::create(2);
+  CHECK(ConfigFactory::write_config_ini(config,
+                                        path(wd.path(),
+                                             "config.ini",
+                                             NULL).c_str()));
+
+  MgmdProcessList mgmds;
+  // Start ndb_mgmd 1 from config.ini without config cache
+  Mgmd* mgmd = new Mgmd(1);
+  mgmds.push_back(mgmd);
+  CHECK(mgmd->start_from_config_ini(wd.path(),
+                                    "--skip-config-cache",
+                                    NULL));
+
+  // Start ndb_mgmd 2 without config cache and by fetching from first
+  Mgmd* mgmd2 = new Mgmd(2);
+  mgmds.push_back(mgmd2);
+  CHECK(mgmd2->start(wd.path(),
+                     "--ndb-connectstring",
+                     mgmd->connectstring(config).c_str(),
+                     "--skip-config-cache",
+                     NULL));
+
+  // Connect the ndb_mgmd(s)
+  for (unsigned i = 0; i < mgmds.size(); i++)
+    CHECK(mgmds[i]->connect(config));
+
+  // wait for confirmed config
+  for (unsigned i = 0; i < mgmds.size(); i++)
+    CHECK(mgmds[i]->wait_confirmed_config());
+
+  return NDBT_OK;
+
+}
 
 
 int runTestNowaitNodes(NDBT_Context* ctx, NDBT_Step* step)
@@ -674,18 +795,27 @@ int runTestNowaitNodes(NDBT_Context* ctx, NDBT_Step* step)
   NDBT_Workingdir wd("test_mgmd"); // temporary working directory
 
   // Create config.ini
-  Properties config = ConfigFactory::create(2);
+  unsigned nodeids[] = { 1, 2 };
+  Properties config = ConfigFactory::create(2, 1, 1, nodeids);
   CHECK(ConfigFactory::write_config_ini(config,
                                         path(wd.path(),
                                              "config.ini",
                                              NULL).c_str()));
+
+
+  BaseString binfile[2];
+  binfile[0].assfmt("ndb_%u_config.bin.1", nodeids[0]);
+  binfile[1].assfmt("ndb_%u_config.bin.1", nodeids[1]);
+
   // Start first ndb_mgmd
-  Mgmd* mgmd1 = new Mgmd(1);
+  Mgmd* mgmd1 = new Mgmd(nodeids[0]);
   {
     mgmds.push_back(mgmd1);
+    BaseString arg;
+    arg.assfmt("--nowait-nodes=%u", nodeids[1]);
     CHECK(mgmd1->start_from_config_ini(wd.path(),
-                                    "--initial",
-                                       "--nowait-nodes=2",
+                                       "--initial",
+                                       arg.c_str(),
                                        NULL));
 
     // Connect the ndb_mgmd
@@ -696,13 +826,13 @@ int runTestNowaitNodes(NDBT_Context* ctx, NDBT_Step* step)
 
     // Check binary config file created
     CHECK(file_exists(path(wd.path(),
-                           "ndb_1_config.bin.1",
+                           binfile[0].c_str(),
                            NULL).c_str()));
   }
 
   // Start second ndb_mgmd
   {
-    Mgmd* mgmd2 = new Mgmd(2);
+    Mgmd* mgmd2 = new Mgmd(nodeids[1]);
     mgmds.push_back(mgmd2);
     CHECK(mgmd2->start_from_config_ini(wd.path(),
                                        "--initial",
@@ -716,14 +846,14 @@ int runTestNowaitNodes(NDBT_Context* ctx, NDBT_Step* step)
 
     // Check binary config file created
     CHECK(file_exists(path(wd.path(),
-                           "ndb_2_config.bin.1",
+                           binfile[1].c_str(),
                            NULL).c_str()));
 
   }
 
   // Create new config.ini
   g_err << "** Create config2.ini" << endl;
-  CHECK(ConfigFactory::put(config, "ndb_mgmd", 1, "ArbitrationDelay", 100));
+  CHECK(ConfigFactory::put(config, "ndb_mgmd", nodeids[0], "ArbitrationDelay", 100));
   CHECK(ConfigFactory::write_config_ini(config,
                                         path(wd.path(),
                                              "config2.ini",
@@ -742,18 +872,20 @@ int runTestNowaitNodes(NDBT_Context* ctx, NDBT_Step* step)
     CHECK(mgmd2->wait_confirmed_config());
 
     CHECK(file_exists(path(wd.path(),
-                           "ndb_1_config.bin.1",
+                           binfile[0].c_str(),
                            NULL).c_str()));
     CHECK(file_exists(path(wd.path(),
-                           "ndb_2_config.bin.1",
+                           binfile[1].c_str(),
                            NULL).c_str()));
 
     // Both ndb_mgmd(s) should have reloaded and new binary config exist
+    binfile[0].assfmt("ndb_%u_config.bin.2", nodeids[0]);
+    binfile[1].assfmt("ndb_%u_config.bin.2", nodeids[1]);
     CHECK(file_exists(path(wd.path(),
-                           "ndb_1_config.bin.2",
+                           binfile[0].c_str(),
                            NULL).c_str()));
     CHECK(file_exists(path(wd.path(),
-                           "ndb_2_config.bin.2",
+                           binfile[1].c_str(),
                            NULL).c_str()));
   }
 
@@ -1150,6 +1282,88 @@ runBug61607(NDBT_Context* ctx, NDBT_Step* step)
   return res == 0 ? NDBT_OK : NDBT_FAILED;
 }
 
+int
+runStopDuringStart(NDBT_Context* ctx, NDBT_Step* step)
+{
+  MgmdProcessList mgmds;
+  NDBT_Workingdir wd("test_mgmd"); // temporary working directory
+
+  // Create config.ini
+  unsigned nodeids[] = { 251, 252 };
+  Properties config = ConfigFactory::create(2, 1, 1, nodeids);
+  CHECK(ConfigFactory::write_config_ini(config,
+                                        path(wd.path(),
+                                             "config.ini",
+                                             NULL).c_str()));
+
+  for (unsigned i = 0; i < NDB_ARRAY_SIZE(nodeids); i++)
+  {
+    Mgmd* mgmd = new Mgmd(nodeids[i]);
+    mgmds.push_back(mgmd);
+    CHECK(mgmd->start_from_config_ini(wd.path()));
+  }
+
+  // Connect the ndb_mgmd(s)
+  for (unsigned i = 0; i < mgmds.size(); i++)
+    CHECK(mgmds[i]->connect(config));
+
+  // wait for confirmed config
+  for (unsigned i = 0; i < mgmds.size(); i++)
+    CHECK(mgmds[i]->wait_confirmed_config());
+
+  // Check binary config files created
+  for (unsigned i = 0; i < mgmds.size(); i++)
+  {
+    BaseString file;
+    file.assfmt("ndb_%u_config.bin.1", nodeids[i]);
+    CHECK(file_exists(path(wd.path(),
+                           file.c_str(),
+                           NULL).c_str()));
+  }
+
+  // stop them
+  for (unsigned i = 0; i < mgmds.size(); i++)
+  {
+    mgmds[i]->stop();
+    int exitCode;
+    mgmds[i]->wait(exitCode);
+  }
+
+  // restart one with error-insert 100
+  // => it shall exit during start...
+  mgmds[0]->start(wd.path(), "--error-insert=100", NULL);
+
+  // restart rest normally
+  for (unsigned i = 1; i < mgmds.size(); i++)
+  {
+    mgmds[i]->start(wd.path());
+  }
+
+  // wait first one to terminate
+  int exitCode;
+  mgmds[0]->wait(exitCode);
+  NdbSleep_MilliSleep(3000);
+
+  // check other OK
+  for (unsigned i = 1; i < mgmds.size(); i++)
+  {
+    CHECK(mgmds[i]->connect(config));
+    CHECK(mgmds[i]->wait_confirmed_config());
+  }
+
+  // now restart without error insert
+  mgmds[0]->start(wd.path());
+
+  // connect
+  CHECK(mgmds[0]->connect(config));
+
+  // all should be ok
+  for (unsigned i = 0; i < mgmds.size(); i++)
+    CHECK(mgmds[i]->wait_confirmed_config());
+
+  return NDBT_OK;
+}
+
 NDBT_TESTSUITE(testMgmd);
 DRIVER(DummyDriver); /* turn off use of NdbApi */
 
@@ -1185,7 +1399,19 @@ TESTCASE("NoCfgCache",
 {
   INITIALIZER(runTestNoConfigCache);
 }
-
+TESTCASE("NoCfgCacheOrConfigDir",
+         "Test that when an mgmd is started with --skip-config-cache, "
+         "no ndb_xx_config.xx.bin file is created, but you can "
+         "connect to the mgm node and retrieve the config.")
+{
+  INITIALIZER(runTestNoConfigCache_DontCreateConfigDir);
+}
+TESTCASE("NoCfgCacheFetch",
+         "Test that when an mgmd is started with --skip-config-cache, "
+         "it can still fetch config from another ndb_mgmd.")
+{
+  INITIALIZER(runTestNoConfigCache_Fetch);
+}
 TESTCASE("Bug45495",
          "Test that mgmd can be restarted in any order")
 {
@@ -1206,6 +1432,10 @@ TESTCASE("Bug61607", "")
 {
   INITIALIZER(runBug61607);
 }
+TESTCASE("StopDuringStart", "")
+{
+  INITIALIZER(runStopDuringStart);
+}
 
 NDBT_TESTSUITE_END(testMgmd);
 
@@ -1216,6 +1446,18 @@ int main(int argc, const char** argv)
   testMgmd.setCreateTable(false);
   testMgmd.setRunAllTables(true);
   testMgmd.setConnectCluster(false);
+
+#ifdef NDB_USE_GET_ENV
+  char buf1[255], buf2[255];
+  if (NdbEnv_GetEnv("NDB_MGMD_VALGRIND_EXE", buf1, sizeof(buf1))) {
+    exe_valgrind = buf1;
+  }
+
+  if (NdbEnv_GetEnv("NDB_MGMD_VALGRIND_ARG", buf2, sizeof(buf2))) {
+    arg_valgrind = buf2;
+  }
+#endif
+
   return testMgmd.execute(argc, argv);
 }
 

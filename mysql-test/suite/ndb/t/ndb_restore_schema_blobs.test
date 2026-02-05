@@ -1,9 +1,13 @@
+# The include statement below is a temp one for tests that are yet to
+#be ported to run with InnoDB,
+#but needs to be kept for tests that would need MyISAM in future.
+--source include/force_myisam_default.inc
+
 ######################################################################
 # Test restoring backups with blob columns
 ######################################################################
 
 -- source include/have_ndb.inc
--- source include/ndb_default_cluster.inc
 
 --disable_warnings
 use test;
@@ -76,7 +80,7 @@ drop table t1,t2;
 create logfile group lg1 add undofile 'undofile.dat'
   initial_size 16M undo_buffer_size 1M engine=ndb;
 create tablespace ts1 add datafile 'datafile.dat'
-  use logfile group lg1 initial_size 32M engine=ndb;
+  use logfile group lg1 initial_size 64M engine=ndb;
 
 create table t1 (
   a int,

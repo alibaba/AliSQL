@@ -1,22 +1,26 @@
-/* Copyright (c) 2002, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2002, 2023, Oracle and/or its affiliates.
    
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
-   
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-   
+   GNU General Public License, version 2.0, for more details.
+
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA */
 
 #include "myisamdef.h"
-
-#ifdef HAVE_RTREE_KEYS
-
 #include "rt_index.h"
 #include "rt_mbr.h"
 
@@ -57,7 +61,7 @@
   }\
   else /* if unknown comparison operator */ \
   { \
-    DBUG_ASSERT(0); \
+    assert(0);                                  \
   }
 
 #define RT_CMP_KORR(type, korr_func, len, nextflag) \
@@ -122,14 +126,12 @@ int rtree_key_cmp(HA_KEYSEG *keyseg, uchar *b, uchar *a, uint key_length,
     case HA_KEYTYPE_ULONG_INT:
       RT_CMP_KORR(uint32, mi_uint4korr, 4, nextflag);
       break;
-#ifdef HAVE_LONG_LONG
     case HA_KEYTYPE_LONGLONG:
       RT_CMP_KORR(longlong, mi_sint8korr, 8, nextflag)
       break;
     case HA_KEYTYPE_ULONGLONG:
       RT_CMP_KORR(ulonglong, mi_uint8korr, 8, nextflag)
       break;
-#endif
     case HA_KEYTYPE_FLOAT:
       /* The following should be safe, even if we compare doubles */
       RT_CMP_GET(float, mi_float4get, 4, nextflag);
@@ -211,14 +213,12 @@ double rtree_rect_volume(HA_KEYSEG *keyseg, uchar *a, uint key_length)
     case HA_KEYTYPE_ULONG_INT:
       RT_VOL_KORR(uint32, mi_uint4korr, 4, (double));
       break;
-#ifdef HAVE_LONG_LONG
     case HA_KEYTYPE_LONGLONG:
       RT_VOL_KORR(longlong, mi_sint8korr, 8, (double));
       break;
     case HA_KEYTYPE_ULONGLONG:
       RT_VOL_KORR(longlong, mi_sint8korr, 8, ulonglong2double);
       break;
-#endif
     case HA_KEYTYPE_FLOAT:
       RT_VOL_GET(float, mi_float4get, 4, (double));
       break;
@@ -291,14 +291,12 @@ int rtree_d_mbr(HA_KEYSEG *keyseg, uchar *a, uint key_length, double *res)
     case HA_KEYTYPE_ULONG_INT:
       RT_D_MBR_KORR(uint32, mi_uint4korr, 4, (double));
       break;
-#ifdef HAVE_LONG_LONG
     case HA_KEYTYPE_LONGLONG:
       RT_D_MBR_KORR(longlong, mi_sint8korr, 8, (double));
       break;
     case HA_KEYTYPE_ULONGLONG:
       RT_D_MBR_KORR(longlong, mi_sint8korr, 8, ulonglong2double);
       break;
-#endif
     case HA_KEYTYPE_FLOAT:
       RT_D_MBR_GET(float, mi_float4get, 4, (double));
       break;
@@ -381,14 +379,12 @@ int rtree_combine_rect(HA_KEYSEG *keyseg, uchar* a, uchar* b, uchar* c,
     case HA_KEYTYPE_ULONG_INT:
       RT_COMB_KORR(uint32, mi_uint4korr, mi_int4store, 4);
       break;
-#ifdef HAVE_LONG_LONG
     case HA_KEYTYPE_LONGLONG:
       RT_COMB_KORR(longlong, mi_sint8korr, mi_int8store, 8);
       break;
     case HA_KEYTYPE_ULONGLONG:
       RT_COMB_KORR(ulonglong, mi_uint8korr, mi_int8store, 8);
       break;
-#endif
     case HA_KEYTYPE_FLOAT:
       RT_COMB_GET(float, mi_float4get, mi_float4store, 4);
       break;
@@ -473,14 +469,12 @@ double rtree_overlapping_area(HA_KEYSEG *keyseg, uchar* a, uchar* b,
     case HA_KEYTYPE_ULONG_INT:
       RT_OVL_AREA_KORR(uint32, mi_uint4korr, 4);
       break;
-#ifdef HAVE_LONG_LONG
     case HA_KEYTYPE_LONGLONG:
       RT_OVL_AREA_KORR(longlong, mi_sint8korr, 8);
       break;
     case HA_KEYTYPE_ULONGLONG:
       RT_OVL_AREA_KORR(longlong, mi_sint8korr, 8);
       break;
-#endif
     case HA_KEYTYPE_FLOAT:
       RT_OVL_AREA_GET(float, mi_float4get, 4);
       break;
@@ -567,14 +561,12 @@ double rtree_area_increase(HA_KEYSEG *keyseg, uchar* a, uchar* b,
     case HA_KEYTYPE_ULONG_INT:
       RT_AREA_INC_KORR(uint32, mi_uint4korr, 4);
       break;
-#ifdef HAVE_LONG_LONG
     case HA_KEYTYPE_LONGLONG:
       RT_AREA_INC_KORR(longlong, mi_sint8korr, 8);
       break;
     case HA_KEYTYPE_ULONGLONG:
       RT_AREA_INC_KORR(longlong, mi_sint8korr, 8);
       break;
-#endif
     case HA_KEYTYPE_FLOAT:
       RT_AREA_INC_GET(float, mi_float4get, 4);
       break;
@@ -659,14 +651,12 @@ double rtree_perimeter_increase(HA_KEYSEG *keyseg, uchar* a, uchar* b,
     case HA_KEYTYPE_ULONG_INT:
       RT_PERIM_INC_KORR(uint32, mi_uint4korr, 4);
       break;
-#ifdef HAVE_LONG_LONG
     case HA_KEYTYPE_LONGLONG:
       RT_PERIM_INC_KORR(longlong, mi_sint8korr, 8);
       break;
     case HA_KEYTYPE_ULONGLONG:
       RT_PERIM_INC_KORR(longlong, mi_sint8korr, 8);
       break;
-#endif
     case HA_KEYTYPE_FLOAT:
       RT_PERIM_INC_GET(float, mi_float4get, 4);
       break;
@@ -780,14 +770,12 @@ int rtree_page_mbr(MI_INFO *info, HA_KEYSEG *keyseg, uchar *page_buf,
     case HA_KEYTYPE_ULONG_INT:
       RT_PAGE_MBR_KORR(uint32, mi_uint4korr, mi_int4store, 4);
       break;
-#ifdef HAVE_LONG_LONG
     case HA_KEYTYPE_LONGLONG:
       RT_PAGE_MBR_KORR(longlong, mi_sint8korr, mi_int8store, 8);
       break;
     case HA_KEYTYPE_ULONGLONG:
       RT_PAGE_MBR_KORR(ulonglong, mi_uint8korr, mi_int8store, 8);
       break;
-#endif
     case HA_KEYTYPE_FLOAT:
       RT_PAGE_MBR_GET(float, mi_float4get, mi_float4store, 4);
       break;
@@ -802,5 +790,3 @@ int rtree_page_mbr(MI_INFO *info, HA_KEYSEG *keyseg, uchar *page_buf,
   }
   return 0;
 }
-
-#endif /*HAVE_RTREE_KEYS*/

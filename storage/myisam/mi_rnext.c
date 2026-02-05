@@ -1,13 +1,20 @@
-/* Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -33,24 +40,22 @@ int mi_rnext(MI_INFO *info, uchar *buf, int inx)
   DBUG_ENTER("mi_rnext");
 
   if ((inx = _mi_check_index(info,inx)) < 0)
-    DBUG_RETURN(my_errno);
+    DBUG_RETURN(my_errno());
   flag=SEARCH_BIGGER;				/* Read next */
   if (info->lastpos == HA_OFFSET_ERROR && info->update & HA_STATE_PREV_FOUND)
     flag=0;					/* Read first */
 
   if (fast_mi_readinfo(info))
-    DBUG_RETURN(my_errno);
+    DBUG_RETURN(my_errno());
   if (info->s->concurrent_insert)
     mysql_rwlock_rdlock(&info->s->key_root_lock[inx]);
   changed=_mi_test_if_changed(info);
   if (!flag)
   {
     switch(info->s->keyinfo[inx].key_alg){
-#ifdef HAVE_RTREE_KEYS
     case HA_KEY_ALG_RTREE:
       error=rtree_get_first(info,inx,info->lastkey_length);
       break;
-#endif
     case HA_KEY_ALG_BTREE:
     default:
       error=_mi_search_first(info,info->s->keyinfo+inx,
@@ -65,7 +70,7 @@ int mi_rnext(MI_INFO *info, uchar *buf, int inx)
       Normally SQL layer would never request "search next" if
       "search first" failed. But HANDLER may do anything.
 
-      As mi_rnext() without preceeding mi_rkey()/mi_rfirst()
+      As mi_rnext() without preceding mi_rkey()/mi_rfirst()
       equals to mi_rfirst(), we must restore original state
       as if failing mi_rfirst() was not called.
     */
@@ -75,7 +80,6 @@ int mi_rnext(MI_INFO *info, uchar *buf, int inx)
   else
   {
     switch (info->s->keyinfo[inx].key_alg) {
-#ifdef HAVE_RTREE_KEYS
     case HA_KEY_ALG_RTREE:
       /*
 	Note that rtree doesn't support that the table
@@ -84,7 +88,6 @@ int mi_rnext(MI_INFO *info, uchar *buf, int inx)
       */
       error= rtree_get_next(info,inx,info->lastkey_length);
       break;
-#endif
     case HA_KEY_ALG_BTREE:
     default:
       if (!changed)
@@ -120,7 +123,8 @@ int mi_rnext(MI_INFO *info, uchar *buf, int inx)
       if (info->s->concurrent_insert)
         mysql_rwlock_unlock(&info->s->key_root_lock[inx]);
       info->lastpos= HA_OFFSET_ERROR;
-      DBUG_RETURN(my_errno= HA_ERR_END_OF_FILE);
+      set_my_errno(HA_ERR_END_OF_FILE);
+      DBUG_RETURN(HA_ERR_END_OF_FILE);
     }
   }
   
@@ -147,18 +151,18 @@ int mi_rnext(MI_INFO *info, uchar *buf, int inx)
 
   if (error)
   {
-    if (my_errno == HA_ERR_KEY_NOT_FOUND)
-      my_errno=HA_ERR_END_OF_FILE;
+    if (my_errno() == HA_ERR_KEY_NOT_FOUND)
+      set_my_errno(HA_ERR_END_OF_FILE);
   }
   else if (!buf)
   {
-    DBUG_RETURN(info->lastpos==HA_OFFSET_ERROR ? my_errno : 0);
+    DBUG_RETURN(info->lastpos==HA_OFFSET_ERROR ? my_errno() : 0);
   }
   else if (!(*info->read_record)(info,info->lastpos,buf))
   {
     info->update|= HA_STATE_AKTIV;		/* Record is read */
     DBUG_RETURN(0);
   }
-  DBUG_PRINT("error",("Got error: %d,  errno: %d",error, my_errno));
-  DBUG_RETURN(my_errno);
+  DBUG_PRINT("error",("Got error: %d,  errno: %d",error, my_errno()));
+  DBUG_RETURN(my_errno());
 } /* mi_rnext */

@@ -1,13 +1,20 @@
-/* Copyright (c) 2001, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2001, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -270,7 +277,7 @@ static int ftb_query_add_word(MYSQL_FTPARSER_PARAM *param,
       info->quot= 0;
       if (ftb_param->ftbe->up)
       {
-        DBUG_ASSERT(ftb_param->depth);
+        assert(ftb_param->depth);
         ftb_param->ftbe= ftb_param->ftbe->up;
         ftb_param->depth--;
         ftb_param->up_quot= 0;
@@ -308,7 +315,7 @@ static int _ftb_parse_query(FTB *ftb, uchar *query, uint len,
   MYSQL_FTPARSER_PARAM *param;
   MY_FTB_PARAM ftb_param;
   DBUG_ENTER("_ftb_parse_query");
-  DBUG_ASSERT(parser);
+  assert(parser);
 
   if (ftb->state != UNINITIALIZED)
     DBUG_RETURN(0);
@@ -361,7 +368,7 @@ static int _ft2_search_no_lock(FTB *ftb, FTB_WORD *ftbw, my_bool init_search)
   int subkeys=1;
   my_bool can_go_down;
   MI_INFO *info=ftb->info;
-  uint UNINIT_VAR(off), extra= HA_FT_WLEN + info->s->rec_reflength;
+  uint off= 0, extra= HA_FT_WLEN + info->s->rec_reflength;
   uchar *lastkey_buf=ftbw->word+ftbw->off;
   uint max_word_length= (ftbw->flags & FTB_FLAG_TRUNC) ? MI_MAX_KEY_BUFF :
                         ((ftbw->len) * ftb->charset->mbmaxlen) + extra;
@@ -476,7 +483,7 @@ static int _ft2_search_no_lock(FTB *ftb, FTB_WORD *ftbw, my_bool init_search)
     ftbw->key_root=info->lastpos;
     ftbw->keyinfo=& info->s->ft2_keyinfo;
     r=_mi_search_first(info, ftbw->keyinfo, ftbw->key_root);
-    DBUG_ASSERT(r==0);  /* found something */
+    assert(r==0);  /* found something */
     memcpy(lastkey_buf+off, info->lastkey, info->lastkey_length);
   }
   ftbw->docid[0]=info->lastpos;
@@ -573,20 +580,21 @@ FT_INFO * ft_init_boolean_search(MI_INFO *info, uint keynr, uchar *query,
   FTB_EXPR  *ftbe;
   FTB_WORD  *ftbw;
 
-  if (!(ftb=(FTB *)my_malloc(sizeof(FTB), MYF(MY_WME))))
+  if (!(ftb=(FTB *)my_malloc(mi_key_memory_FTB,
+                             sizeof(FTB), MYF(MY_WME))))
     return 0;
   ftb->please= (struct _ft_vft *) & _ft_vft_boolean;
   ftb->state=UNINITIALIZED;
   ftb->info=info;
   ftb->keynr=keynr;
   ftb->charset=cs;
-  DBUG_ASSERT(keynr==NO_SUCH_KEY || cs == info->s->keyinfo[keynr].seg->charset);
+  assert(keynr==NO_SUCH_KEY || cs == info->s->keyinfo[keynr].seg->charset);
   ftb->with_scan=0;
   ftb->lastpos=HA_OFFSET_ERROR;
   memset(&ftb->no_dupes, 0, sizeof(TREE));
   ftb->last_word= 0;
 
-  init_alloc_root(&ftb->mem_root, 1024, 1024);
+  init_alloc_root(PSI_INSTRUMENT_ME, &ftb->mem_root, 1024, 1024);
   ftb->queue.max_elements= 0;
   if (!(ftbe=(FTB_EXPR *)alloc_root(&ftb->mem_root, sizeof(FTB_EXPR))))
     goto err;
@@ -711,7 +719,7 @@ static int _ftb_check_phrase(FTB *ftb, const uchar *document, uint len,
   MY_FTB_PHRASE_PARAM ftb_param;
   MYSQL_FTPARSER_PARAM *param;
   DBUG_ENTER("_ftb_check_phrase");
-  DBUG_ASSERT(parser);
+  assert(parser);
 
   if (! (param= ftparser_call_initializer(ftb->info, ftb->keynr, 1)))
     DBUG_RETURN(0);
@@ -732,7 +740,7 @@ static int _ftb_check_phrase(FTB *ftb, const uchar *document, uint len,
   param->flags= 0;
   param->mode= MYSQL_FTPARSER_WITH_STOPWORDS;
   if (unlikely(parser->parse(param)))
-    return -1;
+    DBUG_RETURN(-1);
   DBUG_RETURN(ftb_param.match ? 1 : 0);
 }
 
@@ -829,13 +837,16 @@ int ft_boolean_read_next(FT_INFO *ftb, char *record)
 
   /* black magic ON */
   if ((int) _mi_check_index(info, ftb->keynr) < 0)
-    return my_errno;
+    return my_errno();
   if (_mi_readinfo(info, F_RDLCK, 1))
-    return my_errno;
+    return my_errno();
   /* black magic OFF */
 
   if (!ftb->queue.elements)
-    return my_errno=HA_ERR_END_OF_FILE;
+  {
+    set_my_errno(HA_ERR_END_OF_FILE);
+    return HA_ERR_END_OF_FILE;
+  }
 
   /* Attention!!! Address of a local variable is used here! See err: label */
   ftb->queue.first_cmp_arg=(void *)&curdoc;
@@ -848,7 +859,7 @@ int ft_boolean_read_next(FT_INFO *ftb, char *record)
     {
       if (unlikely(_ftb_climb_the_tree(ftb, ftbw, 0)))
       {
-        my_errno= HA_ERR_OUT_OF_MEM;
+        set_my_errno(HA_ERR_OUT_OF_MEM);
         goto err;
       }
 
@@ -878,17 +889,17 @@ int ft_boolean_read_next(FT_INFO *ftb, char *record)
         if (ftb->with_scan &&
             ft_boolean_find_relevance(ftb,(uchar*) record,0)==0)
             continue; /* no match */
-        my_errno=0;
+        set_my_errno(0);
         goto err;
       }
       goto err;
     }
   }
   ftb->state=INDEX_DONE;
-  my_errno=HA_ERR_END_OF_FILE;
+  set_my_errno(HA_ERR_END_OF_FILE);
 err:
   ftb->queue.first_cmp_arg=(void *)0;
-  return my_errno;
+  return my_errno();
 }
 
 

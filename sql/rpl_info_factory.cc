@@ -1,22 +1,38 @@
-/* Copyright (c) 2010, 2015, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include <my_global.h>
-#include "sql_priv.h"
-#include "rpl_slave.h"
 #include "rpl_info_factory.h"
+
+#include "log.h"                    // sql_print_error
+#include "mysqld.h"                 // key_master_info_run_lock
+#include "rpl_info_dummy.h"         // Rpl_info_dummy
+#include "rpl_info_file.h"          // Rpl_info_file
+#include "rpl_info_table.h"         // Rpl_info_table
+#include "rpl_info_table_access.h"  // Rpl_info_table_access
+#include "rpl_mi.h"                 // Master_info
+#include "rpl_msr.h"                // channel_map
+#include "rpl_rli.h"                // Relay_log_info
+#include "rpl_rli_pdb.h"            // Slave_worker
+
 
 /*
   Defines meta information on diferent repositories.
@@ -29,51 +45,13 @@ Rpl_info_factory::struct_file_data Rpl_info_factory::worker_file_data;
 Rpl_info_factory::struct_table_data Rpl_info_factory::worker_table_data;
 
 /**
-  Creates both a Master info and a Relay log info repository whose types are
-  defined as parameters. Nothing is done for Workers here.
-
-  @todo Make the repository a pluggable component.
-  @todo Use generic programming to make it easier and clearer to
-        add a new repositories' types and Rpl_info objects.
-  
-  @param[in]  mi_option  Type of the Master info repository.
-  @param[out] mi         Reference to the Master_info.
-  @param[in]  rli_option Type of the Relay log info repository.
-  @param[out] rli        Reference to the Relay_log_info.
-
-  @retval FALSE No error
-  @retval TRUE  Failure
-*/ 
-bool Rpl_info_factory::create_coordinators(uint mi_option, Master_info **mi,
-                                           uint rli_option, Relay_log_info **rli)
-{
-  DBUG_ENTER("Rpl_info_factory::create_coordinators");
-
-  Rpl_info_factory::init_repository_metadata();
-
-  if (!((*mi)= Rpl_info_factory::create_mi(mi_option)))
-    DBUG_RETURN(TRUE);
-
-  if (!((*rli)= Rpl_info_factory::create_rli(rli_option, relay_log_recovery)))
-  {
-    delete *mi;
-    *mi= NULL;
-    DBUG_RETURN(TRUE);
-  }
-
-  /*
-    Setting the cross dependency used all over the code.
-  */
-  (*mi)->set_relay_log_info(*rli);
-  (*rli)->set_master_info(*mi);
-
-  DBUG_RETURN(FALSE); 
-}
-
-/**
   Creates a Master info repository whose type is defined as a parameter.
   
   @param[in]  mi_option Type of the repository, e.g. FILE TABLE.
+  @param[in]  channel   the channel for which mi is to be created
+  @param[in]  to_decide_repo     the flag is set to true if mi repositories
+                                 are allowed to convert. For details,
+                                 see init_slave()
 
   The execution fails if a user requests a type but a different type
   already exists in the system. This is done to avoid that a user
@@ -83,7 +61,8 @@ bool Rpl_info_factory::create_coordinators(uint mi_option, Master_info **mi,
   @retval Pointer to Master_info Success
   @retval NULL  Failure
 */ 
-Master_info *Rpl_info_factory::create_mi(uint mi_option)
+Master_info *Rpl_info_factory::create_mi(uint mi_option, const char* channel,
+                                         bool to_decide_repo)
 {
   Master_info* mi= NULL;
   Rpl_info_handler*  handler_src= NULL;
@@ -99,12 +78,13 @@ Master_info *Rpl_info_factory::create_mi(uint mi_option)
                             &key_master_info_run_lock,
                             &key_master_info_data_lock,
                             &key_master_info_sleep_lock,
+                            &key_master_info_thd_lock,
                             &key_master_info_data_cond,
                             &key_master_info_start_cond,
                             &key_master_info_stop_cond,
                             &key_master_info_sleep_cond,
 #endif
-                            instances
+                            instances, channel
                            )))
     goto err;
 
@@ -112,8 +92,26 @@ Master_info *Rpl_info_factory::create_mi(uint mi_option)
                        &handler_src, &handler_dest, &msg))
     goto err;
 
-  if (decide_repository(mi, mi_option, &handler_src, &handler_dest, &msg))
-    goto err;
+  if(to_decide_repo)
+  {
+    if (decide_repository(mi, mi_option, &handler_src, &handler_dest, &msg))
+      goto err;
+  }
+  else
+  {
+    if (handler_dest->get_rpl_info_type() != INFO_REPOSITORY_TABLE)
+    {
+      sql_print_error("Slave: Wrong repository. Respository should be TABLE");
+      goto err;
+    }
+    mi->set_rpl_info_handler(handler_dest);
+
+    if (mi->set_info_search_keys(handler_dest))
+      goto err;
+
+    delete handler_src;
+
+  }
 
   DBUG_RETURN(mi);
 
@@ -127,6 +125,7 @@ err:
       any reference to it.  
     */
     mi->set_rpl_info_handler(NULL);
+    mi->channel_wrlock();
     delete mi;
   }
   sql_print_error("Error creating master info: %s.", msg);
@@ -152,9 +151,7 @@ bool Rpl_info_factory::change_mi_repository(Master_info *mi,
   uint instances= 1;
   DBUG_ENTER("Rpl_info_factory::change_mi_repository");
 
-  DBUG_ASSERT(handler_src);
-  if (handler_src->get_rpl_info_type() == mi_option)
-    DBUG_RETURN(false);
+  assert(handler_src);
 
   if (init_repositories(mi_table_data, mi_file_data, mi_option, instances,
                         NULL, &handler_dest, msg))
@@ -179,6 +176,10 @@ err:
   @param[in]  rli_option        Type of the Relay log info repository
   @param[in]  is_slave_recovery If the slave should try to start a recovery
                                 process to get consistent relay log files
+  @param[in]  channel   the channel for which mi is to be created
+  @param[in]  to_decide_repo    If true, rli repositories are allowed
+                               to convert from one repo to other
+
 
   The execution fails if a user requests a type but a different type
   already exists in the system. This is done to avoid that a user
@@ -188,7 +189,10 @@ err:
   @retval Pointer to Relay_log_info Success
   @retval NULL  Failure
 */ 
-Relay_log_info *Rpl_info_factory::create_rli(uint rli_option, bool is_slave_recovery)
+Relay_log_info *Rpl_info_factory::create_rli(uint rli_option,
+                                             bool is_slave_recovery,
+                                             const char* channel,
+                                             bool to_decide_repo)
 {
   Relay_log_info *rli= NULL;
   Rpl_info_handler* handler_src= NULL;
@@ -203,7 +207,7 @@ Relay_log_info *Rpl_info_factory::create_rli(uint rli_option, bool is_slave_reco
   DBUG_ENTER("Rpl_info_factory::create_rli");
 
   /*
-    Returns how many occurrences of rli's repositories exist. For example,
+    Returns how many occurrences of worker's repositories exist. For example,
     if the repository is a table, this retrieves the number of rows in it.
     Besides, it also returns the type of the repository where entries were
     found.
@@ -218,12 +222,15 @@ Relay_log_info *Rpl_info_factory::create_rli(uint rli_option, bool is_slave_reco
                                 ,&key_relay_log_info_run_lock,
                                 &key_relay_log_info_data_lock,
                                 &key_relay_log_info_sleep_lock,
+                                &key_relay_log_info_thd_lock,
                                 &key_relay_log_info_data_cond,
                                 &key_relay_log_info_start_cond,
                                 &key_relay_log_info_stop_cond,
                                 &key_relay_log_info_sleep_cond
 #endif
-                                , instances
+                                , instances, channel,
+                                (rli_option != INFO_REPOSITORY_TABLE
+                                 && rli_option != INFO_REPOSITORY_FILE)
                                 )))
   {
     msg= msg_alloc;
@@ -248,8 +255,36 @@ Relay_log_info *Rpl_info_factory::create_rli(uint rli_option, bool is_slave_reco
                       "the type change.");
     std::swap(handler_src, handler_dest);
   }
-  if (decide_repository(rli, rli_option, &handler_src, &handler_dest, &msg))
+
+  if (to_decide_repo)
+  {
+    if (decide_repository(rli, rli_option, &handler_src, &handler_dest, &msg))
     goto err;
+  }
+  else
+  {
+    if(channel != NULL)
+    {
+      /* Here dest code should be TABLE type repo. See, init_slave() */
+      if (handler_dest->get_rpl_info_type() != INFO_REPOSITORY_TABLE)
+      {
+        sql_print_error("Slave: Wrong repository. Repository should be TABLE");
+        goto err;
+      }
+
+      if(rli->set_info_search_keys(handler_dest))
+        goto err;
+    }
+
+    rli->set_rpl_info_handler(handler_dest);
+
+    /*
+      By this time, rli must be loaded with it's primary key,
+      which is channel_name
+    */
+    delete handler_src;
+
+  }
 
   DBUG_RETURN(rli);
 
@@ -288,10 +323,7 @@ bool Rpl_info_factory::change_rli_repository(Relay_log_info *rli,
   uint instances= 1;
   DBUG_ENTER("Rpl_info_factory::change_rli_repository");
 
-  DBUG_ASSERT(handler_src != NULL);
-  
-  if (handler_src->get_rpl_info_type() == rli_option)
-    DBUG_RETURN(false);
+  assert(handler_src != NULL);
 
   if (init_repositories(rli_table_data, rli_file_data, rli_option,
                         instances, NULL, &handler_dest, msg))
@@ -333,7 +365,9 @@ bool Rpl_info_factory::reset_workers(Relay_log_info *rli)
     goto err;
 
   if (Rpl_info_table::do_reset_info(Slave_worker::get_number_worker_fields(),
-                                    MYSQL_SCHEMA_NAME.str, WORKER_INFO_NAME.str))
+                                    MYSQL_SCHEMA_NAME.str, WORKER_INFO_NAME.str,
+                                    rli->channel,
+                                    Slave_worker::get_channel_field_index()))
     goto err;
 
   error= false;
@@ -383,7 +417,7 @@ Slave_worker *Rpl_info_factory::create_worker(uint rli_option, uint worker_id,
   /*
     Define the name of the worker and its repository.
   */
-  char *pos= strmov(worker_file_data.name, worker_file_data.pattern);
+  char *pos= my_stpcpy(worker_file_data.name, worker_file_data.pattern);
   sprintf(pos, "%u", worker_id + 1);
 
   if (!(worker= new Slave_worker(rli
@@ -391,12 +425,13 @@ Slave_worker *Rpl_info_factory::create_worker(uint rli_option, uint worker_id,
                                  ,&key_relay_log_info_run_lock,
                                  &key_relay_log_info_data_lock,
                                  &key_relay_log_info_sleep_lock,
+                                 &key_relay_log_info_thd_lock,
                                  &key_relay_log_info_data_cond,
                                  &key_relay_log_info_start_cond,
                                  &key_relay_log_info_stop_cond,
                                  &key_relay_log_info_sleep_cond
 #endif
-                                 , worker_id
+                                 , worker_id, rli->get_channel()
                                 )))
     goto err;
 
@@ -404,7 +439,19 @@ Slave_worker *Rpl_info_factory::create_worker(uint rli_option, uint worker_id,
   if(init_repositories(worker_table_data, worker_file_data, rli_option,
                        worker_id + 1, &handler_src, &handler_dest, &msg))
     goto err;
+  /*
+    Preparing the being set up handler with search keys early.
+    The file repo type handler can't be manupulated this way and it does
+    not have to.
+  */
+  if (handler_dest->get_rpl_info_type() == INFO_REPOSITORY_TABLE)
+    worker->set_info_search_keys(handler_dest);
 
+  /* get_num_instances() requires channel_map lock */
+  /*
+    assert(channel_map.get_num_instances() <= 1 ||
+    (rli_option == 1 && handler_dest->get_rpl_info_type() == 1));
+  */
   if (decide_repository(worker, rli_option, &handler_src, &handler_dest, &msg))
     goto err;
 
@@ -430,7 +477,6 @@ Slave_worker *Rpl_info_factory::create_worker(uint rli_option, uint worker_id,
     msg= "Failed to initialize worker info table";
     goto err;
   }
-
   DBUG_RETURN(worker);
 
 err:
@@ -453,13 +499,13 @@ static void build_worker_info_name(char* to,
                                    const char* path,
                                    const char* fname)
 {
-  DBUG_ASSERT(to);
+  assert(to);
   char* pos= to;
   if (path[0])
-    pos= strmov(pos, path);
-  pos= strmov(pos, "worker-");
-  pos= strmov(pos, fname);
-  strmov(pos, ".");
+    pos= my_stpcpy(pos, path);
+  pos= my_stpcpy(pos, "worker-");
+  pos= my_stpcpy(pos, fname);
+  my_stpcpy(pos, ".");
 }
 
 /**
@@ -479,22 +525,29 @@ void Rpl_info_factory::init_repository_metadata()
   rli_table_data.n_fields= Relay_log_info::get_number_info_rli_fields();
   rli_table_data.schema= MYSQL_SCHEMA_NAME.str;
   rli_table_data.name= RLI_INFO_NAME.str;
+  rli_table_data.n_pk_fields= 0;
+  rli_table_data.pk_field_indexes= NULL;
   rli_file_data.n_fields= Relay_log_info::get_number_info_rli_fields();
-  strmov(rli_file_data.name, relay_log_info_file);
-  strmov(rli_file_data.pattern, relay_log_info_file);
+  my_stpcpy(rli_file_data.name, relay_log_info_file);
+  my_stpcpy(rli_file_data.pattern, relay_log_info_file);
   rli_file_data.name_indexed= false;
 
   mi_table_data.n_fields= Master_info::get_number_info_mi_fields();
   mi_table_data.schema= MYSQL_SCHEMA_NAME.str;
   mi_table_data.name= MI_INFO_NAME.str;
+  mi_table_data.n_pk_fields= 1;
+  mi_table_data.pk_field_indexes= Master_info::get_table_pk_field_indexes();
   mi_file_data.n_fields= Master_info::get_number_info_mi_fields();
-  strmov(mi_file_data.name, master_info_file);
-  strmov(mi_file_data.pattern, master_info_file);
+  my_stpcpy(mi_file_data.name, master_info_file);
+  my_stpcpy(mi_file_data.pattern, master_info_file);
   rli_file_data.name_indexed= false;
 
   worker_table_data.n_fields= Slave_worker::get_number_worker_fields();
   worker_table_data.schema= MYSQL_SCHEMA_NAME.str;
   worker_table_data.name= WORKER_INFO_NAME.str;
+  worker_table_data.n_pk_fields= 2;
+  worker_table_data.pk_field_indexes=
+    Slave_worker::get_table_pk_field_indexes();
   worker_file_data.n_fields= Slave_worker::get_number_worker_fields();
   build_worker_info_name(worker_file_data.name,
                          relay_log_info_file_dirpart,
@@ -552,11 +605,11 @@ bool Rpl_info_factory::decide_repository(Rpl_info *info, uint option,
     goto err;
   }
 
-  DBUG_ASSERT((*handler_src) != NULL && (*handler_dest) != NULL &&
-              (*handler_src) != (*handler_dest));
+  assert((*handler_src) != NULL && (*handler_dest) != NULL &&
+         (*handler_src) != (*handler_dest));
 
   return_check_src= check_src_repository(info, option, handler_src);
-  return_check_dst= (*handler_dest)->do_check_info(info->get_internal_id());
+  return_check_dst= (*handler_dest)->do_check_info(info->get_internal_id()); // approx via scan, not field_values! Todo: reconsider any need for that at least in the Worker case
 
   if (return_check_src == ERROR_CHECKING_REPOSITORY ||
       return_check_dst == ERROR_CHECKING_REPOSITORY)
@@ -620,7 +673,7 @@ bool Rpl_info_factory::decide_repository(Rpl_info *info, uint option,
     else if (return_check_src == REPOSITORY_DOES_NOT_EXIST &&
              return_check_dst == REPOSITORY_EXISTS)
     {
-      DBUG_ASSERT(info->get_rpl_info_handler() == NULL);
+      assert(info->get_rpl_info_handler() == NULL);
       if ((*handler_dest)->do_init_info(info->get_internal_id()))
       {
         *msg= "Error reading repository";
@@ -629,8 +682,9 @@ bool Rpl_info_factory::decide_repository(Rpl_info *info, uint option,
     }
     else
     {
-      DBUG_ASSERT(return_check_src == REPOSITORY_DOES_NOT_EXIST &&
-                  return_check_dst == REPOSITORY_DOES_NOT_EXIST);
+      assert(return_check_src == REPOSITORY_DOES_NOT_EXIST &&
+             return_check_dst == REPOSITORY_DOES_NOT_EXIST);
+      info->inited= false;
     }
 
     delete (*handler_src);
@@ -827,7 +881,7 @@ bool Rpl_info_factory::init_repositories(const struct_table_data table_data,
 
   DBUG_ENTER("Rpl_info_factory::init_mi_repositories");
 
-  DBUG_ASSERT(handler_dest != NULL);
+  assert(handler_dest != NULL);
   switch (rep_option)
   {
     case INFO_REPOSITORY_FILE:
@@ -839,14 +893,18 @@ bool Rpl_info_factory::init_repositories(const struct_table_data table_data,
       if (handler_src &&
           !(*handler_src= new Rpl_info_table(table_data.n_fields,
                                              table_data.schema,
-                                             table_data.name)))
+                                             table_data.name,
+                                             table_data.n_pk_fields,
+                                             table_data.pk_field_indexes)))
         goto err;
     break;
 
     case INFO_REPOSITORY_TABLE:
       if (!(*handler_dest= new Rpl_info_table(table_data.n_fields,
                                               table_data.schema,
-                                              table_data.name)))
+                                              table_data.name,
+                                              table_data.n_pk_fields,
+                                              table_data.pk_field_indexes)))
         goto err;
       if (handler_src &&
           !(*handler_src= new Rpl_info_file(file_data.n_fields,
@@ -862,7 +920,7 @@ bool Rpl_info_factory::init_repositories(const struct_table_data table_data,
     break;
 
     default:
-      DBUG_ASSERT(0);
+      assert(0);
   }
   error= FALSE;
 
@@ -879,7 +937,7 @@ bool Rpl_info_factory::scan_repositories(uint* found_instances,
   bool error= false;
   uint file_instances= 0;
   uint table_instances= 0;
-  DBUG_ASSERT(found_rep_option != NULL);
+  assert(found_rep_option != NULL);
 
   DBUG_ENTER("Rpl_info_factory::scan_repositories");
 
@@ -924,4 +982,466 @@ bool Rpl_info_factory::scan_repositories(uint* found_instances,
 
 err:
   DBUG_RETURN(error);
+}
+
+
+/**
+  This function should be called from init_slave() only.
+
+  During the server start, read all the slave repositories
+  on disk (either in FILE or TABLE form) and create corresponding
+  slave info objects. Each thus created master_info object is
+  added to pchannel_map.
+
+  Multisource replication is supported by only TABLE based
+  repositories. Based on this fact, the following table shows
+  the supported cases considering the repository type and
+  multiple channels of a slave.
+  Each <---> represents a channel with a name on top of it.
+  '' is an empty stringed channel (or default channel).
+  'N' indicates some name for a channel.
+
+ +-----------------------------+------------------+-----------+
+ | channels                    | Supported? FILE  |  TABLE    |
+ +-----------------------------+------------------+-----------+
+ |              ''             |                  |           |
+ | A)  Master<------->Slave    |  YES             |  YES      |
+ |                             |                  |           |
+ |                             |                  |           |
+ |              'N'            |                  |           |
+ | B) Master<------->Slave     |  NO              |  YES      |
+ |                             |                  |           |
+ |              ''             |                  |           |
+ |    Master0<------------+    |                  |           |
+ |              'N'       v    |  NO              |  YES      |
+ | C) Master1<----------->Slave|                  |           |
+ |              'N'       ^    |                  |           |
+ |    Mastern<------------+    |                  |           |
+ |                             |                  |           |
+ |                             |                  |           |
+ |              'N'            |                  |           |
+ |    Master1<------------+    |                  |           |
+ |              'N'       v    |   NO             |   YES     |
+ | D) Master2<----------->Slave|                  |           |
+ |              'N'       ^    |                  |           |
+ |    Mastern<------------+    |                  |           |
+ |                             |                  |           |
+ |                             |                  |           |
+ +-----------------------------+------------------+-----------+
+
+ In a new server, A) shown above is created by default.
+ If there are multiple 'named' channels, but and if a default_channel
+ is not created, it is created.
+
+ Some points to note from the above table
+ =========================================
+
+ From the table it also follows that conversion of repositories
+ is possible *ONLY* in the case of A) i.e for ex: if B) type repository
+ (i.e a named slave channel) was found during server starup but the user
+ repository option is INFO_REPOSITORY_FILE, then we exit the function.
+
+ @note: only for type A) i.e default channel, it is permissable to
+        have different repo types for Master_info and Relay_log_info
+        (Ex: FILE for mi and TABLE for rli)
+
+ @note: The above restrictions break factory pattern in the code
+        which has been followed throughout before.
+
+ @note: All the repository conversion(or live migration) functions
+       (ex: decide_repository()) take Rpl_info::internal_id as an
+       identifier which is always 1 for the case of Master_info and
+       Relay_log_info. So, in the case of multisource replication,
+       the decision to convert the repositories shall be made even before
+       invoking decide_repository(). In other words, if a channel is not a
+       default channel('') we shall not invoke decide_repository().
+
+ @note:  In general, the algorithm in creation of slave info object is:
+          l1: new slave_info;
+          l2: Initialize the repository handlers
+          l3: if (default_channel)
+                 check and convert repositories
+              else
+                   // TABLE type repository
+                  set the value of PK in the TABLE handler.
+
+ @note: Update from 5.6 to 5.7(which has Channel_Name in slave_info_tables)
+        is handled in the upgrade script as usual.
+
+
+  @param[in]        mi_option        the user provided master_info_repository
+  @param[in]       rli_option        the user provided relay_log_info_repository
+  @param[in]       thread_mask       thread mask
+  @param[in]       pchannel_map          the pointer to the multi source map
+                                     (see, rpl_msr.h)
+
+  @return
+   @retval         false              success
+   @retval         true               fail
+
+*/
+
+bool Rpl_info_factory::create_slave_info_objects(uint mi_option,
+                                                 uint rli_option,
+                                                 int thread_mask,
+                                                 Multisource_info *pchannel_map)
+{
+  DBUG_ENTER("create_slave_info_objects");
+
+  Master_info* mi= NULL;
+  const char* msg= NULL;
+  bool error= false, channel_error;
+  bool default_channel_existed_previously= false;
+
+  std::vector<std::string> channel_list;
+
+  /* Number of instances of Master_info repository */
+  uint mi_instances= 0;
+
+  /* At this point, the repository in invalid or unknown */
+  uint mi_repository= INVALID_INFO_REPOSITORY;
+
+  /*
+    Number of instances of Relay_log_info_repository.
+    (Number of Slave worker objects that will be created by the Coordinator
+    (when slave_parallel_workers>0) at a later stage and not here).
+  */
+  uint rli_instances= 0;
+
+  /* At this point, the repository is invalid or unknown */
+  uint rli_repository= INVALID_INFO_REPOSITORY;
+
+  /*
+    Initialize the repository metadata. This metadata is the
+    name of files to look in case of FILE type repository, and the
+    names of table to look in case of TABLE type repository.
+  */
+  Rpl_info_factory::init_repository_metadata();
+
+  /* Count the number of Master_info and Relay_log_info repositories */
+  if (scan_repositories(&mi_instances, &mi_repository, mi_table_data,
+                        mi_file_data, &msg) ||
+      scan_repositories(&rli_instances, &rli_repository, rli_table_data,
+                        rli_file_data, &msg))
+  {
+    /* msg will contain the reason of failure */
+    sql_print_error("Slave: %s", msg);
+    error= true;
+    goto end;
+  }
+
+  /* Make a list of all channels if the slave was connected to previously*/
+  if (load_channel_names_from_repository(channel_list,
+                                         mi_instances,
+                                         mi_repository,
+                                         pchannel_map->get_default_channel(),
+                                         &default_channel_existed_previously))
+  {
+    sql_print_error("Slave: Could not create channel list");
+    error= true;
+    goto end;
+  }
+
+  if ((mi_option == INFO_REPOSITORY_FILE ||
+       rli_option == INFO_REPOSITORY_FILE) && channel_list.size() > 1)
+  {
+     /* Not supported cases of B) C) and D) above */
+     sql_print_error("Slave: This slave was a multisourced slave previously which"
+                     " is supported only by both TABLE based master info and relay"
+                     " log info repositories. Found one or both of the info repos"
+                     " to be type FILE. Set both repos to type TABLE.");
+     error= true;
+     goto end;
+  }
+
+  /* Adding the default channel if needed. */
+  if (!default_channel_existed_previously)
+  {
+    std::string str(pchannel_map->get_default_channel());
+    channel_list.push_back(str);
+  }
+
+  /*
+    Create and initialize the channels.
+
+    Even if there is an error during one channel creation, we continue to
+    iterate until we have created the other channels.
+
+    For compatibility reasons, we have to separate the print out
+    of the error messages.
+  */
+  for (std::vector<std::string>::iterator it= channel_list.begin();
+       it != channel_list.end(); ++it)
+  {
+    const char* cname= (*it).c_str();
+    bool is_default_channel= !strcmp(cname, pchannel_map->get_default_channel());
+    channel_error= !(mi= create_mi_and_rli_objects(mi_option, rli_option, cname,
+                                                   (channel_list.size() == 1) ? 1 : 0,
+                                                   pchannel_map));
+    /*
+      Read the channel configuration from the repository if the channel name
+      was read from the repository.
+    */
+    if (!channel_error && (!is_default_channel || default_channel_existed_previously))
+    {
+      bool ignore_if_no_info= (channel_list.size() == 1) ? true : false;
+      channel_error= load_mi_and_rli_from_repositories(mi,
+                                                       ignore_if_no_info,
+                                                       thread_mask);
+    }
+
+    if (channel_error)
+    {
+      sql_print_error("Slave: Failed to initialize the master info structure"
+                      " for channel '%s'; its record may still be present in"
+                      " 'mysql.slave_master_info' table, consider "
+                      "deleting it.", cname);
+    }
+    error= error || channel_error;
+  }
+end:
+  DBUG_RETURN(error);
+}
+
+
+/**
+   Create Master_info and Relay_log_info objects for a new channel.
+   Also, set cross dependencies between these objects used all over
+   the code.
+
+   Both master_info and relay_log_info repositories should be of the type
+   TABLE. We do a check for this here as well.
+
+   @param[in]    mi_option        master info repository
+   @param[in]    rli_option       relay log info repository
+   @param[in]    channel          the channel for which these objects
+                                  should be created.
+   @param[in]    to_decide_repo   For this channel, check if repositories
+                                  are allowed to convert from one type to other.
+   @param[in]    pchannel_map     a pointer to channel_map
+
+   @return      Pointer         pointer to the created Master_info
+   @return      NULL            when creation fails
+
+*/
+
+Master_info*
+Rpl_info_factory::create_mi_and_rli_objects(uint mi_option,
+                                            uint rli_option,
+                                            const char* channel,
+                                            bool to_decide_repo,
+                                            Multisource_info* pchannel_map)
+{
+  DBUG_ENTER("Rpl_info_factory::create_mi_and_rli_objects");
+
+  Master_info *mi= NULL;
+  Relay_log_info *rli= NULL;
+
+  if (!(mi= Rpl_info_factory::create_mi(mi_option, channel, to_decide_repo)))
+    DBUG_RETURN(NULL);
+
+  if (!(rli= Rpl_info_factory::create_rli(rli_option, relay_log_recovery,
+                                          channel, to_decide_repo)))
+  {
+    mi->channel_wrlock();
+    delete mi;
+    mi= NULL;
+    DBUG_RETURN(NULL);
+  }
+
+  /* Set the cross dependencies used all over the code */
+  mi->set_relay_log_info(rli);
+  rli->set_master_info(mi);
+
+  /* Add to multisource map*/
+  if (pchannel_map->add_mi(channel, mi))
+  {
+    mi->channel_wrlock();
+    delete mi;
+    delete rli;
+    DBUG_RETURN(NULL);
+  }
+
+  DBUG_RETURN(mi);
+}
+
+/**
+   Make a list of all the channels if existed on the previos slave run.
+
+   @param[out]  channel_list    the names of all channels that exists
+                                on this slave.
+
+   @param[in]   mi_instances    number of master_info repositories
+
+   @param[in]   mi_repository   Found master_info repository
+
+   @param[in]   default_channel pointer to default channel.
+
+   @param[out]  default_channel_existed_previously
+                                Value filled with true if default channel
+                                existed previously. False if it is not.
+
+   @return
+     @retval        true             fail
+     @retval        false            success
+
+*/
+
+bool
+Rpl_info_factory::load_channel_names_from_repository(std::vector<std::string>& channel_list,
+                                                     uint mi_instances,
+                                                     uint mi_repository,
+                                                     const char* default_channel,
+                                                     bool *default_channel_existed_previously)
+{
+  DBUG_ENTER("Rpl_info_factory::load_channel_names_from_repository");
+
+  *default_channel_existed_previously= false;
+  switch(mi_repository)
+  {
+  case INFO_REPOSITORY_FILE:
+    assert(mi_instances == 1);
+    /* insert default channel */
+    {
+    std::string str(default_channel);
+    channel_list.push_back(str);
+    }
+    *default_channel_existed_previously= true;
+    break;
+  case INFO_REPOSITORY_TABLE:
+    if (load_channel_names_from_table(channel_list, default_channel,
+                                      default_channel_existed_previously))
+      DBUG_RETURN(true);
+    break;
+  case INVALID_INFO_REPOSITORY:
+    /* file and table instanaces are zero, nothing to be done*/
+    break;
+  default:
+    assert(0);
+  }
+
+  DBUG_RETURN(false);
+}
+
+
+/**
+  In a multisourced slave, during init_slave(), the repositories
+  are read to initialize the slave info objects. To initialize
+  the slave info objects, we need the number of channels the slave
+  was connected to previously. The following function, finds the
+  number of channels in the master info repository.
+  Later, this chanenl list is used to create a pair of {mi, rli}
+  objects required for IO and SQL threads respectively.
+
+  @param [out]  channel_list    A reference to the channel list.
+                                This will be filled after reading the
+                                master info table, row by row.
+
+  @param[in]   default_channel  pointer to default channel.
+
+  @param[out]  default_channel_existed_previously
+                                Value filled with true if default channel
+                                existed previously. False if it is not.
+
+  @todo: Move it to Rpl_info_table and make it generic to extract
+         all the PK list from the tables (but it not yet necessary)
+*/
+bool
+Rpl_info_factory::load_channel_names_from_table(std::vector<std::string> &channel_list,
+                                                const char* default_channel,
+                                                bool *default_channel_existed_previously)
+{
+
+ DBUG_ENTER(" Rpl_info_table::load_channel_names_from_table");
+
+  int error= 1;
+  TABLE *table= 0;
+  ulong saved_mode;
+  Open_tables_backup backup;
+  Rpl_info_table* info= 0;
+  THD *thd= 0;
+  char buff[MAX_FIELD_WIDTH];
+  *default_channel_existed_previously= false;
+  String str(buff, sizeof(buff), system_charset_info); // to extract channel names
+
+  uint channel_field= Master_info::get_channel_field_num() -1;
+
+
+  if(!(info= new Rpl_info_table(mi_table_data.n_fields,
+                                mi_table_data.schema, mi_table_data.name,
+                                mi_table_data.n_pk_fields,
+                                mi_table_data.pk_field_indexes)))
+    DBUG_RETURN(true);
+
+  thd= info->access->create_thd();
+  saved_mode= thd->variables.sql_mode;
+  // Ensure channel names are always read consistently
+  thd->variables.sql_mode &= ~MODE_PAD_CHAR_TO_FULL_LENGTH;
+
+  /*
+     Opens and locks the rpl_info table before accessing it.
+  */
+  if (info->access->open_table(thd, info->str_schema, info->str_table,
+                               info->get_number_info(), TL_READ, &table,
+                               &backup))
+  {
+    /*
+      We cannot simply print out a warning message at this
+      point because this may represent a bootstrap.
+    */
+    error= 0;
+    goto err;
+  }
+
+  /* Do ha_handler random init for full scanning */
+  if ((error= table->file->ha_rnd_init(true)))
+    DBUG_RETURN(true);
+
+  /* Ensure that the table pk (Channel_name) is at the correct position */
+  if (info->verify_table_primary_key_fields(table))
+  {
+    sql_print_error("Slave: Failed to create a channel from master info "
+                    "table repository.");
+    error= -1;
+    goto err;
+  }
+
+  /*
+    Load all the values in record[0] for each row
+    and then extract channel name from it
+  */
+
+  do
+  {
+    error= table->file->ha_rnd_next(table->record[0]);
+    switch(error)
+    {
+    case 0:
+      /* extract the channel name from table->field and append to the list */
+      table->field[channel_field]->val_str(&str);
+      channel_list.push_back(std::string(str.c_ptr_safe()));
+      if (!strcmp(str.c_ptr_safe(), default_channel))
+        *default_channel_existed_previously= true;
+      break;
+
+    case HA_ERR_END_OF_FILE:
+      break;
+
+    default:
+       DBUG_PRINT("info", ("Failed to get next record"
+                            " (ha_rnd_next returns %d)", error));
+
+    }
+  }
+  while(!error);
+
+  /*close the table */
+err:
+
+  table->file->ha_rnd_end();
+  info->access->close_table(thd, table, &backup, error);
+  thd->variables.sql_mode= saved_mode;
+  info->access->drop_thd(thd);
+  delete info;
+  DBUG_RETURN(error != HA_ERR_END_OF_FILE && error != 0);
 }

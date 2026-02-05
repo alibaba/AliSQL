@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2005, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -20,6 +27,9 @@
 
 #include <ndb_types.h>
 #include "../diskpage.hpp"
+
+#define JAM_FILE_ID 419
+
 
 struct Tup_page 
 {
@@ -51,11 +61,33 @@ struct Tup_page
   Uint32 m_fragment_id;
   Uint32 m_extent_no;
   Uint32 m_extent_info_ptr;
-  Uint32 unused_ph[9];
+  Uint32 unused_high_index; // size of index + 1
+  Uint32 unused_insert_pos;
+  Uint32 m_flags; /* Currently only LCP_SKIP flag in bit 0 */
+  Uint32 unused_ph[6];
 
   STATIC_CONST( DATA_WORDS = File_formats::NDB_PAGE_SIZE_WORDS - 32 );
   
   Uint32 m_data[DATA_WORDS];
+
+  STATIC_CONST ( LCP_SKIP_FLAG = 1 );
+
+  bool is_page_to_skip_lcp() const
+  {
+    if (m_flags & LCP_SKIP_FLAG)
+    {
+      return true;
+    }
+    return false;
+  }
+  void set_page_to_skip_lcp()
+  {
+    m_flags |= LCP_SKIP_FLAG;
+  }
+  void clear_page_to_skip_lcp()
+  {
+    m_flags &= (~LCP_SKIP_FLAG);
+  }
 };
 
 struct Tup_fixsize_page
@@ -63,8 +95,14 @@ struct Tup_fixsize_page
   struct File_formats::Page_header m_page_header;
   Uint32 m_restart_seq;
   Uint32 page_state;
-  Uint32 next_page;
-  Uint32 prev_page;
+  union {
+    Uint32 next_page;
+    Uint32 nextList;
+  };
+  union {
+    Uint32 prev_page;
+    Uint32 prevList;
+  };
   Uint32 first_cluster_page;
   Uint32 last_cluster_page;
   Uint32 next_cluster_page;
@@ -81,7 +119,10 @@ struct Tup_fixsize_page
   Uint32 m_fragment_id;
   Uint32 m_extent_no;
   Uint32 m_extent_info_ptr;
-  Uint32 unused_ph[9];
+  Uint32 unused_high_index; // size of index + 1
+  Uint32 unushed_insert_pos;
+  Uint32 m_flags; /* Currently only LCP_SKIP flag in bit 0 */
+  Uint32 unused_ph[6];
 
   STATIC_CONST( FREE_RECORD = ~(Uint32)0 );
   STATIC_CONST( DATA_WORDS = File_formats::NDB_PAGE_SIZE_WORDS - 32 );
@@ -108,8 +149,14 @@ struct Tup_varsize_page
   struct File_formats::Page_header m_page_header;
   Uint32 m_restart_seq;
   Uint32 page_state;
-  Uint32 next_page;
-  Uint32 prev_page;
+  union {
+    Uint32 next_page;
+    Uint32 nextList;
+  };
+  union {
+    Uint32 prev_page;
+    Uint32 prevList;
+  };
   Uint32 first_cluster_page;
   Uint32 last_cluster_page;
   Uint32 next_cluster_page;
@@ -128,7 +175,8 @@ struct Tup_varsize_page
   Uint32 m_extent_info_ptr;
   Uint32 high_index; // size of index + 1
   Uint32 insert_pos;
-  Uint32 unused_ph[7];
+  Uint32 m_flags; /* Currently only LCP_SKIP flag in bit 0 */
+  Uint32 unused_ph[6];
   
   STATIC_CONST( DATA_WORDS = File_formats::NDB_PAGE_SIZE_WORDS - 32 );
   STATIC_CONST( CHAIN    = 0x80000000 );
@@ -259,9 +307,17 @@ struct Tup_varsize_page
   {
     return ((get_index_word(page_idx) & FREE) != 0) ? true : false;
   }
+
+  bool is_empty() const
+  {
+    return high_index == 1;
+  }
 };
 
 NdbOut& operator<< (NdbOut& out, const Tup_varsize_page& page);
 NdbOut& operator<< (NdbOut& out, const Tup_fixsize_page& page);
+
+
+#undef JAM_FILE_ID
 
 #endif

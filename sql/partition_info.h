@@ -1,27 +1,116 @@
 #ifndef PARTITION_INFO_INCLUDED
 #define PARTITION_INFO_INCLUDED
 
-/* Copyright (c) 2006, 2015, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2006, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
+#include "lock.h"                             // Tablespace_hash_set
 #include "partition_element.h"
-#include "sql_class.h"                        // enum_duplicates
+#include "mysqld.h"                           // key_map
+#include "sql_bitmap.h"                       // Bitmap
+#include "sql_data_change.h"                  // enum_duplicates
+
+#define NOT_A_PARTITION_ID UINT_MAX32
 
 class partition_info;
+class Partition_share;
 class COPY_INFO;
+class Create_field;
+struct st_partition_iter;
 struct TABLE_LIST;
+
+/**
+  A "Get next" function for partition iterator.
+
+
+  Depending on whether partitions or sub-partitions are iterated, the
+  function returns next subpartition id/partition number. The sequence of
+  returned numbers is not ordered and may contain duplicates.
+
+  When the end of sequence is reached, NOT_A_PARTITION_ID is returned, and
+  the iterator resets itself (so next get_next() call will start to
+  enumerate the set all over again).
+
+  @param[in,out] part_iter Partition iterator, you call only
+                           "iter.get_next(&iter)"
+
+  @return Partition id
+    @retval NOT_A_PARTITION_ID if there are no more partitions.
+    @retval [sub]partition_id  of the next partition
+*/
+typedef uint32 (*partition_iter_func)(st_partition_iter* part_iter);
+
+/**
+  Partition set iterator. Used to enumerate a set of [sub]partitions
+  obtained in partition interval analysis (see get_partitions_in_range_iter).
+
+  For the user, the only meaningful field is get_next, which may be used as
+  follows:
+             part_iterator.get_next(&part_iterator);
+
+  Initialization is done by any of the following calls:
+    - get_partitions_in_range_iter-type function call
+    - init_single_partition_iterator()
+    - init_all_partitions_iterator()
+  Cleanup is not needed.
+*/
+
+typedef struct st_partition_iter
+{
+  partition_iter_func get_next;
+  /*
+    Valid for "Interval mapping" in LIST partitioning: if true, let the
+    iterator also produce id of the partition that contains NULL value.
+  */
+  bool ret_null_part, ret_null_part_orig;
+  struct st_part_num_range
+  {
+    uint32 start;
+    uint32 cur;
+    uint32 end;
+  };
+
+  struct st_field_value_range
+  {
+    longlong start;
+    longlong cur;
+    longlong end;
+  };
+
+  union
+  {
+    struct st_part_num_range     part_nums;
+    struct st_field_value_range  field_vals;
+  };
+  partition_info *part_info;
+} PARTITION_ITERATOR;
+
+
+struct st_ddl_log_memory_entry;
+
+typedef struct {
+  longlong list_value;
+  uint32 partition_id;
+} LIST_PART_ENTRY;
 
 /* Some function typedefs */
 typedef int (*get_part_id_func)(partition_info *part_info,
@@ -29,9 +118,50 @@ typedef int (*get_part_id_func)(partition_info *part_info,
                                  longlong *func_value);
 typedef int (*get_subpart_id_func)(partition_info *part_info,
                                    uint32 *part_id);
- 
-struct st_ddl_log_memory_entry;
 
+
+/**
+  Get an iterator for set of partitions that match given field-space interval.
+
+  Functions with this signature are used to perform "Partitioning Interval
+  Analysis". This analysis is applicable for any type of [sub]partitioning
+  by some function of a single fieldX. The idea is as follows:
+  Given an interval "const1 <=? fieldX <=? const2", find a set of partitions
+  that may contain records with value of fieldX within the given interval.
+
+  The min_val, max_val and flags parameters specify the interval.
+  The set of partitions is returned by initializing an iterator in *part_iter
+
+  @note
+    There are currently three functions of this type:
+     - get_part_iter_for_interval_via_walking
+     - get_part_iter_for_interval_cols_via_map
+     - get_part_iter_for_interval_via_mapping
+
+  @param part_info           Partitioning info
+  @param is_subpart
+  @param store_length_array  Length of fields packed in opt_range_key format
+  @param min_val             Left edge,  field value in opt_range_key format
+  @param max_val             Right edge, field value in opt_range_key format
+  @param min_len             Length of minimum value
+  @param max_len             Length of maximum value
+  @param flags               Some combination of NEAR_MIN, NEAR_MAX,
+                             NO_MIN_RANGE, NO_MAX_RANGE
+  @param part_iter           Iterator structure to be initialized
+
+  @return Operation status
+    @retval 0   No matching partitions, iterator not initialized
+    @retval 1   Some partitions would match, iterator intialized for traversing them
+    @retval -1  All partitions would match, iterator not initialized
+*/
+
+typedef int (*get_partitions_in_range_iter)(partition_info *part_info,
+                                            bool is_subpart,
+                                            uint32 *store_length_array,
+                                            uchar *min_val, uchar *max_val,
+                                            uint min_len, uint max_len,
+                                            uint flags,
+                                            PARTITION_ITERATOR *part_iter);
 class partition_info : public Sql_alloc
 {
 public:
@@ -44,7 +174,7 @@ public:
   List<char> part_field_list;
   List<char> subpart_field_list;
 
-  /* 
+  /*
     If there is no subpartitioning, use only this func to get partition ids.
     If there is subpartitioning, use the this func to get partition id when
     you have both partition and subpartition fields.
@@ -54,10 +184,10 @@ public:
   /* Get partition id when we don't have subpartition fields */
   get_part_id_func get_part_partition_id;
 
-  /* 
+  /*
     Get subpartition id when we have don't have partition fields by we do
     have subpartition ids.
-    Mikael said that for given constant tuple 
+    Mikael said that for given constant tuple
     {subpart_field1, ..., subpart_fieldN} the subpartition id will be the
     same in all subpartitions
   */
@@ -77,7 +207,7 @@ public:
   Field **subpart_field_array;
   Field **part_charset_field_array;
   Field **subpart_charset_field_array;
-  /* 
+  /*
     Array of all fields used in partition and subpartition expression,
     without duplicates, NULL-terminated.
   */
@@ -109,8 +239,8 @@ public:
   struct st_ddl_log_memory_entry *exec_log_entry;
   struct st_ddl_log_memory_entry *frm_log_entry;
 
-  /* 
-    Bitmaps of partitions used by the current query. 
+  /*
+    Bitmaps of partitions used by the current query.
     * read_partitions  - partitions to be used for reading.
     * lock_partitions  - partitions that must be locked (read or write).
     Usually read_partitions is the same set as lock_partitions, but
@@ -134,6 +264,7 @@ public:
   MY_BITMAP read_partitions;
   MY_BITMAP lock_partitions;
   bool bitmaps_are_initialized;
+  // TODO: Add first_read_partition and num_read_partitions?
 
   union {
     longlong *range_int_array;
@@ -141,12 +272,12 @@ public:
     part_column_list_val *range_col_array;
     part_column_list_val *list_col_array;
   };
-  
+
   /********************************************
    * INTERVAL ANALYSIS
    ********************************************/
   /*
-    Partitioning interval analysis function for partitioning, or NULL if 
+    Partitioning interval analysis function for partitioning, or NULL if
     interval analysis is not supported for this kind of partitioning.
   */
   get_partitions_in_range_iter get_part_iter_for_interval;
@@ -155,9 +286,9 @@ public:
     interval analysis is not supported for this kind of partitioning.
   */
   get_partitions_in_range_iter get_subpart_iter_for_interval;
-  
+
   /********************************************
-   * INTERVAL ANALYSIS ENDS 
+   * INTERVAL ANALYSIS ENDS
    ********************************************/
 
   longlong err_value;
@@ -185,9 +316,9 @@ public:
   partition_type part_type;
   partition_type subpart_type;
 
-  uint part_info_len;
-  uint part_func_len;
-  uint subpart_func_len;
+  size_t part_info_len;
+  size_t part_func_len;
+  size_t subpart_func_len;
 
   uint num_parts;
   uint num_subparts;
@@ -288,21 +419,23 @@ public:
 
   partition_info *get_clone(bool reset = false);
   partition_info *get_full_clone();
-  bool set_named_partition_bitmap(const char *part_name, uint length);
+  bool set_named_partition_bitmap(const char *part_name, size_t length);
   bool set_partition_bitmaps(TABLE_LIST *table_list);
+  bool set_read_partitions(List<String> *partition_names);
   /* Answers the question if subpartitioning is used for a certain table */
-  bool is_sub_partitioned()
+  inline bool is_sub_partitioned() const
   {
     return (subpart_type == NOT_A_PARTITION ?  FALSE : TRUE);
   }
 
   /* Returns the total number of partitions on the leaf level */
-  uint get_tot_partitions()
+  inline uint get_tot_partitions() const
   {
     return num_parts * (is_sub_partitioned() ? num_subparts : 1);
   }
 
-  bool set_up_defaults_for_partitioning(handler *file, HA_CREATE_INFO *info,
+  bool set_up_defaults_for_partitioning(Partition_handler *part_handler,
+                                        HA_CREATE_INFO *info,
                                         uint start_no);
   char *find_duplicate_field();
   char *find_duplicate_name();
@@ -364,18 +497,41 @@ public:
                         bool *prune_needs_default_values,
                         MY_BITMAP *used_partitions);
   bool has_same_partitioning(partition_info *new_part_info);
+  inline bool is_partition_used(uint part_id) const
+  {
+    return bitmap_is_set(&read_partitions, part_id);
+  }
+  inline bool is_partition_locked(uint part_id) const
+  {
+    return bitmap_is_set(&lock_partitions, part_id);
+  }
+  inline uint num_partitions_used()
+  {
+    return bitmap_bits_set(&read_partitions);
+  }
+  inline uint get_first_used_partition() const
+  {
+    return bitmap_get_first_set(&read_partitions);
+  }
+  inline uint get_next_used_partition(uint part_id) const
+  {
+    return bitmap_get_next_set(&read_partitions, part_id);
+  }
+  bool same_key_column_order(List<Create_field> *create_list);
+
 private:
   static int list_part_cmp(const void* a, const void* b);
-  bool set_up_default_partitions(handler *file, HA_CREATE_INFO *info,
+  bool set_up_default_partitions(Partition_handler *part_handler,
+                                 HA_CREATE_INFO *info,
                                  uint start_no);
-  bool set_up_default_subpartitions(handler *file, HA_CREATE_INFO *info);
+  bool set_up_default_subpartitions(Partition_handler *part_handler,
+                                    HA_CREATE_INFO *info);
   char *create_default_partition_names(uint part_no, uint num_parts,
                                        uint start_no);
   char *create_default_subpartition_name(uint subpart_no,
                                          const char *part_name);
-  bool prune_partition_bitmaps(TABLE_LIST *table_list);
-  bool add_named_partition(const char *part_name, uint length);
-  bool is_field_in_part_expr(List<Item> &fields);
+  bool add_named_partition(const char *part_name, size_t length);
+  bool is_fields_in_part_expr(List<Item> &fields);
   bool is_full_part_expr_in_fields(List<Item> &fields);
 };
 
@@ -403,5 +559,22 @@ void init_all_partitions_iterator(partition_info *part_info,
   part_iter->ret_null_part= part_iter->ret_null_part_orig= FALSE;
   part_iter->get_next= get_next_partition_id_range;
 }
+
+bool fill_partition_tablespace_names(
+       partition_info *part_info,
+       Tablespace_hash_set *tablespace_set);
+
+bool check_partition_tablespace_names(partition_info *part_info);
+
+/**
+  Predicate which returns true if any partition or subpartition uses
+  an external data directory or external index directory.
+
+  @param pi partitioning information
+  @retval true if any partition or subpartition has an external
+  data directory or external index directory.
+  @retval false otherwise
+ */
+bool has_external_data_or_index_dir(partition_info &pi);
 
 #endif /* PARTITION_INFO_INCLUDED */

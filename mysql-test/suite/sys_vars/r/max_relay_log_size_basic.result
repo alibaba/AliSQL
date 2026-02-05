@@ -88,6 +88,11 @@ ERROR 42000: Incorrect argument type to variable 'max_relay_log_size'
 SELECT @@global.max_relay_log_size;
 @@global.max_relay_log_size
 1073741824
+SET @@global.max_relay_log_size = ' ';
+ERROR 42000: Incorrect argument type to variable 'max_relay_log_size'
+SELECT @@global.max_relay_log_size;
+@@global.max_relay_log_size
+1073741824
 '#-------------------FN_DYNVARS_082_05----------------------------#'
 SET @@session.max_relay_log_size = 4096;
 ERROR HY000: Variable 'max_relay_log_size' is a GLOBAL variable and should be set with SET GLOBAL
@@ -129,11 +134,11 @@ SELECT @@max_relay_log_size;
 @@max_relay_log_size
 4096
 SET local.max_relay_log_size = 7000;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'max_relay_log_size = 7000' at line 1
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'local.max_relay_log_size = 7000' at line 1
 SELECT local.max_relay_log_size;
 ERROR 42S02: Unknown table 'local' in field list
 SET global.max_relay_log_size = 8000;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'max_relay_log_size = 8000' at line 1
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'global.max_relay_log_size = 8000' at line 1
 SELECT global.max_relay_log_size;
 ERROR 42S02: Unknown table 'global' in field list
 SELECT max_relay_log_size = @@session.max_relay_log_size;

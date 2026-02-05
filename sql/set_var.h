@@ -1,15 +1,22 @@
 #ifndef SET_VAR_INCLUDED
 #define SET_VAR_INCLUDED
-/* Copyright (c) 2002, 2013, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2002, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -19,8 +26,18 @@
   @file
   "public" interface to sys_var - server configuration variables.
 */
+#include "my_global.h"
 
-#include <my_getopt.h>
+#include "m_string.h"         // LEX_CSTRING
+#include "my_getopt.h"        // get_opt_arg_type
+#include "mysql_com.h"        // Item_result
+#include "typelib.h"          // TYPELIB
+#include "mysql/plugin.h"     // enum_mysql_show_type
+#include "sql_alloc.h"        // Sql_alloc
+#include "sql_const.h"        // SHOW_COMP_OPTION
+#include "sql_plugin_ref.h"   // plugin_ref
+#include "prealloced_array.h" // Prealloced_array
+
 #include <vector>
 
 class sys_var;
@@ -28,12 +45,21 @@ class set_var;
 class sys_var_pluginvar;
 class PolyLock;
 class Item_func_set_user_var;
-
-// This include needs to be here since item.h requires enum_var_type :-P
-#include "item.h"                          /* Item */
-#include "sql_class.h"                     /* THD  */
+class String;
+class Time_zone;
+class THD;
+struct st_lex_user;
+typedef ulonglong sql_mode_t;
+typedef enum enum_mysql_show_type SHOW_TYPE;
+typedef enum enum_mysql_show_scope SHOW_SCOPE;
+typedef struct st_mysql_show_var SHOW_VAR;
+template <class T> class List;
 
 extern TYPELIB bool_typelib;
+
+/* Number of system variable elements to preallocate. */
+#define SHOW_VAR_PREALLOC 200
+typedef Prealloced_array<SHOW_VAR, SHOW_VAR_PREALLOC, false> Show_var_array;
 
 struct sys_var_chain
 {
@@ -43,6 +69,11 @@ struct sys_var_chain
 
 int mysql_add_sys_var_chain(sys_var *chain);
 int mysql_del_sys_var_chain(sys_var *chain);
+
+enum enum_var_type
+{
+  OPT_DEFAULT= 0, OPT_SESSION, OPT_GLOBAL
+};
 
 /**
   A class representing one system variable - that is something
@@ -56,8 +87,17 @@ class sys_var
 public:
   sys_var *next;
   LEX_CSTRING name;
-  enum flag_enum { GLOBAL, SESSION, ONLY_SESSION, SCOPE_MASK=1023,
-                   READONLY=1024, ALLOCATED=2048, INVISIBLE=4096 };
+  enum flag_enum
+  {
+    GLOBAL=       0x0001,
+    SESSION=      0x0002,
+    ONLY_SESSION= 0x0004,
+    SCOPE_MASK=   0x03FF, // 1023
+    READONLY=     0x0400, // 1024
+    ALLOCATED=    0x0800, // 2048
+    INVISIBLE=    0x1000, // 4096
+    TRI_LEVEL=    0x2000  // 8192 - default is neither GLOBAL nor SESSION
+  };
   static const int PARSE_EARLY= 1;
   static const int PARSE_NORMAL= 2;
   /**
@@ -69,6 +109,7 @@ public:
 
 protected:
   typedef bool (*on_check_function)(sys_var *self, THD *thd, set_var *var);
+  typedef bool (*pre_update_function)(sys_var *self, THD *thd, set_var *var);
   typedef bool (*on_update_function)(sys_var *self, THD *thd, enum_var_type type);
 
   int flags;            ///< or'ed flag_enum values
@@ -78,6 +119,11 @@ protected:
   PolyLock *guard;      ///< *second* lock that protects the variable
   ptrdiff_t offset;     ///< offset to the value from global_system_variables
   on_check_function on_check;
+  /**
+    Pointer to function to be invoked before updating system variable (but
+    after calling on_check hook), while we do not hold any locks yet.
+  */
+  pre_update_function pre_update;
   on_update_function on_update;
   const char *const deprecation_substitute;
   bool is_os_charset; ///< true if the value is in character_set_filesystem
@@ -103,6 +149,7 @@ public:
   virtual sys_var_pluginvar *cast_pluginvar() { return 0; }
 
   bool check(THD *thd, set_var *var);
+  uchar *value_ptr(THD *running_thd, THD *target_thd, enum_var_type type, LEX_STRING *base);
   uchar *value_ptr(THD *thd, enum_var_type type, LEX_STRING *base);
   virtual void update_default(longlong new_def_value)
   { option.def_value= new_def_value; }
@@ -120,24 +167,42 @@ public:
   const CHARSET_INFO *charset(THD *thd);
   bool is_readonly() const { return flags & READONLY; }
   bool not_visible() const { return flags & INVISIBLE; }
+  bool is_trilevel() const { return flags & TRI_LEVEL; }
   /**
     the following is only true for keycache variables,
     that support the syntax @@keycache_name.variable_name
   */
   bool is_struct() { return option.var_type & GET_ASK_ADDR; }
+  /**
+    Indicates whether this system variable is written to the binlog or not.
+
+    Variables are written to the binlog as part of "status_vars" in
+    Query_log_event, as an Intvar_log_event, or a Rand_log_event.
+
+    @param type  Scope of the system variable.
+
+    @return true if the variable is written to the binlog, false otherwise.
+  */
   bool is_written_to_binlog(enum_var_type type)
   { return type != OPT_GLOBAL && binlog_status == SESSION_VARIABLE_IN_BINLOG; }
   virtual bool check_update_type(Item_result type) = 0;
-  bool check_type(enum_var_type type)
+  
+  /**
+    Return TRUE for success if:
+      Global query and variable scope is GLOBAL or SESSION, or
+      Session query and variable scope is SESSION or ONLY_SESSION.
+  */
+  bool check_scope(enum_var_type query_type)
   {
-    switch (scope())
+    switch (query_type)
     {
-    case GLOBAL:       return type != OPT_GLOBAL;
-    case SESSION:      return false; // always ok
-    case ONLY_SESSION: return type == OPT_GLOBAL;
+      case OPT_GLOBAL:  return scope() & (GLOBAL | SESSION);
+      case OPT_SESSION: return scope() & (SESSION | ONLY_SESSION);
+      case OPT_DEFAULT: return scope() & (SESSION | ONLY_SESSION);
     }
-    return true; // keep gcc happy
+    return false;
   }
+
   bool register_option(std::vector<my_option> *array, int parse_flags)
   {
     return (option.id != -1) && (m_parse_flag & parse_flags) &&
@@ -163,7 +228,7 @@ protected:
     It must be of show_val_type type (bool for SHOW_BOOL, int for SHOW_INT,
     longlong for SHOW_LONGLONG, etc).
   */
-  virtual uchar *session_value_ptr(THD *thd, LEX_STRING *base);
+  virtual uchar *session_value_ptr(THD *running_thd, THD *target_thd, LEX_STRING *base);
   virtual uchar *global_value_ptr(THD *thd, LEX_STRING *base);
 
   /**
@@ -171,15 +236,30 @@ protected:
     Typically it's the same as session_value_ptr(), but it's different,
     for example, for ENUM, that is printed as a string, but stored as a number.
   */
-  uchar *session_var_ptr(THD *thd)
-  { return ((uchar*)&(thd->variables)) + offset; }
+  uchar *session_var_ptr(THD *thd);
 
-  uchar *global_var_ptr()
-  { return ((uchar*)&global_system_variables) + offset; }
+  uchar *global_var_ptr();
 };
 
-#include "binlog.h"                           /* binlog_format_typelib */
-#include "sql_plugin.h"                    /* SHOW_HA_ROWS, SHOW_MY_BOOL */
+class Sys_var_tracker
+{
+public:
+  explicit Sys_var_tracker(sys_var *var);
+
+  sys_var *bind_system_variable(THD *thd);
+
+  bool operator==(const Sys_var_tracker &x) const {
+    return m_var && m_var == x.m_var;
+  }
+
+  bool is_sys_var(sys_var *x) const { return m_var == x; }
+
+private:
+  bool m_is_dynamic;   ///< true if dynamic variable
+  LEX_CSTRING m_name;  ///< variable name
+
+  sys_var *m_var;  ///< variable pointer
+};
 
 /****************************************************************************
   Classes for parsing of the SET command
@@ -201,6 +281,7 @@ public:
   virtual void print(THD *thd, String *str)=0;	/* To self-print */
   /// @returns whether this variable is @@@@optimizer_trace.
   virtual bool is_var_optimizer_trace() const { return false; }
+  virtual void cleanup() {}
 };
 
 
@@ -224,35 +305,13 @@ public:
   } save_result;
   LEX_STRING base; /**< for structured variables, like keycache_name.variable_name */
 
+private:
+  Sys_var_tracker var_tracker;
+
+public:
   set_var(enum_var_type type_arg, sys_var *var_arg,
-          const LEX_STRING *base_name_arg, Item *value_arg)
-    :var(var_arg), type(type_arg), base(*base_name_arg)
-  {
-    /*
-      If the set value is a field, change it to a string to allow things like
-      SET table_type=MYISAM;
-    */
-    if (value_arg && value_arg->type() == Item::FIELD_ITEM)
-    {
-      Item_field *item= (Item_field*) value_arg;
-      if (item->field_name)
-      {
-        if (!(value= new Item_string(item->field_name,
-                                     (uint) strlen(item->field_name),
-                                     system_charset_info))) // names are utf8
-	  value= value_arg;			/* Give error message later */
-      }
-      else
-      {
-        /* Both Item_field and Item_insert_value will return the type as
-        Item::FIELD_ITEM. If the item->field_name is NULL, we assume the
-        object to be Item_insert_value. */
-        value= value_arg;
-      }
-    }
-    else
-      value= value_arg;
-  }
+          const LEX_STRING *base_name_arg, Item *value_arg);
+
   int check(THD *thd);
   int update(THD *thd);
   int light_check(THD *thd);
@@ -261,9 +320,10 @@ public:
   virtual bool is_var_optimizer_trace() const
   {
     extern sys_var *Sys_optimizer_trace_ptr;
-    return var == Sys_optimizer_trace_ptr;
+    return var_tracker.is_sys_var(Sys_optimizer_trace_ptr);
   }
 #endif
+  virtual void cleanup() { var= NULL; }
 };
 
 
@@ -285,10 +345,10 @@ public:
 
 class set_var_password: public set_var_base
 {
-  LEX_USER *user;
+  st_lex_user *user;
   char *password;
 public:
-  set_var_password(LEX_USER *user_arg,char *password_arg)
+  set_var_password(st_lex_user *user_arg,char *password_arg)
     :user(user_arg), password(password_arg)
   {}
   int check(THD *thd);
@@ -323,7 +383,6 @@ public:
 
 
 /* optional things, have_* variables */
-extern SHOW_COMP_OPTION have_csv;
 extern SHOW_COMP_OPTION have_ndbcluster, have_partitioning;
 extern SHOW_COMP_OPTION have_profiling;
 
@@ -332,21 +391,30 @@ extern SHOW_COMP_OPTION have_query_cache;
 extern SHOW_COMP_OPTION have_geometry, have_rtree_keys;
 extern SHOW_COMP_OPTION have_crypt;
 extern SHOW_COMP_OPTION have_compress;
-extern SHOW_COMP_OPTION have_tlsv1_2;
+extern SHOW_COMP_OPTION have_statement_timeout;
 
 /*
-  Prototypes for helper functions
+  Helper functions
 */
+ulong get_system_variable_hash_records(void);
+ulonglong get_system_variable_hash_version(void);
 
-SHOW_VAR* enumerate_sys_vars(THD *thd, bool sorted, enum enum_var_type type);
-
-sys_var *find_sys_var(THD *thd, const char *str, uint length=0);
+bool enumerate_sys_vars(THD *thd, Show_var_array *show_var_array,
+                        bool sort, enum enum_var_type type, bool strict);
+void lock_plugin_mutex();
+void unlock_plugin_mutex();
+sys_var *find_sys_var(THD *thd, const char *str, size_t length=0);
+sys_var *find_sys_var_ex(THD *thd, const char *str, size_t length=0,
+                         bool throw_error= false, bool locked= false);
 int sql_set_variables(THD *thd, List<set_var_base> *var_list);
 
 bool fix_delay_key_write(sys_var *self, THD *thd, enum_var_type type);
-
-sql_mode_t expand_sql_mode(sql_mode_t sql_mode);
+bool keyring_access_test();
+sql_mode_t expand_sql_mode(sql_mode_t sql_mode, THD *thd);
 bool sql_mode_string_representation(THD *thd, sql_mode_t sql_mode, LEX_STRING *ls);
+void update_parser_max_mem_size();
+bool duckdb_disabled_optimizers_string_representation(
+  THD *thd, ulonglong disabled_optimizers, LEX_STRING *ls);
 
 extern sys_var *Sys_autocommit_ptr;
 extern sys_var *Sys_gtid_next_ptr;

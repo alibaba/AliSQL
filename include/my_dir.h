@@ -1,13 +1,20 @@
-/* Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -25,6 +32,11 @@ extern "C" {
 #endif
 
 	/* Defines for my_dir and my_stat */
+
+#ifdef _WIN32
+#define S_IROTH _S_IREAD
+#define S_IFIFO _S_IFIFO
+#endif
 
 #define MY_S_IFMT	S_IFMT	/* type of file */
 #define MY_S_IFDIR	S_IFDIR /* directory */
@@ -50,32 +62,11 @@ extern "C" {
 
 	/* typedefs for my_dir & my_stat */
 
-#ifdef USE_MY_STAT_STRUCT
-
-typedef struct my_stat
-{
-  dev_t		st_dev;		/* major & minor device numbers */
-  ino_t		st_ino;		/* inode number */
-  ushort	st_mode;	/* file permissons (& suid sgid .. bits) */
-  short		st_nlink;	/* number of links to file */
-  ushort	st_uid;		/* user id */
-  ushort	st_gid;		/* group id */
-  dev_t		st_rdev;	/* more major & minor device numbers (???) */
-  off_t		st_size;	/* size of file */
-  time_t	st_atime;	/* time for last read */
-  time_t	st_mtime;	/* time for last contens modify */
-  time_t	st_ctime;	/* time for last inode or contents modify */
-} MY_STAT;
-
-#else
-
 #if(_MSC_VER)
 #define MY_STAT struct _stati64 /* 64 bit file size */
 #else
 #define MY_STAT struct stat	/* Orginal struct have what we need */
 #endif
-
-#endif /* USE_MY_STAT_STRUCT */
 
 /* Struct describing one file returned from my_dir */
 typedef struct fileinfo

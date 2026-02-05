@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -219,7 +226,7 @@ public:
   Uint32 m_hashValueMask;
   Uint32 m_hashpointerValue;
   Vector<Uint16> m_fragments;
-  Vector<Uint8> m_hash_map;
+  Vector<Uint16> m_hash_map;
 
   Uint64 m_max_rows;
   Uint64 m_min_rows;
@@ -414,6 +421,7 @@ public:
   int setName(const char * name);
   const char * getName() const;
   int setTable(const NdbDictionary::Table& table);
+  int setTable(const NdbDictionary::Table *table);
   const NdbDictionary::Table * getTable() const;
   int setTable(const char * table);
   const char * getTableName() const;
@@ -562,6 +570,45 @@ public:
 
 };
 
+class NdbForeignKeyImpl : public NdbDictionary::ForeignKey,
+                          public NdbDictObjectImpl
+{
+public:
+  NdbForeignKeyImpl();
+  NdbForeignKeyImpl(NdbDictionary::ForeignKey &);
+  ~NdbForeignKeyImpl();
+
+  void init();
+  int assign(const NdbForeignKeyImpl& src);
+
+  BaseString m_name;
+
+  struct References
+  {
+    References() {
+      m_objectId = RNIL;
+      m_objectVersion = RNIL;
+    }
+    BaseString m_name;
+    Uint32 m_objectId;
+    Uint32 m_objectVersion;
+  } m_references[4]; //
+  Vector<Uint32> m_parent_columns;
+  Vector<Uint32> m_child_columns;
+  NdbDictionary::ForeignKey::FkAction m_on_update_action;
+  NdbDictionary::ForeignKey::FkAction m_on_delete_action;
+
+  NdbDictionary::ForeignKey * m_facade;
+
+  static NdbForeignKeyImpl & getImpl(NdbDictionary::ForeignKey & t){
+    return t.m_impl;
+  }
+
+  static const NdbForeignKeyImpl & getImpl(const NdbDictionary::ForeignKey & t){
+    return t.m_impl;
+  }
+};
+
 class NdbDictInterface {
 public:
   // one transaction per Dictionary instance is supported
@@ -652,7 +699,7 @@ public:
   int dropEvent(const NdbEventImpl &);
   int dropEvent(NdbApiSignal* signal, LinearSectionPtr ptr[3], int noLSP);
 
-  int executeSubscribeEvent(class Ndb & ndb, NdbEventOperationImpl &, Uint32&);
+  int executeSubscribeEvent(class Ndb & ndb, NdbEventOperationImpl &);
   int stopSubscribeEvent(class Ndb & ndb, NdbEventOperationImpl &);
   
   int listObjects(NdbDictionary::Dictionary::List& list,
@@ -687,6 +734,9 @@ public:
   static int parseHashMapInfo(NdbHashMapImpl& dst,
                               const Uint32 * data, Uint32 len);
 
+  static int parseForeignKeyInfo(NdbForeignKeyImpl& dst,
+                                 const Uint32 * data, Uint32 len);
+
   int create_file(const NdbFileImpl &, const NdbFilegroupImpl&, 
 		  bool overwrite, NdbDictObjectImpl*);
   int drop_file(const NdbFileImpl &);
@@ -705,6 +755,11 @@ public:
   int create_hashmap(const NdbHashMapImpl&, NdbDictObjectImpl*, Uint32 flags);
   int get_hashmap(NdbHashMapImpl&, Uint32 id);
   int get_hashmap(NdbHashMapImpl&, const char * name);
+
+  int create_fk(const NdbForeignKeyImpl&, NdbDictObjectImpl*, Uint32 flags);
+  int get_fk(NdbForeignKeyImpl&, Uint32 id);
+  int get_fk(NdbForeignKeyImpl&, const char * name);
+  int drop_fk(const NdbDictObjectImpl&);
 
   int beginSchemaTrans(bool retry711 = true);
   int endSchemaTrans(Uint32 flags);
@@ -793,6 +848,16 @@ private:
   void execCREATE_HASH_MAP_CONF(const NdbApiSignal*,
 				const LinearSectionPtr ptr[3]);
 
+  void execCREATE_FK_REF(const NdbApiSignal*,
+                         const LinearSectionPtr ptr[3]);
+  void execCREATE_FK_CONF(const NdbApiSignal*,
+                          const LinearSectionPtr ptr[3]);
+
+  void execDROP_FK_REF(const NdbApiSignal*,
+                         const LinearSectionPtr ptr[3]);
+  void execDROP_FK_CONF(const NdbApiSignal*,
+                          const LinearSectionPtr ptr[3]);
+
   Uint32 m_fragmentId;
   UtilBuffer m_buffer;
 
@@ -801,9 +866,6 @@ private:
   UtilBuffer m_tableNames;
 
   union {
-    struct SubStartConfData {
-      Uint32 m_buckets;
-    } m_sub_start_conf;
     struct WaitGcpData {
       Uint32 gci_hi;
       Uint32 gci_lo;
@@ -843,7 +905,7 @@ public:
   int dropTable(const char * name);
   int dropTable(NdbTableImpl &);
   int dropBlobTables(NdbTableImpl &);
-  int renameBlobTables(const NdbTableImpl &old_impl, const NdbTableImpl &impl);
+  int alterBlobTables(const NdbTableImpl &old_impl, const NdbTableImpl &impl, Uint32 tabChangeMask);
   int invalidateObject(NdbTableImpl &);
   int removeCachedObject(NdbTableImpl &);
 
@@ -851,7 +913,12 @@ public:
   int createIndex(NdbIndexImpl &ix, NdbTableImpl & tab, bool offline);
   int dropIndex(const char * indexName, 
 		const char * tableName);
+  int dropIndex(const char * indexName, 
+		const char * tableName,
+                bool ignoreFKs);
   int dropIndex(NdbIndexImpl &, const char * tableName);
+  int dropIndex(NdbIndexImpl &, const char * tableName,
+                bool ignoreFKs);
   NdbTableImpl * getIndexTable(NdbIndexImpl * index, 
 			       NdbTableImpl * table);
 
@@ -867,7 +934,7 @@ public:
   int dropBlobEvents(const NdbEventImpl &);
   int listEvents(List& list);
 
-  int executeSubscribeEvent(NdbEventOperationImpl &, Uint32 & buckets);
+  int executeSubscribeEvent(NdbEventOperationImpl &);
   int stopSubscribeEvent(NdbEventOperationImpl &);
 
   int forceGCPWait(int type);
@@ -876,6 +943,7 @@ public:
   int listObjects(List& list, NdbDictionary::Object::Type type, 
                   bool fullyQualified);
   int listIndexes(List& list, Uint32 indexId);
+  int listDependentObjects(List& list, Uint32 tableId);
 
   NdbTableImpl * getTableGlobal(const char * tableName);
   NdbIndexImpl * getIndexGlobal(const char * indexName,
@@ -884,7 +952,9 @@ public:
                                 const char * tableName);
   int alterTableGlobal(NdbTableImpl &orig_impl, NdbTableImpl &impl);
   int dropTableGlobal(NdbTableImpl &);
+  int dropTableGlobal(NdbTableImpl &, int flags);
   int dropIndexGlobal(NdbIndexImpl & impl);
+  int dropIndexGlobal(NdbIndexImpl &, bool ignoreFKs);
   int releaseTableGlobal(const NdbTableImpl & impl, int invalidate);
   int releaseIndexGlobal(const NdbIndexImpl & impl, int invalidate);
 
@@ -960,6 +1030,12 @@ public:
                           Uint32 elemSize,
                           Uint32 flags,
                           bool defaultRecord);
+  NdbRecord *createRecordInternal(const NdbTableImpl *table,
+                                  const NdbDictionary::RecordSpecification *recSpec,
+                                  Uint32 length,
+                                  Uint32 elemSize,
+                                  Uint32 flags,
+                                  bool defaultRecord);
   void releaseRecord_impl(NdbRecord *rec);
 
   static NdbDictionary::RecordType 
@@ -994,6 +1070,7 @@ public:
   /* Empty NdbRecord column mask for user convenience */
   static const Uint32 m_emptyMask[MAXNROFATTRIBUTESINWORDS];
 
+  int getDefaultHashmapSize() const;
 private:
   NdbTableImpl * fetchGlobalTableImplRef(const GlobalCacheInitObject &obj);
 };
@@ -1364,7 +1441,7 @@ public:
   
   int init(NdbDictionaryImpl *dict, NdbTableImpl &tab) const {
     DBUG_ENTER("InitIndex::init");
-    DBUG_ASSERT(tab.m_indexType != NdbDictionary::Object::TypeUndefined);
+    assert(tab.m_indexType != NdbDictionary::Object::TypeUndefined);
     /**
      * Create index impl
      */

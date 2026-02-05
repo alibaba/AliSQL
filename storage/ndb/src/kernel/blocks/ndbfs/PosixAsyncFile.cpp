@@ -1,14 +1,21 @@
 /* 
-   Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2007, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -17,7 +24,7 @@
 
 #include <ndb_global.h>
 #include <my_sys.h>
-#include <my_pthread.h>
+#include <my_thread.h>
 
 #ifdef HAVE_XFS_XFS_H
 #include <xfs/xfs.h>
@@ -40,6 +47,13 @@
 // For readv and writev
 #include <sys/uio.h>
 #include <dirent.h>
+
+#include <EventLogger.hpp>
+
+#define JAM_FILE_ID 384
+
+extern EventLogger* g_eventLogger;
+
 
 PosixAsyncFile::PosixAsyncFile(SimulatedBlock& fs) :
   AsyncFile(fs),
@@ -76,7 +90,29 @@ int PosixAsyncFile::init()
 
   nzf.stream.opaque= &nz_mempool;
 
+  m_filetype = 0;
+
   return 0;
+}
+
+void PosixAsyncFile::set_or_check_filetype(bool set)
+{
+  struct stat sb;
+  if (fstat(theFd, &sb) == -1)
+  {
+    g_eventLogger->error("fd=%d: fstat errno=%d",
+                          theFd, errno);
+    abort();
+  }
+  int ft = sb.st_mode >> 12; // posix
+  if (set)
+    m_filetype = ft;
+  else if (m_filetype != ft)
+  {
+    g_eventLogger->error("fd=%d: type old=%d new=%d",
+                          theFd, m_filetype, ft);
+    abort();
+  }
 }
 
 #ifdef O_DIRECT
@@ -192,10 +228,14 @@ void PosixAsyncFile::openReq(Request *request)
   }
 #endif
 
+  m_always_sync = false;
+
   if ((flags & FsOpenReq::OM_SYNC) && ! (flags & FsOpenReq::OM_INIT))
   {
 #ifdef O_SYNC
     new_flags |= O_SYNC;
+#else
+    m_always_sync = true;
 #endif
   }
 
@@ -247,7 +287,9 @@ void PosixAsyncFile::openReq(Request *request)
     flags |= FsOpenReq::OM_CREATE;
   }
 
+#ifdef O_DIRECT
 no_odirect:
+#endif
   theFd = ::open(theFileName.c_str(), new_flags, mode);
   if (-1 == theFd)
   {
@@ -334,7 +376,7 @@ no_odirect:
 
 #ifdef TRACE_INIT
     Uint32 write_cnt = 0;
-    Uint64 start = NdbTick_CurrentMillisecond();
+    const NDB_TICKS start = NdbTick_getCurrentTicks();
 #endif
     while(off < sz)
     {
@@ -355,7 +397,9 @@ no_odirect:
         cnt++;
         size += request->par.open.page_size;
       }
+#ifdef O_DIRECT
   retry:
+#endif
       off_t save_size = size;
       char* buf = (char*)m_page_ptr.p;
       while(size > 0)
@@ -374,7 +418,7 @@ no_odirect:
 	}
 	if(n == -1 || n == 0)
 	{
-          ndbout_c("ndbzwrite|write returned %d: errno: %d my_errno: %d",n,errno,my_errno);
+          ndbout_c("ndbzwrite|write returned %d: errno: %d my_errno: %d",n,errno,my_errno());
 	  break;
 	}
 	size -= n;
@@ -403,8 +447,8 @@ no_odirect:
     }
     ::fsync(theFd);
 #ifdef TRACE_INIT
-    Uint64 stop = NdbTick_CurrentMillisecond();
-    Uint64 diff = stop - start;
+    const NDB_TICKS stop = NdbTick_getCurrentTicks();
+    Uint64 diff = NdbTick_Elapsed(start, stop).milliSec();
     if (diff == 0)
       diff = 1;
     ndbout_c("wrote %umb in %u writes %us -> %ukb/write %umb/s",
@@ -463,6 +507,8 @@ no_odirect:
     {
       request->error = errno;
     }
+#else
+    m_always_sync = true;
 #endif
   }
 
@@ -489,10 +535,13 @@ no_odirect:
     if((err= ndbzdopen(&nzf, theFd, new_flags)) < 1)
     {
       ndbout_c("Stewart's brain broke: %d %d %s",
-               err, my_errno, theFileName.c_str());
+               err, my_errno(), theFileName.c_str());
       abort();
     }
   }
+
+  set_or_check_filetype(true);
+  request->m_fileinfo = get_fileinfo();
 }
 
 int PosixAsyncFile::readBuffer(Request *req, char *buf,
@@ -548,13 +597,13 @@ int PosixAsyncFile::readBuffer(Request *req, char *buf,
     }
     else if (return_value < 1 && nzf.z_eof!=1)
     {
-      if(my_errno==0 && errno==0 && error==0 && nzf.z_err==Z_STREAM_END)
+      if(my_errno()==0 && errno==0 && error==0 && nzf.z_err==Z_STREAM_END)
         break;
       DEBUG(ndbout_c("ERROR DURING %sRead: %d off: %d from %s",(use_gz)?"gz":"",size,offset,theFileName.c_str()));
       ndbout_c("ERROR IN PosixAsyncFile::readBuffer %d %d %d %d",
-               my_errno, errno, nzf.z_err, error);
+               my_errno(), errno, nzf.z_err, error);
       if(use_gz)
-        return my_errno;
+        return my_errno();
       return errno;
     }
     bytes_read = return_value;
@@ -649,9 +698,9 @@ int PosixAsyncFile::writeBuffer(const char *buf, size_t size, off_t offset)
       DEBUG(ndbout_c("EINTR in write"));
     } else if (return_value == -1 || return_value < 1){
       ndbout_c("ERROR IN PosixAsyncFile::writeBuffer %d %d %d",
-               my_errno, errno, nzf.z_err);
+               my_errno(), errno, nzf.z_err);
       if(use_gz)
-        return my_errno;
+        return my_errno();
       return errno;
     } else {
       bytes_written = return_value;
@@ -676,6 +725,7 @@ int PosixAsyncFile::writeBuffer(const char *buf, size_t size, off_t offset)
 
 void PosixAsyncFile::closeReq(Request *request)
 {
+  set_or_check_filetype(false);
   if (m_open_flags & (
       FsOpenReq::OM_WRITEONLY |
       FsOpenReq::OM_READWRITE |
@@ -697,7 +747,7 @@ void PosixAsyncFile::closeReq(Request *request)
   nzf.stream.opaque = (void*)&nz_mempool;
 
   if (-1 == r) {
-#ifndef DBUG_OFF
+#ifndef NDEBUG
     if (theFd == -1) {
       DEBUG(ndbout_c("close on fd = -1"));
       abort();
@@ -715,7 +765,9 @@ bool PosixAsyncFile::isOpen(){
 
 void PosixAsyncFile::syncReq(Request *request)
 {
-  if(m_auto_sync_freq && m_write_wo_sync == 0){
+  if ((m_auto_sync_freq && m_write_wo_sync == 0) ||
+      m_always_sync)
+  {
     return;
   }
   if (-1 == ::fsync(theFd)){
@@ -727,6 +779,7 @@ void PosixAsyncFile::syncReq(Request *request)
 
 void PosixAsyncFile::appendReq(Request *request)
 {
+  set_or_check_filetype(false);
   const char * buf = request->par.append.buf;
   Uint32 size = request->par.append.size;
 
@@ -743,7 +796,7 @@ void PosixAsyncFile::appendReq(Request *request)
     }
     if(n == -1){
       if(use_gz)
-        request->error = my_errno;
+        request->error = my_errno();
       else
         request->error = errno;
       return;
@@ -756,7 +809,9 @@ void PosixAsyncFile::appendReq(Request *request)
     buf += n;
   }
 
-  if(m_auto_sync_freq && m_write_wo_sync > m_auto_sync_freq){
+  if ((m_auto_sync_freq && m_write_wo_sync > m_auto_sync_freq) ||
+      m_always_sync)
+  {
     syncReq(request);
   }
 }

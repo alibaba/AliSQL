@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -20,6 +27,7 @@
 #include "NdbMgmd.hpp"
 #include <mgmapi.h>
 #include <mgmapi_debug.h>
+#include "../../src/mgmapi/mgmapi_internal.h"
 #include <InputStream.hpp>
 #include <signaldata/EventReport.hpp>
 #include <NdbRestarter.hpp>
@@ -86,7 +94,7 @@ int runTestApiConnectTimeout(NDBT_Context* ctx, NDBT_Step* step)
   if (!mgmd.set_timeout(3000))
     return NDBT_FAILED;
 
-  if (!mgmd.connect())
+  if (!mgmd.connect(0, 0, 0))
   {
     g_err << "Connect failed with timeout 3000" << endl;
     return NDBT_FAILED;
@@ -100,14 +108,14 @@ int runTestApiConnectTimeout(NDBT_Context* ctx, NDBT_Step* step)
     return NDBT_FAILED;
   mgmd.setConnectString("1.1.1.1");
 
-  NDB_TICKS tstart= NdbTick_CurrentMillisecond();
-  if (mgmd.connect())
+  const Uint64 tstart= NdbTick_CurrentMillisecond();
+  if (mgmd.connect(0, 0, 0))
   {
     g_err << "Connect to illegal host suceeded" << endl;
     return NDBT_FAILED;
   }
 
-  NDB_TICKS msecs= NdbTick_CurrentMillisecond() - tstart;
+  const Uint64 msecs= NdbTick_CurrentMillisecond() - tstart;
   ndbout << "Took about " << msecs <<" milliseconds"<<endl;
 
   if(msecs > 6000)
@@ -639,7 +647,6 @@ done:
   return result;
 }
 
-#include <mgmapi_internal.h>
 
 int runSetConfig(NDBT_Context* ctx, NDBT_Step* step)
 {
@@ -736,8 +743,8 @@ get_nodeid_of_type(NdbMgmd& mgmd, ndb_mgm_node_type type, int *nodeId)
   int noOfNodes = cs->no_of_nodes;
   int randomnode = myRandom48(noOfNodes);
   ndb_mgm_node_state *ns = cs->node_states + randomnode;
-  assert(ns->node_type == (Uint32)type);
-  assert(ns->node_id);
+  require((Uint32)ns->node_type == (Uint32)type);
+  require(ns->node_id != 0);
 
   *nodeId = ns->node_id;
   g_info << "Got node id " << *nodeId << " of type " << type << endl;
@@ -811,13 +818,16 @@ check_get_config_illegal_node(NdbMgmd& mgmd)
 static bool
 check_get_config_wrong_type(NdbMgmd& mgmd)
 {
+  int myChoice = myRandom48(2);
+  ndb_mgm_node_type randomAllowedType = (myChoice) ?
+                                        NDB_MGM_NODE_TYPE_API :
+                                        NDB_MGM_NODE_TYPE_MGM;
   int nodeId = 0;
-
-  if (get_nodeid_of_type(mgmd, NDB_MGM_NODE_TYPE_API, &nodeId))
+  if (get_nodeid_of_type(mgmd, randomAllowedType, &nodeId))
   {
     return get_config_from_illegal_node(mgmd, nodeId);
   }
-  // No API nodes found.
+  // No API/MGM nodes found.
   return true;
 }
 
@@ -842,15 +852,10 @@ int runGetConfigFromNode(NDBT_Context* ctx, NDBT_Step* step)
   int loops= ctx->getNumLoops();
   for (int l= 0; l < loops; l++)
   {
-    /* Get config from a node of type:
-     * NDB_MGM_NODE_TYPE_NDB or NDB_MGM_NODE_TYPE_MGM
+    /* Get config from a node of type: * NDB_MGM_NODE_TYPE_NDB
      */
-    int myChoice = myRandom48(2);
-    ndb_mgm_node_type randomAllowedType = (myChoice) ?
-                                          NDB_MGM_NODE_TYPE_NDB :
-                                          NDB_MGM_NODE_TYPE_MGM;
     int nodeId = 0;
-    if (get_nodeid_of_type(mgmd, randomAllowedType, &nodeId))
+    if (get_nodeid_of_type(mgmd,  NDB_MGM_NODE_TYPE_NDB, &nodeId))
     {
       struct ndb_mgm_configuration* conf =
         ndb_mgm_get_configuration_from_node(mgmd.handle(), nodeId);
@@ -1201,8 +1206,8 @@ check_get_nodeid_nodeid1(NdbMgmd& mgmd)
       break;
     }
   }
-  assert(nodeId);
-  assert(nodeType != (Uint32)NDB_MGM_NODE_TYPE_UNKNOWN);
+  require(nodeId);
+  require(nodeType != (Uint32)NDB_MGM_NODE_TYPE_UNKNOWN);
 
   Properties args, reply;
   args.put("nodeid",nodeId);
@@ -1236,11 +1241,12 @@ check_get_nodeid_wrong_nodetype(NdbMgmd& mgmd)
       break;
     }
   }
-  assert(nodeId && nodeType != (Uint32)NDB_MGM_NODE_TYPE_UNKNOWN);
+  require(nodeId);
+  require(nodeType != (Uint32)NDB_MGM_NODE_TYPE_UNKNOWN);
 
   nodeType = (nodeType + 1) / NDB_MGM_NODE_TYPE_MAX;
-  assert((int)nodeType >= (int)NDB_MGM_NODE_TYPE_MIN &&
-         (int)nodeType <= (int)NDB_MGM_NODE_TYPE_MAX);
+  require((int)nodeType >= (int)NDB_MGM_NODE_TYPE_MIN &&
+          (int)nodeType <= (int)NDB_MGM_NODE_TYPE_MAX);
 
   Properties args, reply;
   args.put("nodeid",nodeId);
@@ -1433,7 +1439,7 @@ int runCheckConfig(NDBT_Context* ctx, NDBT_Step* step)
 
   // Connect to each mgmd and check
   // they all have the same config
-  for (size_t i = 0; i < mgmds.size(); i++)
+  for (unsigned i = 0; i < mgmds.size(); i++)
   {
     NdbMgmd mgmd2;
     g_info << "Connecting to " << mgmds[i].c_str() << endl;
@@ -1759,7 +1765,7 @@ check_set_config_any_node(NDBT_Context* ctx, NDBT_Step* step, NdbMgmd& mgmd)
 
   // Connect to each mgmd and check
   // they all have the same config
-  for (size_t i = 0; i < mgmds.size(); i++)
+  for (unsigned i = 0; i < mgmds.size(); i++)
   {
     NdbMgmd mgmd2;
     g_info << "Connecting to " << mgmds[i].c_str() << endl;
@@ -1770,12 +1776,6 @@ check_set_config_any_node(NDBT_Context* ctx, NDBT_Step* step, NdbMgmd& mgmd)
     Config conf2;
     if (!mgmd2.get_config(conf2))
       return false;
-
-#if 0
-    // Change one value in the config
-    if (!conf2.setValue(CFG_SECTION_NODE, 0,
-                        CFG_NODE_ARBIT_DELAY,
-#endif
 
     // Set the modified config
     if (!mgmd2.set_config(conf2))
@@ -2208,6 +2208,469 @@ int runTestConnectionParameterUntilStopped(NDBT_Context* ctx, NDBT_Step* step)
   while(!ctx->isTestStopped() &&
         (result= runTestConnectionParameter(ctx, step)) == NDBT_OK)
     ;
+
+  return result;
+}
+
+
+static bool
+set_ports(NdbMgmd& mgmd,
+          const Properties& args, const char* bulk_arg,
+          Properties& reply)
+{
+  if (!mgmd.call("set ports", args,
+                 "set ports reply", reply, bulk_arg))
+  {
+    g_err << "set_ports: mgmd.call failed" << endl;
+    return false;
+  }
+  return true;
+}
+
+static bool
+check_set_ports_invalid_nodeid(NdbMgmd& mgmd)
+{
+  for (int nodeId = MAX_NODES; nodeId < MAX_NODES+2; nodeId++)
+  {
+    g_err << "Testing invalid node " << nodeId << endl;
+
+    Properties args;
+    args.put("node", nodeId);
+    args.put("num_ports", 2);
+
+    Properties set_result;
+    if (!set_ports(mgmd, args, "", set_result))
+      return false;
+
+    if (ok(set_result))
+      return false;
+
+    if (!result_contains(set_result, "Illegal value for argument node"))
+      return false;
+  }
+  return true;
+}
+
+static bool
+check_set_ports_invalid_num_ports(NdbMgmd& mgmd)
+{
+  g_err << "Testing invalid number of ports "<< endl;
+
+  Properties args;
+  args.put("node", 1);
+  args.put("num_ports", MAX_NODES + 37);
+
+  Properties set_result;
+  if (!set_ports(mgmd, args, "", set_result))
+    return false;
+
+  if (ok(set_result))
+    return false;
+
+  if (!result_contains(set_result, "Illegal value for argument num_ports"))
+    return false;
+
+  return true;
+}
+
+
+
+static bool
+check_set_ports_invalid_mismatch_num_port_1(NdbMgmd& mgmd)
+{
+  g_err << "Testing invalid num port 1"<< endl;
+
+  Properties args;
+  args.put("node", 1);
+  args.put("num_ports", 1);
+  // Intend to send 1   ^ but passes two below
+
+  Properties set_result;
+  if (!set_ports(mgmd, args, "1=-37\n2=-38\n", set_result))
+    return false;
+
+  if (ok(set_result))
+    return false;
+  set_result.print();
+
+  if (!result_contains(set_result, "expected empty line"))
+    return false;
+
+  return true;
+}
+
+static bool
+check_set_ports_invalid_mismatch_num_port_2(NdbMgmd& mgmd)
+{
+  g_err << "Testing invalid num port 2"<< endl;
+
+  Properties args;
+  args.put("node", 1);
+  args.put("num_ports", 2);
+  // Intend to send 2   ^ but pass only one line below
+
+  Properties set_result;
+  if (!set_ports(mgmd, args, "1=-37\n", set_result))
+    return false;
+
+  if (ok(set_result))
+    return false;
+  set_result.print();
+
+  if (!result_contains(set_result, "expected name=value pair"))
+    return false;
+
+  return true;
+}
+
+
+static bool
+check_set_ports_invalid_port_list(NdbMgmd& mgmd)
+{
+  g_err << "Testing invalid port list"<< endl;
+
+  Properties args;
+  args.put("node", 1);
+  // No connection from 1 -> 1 exist
+  args.put("num_ports", 1);
+
+  Properties set_result;
+  if (!set_ports(mgmd, args, "1=-37\n", set_result))
+    return false;
+  set_result.print();
+
+  if (ok(set_result))
+    return false;
+
+  if (!result_contains(set_result,
+                       "Unable to find connection between nodes 1 -> 1"))
+    return false;
+
+  return true;
+}
+
+static bool check_mgmapi_err(NdbMgmd& mgmd,
+                             int return_code,
+                             int expected_error,
+                             const char* expected_message)
+{
+  if (return_code != -1)
+  {
+    ndbout_c("check_mgmapi_error: unexpected return code: %d", return_code);
+    return false;
+  }
+  if (mgmd.last_error() != expected_error)
+  {
+     ndbout_c("check_mgmapi_error: unexpected error code: %d "
+              "expected %d", mgmd.last_error(), expected_error);
+    return false;
+  }
+  if (strstr(mgmd.last_error_message(), expected_message) == NULL)
+  {
+    ndbout_c("check_mgmapi_error: last_error_message '%s' "
+             "didn't contain expected message '%s'",
+             mgmd.last_error_message(), expected_message);
+    return false;
+  }
+  return true;
+
+}
+
+static bool
+check_set_ports_mgmapi(NdbMgmd& mgmd)
+{
+  g_err << "Testing mgmapi"<< endl;
+
+  int ret;
+  int nodeid = 1;
+  unsigned num_ports = 1;
+  ndb_mgm_dynamic_port ports[MAX_NODES * 10];
+  compile_time_assert(MAX_NODES < NDB_ARRAY_SIZE(ports));
+  ports[0].nodeid = 1;
+  ports[0].port = -1;
+
+  {
+    ndbout_c("No handle");
+    NdbMgmd no_handle;
+    ret = ndb_mgm_set_dynamic_ports(no_handle.handle(), nodeid,
+                                    ports, num_ports);
+    if (ret != -1)
+      return false;
+  }
+  {
+    ndbout_c("Not connected");
+    NdbMgmd no_con;
+    no_con.verbose(false);
+    if (no_con.connect("no_such_host:12345", 0, 1))
+    {
+      // Connect should not suceed!
+      return false;
+    }
+
+    ret = ndb_mgm_set_dynamic_ports(no_con.handle(), nodeid,
+                                    ports, num_ports);
+    if (!check_mgmapi_err(no_con, ret, NDB_MGM_SERVER_NOT_CONNECTED, ""))
+      return false;
+  }
+
+  ndbout_c("Invalid number of ports");
+  num_ports = 0; // <<
+  ret = ndb_mgm_set_dynamic_ports(mgmd.handle(), nodeid,
+                                  ports, num_ports);
+  if (!check_mgmapi_err(mgmd, ret, NDB_MGM_USAGE_ERROR,
+                        "Illegal number of dynamic ports"))
+    return false;
+
+  ndbout_c("Invalid nodeid");
+  nodeid = 0; // <<
+  num_ports = 1;
+  ret = ndb_mgm_set_dynamic_ports(mgmd.handle(), nodeid,
+                                  ports, num_ports);
+  if (!check_mgmapi_err(mgmd, ret, NDB_MGM_USAGE_ERROR,
+                        "Illegal value for argument node: 0"))
+    return false;
+
+  ndbout_c("Invalid port in list");
+  nodeid = 1;
+  ports[0].nodeid = 1;
+  ports[0].port = 1; // <<
+  ret = ndb_mgm_set_dynamic_ports(mgmd.handle(), nodeid,
+                                  ports, num_ports);
+  if (!check_mgmapi_err(mgmd, ret, NDB_MGM_USAGE_ERROR,
+                        "Illegal port specfied in ports array"))
+    return false;
+
+
+  ndbout_c("Invalid nodeid in list");
+  nodeid = 1;
+  ports[0].nodeid = 0; // <<
+  ports[0].port = -11;
+  ret = ndb_mgm_set_dynamic_ports(mgmd.handle(), nodeid,
+                                  ports, num_ports);
+  if (!check_mgmapi_err(mgmd, ret, NDB_MGM_USAGE_ERROR,
+                        "Illegal nodeid specfied in ports array"))
+    return false;
+
+  ndbout_c("Max number of ports exceeded");
+  nodeid = 1;
+  num_ports = MAX_NODES; // <<
+  for (unsigned i = 0; i < num_ports; i++)
+  {
+    ports[i].nodeid = i+1;
+    ports[i].port = -37;
+  }
+  ret = ndb_mgm_set_dynamic_ports(mgmd.handle(), nodeid,
+                                  ports, num_ports);
+  if (!check_mgmapi_err(mgmd, ret, NDB_MGM_USAGE_ERROR,
+                        "Illegal value for argument num_ports"))
+    return false;
+
+  ndbout_c("Many many ports");
+  nodeid = 1;
+  num_ports = NDB_ARRAY_SIZE(ports); // <<
+  for (unsigned i = 0; i < num_ports; i++)
+  {
+    ports[i].nodeid = i+1;
+    ports[i].port = -37;
+  }
+  ret = ndb_mgm_set_dynamic_ports(mgmd.handle(), nodeid,
+                                  ports, num_ports);
+  if (!check_mgmapi_err(mgmd, ret, NDB_MGM_USAGE_ERROR,
+                        "Illegal value for argument num_ports"))
+    return false;
+
+  return true;
+}
+
+// Return name value pair of nodeid/ports which can be sent
+// verbatim back to ndb_mgmd
+static bool
+get_all_ports(NdbMgmd& mgmd, Uint32 nodeId1, BaseString& values)
+{
+  for (int nodeId = 1; nodeId < MAX_NODES; nodeId++)
+  {
+    Properties args;
+    args.put("node1", nodeId1);
+    args.put("node2", nodeId);
+
+    Properties result;
+    if (!get_connection_parameter(mgmd, args, result))
+      return false;
+
+    if (!ok(result))
+      continue;
+
+    // Get value
+    BaseString value;
+    if (!result.get("value", value))
+    {
+      g_err << "Failed to get value" << endl;
+      return false;
+    }
+    values.appfmt("%d=%s\n", nodeId, value.c_str());
+  }
+  return true;
+}
+
+
+static bool
+check_set_ports(NdbMgmd& mgmd)
+{
+  // Find a NDB node with dynamic port
+  Config conf;
+  if (!mgmd.get_config(conf))
+    return false;
+
+  Uint32 nodeId1 = 0;
+  for(Uint32 i= 1; i < MAX_NODES; i++){
+    Uint32 nodeType;
+    ConfigIter iter(&conf, CFG_SECTION_NODE);
+    if (iter.find(CFG_NODE_ID, i) == 0 &&
+        iter.get(CFG_TYPE_OF_SECTION, &nodeType) == 0 &&
+        nodeType == NDB_MGM_NODE_TYPE_NDB){
+      nodeId1 = i;
+      break;
+    }
+  }
+
+  g_err << "Using NDB node with id: " << nodeId1 << endl;
+
+  g_err << "Get original values of dynamic ports" << endl;
+  BaseString original_values;
+  if (!get_all_ports(mgmd, nodeId1, original_values))
+  {
+    g_err << "Failed to get all original values" << endl;
+    return false;
+  }
+  ndbout_c("original values: %s", original_values.c_str());
+
+  g_err << "Set new values for all dynamic ports" << endl;
+  BaseString new_values;
+  {
+    Vector<BaseString> port_pairs;
+    original_values.split(port_pairs, "\n");
+    // Remove last empty line
+    require(port_pairs[port_pairs.size()-1] == "");
+    port_pairs.erase(port_pairs.size()-1);
+
+    // Generate new portnumbers
+    for (unsigned i = 0; i < port_pairs.size(); i++)
+    {
+      int nodeid, port;
+      if (sscanf(port_pairs[i].c_str(), "%d=%d", &nodeid, &port) != 2)
+      {
+        g_err << "Failed to parse port_pairs[" << i << "]: '"
+              << port_pairs[i] << "'" << endl;
+        return false;
+      }
+      const int new_port = -(int)(i + 37);
+      new_values.appfmt("%d=%d\n", nodeid, new_port);
+    }
+
+    Properties args;
+    args.put("node", nodeId1);
+    args.put("num_ports", port_pairs.size());
+
+    Properties set_result;
+    if (!set_ports(mgmd, args, new_values.c_str(), set_result))
+      return false;
+
+    if (!ok(set_result))
+    {
+      g_err << "Unexpected result received from set_ports" << endl;
+      set_result.print();
+      return false;
+    }
+  }
+
+  g_err << "Compare new values of dynamic ports" << endl;
+  {
+    BaseString current_values;
+    if (!get_all_ports(mgmd, nodeId1, current_values))
+    {
+      g_err << "Failed to get all current values" << endl;
+      return false;
+    }
+    ndbout_c("current values: %s", current_values.c_str());
+
+    if (current_values != new_values)
+    {
+      g_err << "Set values was not correct, expected "
+            << new_values << ", got "
+            << current_values << endl;
+      return false;
+    }
+  }
+
+  g_err << "Restore old values" << endl;
+  {
+    Vector<BaseString> port_pairs;
+    original_values.split(port_pairs, "\n");
+    // Remove last empty line
+    require(port_pairs[port_pairs.size()-1] == "");
+    port_pairs.erase(port_pairs.size()-1);
+
+    Properties args;
+    args.put("node", nodeId1);
+    args.put("num_ports", port_pairs.size());
+
+    Properties set_result;
+    if (!set_ports(mgmd, args, original_values.c_str(), set_result))
+      return false;
+
+    if (!ok(set_result))
+    {
+      g_err << "Unexpected result received from set_ports" << endl;
+      set_result.print();
+      return false;
+    }
+  }
+
+  g_err << "Check restored values" << endl;
+  {
+    BaseString current_values;
+    if (!get_all_ports(mgmd, nodeId1, current_values))
+    {
+      g_err << "Failed to get all current values" << endl;
+      return false;
+    }
+    ndbout_c("current values: %s", current_values.c_str());
+
+    if (current_values != original_values)
+    {
+      g_err << "Restored values was not correct, expected "
+            << original_values << ", got "
+            << current_values << endl;
+      return false;
+    }
+  }
+
+  return true;
+}
+
+
+int runTestSetPorts(NDBT_Context* ctx, NDBT_Step* step)
+{
+  NdbMgmd mgmd;
+
+  if (!mgmd.connect())
+    return NDBT_FAILED;
+
+  int result= NDBT_FAILED;
+  if (
+      check_set_ports(mgmd) &&
+      check_set_ports_invalid_nodeid(mgmd) &&
+      check_set_ports_invalid_num_ports(mgmd) &&
+      check_set_ports_invalid_mismatch_num_port_1(mgmd) &&
+      check_set_ports_invalid_mismatch_num_port_2(mgmd) &&
+      check_set_ports_invalid_port_list(mgmd) &&
+      check_set_ports_mgmapi(mgmd) &&
+      true)
+    result= NDBT_OK;
+
+  if (!mgmd.end_session())
+    result= NDBT_FAILED;
+
   return result;
 }
 
@@ -2278,7 +2741,7 @@ get_logfilter(NdbMgmd& mgmd,
     return false;
   }
 
-  assert(value);
+  require(value);
   *value = severity_struct.value;
 
   return true;
@@ -2451,6 +2914,123 @@ int runTestBug45497(NDBT_Context* ctx, NDBT_Step* step)
     mgmds.erase(0);
     delete mgmd;
   }
+
+  return result;
+}
+
+
+bool isCategoryValid(struct ndb_logevent* le)
+{
+  switch (le->category)
+  {
+  case NDB_MGM_EVENT_CATEGORY_BACKUP:
+  case NDB_MGM_EVENT_CATEGORY_STARTUP:
+  case NDB_MGM_EVENT_CATEGORY_NODE_RESTART:
+  case NDB_MGM_EVENT_CATEGORY_CONNECTION:
+  case NDB_MGM_EVENT_CATEGORY_STATISTIC:
+  case NDB_MGM_EVENT_CATEGORY_CHECKPOINT:
+    return true;
+  default:
+    return false;
+  }
+}
+
+int runTestBug16723708(NDBT_Context* ctx, NDBT_Step* step)
+{
+  NdbMgmd mgmd;
+  int loops = ctx->getNumLoops();
+  int result = NDBT_FAILED;
+
+  if (!mgmd.connect())
+    return NDBT_FAILED;
+
+  int filter[] = {
+    15, NDB_MGM_EVENT_CATEGORY_BACKUP,
+    15, NDB_MGM_EVENT_CATEGORY_STARTUP,
+    15, NDB_MGM_EVENT_CATEGORY_NODE_RESTART,
+    15, NDB_MGM_EVENT_CATEGORY_CONNECTION,
+    15, NDB_MGM_EVENT_CATEGORY_STATISTIC,
+    15, NDB_MGM_EVENT_CATEGORY_CHECKPOINT,
+    0
+  };
+  NdbLogEventHandle le_handle =
+    ndb_mgm_create_logevent_handle(mgmd.handle(), filter);
+  if (!le_handle)
+    return NDBT_FAILED;
+  NdbLogEventHandle le_handle2 = 
+    ndb_mgm_create_logevent_handle(mgmd.handle(), filter);
+  if (!le_handle2)
+    return NDBT_FAILED;
+ 
+  for(int l=0; l<loops; l++)
+  {
+    g_info << "Calling ndb_log_event_get_next" << endl;
+  
+    struct ndb_logevent le_event;
+    int r = ndb_logevent_get_next(le_handle,
+                                  &le_event,
+                                  2000);
+    g_info << "ndb_log_event_get_next returned " << r << endl;
+    
+    struct ndb_logevent le_event2;
+    int r2 = ndb_logevent_get_next2(le_handle2,
+                                    &le_event2,
+                                    2000);
+    g_info << "ndb_log_event_get_next2 returned " << r2 << endl;
+    
+    result = NDBT_OK;
+    if ((r == 0) || (r2 == 0))
+    {
+      // Got timeout
+      g_info << "ndb_logevent_get_next[2] returned timeout" << endl;
+    }
+    else
+    {
+      if(r>0)
+      {
+        g_info << "next() ndb_logevent type : " << le_event.type 
+               << " category : " << le_event.category 
+               << " " << ndb_mgm_get_event_category_string(le_event.category)
+               << endl;
+        if (isCategoryValid(&le_event))
+        {
+          g_err << "ERROR: ndb_logevent_get_next() returned valid category! "
+                << le_event.category << endl;
+          result = NDBT_FAILED;
+        }
+      }
+      else
+      {
+        g_err << "ERROR: ndb_logevent_get_next returned error: "
+              << r << endl;
+      }
+      
+      if(r2>0)
+      {        
+        g_info << "next2() ndb_logevent type : " << le_event2.type 
+               << " category : " << le_event2.category 
+               << " " << ndb_mgm_get_event_category_string(le_event2.category)
+               << endl;
+
+        if (!isCategoryValid(&le_event2))
+        {
+          g_err << "ERROR: ndb_logevent_get_next2() returned invalid category! "
+                << le_event2.category << endl;
+          result = NDBT_FAILED;
+        }
+      }
+      else
+      {
+        g_err << "ERROR: ndb_logevent_get_next2 returned error: "
+              << r << endl;
+        result = NDBT_FAILED;
+      }
+    }
+    if(result == NDBT_FAILED)
+      break;
+  }
+  ndb_mgm_destroy_logevent_handle(&le_handle2);
+  ndb_mgm_destroy_logevent_handle(&le_handle);
 
   return result;
 }
@@ -2655,7 +3235,6 @@ int runTestDumpEvents(NDBT_Context* ctx, NDBT_Step* step)
 int runTestStatusAfterStop(NDBT_Context* ctx, NDBT_Step* step)
 {
   NdbMgmd mgmd;
-  mgmd.set_timeout(50); // Short timeout, should be upgraded
 
   if (!mgmd.connect())
     return NDBT_FAILED;
@@ -2722,6 +3301,358 @@ int runTestStatusAfterStop(NDBT_Context* ctx, NDBT_Step* step)
   return NDBT_OK;
 }
 
+int
+sort_ng(const void * _e0, const void * _e1)
+{
+  const struct ndb_mgm_node_state * e0 = (const struct ndb_mgm_node_state*)_e0;
+  const struct ndb_mgm_node_state * e1 = (const struct ndb_mgm_node_state*)_e1;
+  if (e0->node_group != e1->node_group)
+    return e0->node_group - e1->node_group;
+
+  return e0->node_id - e1->node_id;
+}
+
+int
+runBug12928429(NDBT_Context* ctx, NDBT_Step* step)
+{
+  NdbMgmd mgmd;
+
+  if (!mgmd.connect())
+  {
+    return NDBT_FAILED;
+  }
+
+  ndb_mgm_node_type node_types[2] =
+    { NDB_MGM_NODE_TYPE_NDB, NDB_MGM_NODE_TYPE_UNKNOWN };
+
+  ndb_mgm_cluster_state * cs = ndb_mgm_get_status2(mgmd.handle(), node_types);
+  if (cs == NULL)
+  {
+    printf("%s (%d)\n", ndb_mgm_get_latest_error_msg(mgmd.handle()),
+           ndb_mgm_get_latest_error(mgmd.handle()));
+    return NDBT_FAILED;
+  }
+
+  /**
+   * sort according to node-group
+   */
+  qsort(cs->node_states, cs->no_of_nodes,
+        sizeof(cs->node_states[0]), sort_ng);
+
+  int ng = cs->node_states[0].node_group;
+  int replicas = 1;
+  for (int i = 1; i < cs->no_of_nodes; i++)
+  {
+    if (cs->node_states[i].node_status != NDB_MGM_NODE_STATUS_STARTED)
+    {
+      ndbout_c("node %u is not started!!!", cs->node_states[i].node_id);
+      free(cs);
+      return NDBT_OK;
+    }
+    if (cs->node_states[i].node_group == ng)
+    {
+      replicas++;
+    }
+    else
+    {
+      break;
+    }
+  }
+
+  if (replicas == 1)
+  {
+    free(cs);
+    return NDBT_OK;
+  }
+
+  int nodes[MAX_NODES];
+  int cnt = 0;
+  for (int i = 0; i < cs->no_of_nodes; i += replicas)
+  {
+    printf("%u ", cs->node_states[i].node_id);
+    nodes[cnt++] = cs->node_states[i].node_id;
+  }
+  printf("\n");
+
+  int initial = 0;
+  int nostart = 1;
+  int abort = 0;
+  int force = 1;
+  int disconnnect = 0;
+
+  /**
+   * restart half of the node...should be only restart half of the nodes
+   */
+  int res = ndb_mgm_restart4(mgmd.handle(), cnt, nodes,
+                             initial, nostart, abort, force, &disconnnect);
+
+  if (res == -1)
+  {
+    ndbout_c("%u res: %u ndb_mgm_get_latest_error: %u line: %u msg: %s",
+             __LINE__,
+             res,
+             ndb_mgm_get_latest_error(mgmd.handle()),
+             ndb_mgm_get_latest_error_line(mgmd.handle()),
+             ndb_mgm_get_latest_error_msg(mgmd.handle()));
+    return NDBT_FAILED;
+  }
+
+  {
+    ndb_mgm_cluster_state * cs2 = ndb_mgm_get_status2(mgmd.handle(),node_types);
+    if (cs2 == NULL)
+    {
+      printf("%s (%d)\n", ndb_mgm_get_latest_error_msg(mgmd.handle()),
+             ndb_mgm_get_latest_error(mgmd.handle()));
+      return NDBT_FAILED;
+    }
+
+    for (int i = 0; i < cs2->no_of_nodes; i++)
+    {
+      int node_id = cs2->node_states[i].node_id;
+      int expect = NDB_MGM_NODE_STATUS_STARTED;
+      for (int c = 0; c < cnt; c++)
+      {
+        if (node_id == nodes[c])
+        {
+          expect = NDB_MGM_NODE_STATUS_NOT_STARTED;
+          break;
+        }
+      }
+      if (cs2->node_states[i].node_status != expect)
+      {
+        ndbout_c("%u node %u expect: %u found: %u",
+                 __LINE__,
+                 cs2->node_states[i].node_id,
+                 expect,
+                 cs2->node_states[i].node_status);
+        return NDBT_FAILED;
+      }
+    }
+    free(cs2);
+  }
+
+  NdbRestarter restarter;
+  restarter.startAll();
+  restarter.waitClusterStarted();
+
+  /**
+   * restart half of the node...and all nodes in one node group
+   *   should restart cluster
+   */
+  cnt = 0;
+  for (int i = 0; i < replicas; i++)
+  {
+    printf("%u ", cs->node_states[i].node_id);
+    nodes[cnt++] = cs->node_states[i].node_id;
+  }
+  for (int i = replicas; i < cs->no_of_nodes; i += replicas)
+  {
+    printf("%u ", cs->node_states[i].node_id);
+    nodes[cnt++] = cs->node_states[i].node_id;
+  }
+  printf("\n");
+
+  res = ndb_mgm_restart4(mgmd.handle(), cnt, nodes,
+                         initial, nostart, abort, force, &disconnnect);
+
+  if (res == -1)
+  {
+    ndbout_c("%u res: %u ndb_mgm_get_latest_error: %u line: %u msg: %s",
+             __LINE__,
+             res,
+             ndb_mgm_get_latest_error(mgmd.handle()),
+             ndb_mgm_get_latest_error_line(mgmd.handle()),
+             ndb_mgm_get_latest_error_msg(mgmd.handle()));
+    return NDBT_FAILED;
+  }
+
+  {
+    ndb_mgm_cluster_state * cs2 = ndb_mgm_get_status2(mgmd.handle(),node_types);
+    if (cs2 == NULL)
+    {
+      printf("%s (%d)\n", ndb_mgm_get_latest_error_msg(mgmd.handle()),
+             ndb_mgm_get_latest_error(mgmd.handle()));
+      return NDBT_FAILED;
+    }
+
+    for (int i = 0; i < cs2->no_of_nodes; i++)
+    {
+      int expect = NDB_MGM_NODE_STATUS_NOT_STARTED;
+      if (cs2->node_states[i].node_status != expect)
+      {
+        ndbout_c("%u node %u expect: %u found: %u",
+                 __LINE__,
+                 cs2->node_states[i].node_id,
+                 expect,
+                 cs2->node_states[i].node_status);
+        return NDBT_FAILED;
+      }
+    }
+    free(cs2);
+  }
+
+  restarter.startAll();
+  restarter.waitClusterStarted();
+
+  free(cs);
+  return NDBT_OK;
+}
+
+int runTestNdbApiConfig(NDBT_Context* ctx, NDBT_Step* step)
+{
+  NdbMgmd mgmd;
+
+  if (!mgmd.connect())
+    return NDBT_FAILED;
+
+  struct test_parameter
+  {
+    Uint32 key;
+    Uint32 NdbApiConfig::*ptr;
+    Uint32 values[2];
+  } parameters[] =
+  {
+    { CFG_MAX_SCAN_BATCH_SIZE,                   &NdbApiConfig::m_scan_batch_size, { 10, 1000 } },
+    { CFG_BATCH_BYTE_SIZE,                       &NdbApiConfig::m_batch_byte_size, { 10, 1000 } },
+    { CFG_BATCH_SIZE,                            &NdbApiConfig::m_batch_size,      { 10, 1000 } },
+    // Skip test of m_waitfor_timeout since it is not configurable in API-section
+    { CFG_DEFAULT_OPERATION_REDO_PROBLEM_ACTION, &NdbApiConfig::m_default_queue_option,
+      { OPERATION_REDO_PROBLEM_ACTION_ABORT, OPERATION_REDO_PROBLEM_ACTION_QUEUE } },
+    { CFG_DEFAULT_HASHMAP_SIZE,                  &NdbApiConfig::m_default_hashmap_size, { 240, 3840 } },
+  };
+  // Catch if new members are added to NdbApiConfig,
+  // if so add tests and adjust expected size
+  NDB_STATIC_ASSERT(sizeof(NdbApiConfig) == 6 * sizeof(Uint32));
+
+  Config savedconf;
+  if (!mgmd.get_config(savedconf))
+    return NDBT_FAILED;
+
+  for (size_t i = 0; i < NDB_ARRAY_SIZE(parameters[0].values) ; i ++)
+  {
+    /**
+     * Setup configuration
+     */
+
+    // Get the binary config
+    Config conf;
+    if (!mgmd.get_config(conf))
+      return NDBT_FAILED;
+
+    ConfigValues::Iterator iter(conf.m_configValues->m_config);
+    for (Uint32 nodeid = 1; nodeid < MAX_NODES; nodeid ++)
+    {
+      Uint32 type;
+      if (!iter.openSection(CFG_SECTION_NODE, nodeid))
+        continue;
+
+      if (iter.get(CFG_TYPE_OF_SECTION, &type) &&
+          type == NDB_MGM_NODE_TYPE_API)
+      {
+        for (size_t param = 0; param < NDB_ARRAY_SIZE(parameters) ; param ++)
+        {
+          iter.set(parameters[param].key, parameters[param].values[i]);
+        }
+      }
+
+      iter.closeSection();
+    }
+
+    // Set the modified config
+    if (!mgmd.set_config(conf))
+      return NDBT_FAILED;
+
+    /**
+     * Connect api
+     */
+
+    Ndb_cluster_connection con(mgmd.getConnectString());
+
+    const int retries = 12;
+    const int retry_delay = 5;
+    const int verbose = 1;
+    if (con.connect(retries, retry_delay, verbose) != 0)
+    {
+      g_err << "Ndb_cluster_connection.connect failed" << endl;
+      return NDBT_FAILED;
+    }
+
+    /**
+     * Check api configuration
+     */
+
+    NDBT_Context conctx(con);
+    int failures = 0;
+
+    for (size_t param = 0; param < NDB_ARRAY_SIZE(parameters) ; param ++)
+    {
+      Uint32 expected = parameters[param].values[i];
+      Uint32 got = conctx.getConfig().*parameters[param].ptr;
+      if (got != expected)
+      {
+        int j;
+        for(j = 0; j < ConfigInfo::m_NoOfParams ; j ++)
+        {
+          if (ConfigInfo::m_ParamInfo[j]._paramId == parameters[param].key)
+            break;
+        }
+        g_err << "Parameter ";
+        if (j < ConfigInfo::m_NoOfParams)
+          g_err << ConfigInfo::m_ParamInfo[j]._fname << " (" << parameters[param].key << ")";
+        else
+          g_err << "Unknown (" << parameters[param].key << ")";
+        g_err << ": Expected " << expected << " got " << got << endl;
+        failures++;
+      }
+      if (failures > 0)
+        return NDBT_FAILED;
+    }
+  }
+
+  // Restore conf after upgrading config generation
+  Config conf;
+  if (!mgmd.get_config(conf))
+    return NDBT_FAILED;
+
+  savedconf.setGeneration(conf.getGeneration());
+
+  if (!mgmd.set_config(savedconf))
+  {
+    g_err << "Failed to restore config." << endl;
+    return NDBT_FAILED;
+  }
+
+  return NDBT_OK;
+}
+
+
+static
+int runTestCreateLogEvent(NDBT_Context* ctx, NDBT_Step* step)
+{
+  NdbMgmd mgmd;
+  int loops = ctx->getNumLoops();
+
+  if (!mgmd.connect())
+    return NDBT_FAILED;
+
+  int filter[] = {
+    15, NDB_MGM_EVENT_CATEGORY_BACKUP,
+    0
+  };
+
+  for(int l=0; l<loops; l++)
+  {
+    g_info << "Creating log event handle " << l << endl;
+    NdbLogEventHandle le_handle =
+        ndb_mgm_create_logevent_handle(mgmd.handle(), filter);
+    if (!le_handle)
+      return NDBT_FAILED;
+
+    ndb_mgm_destroy_logevent_handle(&le_handle);
+  }
+  return NDBT_OK;
+}
+
 NDBT_TESTSUITE(testMgm);
 DRIVER(DummyDriver); /* turn off use of NdbApi */
 TESTCASE("ApiSessionFailure",
@@ -2780,16 +3711,23 @@ TESTCASE("TestSetConfigParallel",
   STEPS(runTestSetConfigParallel, 5);
 }
 TESTCASE("GetConfig", "Run ndb_mgm_get_configuration in parallel"){
-  STEPS(runGetConfig, 100);
+  STEPS(runGetConfig, 64);
 }
 TESTCASE("TestStatus",
 	 "Test status and status2"){
   INITIALIZER(runTestStatus);
 
 }
-TESTCASE("TestStatus200",
-	 "Test status and status2 with 200 threads"){
-  STEPS(runTestStatus, 200);
+TESTCASE("TestStatusMultiple",
+	 "Test status and status2 with 64 threads"){
+  /**
+   * For this and other tests we are limited in how much TCP backlog
+   * the MGM server socket has. It is currently set to a maximum of
+   * 64, so if we need to test more than 64 threads in parallel we
+   * need to introduce some sort of wait state to ensure that we
+   * don't get all threads sending TCP connect at the same time.
+   */
+  STEPS(runTestStatus, 64);
 
 }
 TESTCASE("TestGetNodeId",
@@ -2823,6 +3761,11 @@ TESTCASE("Bug40922",
          "called with a timeout"){
   INITIALIZER(runTestBug40922);
 }
+TESTCASE("Bug16723708",
+	 "Check that ndb_logevent_get_next returns events "
+         "which have valid category values"){
+  INITIALIZER(runTestBug16723708);
+}
 TESTCASE("Stress",
 	 "Run everything while changing config"){
   STEP(runTestGetNodeIdUntilStopped);
@@ -2843,7 +3786,7 @@ TESTCASE("Stress2",
   STEPS(runTestGetVersionUntilStopped, 5);
   STEP(runSleepAndStop);
 }
-TESTCASE("Bug45497",
+X_TESTCASE("Bug45497",
          "Connect to ndb_mgmd until it can't handle more connections"){
   STEP(runTestBug45497);
 }
@@ -2858,6 +3801,21 @@ TESTCASE("TestDumpEvents",
 TESTCASE("TestStatusAfterStop",
  	 "Test get status after stop "){
   STEPS(runTestStatusAfterStop, 1);
+}
+TESTCASE("Bug12928429", "")
+{
+  STEP(runBug12928429);
+}
+TESTCASE("TestNdbApiConfig", "")
+{
+  STEP(runTestNdbApiConfig);
+}
+TESTCASE("TestSetPorts",
+         "Test 'set ports'"){
+  INITIALIZER(runTestSetPorts);
+}
+TESTCASE("TestCreateLogEvent", "Test ndb_mgm_create_log_event_handle"){
+  STEPS(runTestCreateLogEvent, 5);
 }
 NDBT_TESTSUITE_END(testMgm);
 

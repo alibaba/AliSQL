@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -64,7 +71,7 @@ public:
    */
   class Context {
   public:
-    Context() { m_mutex= NULL; };
+    Context() { m_mutex= NULL; }
     ParserStatus m_status;
     const ParserRow<T> * m_currentCmd;
     const ParserRow<T> * m_currentArg;
@@ -79,10 +86,7 @@ public:
   /**
    * Initialize parser
    */
-  Parser(const ParserRow<T> rows[], class InputStream & in = Stdin,
-	 bool breakOnCommand = false, 
-	 bool breakOnEmptyLine = true, 
-	 bool breakOnInvalidArg = false);
+  Parser(const ParserRow<T> rows[], class InputStream & in);
   ~Parser();
   
   /**
@@ -95,15 +99,6 @@ public:
    * the message
    */
   const Properties *parse(Context &, T &);
-
-  bool getBreakOnCommand() const;
-  void setBreakOnCommand(bool v);
-  
-  bool getBreakOnEmptyLine() const;
-  void setBreakOnEmptyLine(bool v);
-
-  bool getBreakOnInvalidArg() const;
-  void setBreakOnInvalidArg(bool v);
   
 private:
   ParserImpl * impl;
@@ -112,7 +107,7 @@ private:
 template<class T>
 struct ParserRow {
 public:
-  enum Type { Cmd, Arg, CmdAlias, ArgAlias };
+  enum Type { Cmd, Arg, CmdAlias, ArgAlias, End }; // Put new types before end
   enum ArgType { String, Int, Properties };
   enum ArgRequired { Mandatory, Optional };
   enum ArgMinMax { CheckMinMax, IgnoreMinMax };
@@ -141,8 +136,7 @@ public:
   typedef Parser<Dummy>::Context Context;
 
   
-  ParserImpl(const DummyRow rows[], class InputStream & in,
-	     bool b_cmd, bool b_empty, bool b_iarg);
+  ParserImpl(const DummyRow rows[], class InputStream & in);
   ~ParserImpl();
   
   bool run(Context *ctx, const class Properties **, volatile bool *) const ;
@@ -153,18 +147,15 @@ public:
   static bool checkMandatory(Context*, const Properties*);
 private:
   const DummyRow * const m_rows;
-  class ParseInputStream & input;
-  bool m_breakOnEmpty;
-  bool m_breakOnCmd;
-  bool m_breakOnInvalidArg;
+  class InputStream & input;
+
+  void check_parser_rows(const DummyRow* rows) const;
 };
 
 template<class T>
 inline
-Parser<T>::Parser(const ParserRow<T> rows[], class InputStream & in,
-		  bool b_cmd, bool b_empty, bool b_iarg){
-  impl = new ParserImpl((ParserImpl::DummyRow *)rows, in,
-			b_cmd, b_empty, b_iarg);
+Parser<T>::Parser(const ParserRow<T> rows[], class InputStream & in) {
+  impl = new ParserImpl((ParserImpl::DummyRow *)rows, in);
 }
 
 template<class T>
@@ -250,47 +241,6 @@ Parser<T>::parse(Context &ctx, T &t) {
   }
   DEBUG("");
   return NULL;
-}
-
-template<class T>
-inline
-bool 
-Parser<T>::getBreakOnCommand() const{
-  return impl->m_breakOnCmd;
-}
-
-template<class T>
-inline
-void
-Parser<T>::setBreakOnCommand(bool v){
-  impl->m_breakOnCmd = v;
-}
-
-template<class T>
-inline
-bool
-Parser<T>::getBreakOnEmptyLine() const{
-  return impl->m_breakOnEmpty;
-}
-template<class T>
-inline
-void
-Parser<T>::setBreakOnEmptyLine(bool v){
-  impl->m_breakOnEmpty = v;
-}
-
-template<class T>
-inline
-bool
-Parser<T>::getBreakOnInvalidArg() const{
-  return impl->m_breakOnInvalidArg;
-}
-
-template<class T>
-inline
-void
-Parser<T>::setBreakOnInvalidArg(bool v){
-  impl->m_breakOnInvalidArg = v;
 }
 
 #endif

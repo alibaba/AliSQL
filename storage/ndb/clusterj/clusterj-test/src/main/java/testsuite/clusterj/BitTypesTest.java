@@ -1,14 +1,21 @@
 /*
-  Copyright (c) 2010, Oracle and/or its affiliates. All rights reserved.
+  Copyright (c) 2010, 2021, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation; version 2 of the License.
+  it under the terms of the GNU General Public License, version 2.0,
+  as published by the Free Software Foundation.
+
+  This program is also distributed with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an additional
+  permission to link the program and your derivative works with the
+  separately licensed software that they have included with MySQL.
 
   This program is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-  GNU General Public License for more details.
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License, version 2.0, for more details.
 
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software
@@ -80,6 +87,7 @@ public class BitTypesTest extends AbstractClusterJModelTest {
             case 1: { // boolean
                 boolean data = (i % 2) == 0;
                 if (getDebug()) System.out.println("BitTypesTest.getColumnValue Column data for " + i + ", " + j
+                        + " " + columnDescriptors[j].getColumnName()
                         + "  is (boolean)" + data);
                 return data;
             }
@@ -90,6 +98,7 @@ public class BitTypesTest extends AbstractClusterJModelTest {
                     data = (data * 2) + (int)(Math.random() * 2);
                 }
                 if (getDebug()) System.out.println("BitTypesTest.getColumnValue Column data for " + i + ", " + j
+                        + " " + columnDescriptors[j].getColumnName()
                         + "  is (byte)" + data);
                 return Byte.valueOf((byte)data);
             }
@@ -100,6 +109,7 @@ public class BitTypesTest extends AbstractClusterJModelTest {
                     data = (data * 2) + (int)(Math.random() * 2);
                 }
                 if (getDebug()) System.out.println("BitTypesTest.getColumnValue Column data for " + i + ", " + j
+                        + " " + columnDescriptors[j].getColumnName()
                         + "  is (short)" + data);
                 return Short.valueOf((short)data);
             }
@@ -111,6 +121,7 @@ public class BitTypesTest extends AbstractClusterJModelTest {
                     data = (data * 2) + ((int)(Math.random() * 2));
                 }
                 if (getDebug()) System.out.println("BitTypesTest.getColumnValue Column data for " + i + ", " + j
+                        + " " + columnDescriptors[j].getColumnName()
                         + "  is (int)" + data);
                 // TODO bug in JDBC handling high bit
                 data = Math.abs(data);
@@ -124,6 +135,7 @@ public class BitTypesTest extends AbstractClusterJModelTest {
                     data = (data * 256) + (i * 16) + d;
                 }
                 if (getDebug()) System.out.println("BitTypesTest.getColumnValue Column data for " + i + ", " + j
+                        + " " + columnDescriptors[j].getColumnName()
                         + "  is (long)" + data);
                 return Long.valueOf(data);
             }
@@ -148,13 +160,14 @@ public class BitTypesTest extends AbstractClusterJModelTest {
             errorIfNotEqual(where + " got failure on id for row " + i, i, actual[0]);
             for (int j = 1; j < expected.length; ++j) {
                 if (getDebug()) System.out.println("BitTypesTest.verify for " + i + ", " + j
+                        + " " + columnDescriptors[j - 1].getColumnName()
                         + "  is (" + actual[j].getClass().getName() + ")" + actual[j]);
                 switch (j) {
                     case 1: { // boolean
                         Boolean expectedColumn = (Boolean)expected[j];
                         Boolean actualColumn = (Boolean)actual[j];
                         errorIfNotEqual(where + " got failure on comparison of data for row "
-                                + i + " column " + j,
+                                + i + " column " + j + " " + columnDescriptors[j - 1].getColumnName(),
                                 expectedColumn, actualColumn);
                         break;
                     }
@@ -163,7 +176,7 @@ public class BitTypesTest extends AbstractClusterJModelTest {
                         byte actualColumn = (Byte)actual[j];
                         // now compare bit by bit
                         errorIfNotEqual(where + " got failure on comparison of data for row "
-                                + i + " column " + j,
+                                + i + " column " + j + " " + columnDescriptors[j - 1].getColumnName(),
                                 Integer.toHexString(expectedColumn), Integer.toHexString(actualColumn));
                         break;
                     }
@@ -172,7 +185,7 @@ public class BitTypesTest extends AbstractClusterJModelTest {
                         short actualColumn = (Short)actual[j];
                         // now compare bit by bit
                         errorIfNotEqual(where + " got failure on comparison of data for row "
-                                + i + " column " + j,
+                                + i + " column " + j + " " + columnDescriptors[j - 1].getColumnName(),
                                 Integer.toHexString(expectedColumn), Integer.toHexString(actualColumn));
                         break;
                     }
@@ -182,7 +195,7 @@ public class BitTypesTest extends AbstractClusterJModelTest {
                         int actualColumn = (Integer)actual[j];
                         // now compare bit by bit
                         errorIfNotEqual(where + " got failure on comparison of data for row "
-                                + i + " column " + j,
+                                + i + " column " + j + " " + columnDescriptors[j - 1].getColumnName(),
                                 Integer.toHexString(expectedColumn), Integer.toHexString(actualColumn));
                         break;
                     }
@@ -192,7 +205,7 @@ public class BitTypesTest extends AbstractClusterJModelTest {
                         long actualColumn = (Long)actual[j];
                         // now compare bit by bit
                         errorIfNotEqual(where + " got failure on comparison of data for row "
-                                + i + " column " + j,
+                                + i + " column " + j + " " + columnDescriptors[j - 1].getColumnName(),
                                 Long.toHexString(expectedColumn), Long.toHexString(actualColumn));
                         break;
                    }
@@ -209,9 +222,8 @@ public class BitTypesTest extends AbstractClusterJModelTest {
     }
 
     public void testWriteNDBReadJDBC() {
-//        TODO: investigate platform dependency when reading via JDBC
-//        writeNDBreadJDBC();
-//        failOnError();
+        writeNDBreadJDBC();
+        failOnError();
    }
 
     public void testWriteNDBReadNDB() {
@@ -220,9 +232,8 @@ public class BitTypesTest extends AbstractClusterJModelTest {
    }
 
     public void testWriteJDBCReadJDBC() {
-//      TODO: investigate platform dependency when reading via JDBC
-//        writeJDBCreadJDBC();
-//        failOnError();
+        writeJDBCreadJDBC();
+        failOnError();
    }
 
    static ColumnDescriptor bit1 = new ColumnDescriptor

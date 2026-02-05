@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -27,11 +34,12 @@
 #include <NodeState.hpp>
 #include <NodeInfo.hpp>
 #include "ArrayPool.hpp"
+#include <NdbTick.h>
 
 // #define GCP_TIMER_HACK
-#ifdef GCP_TIMER_HACK
-#include <NdbTick.h>
-#endif
+
+
+#define JAM_FILE_ID 277
 
 class SimulatedBlock;
 
@@ -41,12 +49,13 @@ enum  restartStates {initial_state,
                      perform_stop};
 
 struct GlobalData {
-  Uint32     m_restart_seq;           // 
-  NodeVersionInfo m_versionInfo;
-  NodeInfo   m_nodeInfo[MAX_NODES];
+  Uint32     m_hb_count[MAX_NODES];   // hb counters
+  NodeInfo   m_nodeInfo[MAX_NODES];   // At top to ensure cache alignment
   Signal     VMSignals[1];            // Owned by FastScheduler::
+  Uint32     m_restart_seq;           //
+  NodeVersionInfo m_versionInfo;
   
-  Uint64     internalMillisecCounter; // Owned by ThreadConfig::
+  NDB_TICKS  internalTicksCounter;    // Owned by ThreadConfig::
   Uint32     highestAvailablePrio;    // Owned by FastScheduler::
   Uint32     JobCounter;              // Owned by FastScheduler
   Uint64     JobLap;                  // Owned by FastScheduler
@@ -54,6 +63,7 @@ struct GlobalData {
   
   Uint32     theNextTimerJob;         // Owned by TimeQueue::
   Uint32     theCurrentTimer;         // Owned by TimeQueue::
+  Uint32     theZeroTQIndex;          // Owned by TimeQueue::
   Uint32     theShortTQIndex;         // Owned by TimeQueue::
   
   Uint32     theLongTQIndex;          // Owned by TimeQueue::
@@ -74,6 +84,10 @@ struct GlobalData {
   bool       isNdbMtLqh; // ndbd multithreaded, LQH workers
   Uint32     ndbMtLqhWorkers;
   Uint32     ndbMtLqhThreads;
+  Uint32     ndbMtTcThreads;
+  Uint32     ndbMtSendThreads;
+  Uint32     ndbMtReceiveThreads;
+  Uint32     ndbLogParts;
   
   GlobalData(){ 
     theSignalId = 0; 
@@ -83,6 +97,11 @@ struct GlobalData {
     isNdbMtLqh = false;
     ndbMtLqhWorkers = 0;
     ndbMtLqhThreads = 0;
+    ndbMtTcThreads = 0;
+    ndbMtSendThreads = 0;
+    ndbMtReceiveThreads = 0;
+    ndbLogParts = 0;
+    bzero(m_hb_count, sizeof(m_hb_count));
 #ifdef GCP_TIMER_HACK
     gcp_timer_limit = 0;
 #endif
@@ -99,7 +118,18 @@ struct GlobalData {
   
   void           incrementWatchDogCounter(Uint32 place);
   Uint32 * getWatchDogPtr();
-  
+
+  Uint32 getBlockThreads() const {
+    return ndbMtLqhThreads + ndbMtTcThreads + ndbMtReceiveThreads;
+  }
+
+  Uint32 get_hb_count(Uint32 nodeId) const {
+    return m_hb_count[nodeId];
+  }
+
+  Uint32& set_hb_count(Uint32 nodeId) {
+    return m_hb_count[nodeId];
+  }
 private:
   Uint32     watchDog;
   SimulatedBlock* blockTable[NO_OF_BLOCKS]; // Owned by Dispatcher::
@@ -111,11 +141,11 @@ public:
   // timings are local to the node
 
   // from prepare to commit (DIH, TC)
-  MicroSecondTimer gcp_timer_commit[2];
+  NDB_TICKS gcp_timer_commit[2];
   // from GCP_SAVEREQ to GCP_SAVECONF (LQH)
-  MicroSecondTimer gcp_timer_save[2];
+  NDB_TICKS gcp_timer_save[2];
   // sysfile update (DIH)
-  MicroSecondTimer gcp_timer_copygci[2];
+  NDB_TICKS gcp_timer_copygci[2];
 
   // report threshold in ms, if 0 guessed, set with dump 7901 <limit>
   Uint32 gcp_timer_limit;
@@ -156,5 +186,8 @@ Uint32 *
 GlobalData::getWatchDogPtr(){
   return &watchDog;
 }
+
+
+#undef JAM_FILE_ID
 
 #endif

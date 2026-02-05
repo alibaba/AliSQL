@@ -13,6 +13,7 @@
 # timezone used in CONVERT_TZ is not binlogged. To debug (by Guilhem
 # and possibly Konstantin).
 
+--source include/not_group_replication_plugin.inc
 source include/master-slave.inc;
 
 --disable_query_log
@@ -71,7 +72,7 @@ connection master;
 connection master;
 delete from t1;
 set time_zone='UTC';
-load data infile '../../std_data/rpl_timezone2.dat' into table t1;
+load data infile '../../std_data/rpl_timezone2.dat' ignore into table t1;
 SELECT * FROM t1 ORDER BY n;
 --source include/sync_slave_sql_with_master.inc
 set time_zone='UTC';
@@ -157,7 +158,9 @@ CREATE TABLE t1 (a INT, b TIMESTAMP);
 INSERT INTO t1 VALUES (1, NOW());
 
 SET @@session.time_zone='Japan';
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 UPDATE t1 SET b= '1970-01-01 08:59:59' WHERE a= 1;
+SET sql_mode = default;
 SELECT * FROM t1 ORDER BY a;
 
 --source include/sync_slave_sql_with_master.inc
@@ -171,40 +174,6 @@ DROP TABLE t1;
 SET @@session.time_zone = default;
 --source include/sync_slave_sql_with_master.inc
 --source include/stop_slave.inc
-
-# Bug#41719 delayed INSERT into timestamp col needs set time_zone for concurrent binlogging
-# To test that time_zone is correctly binloging for 'insert delayed' statement
-# Insert 2 values into timestamp col with different time_zone. Check result.
-
---connection master
-reset master;
-CREATE TABLE t1 (date timestamp NOT NULL default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP, a int(11) default NULL);
-
-SET @@session.time_zone='+01:00';
-insert into t1 values('2008-12-23 19:39:39',1);
-
---connection master1
-SET @@session.time_zone='+02:00';
-insert delayed into t1 values ('2008-12-23 19:39:39',2);
-
-# wait for the delayed insert to be executed
-let $wait_condition= SELECT date FROM t1 WHERE a=2;
---source include/wait_condition.inc
-
-flush table t1;
-flush logs;
-select * from t1;
-DROP TABLE t1;
-
-let $MYSQLD_DATADIR= `select @@datadir;`;
---copy_file $MYSQLD_DATADIR/master-bin.000001 $MYSQLD_DATADIR/master-bin.saved
-# Forget GTIDs
-RESET MASTER;
---exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.saved | $MYSQL
---connection master1
-select * from t1 order by a;
-DROP TABLE t1;
-SET @@session.time_zone = default;
 
 --let $rpl_only_running_threads= 1
 --source include/rpl_end.inc

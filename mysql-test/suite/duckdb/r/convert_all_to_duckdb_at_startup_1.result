@@ -1,0 +1,121 @@
+#
+# 1) CREATE TABLES
+#
+CREATE TABLE t1 (id INT, name VARCHAR(255), PRIMARY KEY (id)) ENGINE = InnoDB, CHARSET = utf8;
+INSERT INTO t1 VALUES (1, 'one');
+CREATE TABLE t2 (id INT, name VARCHAR(255), PRIMARY KEY (id)) ENGINE = DuckDB, CHARSET = utf8;
+INSERT INTO t2 VALUES (1, 'one');
+#
+# 2) RESTART WITH duckdb_convert_all_at_startup=ON
+#
+# restart: --duckdb_convert_all_at_startup=ON --duckdb_convert_all_at_startup_ignore_error=ON
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `name` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=DUCKDB DEFAULT CHARSET=utf8
+SELECT * FROM t1;
+id	name
+1	one
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int(11) NOT NULL,
+  `name` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=DUCKDB DEFAULT CHARSET=utf8
+SELECT * FROM t2;
+id	name
+1	one
+#
+# 3) CREATE INNODB TABLES, SOME OF WHICH CAN NOT BE CONVERTED TO DUCKDB.
+#
+DROP TABLE t1, t2;
+CREATE TABLE t1 (id INT, name VARCHAR(255), PRIMARY KEY (id)) ENGINE = InnoDB, CHARSET = utf8;
+INSERT INTO t1 VALUES (1, 'one');
+CREATE TABLE t2 (id INT NOT NULL, name VARCHAR(255), UNIQUE KEY (id)) ENGINE = InnoDB, CHARSET = utf8;
+INSERT INTO t2 VALUES (1, 'one');
+CREATE TABLE t3 (id INT, name VARCHAR(255)) ENGINE = InnoDB;
+INSERT INTO t3 VALUES (1, 'one');
+CREATE TABLE t4(id INT PRIMARY KEY, a INT, b INT GENERATED ALWAYS AS (a - 1) STORED) ENGINE = InnoDB;
+INSERT INTO t4(id, a) VALUES (1, 1);
+CREATE TABLE t5(id INT PRIMARY KEY, a INT, b INT GENERATED ALWAYS AS (a - 1) VIRTUAL) ENGINE = InnoDB;
+INSERT INTO t5(id, a) VALUES (1, 1);
+CREATE TABLE t6 (fid INT PRIMARY KEY, g POINT) ENGINE = InnoDB;
+INSERT INTO t6 VALUES (101, ST_PointFromText('POINT(10 10)'));
+CREATE TABLE t7(id INT PRIMARY KEY, a INT, b INT, c INT) ENGINE = InnoDB PARTITION BY HASH (id) PARTITIONS 4;
+#
+# 4) RESTART WITH duckdb_convert_all_at_startup=ON, duckdb_convert_all_at_startup_ignore_error=ON, FAILED.
+#
+# restart: --duckdb_convert_all_at_startup=ON --duckdb_convert_all_at_startup_ignore_error=ON
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int(11) NOT NULL,
+  `name` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=DUCKDB DEFAULT CHARSET=utf8
+show create table t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int(11) NOT NULL,
+  `name` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=DUCKDB DEFAULT CHARSET=utf8
+show create table t3;
+Table	Create Table
+t3	CREATE TABLE `t3` (
+  `id` int(11) DEFAULT NULL,
+  `name` varchar(255) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8
+show create table t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `id` int(11) NOT NULL,
+  `a` int(11) DEFAULT NULL,
+  `b` int(11) GENERATED ALWAYS AS ((`a` - 1)) STORED,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8
+show create table t5;
+Table	Create Table
+t5	CREATE TABLE `t5` (
+  `id` int(11) NOT NULL,
+  `a` int(11) DEFAULT NULL,
+  `b` int(11) GENERATED ALWAYS AS ((`a` - 1)) VIRTUAL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8
+show create table t6;
+Table	Create Table
+t6	CREATE TABLE `t6` (
+  `fid` int(11) NOT NULL,
+  `g` point DEFAULT NULL,
+  PRIMARY KEY (`fid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8
+show create table t7;
+Table	Create Table
+t7	CREATE TABLE `t7` (
+  `id` int(11) NOT NULL,
+  `a` int(11) DEFAULT NULL,
+  `b` int(11) DEFAULT NULL,
+  `c` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8
+/*!50100 PARTITION BY HASH (id)
+PARTITIONS 4 */
+#
+# 5) RESTART WITH duckdb_convert_all_at_startup=ON, duckdb_convert_all_at_startup_ignore_error=ON, SUCCESSFUL.
+#
+# restart: --duckdb_convert_all_at_startup=ON --duckdb_convert_all_at_startup_ignore_error=ON
+SELECT * FROM information_schema.tables WHERE ENGINE = 'DuckDB';
+TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	TABLE_TYPE	ENGINE	VERSION	ROW_FORMAT	TABLE_ROWS	AVG_ROW_LENGTH	DATA_LENGTH	MAX_DATA_LENGTH	INDEX_LENGTH	DATA_FREE	AUTO_INCREMENT	CREATE_TIME	UPDATE_TIME	CHECK_TIME	TABLE_COLLATION	CHECKSUM	CREATE_OPTIONS	TABLE_COMMENT
+def	test	t1	BASE TABLE	DUCKDB	10	Dynamic	0	0	0	0	0	0	NULL	NULL	NULL	NULL	utf8_general_ci	NULL		
+def	test	t2	BASE TABLE	DUCKDB	10	Dynamic	0	0	0	0	0	0	NULL	NULL	NULL	NULL	utf8_general_ci	NULL		
+SHOW GLOBAL STATUS LIKE 'DuckDB_convert_stage_at_startup';
+Variable_name	Value
+DuckDB_convert_stage_at_startup	FINISHED
+#
+# 6) CLEANUP
+#
+DROP TABLE t1, t2, t3, t4, t5, t6, t7;

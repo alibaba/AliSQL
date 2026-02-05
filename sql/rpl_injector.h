@@ -1,13 +1,20 @@
-/* Copyright (c) 2006, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2006, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -16,17 +23,15 @@
 #ifndef INJECTOR_H
 #define INJECTOR_H
 
-/* Pull in 'byte', 'my_off_t', and 'uint32' */
-#include <my_global.h>
-#include <my_bitmap.h>
-
-#include "rpl_constants.h"
-#include "table.h"                              /* TABLE */
+#include "my_global.h"
+#include "table.h"          // TABLE
+#include "control_events.h" // enum_incidents
 
 /* Forward declarations */
 class handler;
 class MYSQL_BIN_LOG;
-struct TABLE;
+class THD;
+typedef struct st_bitmap MY_BITMAP;
 
 
 /*
@@ -226,7 +231,9 @@ public:
         Add an 'update row' entry to the transaction.
       */
       int update_row(server_id_type sid, table tbl, 
-                     MY_BITMAP const *cols, size_t colcnt,
+                     MY_BITMAP const *before_cols,
+                     MY_BITMAP const *after_cols,
+                     size_t colcnt,
                      record_type before, record_type after,
                      const uchar* extra_row_info);
       int update_row(server_id_type sid, table tbl,
@@ -348,12 +355,12 @@ public:
        */
       int check_state(enum_state const target_state)
       {
-#ifndef DBUG_OFF
+#ifndef NDEBUG
         static char const *state_name[] = {
           "START_STATE", "TABLE_STATE", "ROW_STATE", "STATE_COUNT"
         };
 
-        DBUG_ASSERT(0 <= target_state && target_state <= STATE_COUNT);
+        assert(0 <= target_state && target_state <= STATE_COUNT);
         DBUG_PRINT("info", ("In state %s", state_name[m_state]));
 #endif
 
@@ -382,8 +389,8 @@ public:
      */
     void new_trans(THD *, transaction *);
 
-    int record_incident(THD*, Incident incident);
-    int record_incident(THD*, Incident incident, LEX_STRING const message);
+    int record_incident(THD*, binary_log::Incident_event::enum_incident incident,
+                        LEX_STRING const message);
 
 private:
     explicit injector();

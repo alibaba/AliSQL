@@ -1,14 +1,22 @@
 /*****************************************************************************
 
-Copyright (c) 2012, 2016, Oracle and/or its affiliates. All Rights Reserved.
+Copyright (c) 2012, 2023, Oracle and/or its affiliates.
 
-This program is free software; you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation; version 2 of the License.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License, version 2.0,
+as published by the Free Software Foundation.
 
-This program is distributed in the hope that it will be useful, but WITHOUT
-ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+This program is also distributed with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have included with MySQL.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License, version 2.0, for more details.
 
 You should have received a copy of the GNU General Public License along with
 this program; if not, write to the Free Software Foundation, Inc.,
@@ -27,7 +35,6 @@ Created 2012-02-08 by Sunny Bains
 #define row0import_h
 
 #include "univ.i"
-#include "db0err.h"
 #include "dict0types.h"
 
 // Forward declarations
@@ -38,8 +45,7 @@ struct row_prebuilt_t;
 /*****************************************************************//**
 Imports a tablespace. The space id in the .ibd file must match the space id
 of the table in the data dictionary.
-@return	error code or DB_SUCCESS */
-UNIV_INTERN
+@return error code or DB_SUCCESS */
 dberr_t
 row_import_for_mysql(
 /*=================*/
@@ -51,7 +57,6 @@ row_import_for_mysql(
 /*****************************************************************//**
 Update the DICT_TF2_DISCARDED flag in SYS_TABLES.
 @return DB_SUCCESS or error code. */
-UNIV_INTERN
 dberr_t
 row_import_update_discarded_flag(
 /*=============================*/
@@ -70,7 +75,6 @@ row_import_update_discarded_flag(
 Update the (space, root page) of a table's indexes from the values
 in the data dictionary.
 @return DB_SUCCESS or error code */
-UNIV_INTERN
 dberr_t
 row_import_update_index_root(
 /*=========================*/

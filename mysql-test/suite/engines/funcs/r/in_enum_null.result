@@ -1,4 +1,7 @@
 DROP TABLE IF EXISTS t7;
+SET sql_mode='NO_ENGINE_SUBSTITUTION';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 CREATE TABLE t7(c1 ENUM('a','abcdefghijabcdefghijabcdefghijabcdefghijabcdefghij') NULL);
 INSERT INTO t7(c1) VALUES(NULL);
 INSERT INTO t7(c1) VALUES('');
@@ -20,3 +23,4 @@ SELECT COUNT(c1) AS null_rows FROM t7 WHERE c1 IS NULL;
 null_rows
 0
 DROP TABLE t7;
+SET sql_mode=default;

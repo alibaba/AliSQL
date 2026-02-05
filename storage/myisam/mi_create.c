@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -20,8 +27,9 @@
 #include "sp_defs.h"
 #include <my_bit.h>
 
-#ifdef __WIN__
+#ifdef _WIN32
 #include <fcntl.h>
+#include <process.h>
 #endif
 #include <m_ctype.h>
 
@@ -34,8 +42,8 @@ int mi_create(const char *name,uint keys,MI_KEYDEF *keydefs,
 	      uint uniques, MI_UNIQUEDEF *uniquedefs,
 	      MI_CREATE_INFO *ci,uint flags)
 {
-  register uint i,j;
-  File UNINIT_VAR(dfile), UNINIT_VAR(file);
+  uint i,j;
+  File dfile= 0, file= 0;
   int errpos,save_errno, create_mode= O_RDWR | O_TRUNC;
   myf create_flag;
   uint fields,length,max_key_length,packed,pointer,real_length_diff,
@@ -69,7 +77,8 @@ int mi_create(const char *name,uint keys,MI_KEYDEF *keydefs,
 
   if (keys + uniques > MI_MAX_KEY || columns == 0)
   {
-    DBUG_RETURN(my_errno=HA_WRONG_CREATE_OPTION);
+    set_my_errno(HA_WRONG_CREATE_OPTION);
+    DBUG_RETURN(HA_WRONG_CREATE_OPTION);
   }
 
   errpos=0;
@@ -92,9 +101,10 @@ int mi_create(const char *name,uint keys,MI_KEYDEF *keydefs,
     ci->reloc_rows=ci->max_rows;		/* Check if wrong parameter */
 
   if (!(rec_per_key_part=
-	(ulong*) my_malloc((keys + uniques)*MI_MAX_KEY_SEG*sizeof(long),
+	(ulong*) my_malloc(mi_key_memory_MYISAM_SHARE,
+                           (keys + uniques)*MI_MAX_KEY_SEG*sizeof(long),
 			   MYF(MY_WME | MY_ZEROFILL))))
-    DBUG_RETURN(my_errno);
+    DBUG_RETURN(my_errno());
 
 	/* Start by checking fields and field-types used */
 
@@ -246,7 +256,6 @@ int mi_create(const char *name,uint keys,MI_KEYDEF *keydefs,
     key_length=pointer;
     if (keydef->flag & HA_SPATIAL)
     {
-#ifdef HAVE_SPATIAL
       /* BAR TODO to support 3D and more dimensions in the future */
       uint sp_segs=SPDIMS*2;
       keydef->flag=HA_SPATIAL;
@@ -270,7 +279,7 @@ int mi_create(const char *name,uint keys,MI_KEYDEF *keydefs,
 	    keyseg->type != HA_KEYTYPE_VARBINARY1 &&
             keyseg->type != HA_KEYTYPE_VARBINARY2)
         {
-          my_errno=HA_WRONG_CREATE_OPTION;
+          set_my_errno(HA_WRONG_CREATE_OPTION);
           goto err_no_lock;
         }
       }
@@ -278,10 +287,6 @@ int mi_create(const char *name,uint keys,MI_KEYDEF *keydefs,
       key_length+=SPLEN*sp_segs;
       length++;                              /* At least one length byte */
       min_key_length_skip+=SPLEN*2*SPDIMS;
-#else
-      my_errno= HA_ERR_UNSUPPORTED;
-      goto err_no_lock;
-#endif /*HAVE_SPATIAL*/
     }
     else if (keydef->flag & HA_FULLTEXT)
     {
@@ -295,7 +300,7 @@ int mi_create(const char *name,uint keys,MI_KEYDEF *keydefs,
 	    keyseg->type != HA_KEYTYPE_VARTEXT1 &&
             keyseg->type != HA_KEYTYPE_VARTEXT2)
         {
-          my_errno=HA_WRONG_CREATE_OPTION;
+          set_my_errno(HA_WRONG_CREATE_OPTION);
           goto err_no_lock;
         }
         if (!(keyseg->flag & HA_BLOB_PART) &&
@@ -382,7 +387,7 @@ int mi_create(const char *name,uint keys,MI_KEYDEF *keydefs,
 	}
 	if (keyseg->flag & HA_SPACE_PACK)
 	{
-          DBUG_ASSERT(!(keyseg->flag & HA_VAR_LENGTH_PART));
+          assert(!(keyseg->flag & HA_VAR_LENGTH_PART));
 	  keydef->flag |= HA_SPACE_PACK_USED | HA_VAR_LENGTH_KEY;
 	  options|=HA_OPTION_PACK_KEYS;		/* Using packed keys */
 	  length++;				/* At least one length byte */
@@ -395,8 +400,8 @@ int mi_create(const char *name,uint keys,MI_KEYDEF *keydefs,
 	}
 	if (keyseg->flag & (HA_VAR_LENGTH_PART | HA_BLOB_PART))
 	{
-          DBUG_ASSERT(!test_all_bits(keyseg->flag,
-                                    (HA_VAR_LENGTH_PART | HA_BLOB_PART)));
+          assert(!test_all_bits(keyseg->flag,
+                                (HA_VAR_LENGTH_PART | HA_BLOB_PART)));
 	  keydef->flag|=HA_VAR_LENGTH_KEY;
 	  length++;				/* At least one length byte */
 	  options|=HA_OPTION_PACK_KEYS;		/* Using packed keys */
@@ -420,7 +425,7 @@ int mi_create(const char *name,uint keys,MI_KEYDEF *keydefs,
     key_segs+=keydef->keysegs;
     if (keydef->keysegs > MI_MAX_KEY_SEG)
     {
-      my_errno=HA_WRONG_CREATE_OPTION;
+      set_my_errno(HA_WRONG_CREATE_OPTION);
       goto err_no_lock;
     }
     /*
@@ -445,7 +450,7 @@ int mi_create(const char *name,uint keys,MI_KEYDEF *keydefs,
     if (keydef->block_length > MI_MAX_KEY_BLOCK_LENGTH ||
         length >= MI_MAX_KEY_BUFF)
     {
-      my_errno=HA_WRONG_CREATE_OPTION;
+      set_my_errno(HA_WRONG_CREATE_OPTION);
       goto err_no_lock;
     }
     set_if_bigger(max_key_block_length,keydef->block_length);
@@ -491,11 +496,11 @@ int mi_create(const char *name,uint keys,MI_KEYDEF *keydefs,
     my_printf_error(0, "MyISAM table '%s' has too many columns and/or "
                     "indexes and/or unique constraints.",
                     MYF(0), name + dirname_length(name));
-    my_errno= HA_WRONG_CREATE_OPTION;
+    set_my_errno(HA_WRONG_CREATE_OPTION);
     goto err_no_lock;
   }
 
-  bmove(share.state.header.file_version,(uchar*) myisam_file_magic,4);
+  memmove(share.state.header.file_version, (uchar*) myisam_file_magic, 4);
   ci->old_options=options| (ci->old_options & HA_OPTION_TEMP_COMPRESS_RECORD ?
 			HA_OPTION_COMPRESS_RECORD |
 			HA_OPTION_TEMP_COMPRESS_RECORD: 0);
@@ -626,7 +631,7 @@ int mi_create(const char *name,uint keys,MI_KEYDEF *keydefs,
     my_printf_error(0, "MyISAM table '%s' is in use "
                     "(most likely by a MERGE table). Try FLUSH TABLES.",
                     MYF(0), name + dirname_length(name));
-    my_errno= HA_ERR_TABLE_EXIST;
+    set_my_errno(HA_ERR_TABLE_EXIST);
     goto err;
   }
 
@@ -687,7 +692,7 @@ int mi_create(const char *name,uint keys,MI_KEYDEF *keydefs,
   if (mi_state_info_write(file, &share.state, 2) ||
       mi_base_info_write(file, &share.base))
     goto err;
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   if ((uint) mysql_file_tell(file, MYF(0)) != base_pos + MI_BASE_INFO_SIZE)
   {
     uint pos=(uint) mysql_file_tell(file, MYF(0));
@@ -707,7 +712,6 @@ int mi_create(const char *name,uint keys,MI_KEYDEF *keydefs,
     for (j=0 ; j < keydefs[i].keysegs-sp_segs ; j++)
       if (mi_keyseg_write(file, &keydefs[i].seg[j]))
        goto err;
-#ifdef HAVE_SPATIAL
     for (j=0 ; j < sp_segs ; j++)
     {
       HA_KEYSEG sseg;
@@ -725,7 +729,6 @@ int mi_create(const char *name,uint keys,MI_KEYDEF *keydefs,
       if (mi_keyseg_write(file, &sseg))
         goto err;
     }
-#endif
   }
   /* Create extra keys for unique definitions */
   offset= real_reclength - uniques * MI_UNIQUE_HASH_LENGTH;
@@ -784,7 +787,7 @@ int mi_create(const char *name,uint keys,MI_KEYDEF *keydefs,
     if (mi_recinfo_write(file, &recinfo[i]))
       goto err;
 
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   if ((uint) mysql_file_tell(file, MYF(0)) != info_length)
   {
     uint pos= (uint) mysql_file_tell(file, MYF(0));
@@ -800,11 +803,6 @@ int mi_create(const char *name,uint keys,MI_KEYDEF *keydefs,
 
   if (! (flags & HA_DONT_TOUCH_DATA))
   {
-#ifdef USE_RELOC
-    if (mysql_file_chsize(dfile, share.base.min_pack_length*ci->reloc_rows,
-                          0, MYF(0)))
-      goto err;
-#endif
     errpos=2;
     if (mysql_file_close(dfile, MYF(0)))
       goto err;
@@ -822,7 +820,7 @@ err:
     mysql_mutex_unlock(&THR_LOCK_myisam);
 
 err_no_lock:
-  save_errno=my_errno;
+  save_errno=my_errno();
   switch (errpos) {
   case 3:
     (void) mysql_file_close(dfile, MYF(0));
@@ -843,29 +841,25 @@ err_no_lock:
                                      MYF(0));
   }
   my_free(rec_per_key_part);
-  DBUG_RETURN(my_errno=save_errno);		/* return the fatal errno */
+  set_my_errno(save_errno);
+  DBUG_RETURN(save_errno);		/* return the fatal errno */
 }
 
 
 uint mi_get_pointer_length(ulonglong file_length, uint def)
 {
-  DBUG_ASSERT(def >= 2 && def <= 7);
+  assert(def >= 2 && def <= 7);
   if (file_length)				/* If not default */
   {
-#ifdef NOT_YET_READY_FOR_8_BYTE_POINTERS
-    if (file_length >= ULL(1) << 56)
-      def=8;
-    else
-#endif
-    if (file_length >= ULL(1) << 48)
+    if (file_length >= 1ULL << 48)
       def=7;
-    else if (file_length >= ULL(1) << 40)
+    else if (file_length >= 1ULL << 40)
       def=6;
-    else if (file_length >= ULL(1) << 32)
+    else if (file_length >= 1ULL << 32)
       def=5;
-    else if (file_length >= ULL(1) << 24)
+    else if (file_length >= 1ULL << 24)
       def=4;
-    else if (file_length >= ULL(1) << 16)
+    else if (file_length >= 1ULL << 16)
       def=3;
     else
       def=2;

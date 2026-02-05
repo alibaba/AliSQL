@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -69,55 +76,55 @@ static
 const
 NDBT_Attribute T3Attribs[] = {
   NDBT_Attribute("KOL1", NdbDictionary::Column::Varbinary, 100, true), 
-  NDBT_Attribute("KOL00", NdbDictionary::Column::Char, 100),
+  NDBT_Attribute("KOL00", NdbDictionary::Column::Binary, 100),
   NDBT_Attribute("KOL01", NdbDictionary::Column::Varbinary, 100),
-  NDBT_Attribute("KOL02", NdbDictionary::Column::Char, 100),
+  NDBT_Attribute("KOL02", NdbDictionary::Column::Binary, 100),
   NDBT_Attribute("KOL03", NdbDictionary::Column::Varbinary, 100),
-  NDBT_Attribute("KOL04", NdbDictionary::Column::Char, 100),
+  NDBT_Attribute("KOL04", NdbDictionary::Column::Binary, 100),
   NDBT_Attribute("KOL05", NdbDictionary::Column::Varbinary, 100),
-  NDBT_Attribute("KOL06", NdbDictionary::Column::Char, 100),
+  NDBT_Attribute("KOL06", NdbDictionary::Column::Binary, 100),
   NDBT_Attribute("KOL07", NdbDictionary::Column::Varbinary, 25),
-  NDBT_Attribute("KOL08", NdbDictionary::Column::Char, 100),
+  NDBT_Attribute("KOL08", NdbDictionary::Column::Binary, 100),
   NDBT_Attribute("KOL09", NdbDictionary::Column::Varbinary, 25),
-  NDBT_Attribute("KOL10", NdbDictionary::Column::Char, 100),
+  NDBT_Attribute("KOL10", NdbDictionary::Column::Binary, 100),
   NDBT_Attribute("KOL11", NdbDictionary::Column::Varbinary, 25),
-  NDBT_Attribute("KOL12", NdbDictionary::Column::Char, 100),
+  NDBT_Attribute("KOL12", NdbDictionary::Column::Binary, 100),
   NDBT_Attribute("KOL13", NdbDictionary::Column::Varbinary, 25),
-  NDBT_Attribute("KOL14", NdbDictionary::Column::Char, 100),
+  NDBT_Attribute("KOL14", NdbDictionary::Column::Binary, 100),
   NDBT_Attribute("KOL15", NdbDictionary::Column::Longvarbinary, 537),
-  NDBT_Attribute("KOL16", NdbDictionary::Column::Char, 100),
+  NDBT_Attribute("KOL16", NdbDictionary::Column::Binary, 100),
   NDBT_Attribute("KOL17", NdbDictionary::Column::Varbinary, 100),
-  NDBT_Attribute("KOL18", NdbDictionary::Column::Char, 100),
+  NDBT_Attribute("KOL18", NdbDictionary::Column::Binary, 100),
   NDBT_Attribute("KOL19", NdbDictionary::Column::Varbinary, 100),
-  NDBT_Attribute("KOL20", NdbDictionary::Column::Char, 100),
+  NDBT_Attribute("KOL20", NdbDictionary::Column::Binary, 100),
   NDBT_Attribute("KOL21", NdbDictionary::Column::Varbinary, 100),
-  NDBT_Attribute("KOL22", NdbDictionary::Column::Char, 100),
+  NDBT_Attribute("KOL22", NdbDictionary::Column::Binary, 100),
   NDBT_Attribute("KOL23", NdbDictionary::Column::Varbinary, 100),
-  NDBT_Attribute("KOL24", NdbDictionary::Column::Char, 100),
+  NDBT_Attribute("KOL24", NdbDictionary::Column::Binary, 100),
   NDBT_Attribute("KOL25", NdbDictionary::Column::Varbinary, 100),
-  NDBT_Attribute("KOL26", NdbDictionary::Column::Char, 100),
+  NDBT_Attribute("KOL26", NdbDictionary::Column::Binary, 100),
   NDBT_Attribute("KOL27", NdbDictionary::Column::Varbinary, 100),
-  NDBT_Attribute("KOL28", NdbDictionary::Column::Char, 100),
+  NDBT_Attribute("KOL28", NdbDictionary::Column::Binary, 100),
   NDBT_Attribute("KOL29", NdbDictionary::Column::Varbinary, 100),
-  NDBT_Attribute("KOL30", NdbDictionary::Column::Char, 100),
+  NDBT_Attribute("KOL30", NdbDictionary::Column::Binary, 100),
   NDBT_Attribute("KOL31", NdbDictionary::Column::Varbinary, 100),
-  NDBT_Attribute("KOL32", NdbDictionary::Column::Char, 100),
+  NDBT_Attribute("KOL32", NdbDictionary::Column::Binary, 100),
   NDBT_Attribute("KOL33", NdbDictionary::Column::Varbinary, 100),
-  NDBT_Attribute("KOL34", NdbDictionary::Column::Char, 100),
+  NDBT_Attribute("KOL34", NdbDictionary::Column::Binary, 100),
   NDBT_Attribute("KOL35", NdbDictionary::Column::Varbinary, 100),
-  NDBT_Attribute("KOL36", NdbDictionary::Column::Char, 100),
+  NDBT_Attribute("KOL36", NdbDictionary::Column::Binary, 100),
   NDBT_Attribute("KOL37", NdbDictionary::Column::Varbinary, 100),
-  NDBT_Attribute("KOL38", NdbDictionary::Column::Char, 100),
+  NDBT_Attribute("KOL38", NdbDictionary::Column::Binary, 100),
   NDBT_Attribute("KOL39", NdbDictionary::Column::Varbinary, 100),
-  NDBT_Attribute("KOL40", NdbDictionary::Column::Char, 100),
+  NDBT_Attribute("KOL40", NdbDictionary::Column::Binary, 100),
   NDBT_Attribute("KOL41", NdbDictionary::Column::Varbinary, 100),
-  NDBT_Attribute("KOL42", NdbDictionary::Column::Char, 100),
+  NDBT_Attribute("KOL42", NdbDictionary::Column::Binary, 100),
   NDBT_Attribute("KOL43", NdbDictionary::Column::Varbinary, 100),
-  NDBT_Attribute("KOL44", NdbDictionary::Column::Char, 100),
+  NDBT_Attribute("KOL44", NdbDictionary::Column::Binary, 100),
   NDBT_Attribute("KOL45", NdbDictionary::Column::Varbinary, 100),
-  NDBT_Attribute("KOL46", NdbDictionary::Column::Char, 100),
+  NDBT_Attribute("KOL46", NdbDictionary::Column::Binary, 100),
   NDBT_Attribute("KOL47", NdbDictionary::Column::Varbinary, 100),
-  NDBT_Attribute("KOL48", NdbDictionary::Column::Char, 100),
+  NDBT_Attribute("KOL48", NdbDictionary::Column::Binary, 100),
   NDBT_Attribute("KOL49", NdbDictionary::Column::Varbinary, 100),
 
   NDBT_Attribute("KOL2", NdbDictionary::Column::Unsigned),
@@ -153,28 +160,328 @@ NDBT_Attribute T6Attribs[] = {
   NDBT_Attribute("ATTR1", NdbDictionary::Column::Unsigned),
   NDBT_Attribute("ATTR2", NdbDictionary::Column::Unsigned),
   NDBT_Attribute("ATTR3", NdbDictionary::Column::Unsigned),
-  NDBT_Attribute("ATTR4", NdbDictionary::Column::Char, 
+  NDBT_Attribute("ATTR4", NdbDictionary::Column::Binary,
 		 47, false, true),// Nullable
   NDBT_Attribute("ATTR5", NdbDictionary::Column::Unsigned),
   NDBT_Attribute("ATTR6", NdbDictionary::Column::Unsigned),
-  NDBT_Attribute("ATTR7", NdbDictionary::Column::Char, 
+  NDBT_Attribute("ATTR7", NdbDictionary::Column::Binary,
 		 48, false, true),// Nullable
-  NDBT_Attribute("ATTR8", NdbDictionary::Column::Char, 
+  NDBT_Attribute("ATTR8", NdbDictionary::Column::Binary,
 		 50, false, true), // Nullable
   NDBT_Attribute("ATTR9", NdbDictionary::Column::Int),
   NDBT_Attribute("ATTR10", NdbDictionary::Column::Float),
   NDBT_Attribute("ATTR11", NdbDictionary::Column::Unsigned),
-  NDBT_Attribute("ATTR12", NdbDictionary::Column::Char, 49),
+  NDBT_Attribute("ATTR12", NdbDictionary::Column::Binary, 49),
   NDBT_Attribute("ATTR13", NdbDictionary::Column::Unsigned),
   NDBT_Attribute("ATTR14", NdbDictionary::Column::Varbinary, 50),
   NDBT_Attribute("ATTR15", NdbDictionary::Column::Unsigned),
   NDBT_Attribute("ATTR16", NdbDictionary::Column::Unsigned),
   NDBT_Attribute("ATTR17", NdbDictionary::Column::Unsigned),
-  NDBT_Attribute("ATTR18", NdbDictionary::Column::Char, 257),
+  NDBT_Attribute("ATTR18", NdbDictionary::Column::Binary, 257),
   NDBT_Attribute("ATTR19", NdbDictionary::Column::Unsigned),
   NDBT_Attribute("ATTR20", NdbDictionary::Column::Unsigned),
-  NDBT_Attribute("ATTR21", NdbDictionary::Column::Char, 4, false, true, 0, MM, true),
-  NDBT_Attribute("ATTR22", NdbDictionary::Column::Varbinary, 255, false, false, 0, MM, true)
+  NDBT_Attribute("ATTR21", NdbDictionary::Column::Binary, 4, false, true, 0, MM, true),
+  NDBT_Attribute("ATTR22", NdbDictionary::Column::Varbinary, 255, false, false, 0, MM, true),
+  NDBT_Attribute("BIT000", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT001", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT002", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT003", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT004", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT005", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT006", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT007", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT008", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT009", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT010", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT011", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT012", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT013", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT014", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT015", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT016", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT017", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT018", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT019", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT020", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT021", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT022", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT023", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT024", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT025", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT026", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT027", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT028", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT029", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT030", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT031", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT032", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT033", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT034", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT035", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT036", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT037", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT038", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT039", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT040", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT041", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT042", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT043", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT044", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT045", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT046", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT047", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT048", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT049", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT050", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT051", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT052", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT053", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT054", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT055", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT056", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT057", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT058", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT059", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT060", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT061", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT062", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT063", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT064", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT065", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT066", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT067", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT068", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT069", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT070", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT071", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT072", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT073", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT074", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT075", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT076", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT077", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT078", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT079", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT080", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT081", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT082", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT083", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT084", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT085", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT086", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT087", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT088", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT089", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT090", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT091", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT092", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT093", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT094", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT095", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT096", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT097", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT098", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT099", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT100", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT101", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT102", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT103", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT104", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT105", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT106", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT107", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT108", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT109", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT110", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT111", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT112", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT113", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT114", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT115", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT116", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT117", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT118", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT119", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT120", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT121", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT122", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT123", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT124", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT125", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT126", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT127", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT128", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT129", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT130", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT131", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT132", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT133", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT134", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT135", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT136", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT137", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT138", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT139", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT140", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT141", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT142", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT143", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT144", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT145", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT146", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT147", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT148", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT149", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT150", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT151", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT152", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT153", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT154", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT155", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT156", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT157", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT158", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT159", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT160", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT161", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT162", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT163", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT164", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT165", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT166", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT167", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT168", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT169", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT170", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT171", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT172", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT173", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT174", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT175", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT176", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT177", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT178", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT179", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT180", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT181", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT182", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT183", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT184", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT185", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT186", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT187", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT188", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT189", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT190", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT191", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT192", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT193", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT194", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT195", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT196", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT197", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT198", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT199", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT200", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT201", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT202", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT203", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT204", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT205", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT206", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT207", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT208", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT209", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT210", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT211", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT212", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT213", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT214", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT215", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT216", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT217", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT218", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT219", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT220", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT221", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT222", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT223", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT224", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT225", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT226", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT227", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT228", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT229", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT230", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT231", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT232", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT233", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT234", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT235", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT236", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT237", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT238", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT239", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT240", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT241", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT242", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT243", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT244", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT245", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT246", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT247", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT248", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT249", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT250", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT251", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT252", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT253", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT254", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT255", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT256", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT257", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT258", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT259", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT260", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT261", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT262", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT263", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT264", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT265", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT266", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT267", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT268", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT269", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT270", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT271", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT272", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT273", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT274", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT275", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT276", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT277", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT278", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT279", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT280", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT281", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT282", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT283", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT284", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT285", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT286", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT287", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT288", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT289", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT290", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT291", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT292", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT293", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT294", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT295", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT296", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT297", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
+  NDBT_Attribute("BIT298", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
+  NDBT_Attribute("BIT299", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true)
 };
 
 static
@@ -185,9 +492,9 @@ NDBT_Table T6("T6", sizeof(T6Attribs)/sizeof(NDBT_Attribute), T6Attribs);
 static
 const
 NDBT_Attribute T13Attribs[] = {
-  NDBT_Attribute("KOL1", NdbDictionary::Column::Char, 257, true), 
-  NDBT_Attribute("KOL2", NdbDictionary::Column::Char, 259, true),
-  NDBT_Attribute("KOL3", NdbDictionary::Column::Char, 113, true),
+  NDBT_Attribute("KOL1", NdbDictionary::Column::Binary, 257, true),
+  NDBT_Attribute("KOL2", NdbDictionary::Column::Binary, 259, true),
+  NDBT_Attribute("KOL3", NdbDictionary::Column::Binary, 113, true),
   NDBT_Attribute("KOL4", NdbDictionary::Column::Unsigned),
   NDBT_Attribute("KOL5", NdbDictionary::Column::Unsigned, 1, true),
   NDBT_Attribute("KOL6", NdbDictionary::Column::Unsigned),
@@ -203,13 +510,13 @@ const
 NDBT_Attribute T14Attribs[] = {
   NDBT_Attribute("KOL1", NdbDictionary::Column::Unsigned, 1, true), 
   NDBT_Attribute("KOL2", NdbDictionary::Column::Unsigned, 1, true), 
-  NDBT_Attribute("KOL3", NdbDictionary::Column::Char, 4, true), 
+  NDBT_Attribute("KOL3", NdbDictionary::Column::Binary, 4, true),
   NDBT_Attribute("KOL4", NdbDictionary::Column::Unsigned, 1, true), 
   NDBT_Attribute("KOL5", NdbDictionary::Column::Unsigned, 1, true), 
   NDBT_Attribute("KOL20", NdbDictionary::Column::Unsigned),
   NDBT_Attribute("KOL30", NdbDictionary::Column::Int),
   NDBT_Attribute("KOL40", NdbDictionary::Column::Float),
-  NDBT_Attribute("KOL50", NdbDictionary::Column::Char, 200, false, false, 0, MM, true)
+  NDBT_Attribute("KOL50", NdbDictionary::Column::Binary, 200, false, false, 0, MM, true)
 };
 
 
@@ -230,53 +537,53 @@ NDBT_Attribute T15Attribs[] = {
   NDBT_Attribute("KOL3", NdbDictionary::Column::Unsigned, 1, false, true, 0, MM, true),
   NDBT_Attribute("KOL4", NdbDictionary::Column::Int, 1, false, false, 0, MM, true),
   NDBT_Attribute("KOL5", NdbDictionary::Column::Float, 1, false, true, 0, MM, true),
-  NDBT_Attribute("KOL6", NdbDictionary::Column::Char, 4, false, true, 0, MM, true),
+  NDBT_Attribute("KOL6", NdbDictionary::Column::Binary, 4, false, true, 0, MM, true),
   NDBT_Attribute("KOL7", NdbDictionary::Column::Varbinary, 4, false, true, 0, MM, true),
-  NDBT_Attribute("KOL8", NdbDictionary::Column::Char, 4, false, true, 0, MM, true),
+  NDBT_Attribute("KOL8", NdbDictionary::Column::Binary, 4, false, true, 0, MM, true),
   NDBT_Attribute("KOL9", NdbDictionary::Column::Varbinary, 4, false, true, 0, MM, true),
-  NDBT_Attribute("KOL10", NdbDictionary::Column::Char, 4, false, true, 0, MM, true),
+  NDBT_Attribute("KOL10", NdbDictionary::Column::Binary, 4, false, true, 0, MM, true),
   NDBT_Attribute("KOL11", NdbDictionary::Column::Varbinary, 4, false, true, 0, MM, true),
-  NDBT_Attribute("KOL12", NdbDictionary::Column::Char, 4, false, true, 0, MM, true),
+  NDBT_Attribute("KOL12", NdbDictionary::Column::Binary, 4, false, true, 0, MM, true),
   NDBT_Attribute("KOL13", NdbDictionary::Column::Varbinary, 4, false, true, 0, MM, true),
-  NDBT_Attribute("KOL14", NdbDictionary::Column::Char, 4, false, true, 0, MM, true),
+  NDBT_Attribute("KOL14", NdbDictionary::Column::Binary, 4, false, true, 0, MM, true),
   NDBT_Attribute("KOL15", NdbDictionary::Column::Varbinary, 4, false, true, 0, MM, true),
-  NDBT_Attribute("KOL16", NdbDictionary::Column::Char, 4, false, true, 0, MM, true),
+  NDBT_Attribute("KOL16", NdbDictionary::Column::Binary, 4, false, true, 0, MM, true),
   NDBT_Attribute("KOL17", NdbDictionary::Column::Varbinary, 4, false, true, 0, MM, true),
-  NDBT_Attribute("KOL18", NdbDictionary::Column::Char, 4, false, true, 0, MM, true),
+  NDBT_Attribute("KOL18", NdbDictionary::Column::Binary, 4, false, true, 0, MM, true),
   NDBT_Attribute("KOL19", NdbDictionary::Column::Varbinary, 4, false, true, 0, MM, true),
-  NDBT_Attribute("KOL20", NdbDictionary::Column::Char, 4, false, true, 0, MM, true),
+  NDBT_Attribute("KOL20", NdbDictionary::Column::Binary, 4, false, true, 0, MM, true),
   NDBT_Attribute("KOL21", NdbDictionary::Column::Varbinary, 4, false, true, 0, MM, true),
-  NDBT_Attribute("KOL22", NdbDictionary::Column::Char, 4, false, false, 0, MM, true),
+  NDBT_Attribute("KOL22", NdbDictionary::Column::Binary, 4, false, false, 0, MM, true),
   NDBT_Attribute("KOL23", NdbDictionary::Column::Varbinary, 4, false, false, 0, MM, true),
-  NDBT_Attribute("KOL24", NdbDictionary::Column::Char, 4, false, false, 0, MM, true),
+  NDBT_Attribute("KOL24", NdbDictionary::Column::Binary, 4, false, false, 0, MM, true),
   NDBT_Attribute("KOL25", NdbDictionary::Column::Varbinary, 4, false, false, 0, MM, true),
-  NDBT_Attribute("KOL26", NdbDictionary::Column::Char, 4, false, false, 0, MM, true),
+  NDBT_Attribute("KOL26", NdbDictionary::Column::Binary, 4, false, false, 0, MM, true),
   NDBT_Attribute("KOL27", NdbDictionary::Column::Varbinary, 4, false, false, 0, MM, true),
-  NDBT_Attribute("KOL28", NdbDictionary::Column::Char, 4, false, false),
+  NDBT_Attribute("KOL28", NdbDictionary::Column::Binary, 4, false, false),
   NDBT_Attribute("KOL29", NdbDictionary::Column::Varbinary, 4, false, false),
-  NDBT_Attribute("KOL30", NdbDictionary::Column::Char, 4, false, true, 0, DD),
-  NDBT_Attribute("KOL31", NdbDictionary::Column::Char, 4, false, false, 0, MM, true),
+  NDBT_Attribute("KOL30", NdbDictionary::Column::Binary, 4, false, true, 0, DD),
+  NDBT_Attribute("KOL31", NdbDictionary::Column::Binary, 4, false, false, 0, MM, true),
   NDBT_Attribute("KOL32", NdbDictionary::Column::Varbinary, 4, false, false, 0, MM, true),
   NDBT_Attribute("BIT1", NdbDictionary::Column::Bit, 27, false, true, 0, MM, true),
   NDBT_Attribute("BIT2", NdbDictionary::Column::Bit, 1, false, false, 0, MM, true),
   NDBT_Attribute("BIT3", NdbDictionary::Column::Bit, 1, false, true, 0, MM, true),
   NDBT_Attribute("BIT4", NdbDictionary::Column::Bit, 8, false, false, 0, MM, true),
-  NDBT_Attribute("KOL33", NdbDictionary::Column::Char, 4, false, false, 0, MM, true),
+  NDBT_Attribute("KOL33", NdbDictionary::Column::Binary, 4, false, false, 0, MM, true),
   NDBT_Attribute("KOL34", NdbDictionary::Column::Varbinary, 4, false, false, 0, MM, true),
-  NDBT_Attribute("KOL35", NdbDictionary::Column::Char, 4, false, false, 0, MM, true),
+  NDBT_Attribute("KOL35", NdbDictionary::Column::Binary, 4, false, false, 0, MM, true),
   NDBT_Attribute("KOL36", NdbDictionary::Column::Varbinary, 4, false, false, 0, MM, true),
-  NDBT_Attribute("KOL37", NdbDictionary::Column::Char, 4, false, false, 0, MM, true),
+  NDBT_Attribute("KOL37", NdbDictionary::Column::Binary, 4, false, false, 0, MM, true),
   NDBT_Attribute("KOL38", NdbDictionary::Column::Varbinary, 4, false, false, 0, MM, true),
-  NDBT_Attribute("KOL39", NdbDictionary::Column::Char, 4, false, false, 0, MM, true),
+  NDBT_Attribute("KOL39", NdbDictionary::Column::Binary, 4, false, false, 0, MM, true),
   NDBT_Attribute("KOL40", NdbDictionary::Column::Varbinary, 4, false, false, 0, MM, true),
-  NDBT_Attribute("KOL41", NdbDictionary::Column::Char, 64, false, true, 0, MM, true),
-  NDBT_Attribute("KOL42", NdbDictionary::Column::Char, 4, false, true, 0, MM, true),
-  NDBT_Attribute("KOL43", NdbDictionary::Column::Char, 8, false, true, 0, MM, true),
-  NDBT_Attribute("KOL44", NdbDictionary::Column::Char, 27, false, true, 0, MM, true),
-  NDBT_Attribute("KOL45", NdbDictionary::Column::Char, 64, false, false, 0, MM, true),
-  NDBT_Attribute("KOL46", NdbDictionary::Column::Char, 4, false, false, 0, MM, true),
-  NDBT_Attribute("KOL47", NdbDictionary::Column::Char, 8, false, false, 0, MM, true),
-  NDBT_Attribute("KOL48", NdbDictionary::Column::Char, 27, false, false, 0, MM, true),
+  NDBT_Attribute("KOL41", NdbDictionary::Column::Binary, 64, false, true, 0, MM, true),
+  NDBT_Attribute("KOL42", NdbDictionary::Column::Binary, 4, false, true, 0, MM, true),
+  NDBT_Attribute("KOL43", NdbDictionary::Column::Binary, 8, false, true, 0, MM, true),
+  NDBT_Attribute("KOL44", NdbDictionary::Column::Binary, 27, false, true, 0, MM, true),
+  NDBT_Attribute("KOL45", NdbDictionary::Column::Binary, 64, false, false, 0, MM, true),
+  NDBT_Attribute("KOL46", NdbDictionary::Column::Binary, 4, false, false, 0, MM, true),
+  NDBT_Attribute("KOL47", NdbDictionary::Column::Binary, 8, false, false, 0, MM, true),
+  NDBT_Attribute("KOL48", NdbDictionary::Column::Binary, 27, false, false, 0, MM, true),
   NDBT_Attribute("KOL49", NdbDictionary::Column::Varbinary, 255, false, false, 0, MM, true),
   /* This one is for update count, needed by hugoScanUpdate. */
   NDBT_Attribute("KOL99", NdbDictionary::Column::Unsigned, 1, false, false, 0, MM, true),
@@ -306,11 +613,11 @@ static
 const
 NDBT_Attribute I1_Cols[] = {
   NDBT_Attribute("ID", NdbDictionary::Column::Unsigned, true),
-  NDBT_Attribute("PORT", NdbDictionary::Column::Char, 16, true),
-  NDBT_Attribute("ACCESSNODE", NdbDictionary::Column::Char, 16, true),
-  NDBT_Attribute("POP", NdbDictionary::Column::Char, 64, true),
-  NDBT_Attribute("VLAN", NdbDictionary::Column::Char, 16),
-  NDBT_Attribute("COMMENT", NdbDictionary::Column::Char, 128),
+  NDBT_Attribute("PORT", NdbDictionary::Column::Binary, 16, true),
+  NDBT_Attribute("ACCESSNODE", NdbDictionary::Column::Binary, 16, true),
+  NDBT_Attribute("POP", NdbDictionary::Column::Binary, 64, true),
+  NDBT_Attribute("VLAN", NdbDictionary::Column::Binary, 16),
+  NDBT_Attribute("COMMENT", NdbDictionary::Column::Binary, 128),
   NDBT_Attribute("SNMPINDEX", NdbDictionary::Column::Int),
   NDBT_Attribute("PORTSTATE", NdbDictionary::Column::Int),
   NDBT_Attribute("UPDATES", NdbDictionary::Column::Unsigned)
@@ -331,9 +638,9 @@ static
 const
 NDBT_Attribute I2_Cols[] = {
   NDBT_Attribute("ID", NdbDictionary::Column::Unsigned, true),
-  NDBT_Attribute("PORT", NdbDictionary::Column::Char, 16, true),
-  NDBT_Attribute("ACCESSNODE", NdbDictionary::Column::Char, 16, true),
-  NDBT_Attribute("POP", NdbDictionary::Column::Char, 64, true),
+  NDBT_Attribute("PORT", NdbDictionary::Column::Binary, 16, true),
+  NDBT_Attribute("ACCESSNODE", NdbDictionary::Column::Binary, 16, true),
+  NDBT_Attribute("POP", NdbDictionary::Column::Binary, 64, true),
   NDBT_Attribute("ACCESSTYPE", NdbDictionary::Column::Int, true),
   NDBT_Attribute("CUSTOMER_ID", NdbDictionary::Column::Int),
   NDBT_Attribute("PROVIDER", NdbDictionary::Column::Int),
@@ -361,14 +668,14 @@ static
 const
 NDBT_Attribute I3_Cols[] = {
   NDBT_Attribute("ID", NdbDictionary::Column::Unsigned, true),
-  NDBT_Attribute("PORT", NdbDictionary::Column::Char, 16), // SI2
-  NDBT_Attribute("ACCESSNODE", NdbDictionary::Column::Char, 16), // SI2
-  NDBT_Attribute("POP", NdbDictionary::Column::Char, 64), // SI2
-  NDBT_Attribute("MAC", NdbDictionary::Column::Char, 12, true), 
+  NDBT_Attribute("PORT", NdbDictionary::Column::Binary, 16), // SI2
+  NDBT_Attribute("ACCESSNODE", NdbDictionary::Column::Binary, 16), // SI2
+  NDBT_Attribute("POP", NdbDictionary::Column::Binary, 64), // SI2
+  NDBT_Attribute("MAC", NdbDictionary::Column::Binary, 12, true),
   NDBT_Attribute("MAC_EXPIRE", NdbDictionary::Column::Int, 1),
   NDBT_Attribute("IIP", NdbDictionary::Column::Int), // SI1
   NDBT_Attribute("P_EXPIRE", NdbDictionary::Column::Int),
-  NDBT_Attribute("HOSTNAME", NdbDictionary::Column::Char, 32),
+  NDBT_Attribute("HOSTNAME", NdbDictionary::Column::Binary, 32),
   NDBT_Attribute("DETECTED", NdbDictionary::Column::Int),
   NDBT_Attribute("STATUS", NdbDictionary::Column::Int),
   NDBT_Attribute("NUM_REQUESTS", NdbDictionary::Column::Int),
@@ -397,7 +704,7 @@ NDBT_Attribute D1Attribs[] = {
   NDBT_Attribute("KOL1", NdbDictionary::Column::Unsigned, 1, true), 
   NDBT_Attribute("KOL2", NdbDictionary::Column::Unsigned, 1, false, false, 0, NdbDictionary::Column::StorageTypeDisk),
   NDBT_Attribute("KOL3", NdbDictionary::Column::Unsigned),
-  NDBT_Attribute("KOL4", NdbDictionary::Column::Char, 233, false, true, 0, NdbDictionary::Column::StorageTypeDisk),
+  NDBT_Attribute("KOL4", NdbDictionary::Column::Binary, 233, false, true, 0, NdbDictionary::Column::StorageTypeDisk),
   NDBT_Attribute("KOL5", NdbDictionary::Column::Unsigned),
   NDBT_Attribute("KOL6", NdbDictionary::Column::Varbinary, 233, false, true, 0, NdbDictionary::Column::StorageTypeDisk),
 };
@@ -436,7 +743,7 @@ NDBT_Attribute D2Attribs[] = {
   NDBT_Attribute("KOL3", NdbDictionary::Column::Unsigned),
   NDBT_Attribute("KOL4", NdbDictionary::Column::Varbinary, 133, false, true, 0, MM, true, 
                  "\x1E" "A default value for KOL4 in D2", 31),
-  NDBT_Attribute("KOL5", NdbDictionary::Column::Char, 199, false, true, 0, NdbDictionary::Column::StorageTypeDisk),
+  NDBT_Attribute("KOL5", NdbDictionary::Column::Binary, 199, false, true, 0, NdbDictionary::Column::StorageTypeDisk),
   NDBT_Attribute("KOL6", NdbDictionary::Column::Bit, 21, false, false, 0, NdbDictionary::Column::StorageTypeDisk),
   NDBT_Attribute("KOL7", NdbDictionary::Column::Longvarbinary, 384, false, true, 0, NdbDictionary::Column::StorageTypeDisk, false, 
                  BigVarDefault, 386),
@@ -606,8 +913,8 @@ NDBT_Table F5("F5", sizeof(F5Attribs)/sizeof(NDBT_Attribute), F5Attribs);
 static
 const
 NDBT_Attribute F6Attribs[] = {
-  NDBT_Attribute("KOL1", NdbDictionary::Column::Char, 0, true, false), 
-  NDBT_Attribute("KOL2", NdbDictionary::Column::Char, 256),
+  NDBT_Attribute("KOL1", NdbDictionary::Column::Binary, 0, true, false),
+  NDBT_Attribute("KOL2", NdbDictionary::Column::Binary, 256),
 };
 
 static
@@ -647,7 +954,7 @@ NDBT_Table F8("F8", sizeof(F8Attribs)/sizeof(NDBT_Attribute), F8Attribs);
 static
 const
 NDBT_Attribute F15Attribs[] = {
-  NDBT_Attribute("KOL1", NdbDictionary::Column::Char, 40, true)
+  NDBT_Attribute("KOL1", NdbDictionary::Column::Binary, 40, true)
 };
 static
 const
@@ -900,7 +1207,7 @@ NDBT_Table* createMaxKeyMaxColsHugoTabDef(const char* name)
     /* Last key uses remaining key space */
     BaseString::snprintf(namebuff, buffsize, "K%d", attrNum);
     attrs[attrNum]= new NDBT_Attribute(namebuff,
-                                       NdbDictionary::Column::Char,
+                                       NdbDictionary::Column::Binary,
                                        (NDB_MAX_KEYSIZE_IN_WORDS -
                                         (NDB_MAX_ATTRIBUTES_IN_INDEX -1)) * 4,
                                        true);
@@ -923,7 +1230,7 @@ NDBT_Table* createMaxKeyMaxColsHugoTabDef(const char* name)
     sz32 -= NDB_MAX_ATTRIBUTES_IN_INDEX;
     sz32 -= 2 * NDB_MAX_ATTRIBUTES_IN_TABLE;
     attrs[attrNum]= new NDBT_Attribute(namebuff,
-                                       NdbDictionary::Column::Char, 4 * sz32,
+                                       NdbDictionary::Column::Binary, 4 * sz32,
                                        false);
 
     WIDE_MAXKEYMAXCOLS_HUGO= new NDBT_Table(name, NDB_MAX_ATTRIBUTES_IN_TABLE,
@@ -969,7 +1276,7 @@ NDBT_Table* createMinKeyMaxColsHugoTabDef(const char* name)
     /* Last attr uses remaining attr space */
     BaseString::snprintf(namebuff, buffsize, "A%d", attrNum);
     attrs[attrNum]= new NDBT_Attribute(namebuff,
-                                       NdbDictionary::Column::Char,
+                                       NdbDictionary::Column::Binary,
                                        (NDB_MAX_TUPLE_SIZE_IN_WORDS -
                                         (NDB_MAX_ATTRIBUTES_IN_TABLE - 1)) * 4,
                                        false);
@@ -1075,17 +1382,17 @@ NDBT_Tables::tableWithPkSize(const char* _nam, Uint32 pkSize){
 
   // Add one PK of the desired length
   tab->addColumn(NDBT_Attribute("PK1",
-				NdbDictionary::Column::Char,
+				NdbDictionary::Column::Binary,
 				pkSize,
 				true));
   
   // Add 4 attributes
   tab->addColumn(NDBT_Attribute("ATTR1",
-				NdbDictionary::Column::Char,
+				NdbDictionary::Column::Binary,
 				21));
   
   tab->addColumn(NDBT_Attribute("ATTR2",
-				NdbDictionary::Column::Char,
+				NdbDictionary::Column::Binary,
 				124));
   
   tab->addColumn(NDBT_Attribute("ATTR3",
@@ -1100,7 +1407,7 @@ NDBT_Tables::tableWithPkSize(const char* _nam, Uint32 pkSize){
 const NdbDictionary::Table* 
 NDBT_Tables::getTable(int _num){
   // Get table at pos _num
-  assert(_num < numTestTables);
+  require(_num < numTestTables);
   return test_tables[_num];
 }
 
@@ -1146,6 +1453,7 @@ NDBT_Tables::create_default_tablespace(Ndb* pNdb)
 
   int res;
   Uint32 mb = 8;
+#ifdef NDB_USE_GET_ENV
   {
     char buf[256];
     if (NdbEnv_GetEnv("UNDOBUFFER", buf, sizeof(buf)))
@@ -1154,6 +1462,7 @@ NDBT_Tables::create_default_tablespace(Ndb* pNdb)
       ndbout_c("Using %umb dd-undo-buffer", mb);
     }
   }
+#endif
 
   NdbDictionary::LogfileGroup lg = pDict->getLogfileGroup("DEFAULT-LG");
   if (strcmp(lg.getName(), "DEFAULT-LG") != 0)
@@ -1171,6 +1480,7 @@ NDBT_Tables::create_default_tablespace(Ndb* pNdb)
   mb = 96;
   Uint32 files = 13;
 
+#ifdef NDB_USE_GET_ENV
   {
     char buf[256];
     if (NdbEnv_GetEnv("UNDOSIZE", buf, sizeof(buf)))
@@ -1179,7 +1489,6 @@ NDBT_Tables::create_default_tablespace(Ndb* pNdb)
       ndbout_c("Using %umb dd-undo", mb);
     }
   }
-  
   {
     char buf[256];
     if (NdbEnv_GetEnv("UNDOFILES", buf, sizeof(buf)))
@@ -1188,6 +1497,7 @@ NDBT_Tables::create_default_tablespace(Ndb* pNdb)
       ndbout_c("Using max %u dd-undo files", files);
     }
   }
+#endif 
   
   Uint32 sz = 32;
   while (mb > files * sz)
@@ -1229,6 +1539,7 @@ NDBT_Tables::create_default_tablespace(Ndb* pNdb)
   }
 
   mb = 128;
+#ifdef NDB_USE_GET_ENV
   {
     char buf[256];
     if (NdbEnv_GetEnv("DATASIZE", buf, sizeof(buf)))
@@ -1237,9 +1548,11 @@ NDBT_Tables::create_default_tablespace(Ndb* pNdb)
       ndbout_c("Using %umb dd-data", mb);
     }
   }
+#endif 
   
   sz = 64;
   files = 13;
+#ifdef NDB_USE_GET_ENV
   {
     char buf[256];
     if (NdbEnv_GetEnv("DATAFILES", buf, sizeof(buf)))
@@ -1248,6 +1561,7 @@ NDBT_Tables::create_default_tablespace(Ndb* pNdb)
       ndbout_c("Using max %u dd-data files", files);
     }
   }
+#endif 
   
   while (mb > files * sz)
     sz += 32;
@@ -1301,7 +1615,7 @@ NDBT_Tables::createTable(Ndb* pNdb, const char* _name, bool _temp,
     {
       NdbError error;
       int ret = tmpTab.validate(error);
-      assert(ret == 0);
+      require(ret == 0);
     }
     if(f != 0 && f(pNdb, tmpTab, 0, arg))
     {
@@ -1389,10 +1703,12 @@ NDBT_Tables::dropAllTables(Ndb* pNdb){
 
     const NdbDictionary::Table* tab = NDBT_Tables::getTable(i);
     if (tab == NULL){
+      g_err << "Failed to drop all tables" << endl;
       return NDBT_ProgramExit(NDBT_FAILED);
     }
     
     if(pNdb->getDictionary()->dropTable(tab->getName()) == -1){
+      g_err << "Failed to drop a table" << endl;
       return NDBT_FAILED;
     }
   }

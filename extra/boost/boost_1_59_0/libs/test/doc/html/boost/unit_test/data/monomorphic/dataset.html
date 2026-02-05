@@ -1,0 +1,106 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=US-ASCII">
+<title>Class template dataset</title>
+<link rel="stylesheet" href="../../../../boostbook.css" type="text/css">
+<meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
+<link rel="home" href="../../../../index.html" title="Boost.Test">
+<link rel="up" href="../../../../header/boost/test/data/monomorphic/dataset_hpp.html" title="Header &lt;boost/test/data/monomorphic/dataset.hpp&gt;">
+<link rel="prev" href="../../../../header/boost/test/data/monomorphic/dataset_hpp.html" title="Header &lt;boost/test/data/monomorphic/dataset.hpp&gt;">
+<link rel="next" href="dataset/iterator.html" title="Class iterator">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table cellpadding="2" width="100%"><tr>
+<td valign="top"><img alt="Boost C++ Libraries" width="277" height="86" src="../../../../../../../../boost.png"></td>
+<td align="center"><a href="../../../../../../../../index.html">Home</a></td>
+<td align="center"><a href="../../../../../../../../libs/libraries.htm">Libraries</a></td>
+<td align="center"><a href="http://www.boost.org/users/people.html">People</a></td>
+<td align="center"><a href="http://www.boost.org/users/faq.html">FAQ</a></td>
+<td align="center"><a href="../../../../../../../../more/index.htm">More</a></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="../../../../header/boost/test/data/monomorphic/dataset_hpp.html"><img src="../../../../../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../../../../header/boost/test/data/monomorphic/dataset_hpp.html"><img src="../../../../../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../../../index.html"><img src="../../../../../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="dataset/iterator.html"><img src="../../../../../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+<div class="refentry">
+<a name="boost.unit_test.data.monomorphic.dataset"></a><div class="titlepage"></div>
+<div class="refnamediv">
+<h2><span class="refentrytitle">Class template dataset</span></h2>
+<p>boost::unit_test::data::monomorphic::dataset &#8212; Dataset base class. </p>
+</div>
+<h2 xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" class="refsynopsisdiv-title">Synopsis</h2>
+<div xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" class="refsynopsisdiv"><pre class="synopsis"><span class="comment">// In header: &lt;<a class="link" href="../../../../header/boost/test/data/monomorphic/dataset_hpp.html" title="Header &lt;boost/test/data/monomorphic/dataset.hpp&gt;">boost/test/data/monomorphic/dataset.hpp</a>&gt;
+
+</span><span class="keyword">template</span><span class="special">&lt;</span><span class="keyword">typename</span> T<span class="special">&gt;</span> 
+<span class="keyword">class</span> <a class="link" href="dataset.html" title="Class template dataset">dataset</a> <span class="special">{</span>
+<span class="keyword">public</span><span class="special">:</span>
+  <span class="comment">// types</span>
+  <span class="keyword">typedef</span> <span class="identifier">T</span>                             <a name="boost.unit_test.data.monomorphic.dataset.data_type"></a><span class="identifier">data_type</span><span class="special">;</span>  <span class="comment">// Type of the samples in this dataset. </span>
+  <span class="keyword">typedef</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">shared_ptr</span><span class="special">&lt;</span> <a class="link" href="dataset/iterator.html" title="Class iterator">iterator</a> <span class="special">&gt;</span> <a name="boost.unit_test.data.monomorphic.dataset.iter_ptr"></a><span class="identifier">iter_ptr</span><span class="special">;</span>   <span class="comment">// Type of the iterator. </span>
+
+  <span class="comment">// member classes/structs/unions</span>
+
+  <span class="comment">// Interface of the dataset iterator.</span>
+
+  <span class="keyword">class</span> <a class="link" href="dataset/iterator.html" title="Class iterator">iterator</a> <span class="special">{</span>
+  <span class="keyword">public</span><span class="special">:</span>
+    <span class="comment">// types</span>
+    <span class="keyword">typedef</span> <a class="link" href="traits.html" title="Struct template traits">monomorphic::traits</a><span class="special">&lt;</span> <span class="identifier">T</span> <span class="special">&gt;</span><span class="special">::</span><span class="identifier">ref_type</span> <a class="link" href="dataset/iterator.html#boost.unit_test.data.monomorphic.dataset.iterator.ref_type"><span class="identifier">ref_type</span></a><span class="special">;</span>
+
+    <span class="comment">// <a class="link" href="dataset/iterator.html#boost.unit_test.data.monomorphic.dataset.iteratorconstruct-copy-destruct">construct/copy/destruct</a></span>
+    <a class="link" href="dataset/iterator.html#idp43002368-bb"><span class="special">~</span><span class="identifier">iterator</span></a><span class="special">(</span><span class="special">)</span><span class="special">;</span>
+
+    <span class="comment">// <a class="link" href="dataset/iterator.html#idp42998960-bb">public member functions</a></span>
+    <span class="keyword">virtual</span> <span class="identifier">ref_type</span> <a class="link" href="dataset/iterator.html#idp42999456-bb"><span class="keyword">operator</span><span class="special">*</span></a><span class="special">(</span><span class="special">)</span> <span class="special">=</span> <span class="number">0</span><span class="special">;</span>
+    <span class="keyword">virtual</span> <span class="keyword">void</span> <a class="link" href="dataset/iterator.html#idp43000816-bb"><span class="keyword">operator</span><span class="special">++</span></a><span class="special">(</span><span class="special">)</span> <span class="special">=</span> <span class="number">0</span><span class="special">;</span>
+  <span class="special">}</span><span class="special">;</span>
+
+  <span class="comment">// <a class="link" href="dataset.html#boost.unit_test.data.monomorphic.datasetconstruct-copy-destruct">construct/copy/destruct</a></span>
+  <a class="link" href="dataset.html#idp43009632-bb"><span class="special">~</span><span class="identifier">dataset</span></a><span class="special">(</span><span class="special">)</span><span class="special">;</span>
+
+  <span class="comment">// <a class="link" href="dataset.html#idp43005392-bb">public member functions</a></span>
+  <span class="keyword">virtual</span> <a class="link" href="../size_t.html" title="Class size_t">data::size_t</a> <a class="link" href="dataset.html#idp43005952-bb"><span class="identifier">size</span></a><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="special">=</span> <span class="number">0</span><span class="special">;</span>
+  <span class="keyword">virtual</span> <span class="identifier">iter_ptr</span> <a class="link" href="dataset.html#idp43007760-bb"><span class="identifier">begin</span></a><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="special">=</span> <span class="number">0</span><span class="special">;</span>
+<span class="special">}</span><span class="special">;</span></pre></div>
+<div class="refsect1">
+<a name="idp93174320"></a><h2>Description</h2>
+<p>This class defines the dataset concept, which is an implementation of a sequence. Each dataset should implement</p>
+<div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; ">
+<li class="listitem"><p>the <code class="computeroutput">size</code> </p></li>
+<li class="listitem"><p>the <code class="computeroutput">begin</code> function, which provides a forward iterator on the beginning of the sequence. The returned iterator should be incrementable a number of times corresponding to the returned size. </p></li>
+</ul></div>
+<p>
+</p>
+<div class="refsect2">
+<a name="idp93177904"></a><h3>
+<a name="boost.unit_test.data.monomorphic.datasetconstruct-copy-destruct"></a><code class="computeroutput">dataset</code> 
+        public
+       construct/copy/destruct</h3>
+<div class="orderedlist"><ol class="orderedlist" type="1"><li class="listitem"><pre class="literallayout"><a name="idp43009632-bb"></a><span class="special">~</span><span class="identifier">dataset</span><span class="special">(</span><span class="special">)</span><span class="special">;</span></pre></li></ol></div>
+</div>
+<div class="refsect2">
+<a name="idp93184400"></a><h3>
+<a name="idp43005392-bb"></a><code class="computeroutput">dataset</code> public member functions</h3>
+<div class="orderedlist"><ol class="orderedlist" type="1">
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">virtual</span> <a class="link" href="../size_t.html" title="Class size_t">data::size_t</a> <a name="idp43005952-bb"></a><span class="identifier">size</span><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="special">=</span> <span class="number">0</span><span class="special">;</span></pre>Dataset size. </li>
+<li class="listitem">
+<pre class="literallayout"><span class="keyword">virtual</span> <span class="identifier">iter_ptr</span> <a name="idp43007760-bb"></a><span class="identifier">begin</span><span class="special">(</span><span class="special">)</span> <span class="keyword">const</span> <span class="special">=</span> <span class="number">0</span><span class="special">;</span></pre>Iterator to use to iterate over this dataset. </li>
+</ol></div>
+</div>
+</div>
+</div>
+<table xmlns:rev="http://www.cs.rpi.edu/~gregod/boost/tools/doc/revision" width="100%"><tr>
+<td align="left"></td>
+<td align="right"><div class="copyright-footer">Copyright &#169; 2001-2015 Boost.Test team<p>
+        Distributed under the Boost Software License, Version 1.0. (See accompanying
+        file LICENSE_1_0.txt or copy at <a href="http://www.boost.org/LICENSE_1_0.txt" target="_top">http://www.boost.org/LICENSE_1_0.txt</a>)
+      </p>
+</div></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="../../../../header/boost/test/data/monomorphic/dataset_hpp.html"><img src="../../../../../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../../../../header/boost/test/data/monomorphic/dataset_hpp.html"><img src="../../../../../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../../../index.html"><img src="../../../../../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="dataset/iterator.html"><img src="../../../../../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+</body>
+</html>

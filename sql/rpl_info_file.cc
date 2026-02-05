@@ -1,27 +1,35 @@
-/* Copyright (c) 2010, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include <my_global.h>
-#include <sql_priv.h>
-#include <my_dir.h>
 #include "rpl_info_file.h"
-#include "mysqld.h"
-#include "log.h"
+
+#include "my_dir.h"            // MY_STAT
+#include "my_thread_local.h"   // my_errno
+#include "dynamic_ids.h"       // Server_ids
+#include "log.h"               // sql_print_error
+
 
 int init_ulongvar_from_file(ulong* var, IO_CACHE* f, ulong default_val);
-int init_strvar_from_file(char *var, int max_size, IO_CACHE *f,
+int init_strvar_from_file(char *var, size_t max_size, IO_CACHE *f,
                           const char *default_val);
 int init_intvar_from_file(int* var, IO_CACHE* f, int default_val);
 int init_floatvar_from_file(float* var, IO_CACHE* f, float default_val);
@@ -57,7 +65,7 @@ int Rpl_info_file::do_init_info(uint instance)
   DBUG_ENTER("Rpl_info_file::do_init_info(uint)");
 
   char fname_local[FN_REFLEN];
-  char *pos= strmov(fname_local, pattern_fname);
+  char *pos= my_stpcpy(fname_local, pattern_fname);
   if (name_indexed)
     sprintf(pos, "%u", instance);
 
@@ -87,7 +95,7 @@ int Rpl_info_file::do_init_info()
     if ((info_fd = my_open(info_fname, O_CREAT|O_RDWR|O_BINARY, MYF(MY_WME))) < 0)
     {
       sql_print_error("Failed to create a new info file (\
-file '%s', errno %d)", info_fname, my_errno);
+file '%s', errno %d)", info_fname, my_errno());
       error= 1;
     }
     else if (init_io_cache(&info_file, info_fd, IO_SIZE*2, READ_CACHE, 0L,0,
@@ -114,7 +122,7 @@ file '%s')", info_fname);
       if ((info_fd = my_open(info_fname, O_RDWR|O_BINARY, MYF(MY_WME))) < 0 )
       {
         sql_print_error("Failed to open the existing info file (\
-file '%s', errno %d)", info_fname, my_errno);
+file '%s', errno %d)", info_fname, my_errno());
         error= 1;
       }
       else if (init_io_cache(&info_file, info_fd, IO_SIZE*2, READ_CACHE, 0L,
@@ -181,7 +189,7 @@ enum_return_check Rpl_info_file::do_check_info(uint instance)
 
   for (i= 1; i <= instance && last_check == REPOSITORY_EXISTS; i++)
   {
-    pos= strmov(fname_local, pattern_fname);
+    pos= my_stpcpy(fname_local, pattern_fname);
     if (name_indexed)
       sprintf(pos, "%u", i);
     fn_format(fname_local, fname_local, mysql_data_home, "", 4 + 32);
@@ -231,7 +239,7 @@ bool Rpl_info_file::do_count_info(const int nparam,
 
   for (i= 1; last_check == REPOSITORY_EXISTS; i++)
   {
-    pos= strmov(fname_local, param_pattern);
+    pos= my_stpcpy(fname_local, param_pattern);
     if (indexed)
     {  
       sprintf(pos, "%u", i);
@@ -323,7 +331,7 @@ int Rpl_info_file::do_reset_info(const int nparam,
 
   for (i= 1; last_check == REPOSITORY_EXISTS; i++)
   {
-    pos= strmov(fname_local, param_pattern);
+    pos= my_stpcpy(fname_local, param_pattern);
     if (indexed)
     {  
       sprintf(pos, "%u", i);
@@ -386,7 +394,7 @@ bool Rpl_info_file::do_set_info(const int pos, const float value)
           FALSE : TRUE);
 }
 
-bool Rpl_info_file::do_set_info(const int pos, const Dynamic_ids *value)
+bool Rpl_info_file::do_set_info(const int pos, const Server_ids *value)
 {
   bool error= TRUE;
   String buffer;
@@ -394,7 +402,7 @@ bool Rpl_info_file::do_set_info(const int pos, const Dynamic_ids *value)
   /*
     This produces a line listing the total number and all the server_ids.
   */
-  if (const_cast<Dynamic_ids *>(value)->pack_dynamic_ids(&buffer))
+  if (const_cast<Server_ids*>(value)->pack_dynamic_ids(&buffer))
     goto err;
 
   error= (my_b_printf(&info_file, "%s\n", buffer.c_ptr_safe()) >
@@ -426,7 +434,7 @@ bool Rpl_info_file::do_get_info(const int pos, ulong *value,
 bool Rpl_info_file::do_get_info(const int pos, int *value,
                                 const int default_value)
 {
-  return (init_intvar_from_file((int *) value, &info_file, 
+  return (init_intvar_from_file(value, &info_file,
                                 (int) default_value));
 }
 
@@ -437,8 +445,8 @@ bool Rpl_info_file::do_get_info(const int pos, float *value,
                                   default_value));
 }
 
-bool Rpl_info_file::do_get_info(const int pos, Dynamic_ids *value,
-                                const Dynamic_ids *default_value MY_ATTRIBUTE((unused)))
+bool Rpl_info_file::do_get_info(const int pos, Server_ids *value,
+                                const Server_ids *default_value MY_ATTRIBUTE((unused)))
 {
   /*
     Static buffer to use most of the times. However, if it is not big
@@ -478,6 +486,10 @@ bool Rpl_info_file::do_is_transactional()
 
 bool Rpl_info_file::do_update_is_transactional()
 {
+  DBUG_EXECUTE_IF("simulate_update_is_transactional_error",
+                  {
+                  return TRUE;
+                  });
   return FALSE;
 }
 
@@ -486,10 +498,10 @@ uint Rpl_info_file::do_get_rpl_info_type()
   return INFO_REPOSITORY_FILE;
 }
 
-int init_strvar_from_file(char *var, int max_size, IO_CACHE *f,
+int init_strvar_from_file(char *var, size_t max_size, IO_CACHE *f,
                           const char *default_val)
 {
-  uint length;
+  size_t length;
   DBUG_ENTER("init_strvar_from_file");
 
   if ((length=my_b_gets(f,var, max_size)))
@@ -636,7 +648,7 @@ bool init_dynarray_intvar_from_file(char *buffer, size_t size,
     */
     char buf_work[(sizeof(long) * 3 + 1) * 16];
     memcpy(buf_work, buf, sizeof(buf_work));
-    num_items= atoi(strtok_r(buf_work, " ", &last));
+    num_items= atoi(my_strtok_r(buf_work, " ", &last));
     size_t snd_size;
     /*
       max size upper bound approximate estimation bases on the formula:
@@ -644,7 +656,8 @@ bool init_dynarray_intvar_from_file(char *buffer, size_t size,
           (decimal size + space) - 1 + `\n' + '\0'
     */
     size_t max_size= (1 + num_items) * (sizeof(long) * 3 + 1) + 1;
-    if (! (buf_act= (char*) my_malloc(max_size, MYF(MY_WME))))
+    if (! (buf_act= (char*) my_malloc(key_memory_Rpl_info_file_buffer,
+                                      max_size, MYF(MY_WME))))
       DBUG_RETURN(TRUE);
     *buffer_act= buf_act;
     memcpy(buf_act, buf, read_size);

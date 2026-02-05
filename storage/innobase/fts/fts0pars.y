@@ -1,14 +1,22 @@
 /*****************************************************************************
 
-Copyright (c) 2007, 2014,  Oracle and/or its affiliates. All Rights Reserved.
+Copyright (c) 2007, 2023, Oracle and/or its affiliates.
 
-This program is free software; you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation; version 2 of the License.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License, version 2.0,
+as published by the Free Software Foundation.
 
-This program is distributed in the hope that it will be useful, but WITHOUT
-ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+This program is also distributed with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have included with MySQL.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License, version 2.0, for more details.
 
 You should have received a copy of the GNU General Public License along with
 this program; if not, write to the Free Software Foundation, Inc.,
@@ -24,12 +32,13 @@ this program; if not, write to the Free Software Foundation, Inc.,
  */
 
 %{
-
+#include "ha_prototypes.h"
 #include "mem0mem.h"
 #include "fts0ast.h"
 #include "fts0blex.h"
 #include "fts0tlex.h"
 #include "fts0pars.h"
+#include <my_sys.h>
 
 extern	int fts_lexer(YYSTYPE*, fts_lexer_t*);
 extern	int fts_blexer(YYSTYPE*, yyscan_t);
@@ -139,7 +148,7 @@ expr	: term		{
 	}
 
 	| text '@' FTS_NUMB {
-		fts_ast_term_set_distance($1, fts_ast_string_to_ul($3, 10));
+		fts_ast_text_set_distance($1, fts_ast_string_to_ul($3, 10));
 		fts_ast_string_free($3);
 	}
 
@@ -157,7 +166,7 @@ expr	: term		{
 	| prefix text '@' FTS_NUMB {
 		$$ = fts_ast_create_node_list(state, $1);
 		fts_ast_add_node($$, $2);
-		fts_ast_term_set_distance($2, fts_ast_string_to_ul($4, 10));
+		fts_ast_text_set_distance($2, fts_ast_string_to_ul($4, 10));
 		fts_ast_string_free($4);
 	}
 
@@ -224,7 +233,6 @@ ftserror(
 
 /********************************************************************
 Create a fts_lexer_t instance.*/
-
 fts_lexer_t*
 fts_lexer_create(
 /*=============*/
@@ -233,17 +241,17 @@ fts_lexer_create(
 	ulint		query_len)
 {
 	fts_lexer_t*	fts_lexer = static_cast<fts_lexer_t*>(
-		ut_malloc(sizeof(fts_lexer_t)));
+		ut_malloc_nokey(sizeof(fts_lexer_t)));
 
 	if (boolean_mode) {
 		fts0blex_init(&fts_lexer->yyscanner);
-		fts0b_scan_bytes((char*) query, query_len, fts_lexer->yyscanner);
+		fts0b_scan_bytes((char*) query, (int) query_len, fts_lexer->yyscanner);
 		fts_lexer->scanner = (fts_scan) fts_blexer;
 		/* FIXME: Debugging */
 		/* fts0bset_debug(1 , fts_lexer->yyscanner); */
 	} else {
 		fts0tlex_init(&fts_lexer->yyscanner);
-		fts0t_scan_bytes((char*) query, query_len, fts_lexer->yyscanner);
+		fts0t_scan_bytes((char*) query, (int) query_len, fts_lexer->yyscanner);
 		fts_lexer->scanner = (fts_scan) fts_tlexer;
 	}
 
@@ -269,7 +277,6 @@ fts_lexer_free(
 
 /********************************************************************
 Call the appropaiate scanner.*/
-
 int
 fts_lexer(
 /*======*/

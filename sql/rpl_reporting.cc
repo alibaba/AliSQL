@@ -1,23 +1,31 @@
-/* Copyright (c) 2007, 2013, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2007, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
    51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
 
-#include "sql_priv.h"
 #include "rpl_reporting.h"
-#include "log.h" // sql_print_error, sql_print_warning,
-                 // sql_print_information
-#include "rpl_slave.h"
+
+#include "log.h"               // sql_print_warning
+#include "mysqld.h"            // current_thd
+#include "sql_class.h"         // THD
+#include "sql_error.h"         // Diagnostics_area
 
 Slave_reporting_capability::Slave_reporting_capability(char const *thread_name)
   : m_thread_name(thread_name)
@@ -56,16 +64,13 @@ int Slave_reporting_capability::has_temporary_error(THD *thd,
                   });
 
   /*
-    The state of the slave thread can't be regarded as
-    experiencing a temporary failure in cases of @c is_slave_error was set TRUE,
-    or if there is no message in THD, we can't say if it's a temporary
-    error or not. This is currently the case for Incident_log_event,
-    which sets no message.
+    The slave can't be regarded as experiencing a temporary failure in cases of
+    is_fatal_error is TRUE, or if no error is in THD and error_arg is not set.
   */
-  if (thd->is_fatal_error || !thd->is_error())
+  if (thd->is_fatal_error || (!thd->is_error() && error_arg == 0))
     DBUG_RETURN(0);
 
-  error= (error_arg == 0)? thd->get_stmt_da()->sql_errno() : error_arg;
+  error= (error_arg == 0)? thd->get_stmt_da()->mysql_errno() : error_arg;
 
   /*
     Temporary error codes:
@@ -85,9 +90,9 @@ int Slave_reporting_capability::has_temporary_error(THD *thd,
   const Sql_condition *err;
   while ((err= it++))
   {
-    DBUG_PRINT("info", ("has condition %d %s", err->get_sql_errno(),
-                        err->get_message_text()));
-    switch (err->get_sql_errno())
+    DBUG_PRINT("info", ("has condition %d %s", err->mysql_errno(),
+                        err->message_text()));
+    switch (err->mysql_errno())
     {
     case ER_GET_TEMPORARY_ERRMSG:
       DBUG_RETURN(1);
@@ -130,7 +135,8 @@ Slave_reporting_capability::va_report(loglevel level, int err_code,
   uint pbuffsize= sizeof(buff);
 
   if (thd && level == ERROR_LEVEL && has_temporary_error(thd, err_code) &&
-      !thd->transaction.all.cannot_safely_rollback())
+      !thd->get_transaction()->cannot_safely_rollback(
+          Transaction_ctx::SESSION))
     level= WARNING_LEVEL;
 
   mysql_mutex_lock(&err_lock);
@@ -148,15 +154,13 @@ Slave_reporting_capability::va_report(loglevel level, int err_code,
     report_function= sql_print_error;
     break;
   case WARNING_LEVEL:
-    report_function= log_warnings?
-      sql_print_warning : NULL;
+    report_function= sql_print_warning;
     break;
   case INFORMATION_LEVEL:
-    report_function= log_warnings?
-      sql_print_information : NULL;
+    report_function= sql_print_information;
     break;
   default:
-    DBUG_ASSERT(0);                            // should not come here
+    assert(0);                            // should not come here
     return;          // don't crash production builds, just do nothing
   }
   curr_buff= pbuff;
@@ -167,11 +171,10 @@ Slave_reporting_capability::va_report(loglevel level, int err_code,
   mysql_mutex_unlock(&err_lock);
 
   /* If the msg string ends with '.', do not add a ',' it would be ugly */
-  if (report_function)
-    report_function("Slave %s: %s%s Error_code: %d",
-                    m_thread_name, pbuff,
-                    (curr_buff[0] && *(strend(curr_buff)-1) == '.') ? "" : ",",
-                    err_code);
+  report_function("Slave %s%s: %s%s Error_code: %d",
+                  m_thread_name, get_for_channel_str(false), pbuff,
+                  (curr_buff[0] && *(strend(curr_buff)-1) == '.') ? "" : ",",
+                  err_code);
 #endif
 }
 

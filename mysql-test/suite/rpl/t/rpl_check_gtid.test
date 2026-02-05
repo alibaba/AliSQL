@@ -1,10 +1,12 @@
 #Want to skip this test from daily Valgrind execution
 --source include/no_valgrind_without_big.inc
+--source include/not_group_replication_plugin.inc
 # Adding big test option for this test.
 --source include/big_test.inc
+--source include/have_debug_sync.inc
 
 ################################################################################
-# This test case checks if a set of properites related to the GTIDs hold
+# This test case checks if a set of properties related to the GTIDs hold
 # after rotating the binary/relay logs and after crashes. The properties
 # are as follows:
 #
@@ -25,7 +27,8 @@
 #                set of transactions stored in the previous binary logs.
 #
 # Property 2.2 - The Previous GTIDs stored in a relay log must represent the
-#                set of transactions stored in the previous relay logs.
+#                set of complete transactions stored in the previous relay
+#                logs.
 #
 # 3. Guarantee that RESET SLAVE/RESET MASTER cleans the appropriate states.
 #
@@ -44,9 +47,9 @@
 # of transactions and rotating logs through different methods: 
 #
 # 1. On both master and slave, rotate logs through FLUSH LOGS.
-# 2. On the slave, generate spreaded events by rotating the relay log when
-#    its size is greater than 500 bytes. On the master, rotate logs through
-#    FLUSH LOGS.
+# 2. On the slave, generate spreaded events by rotating the relay log using
+#    FLUSH RELAY LOGS when the IO thread is in the middle of a transaction.
+#    On the master, rotate logs through FLUSH LOGS.
 # 3. On the slave, rotate logs by restarting the server. On the master,
 #    rotate logs through FLUSH LOGS.
 # 4. On the slave, rotate logs by start/stop. On the master, rotate logs by
@@ -67,18 +70,17 @@
 # 9. Binary logs with corrupted GTIDs are generated simulating a crash
 #    while writing such information into the binary log.
 ################################################################################
---disable_warnings
---source include/master-slave.inc
 --source include/not_embedded.inc
 --source include/not_windows.inc
 --source include/have_debug.inc
+--source include/have_gtid.inc
+--source include/master-slave.inc
 
+--disable_warnings
 call mtr.add_suppression("Recovery from master pos .*");
 call mtr.add_suppression("Error in Log_event::read_log_event()");
 call mtr.add_suppression("Failed to read information on Previous GTIDs.");
 call mtr.add_suppression("Error reading GTIDs from binary log");
-
---source include/rpl_set_gtid_mode.inc
 --enable_warnings
 
 CREATE TABLE t1(id INTEGER) ENGINE= Innodb;
@@ -225,31 +227,81 @@ while ($i != 5)
 
 --echo ==== Part 2 ====
 
+# This test was designed to sync slave with the master using positions
+# instead of GTIDs. However, if the test is ran with GTID_MODE=ON it
+# uses GTIDs to sync the slave with the master.
+# When MTS is enabled, the slave may have the GITDs of transactions
+# in the GTID_EXECUTED before updating slave's applier position, and
+# this situation may lead to fail in this part of the test.
+# So, it is better to ignore GTIDs on sync.
+--let $ignore_gtids_on_sync= 1
+
 --disable_warnings
 --source include/rpl_reset.inc
 --enable_warnings
 --connection slave
 --source include/stop_slave.inc
-SET GLOBAL debug="d,rotate_slave_debug_group";
 --disable_warnings
 --source include/start_slave.inc
 --enable_warnings
+
+--connection master
+# This transaction will be the MASTER_UUID:1
+BEGIN;
+INSERT INTO t1 VALUES(0);
+COMMIT;
+--source include/sync_slave_sql_with_master.inc
 
 --let $i=1
 while ($i != 5)
 {
   --echo ---- i=$i ----
+  --source include/rpl_connection_slave.inc
+  --let $debug_point= pause_on_queuing_event
+  --source include/add_debug_point.inc
 
   #  2.1 - Generates a set of transactions on the master.
-  --connection master
+  #        Each transaction will have more than three events
+  #        depending on binlog format:
+  #
+  #        GTID + QUERY(BEGIN) + QUERY(INSERT) + QUERY(INSERT) + XID
+  #        or
+  #        GTID + QUERY(BEGIN) + TABLE_MAP + ROWS + XID
+  #
+  #        So, this part of the test will issue an "FLUSH LOCAL RELAY LOGS"
+  #        on the slave right before queuing the fourth event of the
+  #        transaction.
+  --source include/rpl_connection_master.inc
   BEGIN;
   INSERT INTO t1 VALUES(1);
   INSERT INTO t1 VALUES(2);
   COMMIT;
 
+  --let $event_counter= 3
+  --source include/rpl_connection_slave.inc
+  while ($event_counter > 0)
+  {
+    --echo Waiting for $event_counter more event(s) before flushing relaylog
+    # Wait for the IO thread to reach the beginning of queue_event.
+    SET DEBUG_SYNC='now WAIT_FOR reached_queuing_event';
+    # Let IO thread continue its work
+    SET DEBUG_SYNC= 'now SIGNAL continue_queuing_event';
+    --dec $event_counter
+  }
+  # Make the IO thread to create a new relaylog file while in the middle
+  # of a transaction.
+  FLUSH LOCAL RELAY LOGS;
+  # Wait for the IO thread to reach the beginning of queue_event.
+  SET DEBUG_SYNC='now WAIT_FOR reached_queuing_event';
+  # Make sure the test will not stop again in the beginning of queue_event.
+  --source include/remove_debug_point.inc
+  # Let IO thread continue its work
+  SET DEBUG_SYNC= 'now SIGNAL continue_queuing_event';
+
   #  2.2 - Makes the slave to retrieve these transactions and
   #        spread their events into two relay logs. Then apply
   #        the events.
+  --source include/rpl_connection_master.inc
   --source include/sync_slave_sql_with_master.inc
 
   # Check property 2.2.
@@ -267,6 +319,8 @@ while ($i != 5)
 
   inc $i;
 }
+
+--let $ignore_gtids_on_sync= 0
 
 #
 # 3. This part of the test case:
@@ -926,4 +980,22 @@ while ($i != 5)
 
 --connection master
 DROP TABLE t1;
+
+--echo # Failure on creating compression thread
+--source include/sync_slave_sql_with_master.inc
+--source include/stop_slave.inc
+call mtr.add_suppression("Can not create thread to compress gtid_executed table .*");
+--let $rpl_server_number= 2
+--let $rpl_server_parameters= --debug=d,simulate_create_compress_thread_failure
+--source include/rpl_restart_server.inc
+--let $assert_text= compression thread is destroied;
+--let $assert_cond= COUNT(*) = 0 FROM performance_schema.threads WHERE NAME LIKE "%compress_gtid_table"
+--source include/assert.inc
+call mtr.add_suppression("Plugin 'InnoDB' will be forced to shutdown");
+call mtr.add_suppression("Plugin 'InnoDB' has ref_count=.* after shutdown");
+--let $rpl_server_parameters=
+# Restart slave server without setting simulate_create_compress_thread_failure
+--source include/rpl_restart_server.inc
+--source include/start_slave.inc
+
 --source include/rpl_end.inc

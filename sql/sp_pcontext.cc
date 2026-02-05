@@ -1,27 +1,32 @@
-/* Copyright (c) 2002, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2002, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
    51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
 
-#include "sql_priv.h"
-#include "unireg.h"
 #include "sp_pcontext.h"
 #include "sp_head.h"
 
 
 bool sp_condition_value::equals(const sp_condition_value *cv) const
 {
-  DBUG_ASSERT(cv);
+  assert(cv);
 
   if (this == cv)
     return true;
@@ -43,6 +48,75 @@ bool sp_condition_value::equals(const sp_condition_value *cv) const
 }
 
 
+void sp_condition_value::print(String *str) const
+{
+  switch (type)
+  {
+  case sp_condition_value::ERROR_CODE:
+    str->append(STRING_WITH_LEN(" "));
+    str->append_ulonglong(static_cast<ulonglong>(mysqlerr));
+    break;
+  case sp_condition_value::SQLSTATE:
+    str->append(STRING_WITH_LEN(" SQLSTATE '"));
+    str->append(static_cast<const char *>(sql_state), 5);
+    str->append(STRING_WITH_LEN("'"));
+    break;
+  case sp_condition_value::WARNING:
+    str->append(STRING_WITH_LEN(" SQLWARNING"));
+    break;
+  case sp_condition_value::NOT_FOUND:
+    str->append(STRING_WITH_LEN(" NOT FOUND"));
+    break;
+  case sp_condition_value::EXCEPTION:
+    str->append(STRING_WITH_LEN(" SQLEXCEPTION"));
+    break;
+  default:
+    break;
+  }
+}
+
+
+void sp_handler::print_conditions(String *str) const
+{
+  List_iterator_fast<const sp_condition_value> li(
+    const_cast<List<const sp_condition_value>&>(condition_values));
+  const sp_condition_value *cv;
+  bool first= true;
+
+  while ((cv= li++))
+  {
+    if (first)
+    {
+      first= false;
+      str->append(STRING_WITH_LEN(" HANDLER FOR"));
+    }
+    else
+      str->append(STRING_WITH_LEN(","));
+
+    cv->print(str);
+  }
+}
+
+
+void sp_handler::print(String *str) const
+{
+  switch (type)
+  {
+  case sp_handler::EXIT:
+    str->append(STRING_WITH_LEN(" EXIT"));
+    break;
+  case sp_handler::CONTINUE:
+    str->append(STRING_WITH_LEN(" CONTINUE"));
+    break;
+  default:
+    // The handler type must be either CONTINUE or EXIT.
+    assert(0);
+  }
+
+  print_conditions(str);
+}
+
+
 void sp_pcontext::init(uint var_offset,
                        uint cursor_offset,
                        int num_case_expressions)
@@ -55,23 +129,36 @@ void sp_pcontext::init(uint var_offset,
 }
 
 
-sp_pcontext::sp_pcontext()
+sp_pcontext::sp_pcontext(THD *thd)
   : Sql_alloc(),
-  m_level(0),
-  m_max_var_index(0), m_max_cursor_index(0),
-  m_parent(NULL), m_pboundary(0),
-  m_scope(REGULAR_SCOPE)
+    m_level(0),
+    m_max_var_index(0), m_max_cursor_index(0),
+    m_parent(NULL), m_pboundary(0),
+    m_vars(thd->mem_root),
+    m_case_expr_ids(thd->mem_root),
+    m_conditions(thd->mem_root),
+    m_cursors(thd->mem_root),
+    m_handlers(thd->mem_root),
+    m_children(thd->mem_root),
+    m_scope(REGULAR_SCOPE)
 {
   init(0, 0, 0);
 }
 
 
-sp_pcontext::sp_pcontext(sp_pcontext *prev, sp_pcontext::enum_scope scope)
+sp_pcontext::sp_pcontext(THD *thd, sp_pcontext *prev,
+                         sp_pcontext::enum_scope scope)
   : Sql_alloc(),
-  m_level(prev->m_level + 1),
-  m_max_var_index(0), m_max_cursor_index(0),
-  m_parent(prev), m_pboundary(0),
-  m_scope(scope)
+    m_level(prev->m_level + 1),
+    m_max_var_index(0), m_max_cursor_index(0),
+    m_parent(prev), m_pboundary(0),
+    m_vars(thd->mem_root),
+    m_case_expr_ids(thd->mem_root),
+    m_conditions(thd->mem_root),
+    m_cursors(thd->mem_root),
+    m_handlers(thd->mem_root),
+    m_children(thd->mem_root),
+    m_scope(scope)
 {
   init(prev->m_var_offset + prev->m_max_var_index,
        prev->current_cursor_count(),
@@ -81,17 +168,17 @@ sp_pcontext::sp_pcontext(sp_pcontext *prev, sp_pcontext::enum_scope scope)
 
 sp_pcontext::~sp_pcontext()
 {
-  for (int i= 0; i < m_children.elements(); ++i)
+  for (size_t i= 0; i < m_children.size(); ++i)
     delete m_children.at(i);
 }
 
 
 sp_pcontext *sp_pcontext::push_context(THD *thd, sp_pcontext::enum_scope scope)
 {
-  sp_pcontext *child= new (thd->mem_root) sp_pcontext(this, scope);
+  sp_pcontext *child= new (thd->mem_root) sp_pcontext(thd, this, scope);
 
   if (child)
-    m_children.append(child);
+    m_children.push_back(child);
   return child;
 }
 
@@ -111,38 +198,38 @@ sp_pcontext *sp_pcontext::pop_context()
 }
 
 
-uint sp_pcontext::diff_handlers(const sp_pcontext *ctx, bool exclusive) const
+size_t sp_pcontext::diff_handlers(const sp_pcontext *ctx, bool exclusive) const
 {
-  uint n= 0;
+  size_t n= 0;
   const sp_pcontext *pctx= this;
   const sp_pcontext *last_ctx= NULL;
 
   while (pctx && pctx != ctx)
   {
-    n+= pctx->m_handlers.elements();
+    n+= pctx->m_handlers.size();
     last_ctx= pctx;
     pctx= pctx->parent_context();
   }
   if (pctx)
-    return (exclusive && last_ctx ? n - last_ctx->m_handlers.elements() : n);
+    return (exclusive && last_ctx ? n - last_ctx->m_handlers.size() : n);
   return 0;			// Didn't find ctx
 }
 
 
-uint sp_pcontext::diff_cursors(const sp_pcontext *ctx, bool exclusive) const
+size_t sp_pcontext::diff_cursors(const sp_pcontext *ctx, bool exclusive) const
 {
-  uint n= 0;
+  size_t n= 0;
   const sp_pcontext *pctx= this;
   const sp_pcontext *last_ctx= NULL;
 
   while (pctx && pctx != ctx)
   {
-    n+= pctx->m_cursors.elements();
+    n+= pctx->m_cursors.size();
     last_ctx= pctx;
     pctx= pctx->parent_context();
   }
   if (pctx)
-    return  (exclusive && last_ctx ? n - last_ctx->m_cursors.elements() : n);
+    return  (exclusive && last_ctx ? n - last_ctx->m_cursors.size() : n);
   return 0;			// Didn't find ctx
 }
 
@@ -150,7 +237,7 @@ uint sp_pcontext::diff_cursors(const sp_pcontext *ctx, bool exclusive) const
 sp_variable *sp_pcontext::find_variable(LEX_STRING name,
                                         bool current_scope_only) const
 {
-  uint i= m_vars.elements() - m_pboundary;
+  size_t i= m_vars.size() - m_pboundary;
 
   while (i--)
   {
@@ -172,7 +259,7 @@ sp_variable *sp_pcontext::find_variable(LEX_STRING name,
 
 sp_variable *sp_pcontext::find_variable(uint offset) const
 {
-  if (m_var_offset <= offset && offset < m_var_offset + m_vars.elements())
+  if (m_var_offset <= offset && offset < m_var_offset + m_vars.size())
     return m_vars.at(offset - m_var_offset);  // This frame
 
   return m_parent ?
@@ -194,7 +281,7 @@ sp_variable *sp_pcontext::add_variable(THD *thd,
 
   ++m_max_var_index;
 
-  return m_vars.append(p) ? NULL : p;
+  return m_vars.push_back(p) ? NULL : p;
 }
 
 
@@ -246,14 +333,14 @@ bool sp_pcontext::add_condition(THD *thd,
   if (p == NULL)
     return true;
 
-  return m_conditions.append(p);
+  return m_conditions.push_back(p);
 }
 
 
 sp_condition_value *sp_pcontext::find_condition(LEX_STRING name,
                                                 bool current_scope_only) const
 {
-  uint i= m_conditions.elements();
+  size_t i= m_conditions.size();
 
   while (i--)
   {
@@ -281,19 +368,19 @@ sp_handler *sp_pcontext::add_handler(THD *thd,
   if (!h)
     return NULL;
 
-  return m_handlers.append(h) ? NULL : h;
+  return m_handlers.push_back(h) ? NULL : h;
 }
 
 
 bool sp_pcontext::check_duplicate_handler(
   const sp_condition_value *cond_value) const
 {
-  for (int i= 0; i < m_handlers.elements(); ++i)
+  for (size_t i= 0; i < m_handlers.size(); ++i)
   {
     sp_handler *h= m_handlers.at(i);
 
-    List_iterator_fast<sp_condition_value> li(h->condition_values);
-    sp_condition_value *cv;
+    List_iterator_fast<const sp_condition_value> li(h->condition_values);
+    const sp_condition_value *cv;
 
     while ((cv= li++))
     {
@@ -309,17 +396,17 @@ bool sp_pcontext::check_duplicate_handler(
 sp_handler*
 sp_pcontext::find_handler(const char *sql_state,
                           uint sql_errno,
-                          Sql_condition::enum_warning_level level) const
+                          Sql_condition::enum_severity_level severity) const
 {
   sp_handler *found_handler= NULL;
-  sp_condition_value *found_cv= NULL;
+  const sp_condition_value *found_cv= NULL;
 
-  for (int i= 0; i < m_handlers.elements(); ++i)
+  for (size_t i= 0; i < m_handlers.size(); ++i)
   {
     sp_handler *h= m_handlers.at(i);
 
-    List_iterator_fast<sp_condition_value> li(h->condition_values);
-    sp_condition_value *cv;
+    List_iterator_fast<const sp_condition_value> li(h->condition_values);
+    const sp_condition_value *cv;
 
     while ((cv= li++))
     {
@@ -347,7 +434,7 @@ sp_pcontext::find_handler(const char *sql_state,
 
       case sp_condition_value::WARNING:
         if ((is_sqlstate_warning(sql_state) ||
-             level == Sql_condition::WARN_LEVEL_WARN) && !found_cv)
+             severity == Sql_condition::SL_WARNING) && !found_cv)
         {
           found_cv= cv;
           found_handler= h;
@@ -364,7 +451,7 @@ sp_pcontext::find_handler(const char *sql_state,
 
       case sp_condition_value::EXCEPTION:
         if (is_sqlstate_exception(sql_state) &&
-            level == Sql_condition::WARN_LEVEL_ERROR && !found_cv)
+            severity == Sql_condition::SL_ERROR && !found_cv)
         {
           found_cv= cv;
           found_handler= h;
@@ -412,16 +499,16 @@ sp_pcontext::find_handler(const char *sql_state,
   if (!p || !p->m_parent)
     return NULL;
 
-  return p->m_parent->find_handler(sql_state, sql_errno, level);
+  return p->m_parent->find_handler(sql_state, sql_errno, severity);
 }
 
 
 bool sp_pcontext::add_cursor(LEX_STRING name)
 {
-  if (m_cursors.elements() == (int) m_max_cursor_index)
+  if (m_cursors.size() == m_max_cursor_index)
     ++m_max_cursor_index;
 
-  return m_cursors.append(name);
+  return m_cursors.push_back(name);
 }
 
 
@@ -429,7 +516,7 @@ bool sp_pcontext::find_cursor(LEX_STRING name,
                               uint *poff,
                               bool current_scope_only) const
 {
-  uint i= m_cursors.elements();
+  size_t i= m_cursors.size();
 
   while (i--)
   {
@@ -455,7 +542,7 @@ void sp_pcontext::retrieve_field_definitions(
 {
   /* Put local/context fields in the result list. */
 
-  for (int i= 0; i < m_vars.elements(); ++i)
+  for (size_t i= 0; i < m_vars.size(); ++i)
   {
     sp_variable *var_def= m_vars.at(i);
 
@@ -464,7 +551,7 @@ void sp_pcontext::retrieve_field_definitions(
 
   /* Put the fields of the enclosed contexts in the result list. */
 
-  for (int i= 0; i < m_children.elements(); ++i)
+  for (size_t i= 0; i < m_children.size(); ++i)
     m_children.at(i)->retrieve_field_definitions(field_def_lst);
 }
 
@@ -472,7 +559,7 @@ void sp_pcontext::retrieve_field_definitions(
 const LEX_STRING *sp_pcontext::find_cursor(uint offset) const
 {
   if (m_cursor_offset <= offset &&
-      offset < m_cursor_offset + m_cursors.elements())
+      offset < m_cursor_offset + m_cursors.size())
   {
     return &m_cursors.at(offset - m_cursor_offset);   // This frame
   }

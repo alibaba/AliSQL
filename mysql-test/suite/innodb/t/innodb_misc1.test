@@ -1,7 +1,7 @@
 -- source include/have_innodb.inc
+-- source include/have_innodb_max_16k.inc
 
 let $MYSQLD_DATADIR= `select @@datadir`;
-
 # Save the original values of some variables in order to be able to
 # estimate how much they have changed during the tests. Previously this
 # test assumed that e.g. rows_deleted is 0 here and after deleting 23
@@ -11,6 +11,10 @@ let $MYSQLD_DATADIR= `select @@datadir`;
 # the test to be run multiple times without restarting the mysqld server.
 # See Bug#43309 Test main.innodb can't be run twice
 -- disable_query_log
+
+call mtr.add_suppression("Cannot add field .* in table .* because after adding it, the row size is");
+call mtr.add_suppression("\\[ERROR\\] InnoDB: in ALTER TABLE `test`.`t1`");
+call mtr.add_suppression("\\[ERROR\\] InnoDB: in RENAME TABLE table `test`.`t1`");
 SET @innodb_thread_concurrency_orig = @@innodb_thread_concurrency;
 -- enable_query_log
 
@@ -166,7 +170,10 @@ create table t8 (col1 blob, index(col1(767)))
 
 drop table t1, t2, t3, t4, t5, t6, t7, t8;
 
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+
 # these should have their index length trimmed
+SET GLOBAL innodb_large_prefix=OFF;
 create table t1 (col1 varchar(768), index(col1))
  character set = latin1 engine = innodb;
 create table t2 (col1 varbinary(768), index(col1))
@@ -179,6 +186,8 @@ create table t4 (col1 blob, index(col1(768)))
 show create table t1;
 
 drop table t1, t2, t3, t4;
+
+SET sql_mode = default;
 
 # these should be refused
 --error ER_TOO_LONG_KEY
@@ -193,6 +202,7 @@ create table t3 (col1 text, primary key(col1(768)))
 --error ER_TOO_LONG_KEY
 create table t4 (col1 blob, primary key(col1(768)))
  character set = latin1 engine = innodb;
+SET GLOBAL innodb_large_prefix=default;
 
 #
 # Test improved foreign key error messages (bug #3443)
@@ -402,8 +412,10 @@ update t1 set s1=0x123456 where a=2;
 select hex(s1) from t2;
 -- error 1451
 update t1 set s1=0x12 where a=1;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 -- error 1451
 update t1 set s1=0x12345678 where a=1;
+SET sql_mode = default;
 -- error 1451
 update t1 set s1=0x123457 where a=1;
 update t1 set s1=0x1220 where a=1;
@@ -952,11 +964,8 @@ INSERT INTO t1 VALUES (1);
 INSERT INTO t2 VALUES (1);
 ALTER TABLE t2 ADD FOREIGN KEY (a) REFERENCES t1 (a) ON DELETE SET NULL;
 # NULL -> NOT NULL only allowed INPLACE if strict sql_mode is on.
-SET @old_sql_mode = @@sql_mode;
-SET @@sql_mode = 'STRICT_TRANS_TABLES';
 --error ER_FK_COLUMN_NOT_NULL
 ALTER TABLE t2 MODIFY a INT NOT NULL;
-SET @@sql_mode = @old_sql_mode;
 DELETE FROM t1;
 DROP TABLE t2,t1;
 
@@ -1169,3 +1178,6 @@ DISCONNECT c1;
 CONNECTION default;
 
 SET GLOBAL innodb_thread_concurrency = @innodb_thread_concurrency_orig;
+
+-- enable_query_log
+-- source suite/innodb/include/check_pfs_mem_other_is_zero.inc

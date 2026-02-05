@@ -1,14 +1,20 @@
-/* Copyright (c) 2000, 2015, Oracle and/or its affiliates. All rights
- * reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -22,9 +28,10 @@
 #ifndef vio_violite_h_
 #define	vio_violite_h_
 
-#include "my_net.h"   /* needed because of struct in_addr */
+#include <my_thread.h> /* my_thread_handle */
+#include <mysql/psi/psi.h>
+#include <pfs_socket_provider.h>
 #include <mysql/psi/mysql_socket.h>
-
 
 /* Simple vio interface in C;  The functions are implemented in violite.c */
 
@@ -32,15 +39,64 @@
 extern "C" {
 #endif /* __cplusplus */
 
+#ifdef HAVE_PSI_INTERFACE
+void init_vio_psi_keys();
+#endif
+
 #ifdef __cplusplus
 typedef struct st_vio Vio;
 #endif /* __cplusplus */
 
 enum enum_vio_type
 {
-  VIO_TYPE_TCPIP, VIO_TYPE_SOCKET, VIO_TYPE_NAMEDPIPE, VIO_TYPE_SSL, 
-  VIO_TYPE_SHARED_MEMORY
+  /**
+    Type of the connection is unknown.
+  */
+  NO_VIO_TYPE= 0,
+  /**
+    Used in case of TCP/IP connections.
+  */
+  VIO_TYPE_TCPIP= 1,
+  /**
+    Used for Unix Domain socket connections. Unix only.
+  */
+  VIO_TYPE_SOCKET= 2,
+  /**
+    Used for named pipe connections. Windows only.
+  */
+  VIO_TYPE_NAMEDPIPE= 3,
+  /**
+    Used in case of SSL connections.
+  */
+  VIO_TYPE_SSL= 4,
+  /**
+    Used for shared memory connections. Windows only.
+  */
+  VIO_TYPE_SHARED_MEMORY= 5,
+  /**
+    Used internally by the prepared statements
+  */
+  VIO_TYPE_LOCAL= 6,
+  /**
+    Implicitly used by plugins that doesn't support any other VIO_TYPE.
+  */
+  VIO_TYPE_PLUGIN= 7,
+
+  FIRST_VIO_TYPE= VIO_TYPE_TCPIP,
+  /*
+    If a new type is added, please update LAST_VIO_TYPE. In addition, please
+    change get_vio_type_name() in vio/vio.c to return correct name for it.
+  */
+  LAST_VIO_TYPE= VIO_TYPE_PLUGIN
 };
+
+/**
+  Convert a vio type to a printable string.
+  @param vio_type the type
+  @param[out] str the string
+  @param[out] len the string length
+*/
+void get_vio_type_name(enum enum_vio_type vio_type, const char ** str, int * len);
 
 /**
   VIO I/O events.
@@ -59,7 +115,7 @@ enum enum_vio_io_event
 
 Vio* vio_new(my_socket sd, enum enum_vio_type type, uint flags);
 Vio*  mysql_socket_vio_new(MYSQL_SOCKET mysql_socket, enum enum_vio_type type, uint flags);
-#ifdef __WIN__
+#ifdef _WIN32
 Vio* vio_new_win32pipe(HANDLE hPipe);
 Vio* vio_new_win32shared_memory(HANDLE handle_file_map,
                                 HANDLE handle_map,
@@ -70,11 +126,10 @@ Vio* vio_new_win32shared_memory(HANDLE handle_file_map,
                                 HANDLE event_conn_closed);
 #else
 #define HANDLE void *
-#endif /* __WIN__ */
+#endif /* _WIN32 */
 
 void    vio_delete(Vio* vio);
 int vio_shutdown(Vio* vio);
-int vio_cancel(Vio* vio, int how);
 my_bool vio_reset(Vio* vio, enum enum_vio_type type,
                   my_socket sd, void *ssl, uint flags);
 size_t  vio_read(Vio *vio, uchar *	buf, size_t size);
@@ -101,18 +156,16 @@ my_bool vio_peer_addr(Vio *vio, char *buf, uint16 *port, size_t buflen);
 /* Wait for an I/O event notification. */
 int vio_io_wait(Vio *vio, enum enum_vio_io_event event, int timeout);
 my_bool vio_is_connected(Vio *vio);
-#ifndef DBUG_OFF
+#ifndef NDEBUG
 ssize_t vio_pending(Vio *vio);
 #endif
 /* Set timeout for a network operation. */
 int vio_timeout(Vio *vio, uint which, int timeout_sec);
-extern void vio_set_wait_callback(void (*before_wait)(void),
-                                  void (*after_wait)(void));
 /* Connect to a peer. */
 my_bool vio_socket_connect(Vio *vio, struct sockaddr *addr, socklen_t len,
                            int timeout);
 
-my_bool vio_get_normalized_ip_string(const struct sockaddr *addr, int addr_length,
+my_bool vio_get_normalized_ip_string(const struct sockaddr *addr, size_t addr_length,
                                      char *ip_string, size_t ip_string_size);
 
 my_bool vio_is_no_name_error(int err_code);
@@ -135,14 +188,6 @@ int vio_getnameinfo(const struct sockaddr *sa,
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #endif
 
-#define HEADER_DES_LOCL_H dummy_something
-#define YASSL_MYSQL_COMPATIBLE
-#ifndef YASSL_PREFIX
-#define YASSL_PREFIX
-#endif
-/* Set yaSSL to use same type as MySQL do for socket handles */
-typedef my_socket YASSL_SOCKET_T;
-#define YASSL_SOCKET_T_DEFINED
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
@@ -151,8 +196,8 @@ enum enum_ssl_init_error
 {
   SSL_INITERR_NOERROR= 0, SSL_INITERR_CERT, SSL_INITERR_KEY, 
   SSL_INITERR_NOMATCH, SSL_INITERR_BAD_PATHS, SSL_INITERR_CIPHERS, 
-  SSL_INITERR_MEMFAIL, SSL_INITERR_DHFAIL, SSL_TLS_VERSION_INVALID,
-  SSL_INITERR_LASTERR
+  SSL_INITERR_MEMFAIL, SSL_INITERR_NO_USABLE_CTX, SSL_INITERR_DHFAIL,
+  SSL_TLS_VERSION_INVALID, SSL_INITERR_LASTERR
 };
 const char* sslGetErrString(enum enum_ssl_init_error err);
 
@@ -168,8 +213,7 @@ struct st_VioSSLFd
 *new_VioSSLConnectorFd(const char *key_file, const char *cert_file,
                        const char *ca_file,  const char *ca_path,
                        const char *cipher, enum enum_ssl_init_error *error,
-                       const char *crl_file, const char *crl_path,
-                       const long ssl_ctx_flags);
+                       const char *crl_file, const char *crl_path, const long ssl_ctx_flags);
 
 long process_tls_version(const char *tls_version);
 
@@ -177,9 +221,11 @@ struct st_VioSSLFd
 *new_VioSSLAcceptorFd(const char *key_file, const char *cert_file,
                       const char *ca_file,const char *ca_path,
                       const char *cipher, enum enum_ssl_init_error *error,
-                      const char *crl_file, const char *crl_path,
-                      const long ssl_ctx_flags);
+                      const char *crl_file, const char *crl_path, const long ssl_ctx_flags);
 void free_vio_ssl_acceptor_fd(struct st_VioSSLFd *fd);
+
+void vio_ssl_end();
+
 #endif /* ! EMBEDDED_LIBRARY */
 #endif /* HAVE_OPENSSL */
 
@@ -199,7 +245,6 @@ void vio_end(void);
 #define vio_keepalive(vio, set_keep_alive)  (vio)->viokeepalive(vio, set_keep_alive)
 #define vio_should_retry(vio)                   (vio)->should_retry(vio)
 #define vio_was_timeout(vio)                    (vio)->was_timeout(vio)
-#define vio_cancel(vio, how)                    ((vio)->viocancel)(vio, how)
 #define vio_shutdown(vio)                       ((vio)->vioshutdown)(vio)
 #define vio_peer_addr(vio, buf, prt, buflen)    (vio)->peer_addr(vio, buf, prt, buflen)
 #define vio_io_wait(vio, event, timeout)        (vio)->io_wait(vio, event, timeout)
@@ -225,7 +270,7 @@ struct st_vio
   my_bool       localhost;              /* Are we from localhost? */
   struct sockaddr_storage   local;      /* Local internet address */
   struct sockaddr_storage   remote;     /* Remote internet address */
-  int addrLen;                          /* Length of remote address */
+  size_t addrLen;                       /* Length of remote address */
   enum enum_vio_type    type;           /* Type of connection */
   my_bool               inactive; /* Connection inactive (has been shutdown) */
   char                  desc[VIO_DESCRIPTION_SIZE]; /* Description string. This
@@ -266,7 +311,6 @@ struct st_vio
      descriptors, handles can remain valid after a shutdown.
   */
   int     (*vioshutdown)(Vio*);
-  int     (*viocancel)(Vio*, int);
   my_bool (*is_connected)(Vio*);
   my_bool (*has_data) (Vio*);
   int (*io_wait)(Vio*, enum enum_vio_io_event, int);
@@ -278,7 +322,7 @@ struct st_vio
 #ifdef HAVE_OPENSSL
   void    *ssl_arg;
 #endif
-#ifdef HAVE_SMEM
+#if defined (_WIN32) && !defined (EMBEDDED_LIBRARY)
   HANDLE  handle_file_map;
   char    *handle_map;
   HANDLE  event_server_wrote;
@@ -288,6 +332,13 @@ struct st_vio
   HANDLE  event_conn_closed;
   size_t  shared_memory_remain;
   char    *shared_memory_pos;
-#endif /* HAVE_SMEM */
+#endif /* _WIN32 && !EMBEDDED_LIBRARY */
 };
+
+#ifdef HAVE_OPENSSL
+#define SSL_handle SSL*
+#else
+#define SSL_handle void*
+#endif
+
 #endif /* vio_violite_h_ */

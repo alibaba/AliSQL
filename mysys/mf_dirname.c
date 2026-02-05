@@ -1,27 +1,40 @@
-/* Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "mysys_priv.h"
+#include "my_sys.h"
 #include <m_string.h>
 
 	/* Functions definied in this file */
 
 size_t dirname_length(const char *name)
 {
-  register char *pos, *gpos;
-#ifdef BASKSLASH_MBTAIL
+  char *pos, *gpos;
+#ifdef _WIN32
   CHARSET_INFO *fs= fs_character_set();
 #endif
 #ifdef FN_DEVCHAR
@@ -32,7 +45,7 @@ size_t dirname_length(const char *name)
   gpos= pos++;
   for ( ; *pos ; pos++)				/* Find last FN_LIBCHAR */
   {
-#ifdef BASKSLASH_MBTAIL
+#ifdef _WIN32
     uint l;
     if (use_mb(fs) && (l= my_ismbchar(fs, pos, pos + 3)))
     {
@@ -104,7 +117,7 @@ size_t dirname_part(char *to, const char *name, size_t *to_res_length)
 char *convert_dirname(char *to, const char *from, const char *from_end)
 {
   char *to_org=to;
-#ifdef BACKSLASH_MBTAIL
+#ifdef _WIN32
   CHARSET_INFO *fs= fs_character_set();
 #endif
   DBUG_ENTER("convert_dirname");
@@ -115,13 +128,13 @@ char *convert_dirname(char *to, const char *from, const char *from_end)
 
 #if FN_LIBCHAR != '/'
   {
-    for (; from != from_end && *from ; from++)
+    for (; from < from_end && *from ; from++)
     {
       if (*from == '/')
 	*to++= FN_LIBCHAR;
       else
       {
-#ifdef BACKSLASH_MBTAIL
+#ifdef _WIN32
         uint l;
         if (use_mb(fs) && (l= my_ismbchar(fs, from, from + 3)))
         {

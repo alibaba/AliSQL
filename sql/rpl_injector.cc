@@ -1,26 +1,33 @@
-/* Copyright (c) 2006, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2006, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA */
 
-#include "sql_priv.h" 
-#include "unireg.h"                             // REQUIRED by later includes
 #include "rpl_injector.h"
-#include "transaction.h"
-#include "sql_parse.h"                          // begin_trans, end_trans, COMMIT
-#include "sql_base.h"                           // close_thread_tables
-#include "log_event.h"                          // Incident_log_event
+
 #include "binlog.h"                             // mysql_bin_log
+#include "log_event.h"                          // Incident_log_event
+#include "sql_base.h"                           // close_thread_tables
+#include "sql_class.h"                          // THD
+#include "transaction.h"                        // trans_begin
+
 
 /*
   injector::transaction - member definitions
@@ -38,7 +45,8 @@ injector::transaction::transaction(MYSQL_BIN_LOG *log, THD *thd)
   LOG_INFO log_info;
   log->get_current_log(&log_info);
   /* !!! binlog_pos does not follow RAII !!! */
-  m_start_pos.m_file_name= my_strdup(log_info.log_file_name, MYF(0));
+  m_start_pos.m_file_name= my_strdup(key_memory_binlog_pos,
+                                     log_info.log_file_name, MYF(0));
   m_start_pos.m_file_pos= log_info.pos;
 
   if (unlikely(m_start_pos.m_file_name == NULL))
@@ -124,7 +132,8 @@ int injector::transaction::commit()
    if ((error == 0) &&
        (m_thd->binlog_next_event_pos.file_name != NULL) &&
        ((m_next_pos.m_file_name=
-         my_strdup(m_thd->binlog_next_event_pos.file_name, MYF(0))) != NULL))
+         my_strdup(key_memory_binlog_pos,
+                   m_thd->binlog_next_event_pos.file_name, MYF(0))) != NULL))
    {
      m_next_pos.m_file_pos= m_thd->binlog_next_event_pos.pos;
    }
@@ -227,10 +236,11 @@ int injector::transaction::delete_row(server_id_type sid, table tbl,
   return delete_row(sid, tbl, cols, colcnt, record, NULL);
 }
 
-
-int injector::transaction::update_row(server_id_type sid, table tbl, 
-				      MY_BITMAP const* cols, size_t colcnt,
-				      record_type before, record_type after,
+int injector::transaction::update_row(server_id_type sid, table tbl,
+                                      MY_BITMAP const* before_cols,
+                                      MY_BITMAP const* after_cols,
+                                      size_t colcnt,
+                                      record_type before, record_type after,
                                       const uchar* extra_row_info)
 {
    DBUG_ENTER("injector::transaction::update_row(...)");
@@ -242,7 +252,7 @@ int injector::transaction::update_row(server_id_type sid, table tbl,
    server_id_type save_id= m_thd->server_id;
    m_thd->set_server_id(sid);
    // The read- and write sets with autorestore (in the destructor)
-   table::save_sets saveset(tbl, cols, cols);
+   table::save_sets saveset(tbl, before_cols, after_cols);
 
    error= m_thd->binlog_update_row(tbl.get_table(), tbl.is_transactional(), 
                                    before, after, extra_row_info);
@@ -251,10 +261,10 @@ int injector::transaction::update_row(server_id_type sid, table tbl,
 }
 
 int injector::transaction::update_row(server_id_type sid, table tbl,
-				      MY_BITMAP const* cols, size_t colcnt,
-				      record_type before, record_type after)
+                                      MY_BITMAP const* cols, size_t colcnt,
+                                      record_type before, record_type after)
 {
-  return update_row(sid, tbl, cols, colcnt, before, after, NULL);
+  return update_row(sid, tbl, cols, cols, colcnt, before, after, NULL);
 }
 
 injector::transaction::binlog_pos injector::transaction::start_pos() const
@@ -309,14 +319,11 @@ void injector::new_trans(THD *thd, injector::transaction *ptr)
    DBUG_VOID_RETURN;
 }
 
-int injector::record_incident(THD *thd, Incident incident)
-{
-  Incident_log_event ev(thd, incident);
-  return mysql_bin_log.write_incident(&ev, true/*need_lock_log=true*/);
-}
-
-int injector::record_incident(THD *thd, Incident incident, LEX_STRING const message)
+int injector::record_incident(THD *thd,
+                              binary_log::Incident_event::enum_incident incident,
+                              LEX_STRING const message)
 {
   Incident_log_event ev(thd, incident, message);
-  return mysql_bin_log.write_incident(&ev, true/*need_lock_log=true*/);
+  return mysql_bin_log.write_incident(&ev, thd, true/*need_lock_log=true*/,
+                                      message.str);
 }

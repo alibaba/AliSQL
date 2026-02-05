@@ -1,13 +1,20 @@
-/* Copyright (c) 2010, 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation; version 2 of the License.
+  it under the terms of the GNU General Public License, version 2.0,
+  as published by the Free Software Foundation.
+
+  This program is also distributed with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an additional
+  permission to link the program and your derivative works with the
+  separately licensed software that they have included with MySQL.
 
   This program is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
+  GNU General Public License, version 2.0, for more details.
 
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software
@@ -19,13 +26,15 @@
 */
 
 #include "my_global.h"
-#include "my_pthread.h"
+#include "my_thread.h"
 #include "pfs_instr_class.h"
 #include "pfs_column_types.h"
 #include "pfs_column_values.h"
 #include "table_tiws_by_table.h"
 #include "pfs_global.h"
 #include "pfs_visitor.h"
+#include "pfs_buffer_container.h"
+#include "field.h"
 
 THR_LOCK table_tiws_by_table::m_table_lock;
 
@@ -227,6 +236,11 @@ TABLE_FIELD_DEF
 table_tiws_by_table::m_field_def=
 { 38, field_types };
 
+PFS_engine_table_share_state
+table_tiws_by_table::m_share_state = {
+  false /* m_checked */
+};
+
 PFS_engine_table_share
 table_tiws_by_table::m_share=
 {
@@ -235,12 +249,13 @@ table_tiws_by_table::m_share=
   table_tiws_by_table::create,
   NULL, /* write_row */
   table_tiws_by_table::delete_all_rows,
-  NULL, /* get_row_count */
-  1000, /* records */
+  table_tiws_by_table::get_row_count,
   sizeof(PFS_simple_index),
   &m_table_lock,
   &m_field_def,
-  false /* checked */
+  false, /* m_perpetual */
+  false, /* m_optional */
+  &m_share_state
 };
 
 PFS_engine_table*
@@ -255,6 +270,12 @@ table_tiws_by_table::delete_all_rows(void)
   reset_table_io_waits_by_table_handle();
   reset_table_io_waits_by_table();
   return 0;
+}
+
+ha_rows
+table_tiws_by_table::get_row_count(void)
+{
+  return global_table_share_container.get_row_count();
 }
 
 table_tiws_by_table::table_tiws_by_table()
@@ -276,20 +297,23 @@ int table_tiws_by_table::rnd_init(bool scan)
 
 int table_tiws_by_table::rnd_next(void)
 {
-  PFS_table_share *table_share;
+  PFS_table_share *pfs;
 
-  for (m_pos.set_at(&m_next_pos);
-       m_pos.m_index < table_share_max;
-       m_pos.m_index++)
+  m_pos.set_at(&m_next_pos);
+  PFS_table_share_iterator it= global_table_share_container.iterate(m_pos.m_index);
+  do
   {
-    table_share= &table_share_array[m_pos.m_index];
-    if (table_share->m_lock.is_populated())
+    pfs= it.scan_next(& m_pos.m_index);
+    if (pfs != NULL)
     {
-      make_row(table_share);
-      m_next_pos.set_after(&m_pos);
-      return 0;
+      if (pfs->m_enabled)
+      {
+        make_row(pfs);
+        m_next_pos.set_after(&m_pos);
+        return 0;
+      }
     }
-  }
+  } while (pfs != NULL);
 
   return HA_ERR_END_OF_FILE;
 }
@@ -297,15 +321,18 @@ int table_tiws_by_table::rnd_next(void)
 int
 table_tiws_by_table::rnd_pos(const void *pos)
 {
-  PFS_table_share *table_share;
+  PFS_table_share *pfs;
 
   set_position(pos);
 
-  table_share= &table_share_array[m_pos.m_index];
-  if (table_share->m_lock.is_populated())
+  pfs= global_table_share_container.get(m_pos.m_index);
+  if (pfs != NULL)
   {
-    make_row(table_share);
-    return 0;
+    if (pfs->m_enabled)
+    {
+      make_row(pfs);
+      return 0;
+    }
   }
 
   return HA_ERR_RECORD_DELETED;
@@ -313,7 +340,7 @@ table_tiws_by_table::rnd_pos(const void *pos)
 
 void table_tiws_by_table::make_row(PFS_table_share *share)
 {
-  pfs_lock lock;
+  pfs_optimistic_state lock;
 
   m_row_exists= false;
 
@@ -343,7 +370,7 @@ int table_tiws_by_table::read_row_values(TABLE *table,
     return HA_ERR_RECORD_DELETED;
 
   /* Set the null bits */
-  DBUG_ASSERT(table->s->null_bytes == 1);
+  assert(table->s->null_bytes == 1);
   buf[0]= 0;
 
   for (; (f= *fields) ; fields++)
@@ -463,7 +490,7 @@ int table_tiws_by_table::read_row_values(TABLE *table,
         set_field_ulonglong(f, m_row.m_stat.m_delete.m_max);
         break;
       default:
-        DBUG_ASSERT(false);
+        assert(false);
       }
     }
   }

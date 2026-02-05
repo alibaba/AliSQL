@@ -1,13 +1,20 @@
-/* Copyright (c) 2007, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2007, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -53,7 +60,7 @@
   created any more, except when reading a relay log created by an old
   server.
 */
-class Old_rows_log_event : public Log_event
+class Old_rows_log_event : public Binary_log_event, public Log_event
 {
   /********** BEGIN CUT & PASTE FROM Rows_log_event **********/
 public:
@@ -126,7 +133,7 @@ public:
 #endif
 
   /* Member functions to implement superclass interface */
-  virtual int get_data_size();
+  virtual size_t get_data_size();
 
   MY_BITMAP const *get_cols() const { return &m_cols; }
   size_t get_width() const          { return m_width; }
@@ -161,7 +168,7 @@ protected:
 #endif
   Old_rows_log_event(const char *row_data, uint event_len,
                      Log_event_type event_type,
-                     const Format_description_log_event *description_event);
+                     const Format_description_event *description_event);
 
 #ifdef MYSQL_CLIENT
   void print_helper(FILE *, PRINT_EVENT_INFO *, char const *const name);
@@ -203,7 +210,7 @@ protected:
   // Unpack the current row into m_table->record[0]
   int unpack_current_row(const Relay_log_info *const rli)
   { 
-    DBUG_ASSERT(m_table);
+    assert(m_table);
     ASSERT_OR_RETURN_ERROR(m_curr_row < m_rows_end, HA_ERR_CORRUPT_EVENT);
     return ::unpack_row(rli, m_table, m_width, m_curr_row, &m_cols,
                                    &m_curr_row_end, &m_master_reclength, m_rows_end);
@@ -363,7 +370,7 @@ public:
 #endif
 #ifdef HAVE_REPLICATION
   Write_rows_log_event_old(const char *buf, uint event_len,
-                           const Format_description_log_event *description_event);
+                           const Format_description_event *description_event);
 #endif
 #if !defined(MYSQL_CLIENT) 
   static bool binlog_row_logging_function(THD *thd, TABLE *table,
@@ -393,11 +400,10 @@ public:
   enum
   {
     /* Support interface to THD::binlog_prepare_pending_rows_event */
-    TYPE_CODE = PRE_GA_WRITE_ROWS_EVENT
+    TYPE_CODE = binary_log::PRE_GA_WRITE_ROWS_EVENT
   };
 
 private:
-  virtual Log_event_type get_type_code() { return (Log_event_type)TYPE_CODE; }
 
 #if !defined(MYSQL_CLIENT) && defined(HAVE_REPLICATION)
   // use old definition of do_apply_event()
@@ -437,7 +443,7 @@ public:
 
 #ifdef HAVE_REPLICATION
   Update_rows_log_event_old(const char *buf, uint event_len,
-                            const Format_description_log_event *description_event);
+                            const Format_description_event *description_event);
 #endif
 
 #if !defined(MYSQL_CLIENT) 
@@ -469,11 +475,10 @@ public:
   enum 
   {
     /* Support interface to THD::binlog_prepare_pending_rows_event */
-    TYPE_CODE = PRE_GA_UPDATE_ROWS_EVENT
+    TYPE_CODE = binary_log::PRE_GA_UPDATE_ROWS_EVENT
   };
 
 private:
-  virtual Log_event_type get_type_code() { return (Log_event_type)TYPE_CODE; }
 
 #if !defined(MYSQL_CLIENT) && defined(HAVE_REPLICATION)
   // use old definition of do_apply_event()
@@ -511,7 +516,7 @@ public:
 #endif
 #ifdef HAVE_REPLICATION
   Delete_rows_log_event_old(const char *buf, uint event_len,
-                            const Format_description_log_event *description_event);
+                            const Format_description_event *description_event);
 #endif
 #if !defined(MYSQL_CLIENT) 
   static bool binlog_row_logging_function(THD *thd, TABLE *table,
@@ -543,11 +548,10 @@ public:
   enum 
   {
     /* Support interface to THD::binlog_prepare_pending_rows_event */
-    TYPE_CODE = PRE_GA_DELETE_ROWS_EVENT
+    TYPE_CODE = binary_log::PRE_GA_DELETE_ROWS_EVENT
   };
 
 private:
-  virtual Log_event_type get_type_code() { return (Log_event_type)TYPE_CODE; }
 
 #if !defined(MYSQL_CLIENT) && defined(HAVE_REPLICATION)
   // use old definition of do_apply_event()

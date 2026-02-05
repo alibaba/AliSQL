@@ -1,22 +1,27 @@
-/* Copyright (c) 2005, 2015, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2005, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#define MYSQL_LEX 1
-#include "my_global.h"                          /* NO_EMBEDDED_ACCESS_CHECKS */
-#include "sql_priv.h"
-#include "unireg.h"
+#include "event_data_objects.h"
+
 #include "sql_parse.h"                          // parse_sql
 #include "strfunc.h"                           // find_string_in_array
 #include "sql_db.h"                        // get_default_db_collation
@@ -24,18 +29,33 @@
                                            // date_add_interval,
                                            // calc_time_diff
 #include "tztime.h"     // my_tz_find, my_tz_OFFSET0, struct Time_zone
-#include "sql_acl.h"    // EVENT_ACL, SUPER_ACL
+#include "auth_common.h"                   // EVENT_ACL, SUPER_ACL
 #include "sp.h"         // load_charset, load_collation
 #include "events.h"
-#include "event_data_objects.h"
 #include "event_db_repository.h"
+#include "event_parse_data.h"
 #include "sp_head.h"
 #include "sql_show.h"                // append_definer, append_identifier
+#include "log.h"
+
+#include "mysql/psi/mysql_sp.h"
 
 /**
   @addtogroup Event_Scheduler
   @{
 */
+
+#ifdef HAVE_PSI_INTERFACE
+void init_scheduler_psi_keys()
+{
+  const char *category= "scheduler";
+
+  PSI_server->register_statement(category, & Event_queue_element_for_exec::psi_info, 1);
+}
+
+PSI_statement_info Event_queue_element_for_exec::psi_info=
+{ 0, "event", 0};
+#endif
 
 /*************************************************************************/
 
@@ -108,8 +128,8 @@ Event_creation_ctx::load_from_db(THD *thd,
   {
     sql_print_warning("Event '%s'.'%s': invalid value "
                       "in column mysql.event.character_set_client.",
-                      (const char *) db_name,
-                      (const char *) event_name);
+                      db_name,
+                      event_name);
 
     invalid_creation_ctx= TRUE;
   }
@@ -121,8 +141,8 @@ Event_creation_ctx::load_from_db(THD *thd,
   {
     sql_print_warning("Event '%s'.'%s': invalid value "
                       "in column mysql.event.collation_connection.",
-                      (const char *) db_name,
-                      (const char *) event_name);
+                      db_name,
+                      event_name);
 
     invalid_creation_ctx= TRUE;
   }
@@ -134,8 +154,8 @@ Event_creation_ctx::load_from_db(THD *thd,
   {
     sql_print_warning("Event '%s'.'%s': invalid value "
                       "in column mysql.event.db_collation.",
-                      (const char *) db_name,
-                      (const char *) event_name);
+                      db_name,
+                      event_name);
 
     invalid_creation_ctx= TRUE;
   }
@@ -172,9 +192,11 @@ Event_creation_ctx::load_from_db(THD *thd,
 bool
 Event_queue_element_for_exec::init(LEX_STRING db, LEX_STRING n)
 {
-  if (!(dbname.str= my_strndup(db.str, dbname.length= db.length, MYF(MY_WME))))
+  if (!(dbname.str= my_strndup(key_memory_Event_queue_element_for_exec_names,
+                               db.str, dbname.length= db.length, MYF(MY_WME))))
     return TRUE;
-  if (!(name.str= my_strndup(n.str, name.length= n.length, MYF(MY_WME))))
+  if (!(name.str= my_strndup(key_memory_Event_queue_element_for_exec_names,
+                             n.str, name.length= n.length, MYF(MY_WME))))
   {
     my_free(dbname.str);
     return TRUE;
@@ -182,6 +204,11 @@ Event_queue_element_for_exec::init(LEX_STRING db, LEX_STRING n)
   return FALSE;
 }
 
+void Event_queue_element_for_exec::claim_memory_ownership()
+{
+  my_claim(dbname.str);
+  my_claim(name.str);
+}
 
 /*
   Destructor
@@ -208,7 +235,7 @@ Event_basic::Event_basic()
 {
   DBUG_ENTER("Event_basic::Event_basic");
   /* init memory root */
-  init_sql_alloc(&mem_root, 256, 512);
+  init_sql_alloc(key_memory_event_basic_root, &mem_root, 256, 512);
   dbname.str= name.str= NULL;
   dbname.length= name.length= 0;
   time_zone= NULL;
@@ -366,8 +393,10 @@ Event_timed::init()
 {
   DBUG_ENTER("Event_timed::init");
 
-  definer_user.str= definer_host.str= body.str= comment.str= NULL;
-  definer_user.length= definer_host.length= body.length= comment.length= 0;
+  definer_user= NULL_CSTR;
+  definer_host= NULL_CSTR;
+  body= NULL_STR;
+  comment= NULL_STR;
 
   sql_mode= 0;
 
@@ -498,7 +527,7 @@ Event_queue_element::load_from_row(THD *thd, TABLE *table)
     Hence, if ET_FIELD_EXECUTE_AT is empty there is an error.
   */
   execute_at_null= table->field[ET_FIELD_EXECUTE_AT]->is_null();
-  DBUG_ASSERT(!(starts_null && ends_null && !expression && execute_at_null));
+  assert(!(starts_null && ends_null && !expression && execute_at_null));
   if (!expression && !execute_at_null)
   {
     if (table->field[ET_FIELD_EXECUTE_AT]->get_date(&time,
@@ -607,7 +636,7 @@ Event_timed::load_from_row(THD *thd, TABLE *table)
                                        table, &creation_ctx))
   {
     push_warning_printf(thd,
-                        Sql_condition::WARN_LEVEL_WARN,
+                        Sql_condition::SL_WARNING,
                         ER_EVENT_INVALID_CREATION_CTX,
                         ER(ER_EVENT_INVALID_CREATION_CTX),
                         (const char *) dbname.str,
@@ -651,7 +680,7 @@ Event_timed::load_from_row(THD *thd, TABLE *table)
 static
 my_time_t
 add_interval(MYSQL_TIME *ltime, const Time_zone *time_zone,
-             interval_type scale, INTERVAL interval)
+             interval_type scale, Interval interval)
 {
   if (date_add_interval(ltime, scale, interval))
     return 0;
@@ -693,7 +722,7 @@ bool get_next_time(const Time_zone *time_zone, my_time_t *next,
   DBUG_ENTER("get_next_time");
   DBUG_PRINT("enter", ("start: %lu  now: %lu", (long) start, (long) time_now));
 
-  DBUG_ASSERT(start <= time_now);
+  assert(start <= time_now);
 
   longlong months=0, seconds=0;
 
@@ -739,7 +768,7 @@ bool get_next_time(const Time_zone *time_zone, my_time_t *next,
     DBUG_RETURN(1);
     break;
   case INTERVAL_LAST:
-    DBUG_ASSERT(0);
+    assert(0);
   }
   DBUG_PRINT("info", ("seconds: %ld  months: %ld", (long) seconds, (long) months));
 
@@ -752,7 +781,7 @@ bool get_next_time(const Time_zone *time_zone, my_time_t *next,
     time_zone->gmt_sec_to_TIME(&local_now, time_now);
   }
 
-  INTERVAL interval;
+  Interval interval;
   memset(&interval, 0, sizeof(interval));
   my_time_t next_time= 0;
 
@@ -783,7 +812,7 @@ bool get_next_time(const Time_zone *time_zone, my_time_t *next,
         then next_time was set, but perhaps to the value that is less
         then time_now.  See below for elaboration.
       */
-      DBUG_ASSERT(negative || next_time > 0);
+      assert(negative || next_time > 0);
 
       /*
         If local_now < local_start, i.e. STARTS time is in the future
@@ -881,7 +910,7 @@ bool get_next_time(const Time_zone *time_zone, my_time_t *next,
     }
   }
 
-  DBUG_ASSERT(time_now < next_time);
+  assert(time_now < next_time);
 
   *next= next_time;
 
@@ -1194,7 +1223,7 @@ Event_timed::get_create_event(THD *thd, String *buf)
     DBUG_RETURN(EVEX_MICROSECOND_UNSUP);
 
   buf->append(STRING_WITH_LEN("CREATE "));
-  append_definer(thd, buf, &definer_user, &definer_host);
+  append_definer(thd, buf, definer_user, definer_host);
   buf->append(STRING_WITH_LEN("EVENT "));
   append_identifier(thd, buf, name.str, name.length);
 
@@ -1291,34 +1320,6 @@ Event_job_data::construct_sp_sql(THD *thd, String *sp_sql)
 
 
 /**
-  Get DROP EVENT statement to binlog the drop of ON COMPLETION NOT
-  PRESERVE event.
-*/
-
-bool
-Event_job_data::construct_drop_event_sql(THD *thd, String *sp_sql)
-{
-  LEX_STRING buffer;
-  const uint STATIC_SQL_LENGTH= 14;
-
-  DBUG_ENTER("Event_job_data::construct_drop_event_sql");
-
-  buffer.length= STATIC_SQL_LENGTH + name.length*2 + dbname.length*2;
-  if (! (buffer.str= (char*) thd->alloc(buffer.length)))
-    DBUG_RETURN(TRUE);
-
-  sp_sql->set(buffer.str, buffer.length, system_charset_info);
-  sp_sql->length(0);
-
-  sp_sql->append(C_STRING_WITH_LEN("DROP EVENT "));
-  append_identifier(thd, sp_sql, dbname.str, dbname.length);
-  sp_sql->append('.');
-  append_identifier(thd, sp_sql, name.str, name.length);
-
-  DBUG_RETURN(thd->is_fatal_error);
-}
-
-/**
   Compiles and executes the event (the underlying sp_head object)
 
   @retval TRUE  error (reported to the error log)
@@ -1357,13 +1358,13 @@ Event_job_data::execute(THD *thd, bool drop)
     mysql_change_db will be invoked anyway later, to activate the
     procedure database before it's executed.
   */
-  thd->set_db(dbname.str, dbname.length);
+  thd->set_db(to_lex_cstring(dbname));
 
   lex_start(thd);
 
 #ifndef NO_EMBEDDED_ACCESS_CHECKS
   if (event_sctx.change_security_context(thd,
-                                         &definer_user, &definer_host,
+                                         definer_user, definer_host,
                                          &dbname, &save_sctx))
   {
     sql_print_error("Event Scheduler: "
@@ -1407,7 +1408,8 @@ Event_job_data::execute(THD *thd, bool drop)
 
   {
     Parser_state parser_state;
-    if (parser_state.init(thd, thd->query(), thd->query_length()))
+
+    if (parser_state.init(thd, thd->query().str, thd->query().length))
       goto end;
 
     thd->m_digest= NULL;
@@ -1429,7 +1431,7 @@ Event_job_data::execute(THD *thd, bool drop)
   {
     sp_head *sphead= thd->lex->sphead;
 
-    DBUG_ASSERT(sphead);
+    assert(sphead);
 
     if (thd->enable_slow_log)
       sphead->m_flags|= sp_head::LOG_SLOW_STATEMENTS;
@@ -1438,6 +1440,13 @@ Event_job_data::execute(THD *thd, bool drop)
     sphead->set_info(0, 0, &thd->lex->sp_chistics, sql_mode);
     sphead->set_creation_ctx(creation_ctx);
     sphead->optimize();
+
+    sphead->m_type= SP_TYPE_EVENT;
+#ifdef HAVE_PSI_SP_INTERFACE
+    sphead->m_sp_share= MYSQL_GET_SP_SHARE(SP_TYPE_EVENT,
+                                           dbname.str, dbname.length,
+                                           name.str, name.length);
+#endif
 
     ret= sphead->execute_procedure(thd, &empty_item_list);
     /*
@@ -1459,7 +1468,7 @@ end:
       Construct a query for the binary log, to ensure the event is dropped
       on the slave
     */
-    if (construct_drop_event_sql(thd, &sp_sql))
+    if (construct_drop_event_sql(thd, &sp_sql, dbname, name))
       ret= 1;
     else
     {
@@ -1476,28 +1485,60 @@ end:
         Temporarily reset it to read-write.
       */
 
-      saved_master_access= thd->security_ctx->master_access;
-      thd->security_ctx->master_access |= SUPER_ACL;
+      saved_master_access= thd->security_context()->master_access();
+      thd->security_context()->set_master_access(saved_master_access |
+                                                 SUPER_ACL);
       bool save_tx_read_only= thd->tx_read_only;
       thd->tx_read_only= false;
 
       ret= Events::drop_event(thd, dbname, name, FALSE);
 
       thd->tx_read_only= save_tx_read_only;
-      thd->security_ctx->master_access= saved_master_access;
+      thd->security_context()->set_master_access(saved_master_access);
     }
   }
 #ifndef NO_EMBEDDED_ACCESS_CHECKS
   if (save_sctx)
     event_sctx.restore_security_context(thd, save_sctx);
 #endif
-  thd->lex->unit.cleanup();
+  thd->lex->unit->cleanup(true);
   thd->end_statement();
   thd->cleanup_after_query();
   /* Avoid races with SHOW PROCESSLIST */
   thd->reset_query();
 
   DBUG_PRINT("info", ("EXECUTED %s.%s  ret: %d", dbname.str, name.str, ret));
+
+  DBUG_RETURN(ret);
+}
+
+/**
+  Get DROP EVENT statement to binlog the drop of ON COMPLETION NOT
+  PRESERVE event.
+*/
+bool construct_drop_event_sql(THD *thd, String *sp_sql,
+                              const LEX_STRING &schema_name,
+                              const LEX_STRING &event_name)
+{
+  LEX_STRING buffer;
+  const uint STATIC_SQL_LENGTH= 14;
+  int ret= 0;
+
+  DBUG_ENTER("construct_drop_event_sql");
+
+  buffer.length= STATIC_SQL_LENGTH + event_name.length*2 +
+                 schema_name.length * 2;
+  if (! (buffer.str= (char*) thd->alloc(buffer.length)))
+    DBUG_RETURN(true);
+
+  sp_sql->set(buffer.str, buffer.length, system_charset_info);
+  sp_sql->length(0);
+
+  ret|= sp_sql->append(C_STRING_WITH_LEN("DROP EVENT IF EXISTS"));
+  append_identifier(thd, sp_sql, schema_name.str, schema_name.length);
+  ret|= sp_sql->append('.');
+  append_identifier(thd, sp_sql, event_name.str,
+                    event_name.length);
 
   DBUG_RETURN(ret);
 }

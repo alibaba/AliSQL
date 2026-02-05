@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -102,6 +109,21 @@ class LogHandlerList;
 class Logger
 {
 public:
+
+
+  /*
+    Convert time to local timezone and print in timestamp format
+    to string buffer. The function always write some null terminated
+    string to buffer so it can safely be printed.
+
+      @epoch time to convert and print
+      @str pointer to buffer where to print the resulting string
+      @len max lenght of result buffer
+
+  */
+  static void format_timestamp(const time_t epoch,
+                               char* str, size_t len);
+
   /** The log levels. NOTE: Could not use the name LogLevel since 
    * it caused conflicts with another class.
    */
@@ -153,11 +175,11 @@ public:
   bool createEventLogHandler(const char* source_name);
 
   /**
-   * Create a default handler that logs to a file called logger.log.
+   * Create a default handler which writes to the specified file name.
    *
    * @return true if successful.
    */
-  bool createFileHandler(char* filename= 0);
+  bool createFileHandler(char* filename);
 
   /**
    * Remove the default file handler.
@@ -183,16 +205,6 @@ public:
    * @return true if successful.
    */
   bool addHandler(LogHandler* pHandler);
-
-  /**
-   * Add a new handler
-   *
-   * @param logstring string describing the handler to add
-   * @param err OS errno in event of error
-   * @param len max length of errStr buffer
-   * @param errStr logger error string in event of error
-   */
-  bool addHandler(const BaseString &logstring, int *err, int len, char* errStr);
 
   /**
    * Remove a log handler.

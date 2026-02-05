@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2006, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2006, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -19,6 +26,9 @@
 #define WOPOOL_HPP
 
 #include "Pool.hpp"
+
+#define JAM_FILE_ID 303
+
 
 struct WOPage
 {
@@ -50,6 +60,7 @@ public:
   void * getPtr(Uint32 i);
   
 private:  
+  void seize_in_page(Ptr<void>&);
   bool seize_new_page(Ptr<void>&);
   void release_not_current(Ptr<void>);
 
@@ -59,22 +70,33 @@ private:
 };
 
 inline
+void
+WOPool::seize_in_page(Ptr<void>& ptr)
+{
+  Uint32 pos = m_current_pos;
+  WOPage *pageP = m_current_page;
+  Uint32 magic_pos = pos + m_record_info.m_offset_magic;
+  Uint32 type_id = ~(Uint32)m_record_info.m_type_id;
+  Uint32 size = m_record_info.m_size;
+  Uint16 ref_count = m_current_ref_count;
+
+  assert(pos + size < WOPage::WOPAGE_WORDS);
+  ptr.i = (m_current_page_no << POOL_RECORD_BITS) + pos;
+  ptr.p = (pageP->m_data + pos);
+  pageP->m_data[magic_pos] = type_id;
+  m_current_pos = pos + size;
+  m_current_ref_count = ref_count + 1;
+}
+
+inline
 bool
 WOPool::seize(Ptr<void>& ptr)
 {
-  Uint32 pos = m_current_pos;
-  Uint32 size = m_record_info.m_size;
-  WOPage *pageP = m_current_page;
-  if (likely(pos + size < WOPage::WOPAGE_WORDS))
+  if (likely(m_current_pos + m_record_info.m_size < WOPage::WOPAGE_WORDS))
   {
-    ptr.i = (m_current_page_no << POOL_RECORD_BITS) + pos;
-    ptr.p = (pageP->m_data + pos);
-    pageP->m_data[pos+m_record_info.m_offset_magic] = ~(Uint32)m_record_info.m_type_id;
-    m_current_pos = pos + size;
-    m_current_ref_count++;
+    seize_in_page(ptr);
     return true;
   }
-  
   return seize_new_page(ptr);
 }
 
@@ -120,5 +142,8 @@ WOPool::getPtr(Uint32 i)
   handle_invalid_get_ptr(i);
   return 0;                                     /* purify: deadcode */
 }
+
+
+#undef JAM_FILE_ID
 
 #endif

@@ -1,13 +1,20 @@
-# Copyright (c) 2008, 2010, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; version 2 of the License.
+# it under the terms of the GNU General Public License, version 2.0,
+# as published by the Free Software Foundation.
+#
+# This program is also distributed with certain software (including
+# but not limited to OpenSSL) that is licensed under separate terms,
+# as designated in a particular file or component or in included license
+# documentation.  The authors of MySQL hereby grant you an additional
+# permission to link the program and your derivative works with the
+# separately licensed software that they have included with MySQL.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# GNU General Public License, version 2.0, for more details.
 #
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
@@ -17,9 +24,8 @@
 INCLUDE(${CMAKE_SOURCE_DIR}/storage/ndb/config/type_util.cmake)
 INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/storage/ndb/include/mgmapi
                     ${CMAKE_SOURCE_DIR}/storage/ndb/include/kernel
-                    ${CMAKE_SOURCE_DIR}/storage/ndb/mgmsrv
 )
-ADD_DEFINITIONS(-DNDB_MGMAPI)
+#ADD_DEFINITIONS(-DNDB_MGMAPI)
 ADD_CONVENIENCE_LIBRARY(ndbmgmapi
             mgmapi.cpp
             mgmapi_error.c
@@ -28,3 +34,7 @@ ADD_CONVENIENCE_LIBRARY(ndbmgmapi
             LocalConfig.cpp
             ${CMAKE_SOURCE_DIR}/storage/ndb/src/kernel/error/ndbd_exit_codes.c)
 TARGET_LINK_LIBRARIES(ndbmgmapi ndbconf ndbportlib)
+
+
+ADD_EXECUTABLE(mgmapi-t mgmapi-t.cpp)
+TARGET_LINK_LIBRARIES(mgmapi-t ndbmgmapi ndbgeneral)

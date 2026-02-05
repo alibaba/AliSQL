@@ -1,23 +1,31 @@
-/* Copyright (c) 2010, 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "datadict.h"
-#include "sql_priv.h"
 #include "sql_class.h"
 #include "sql_table.h"
 
+#include "pfs_file_provider.h"
+#include "mysql/psi/mysql_file.h"
 
 /**
   Check type of .frm if we are not going to parse it.
@@ -87,8 +95,9 @@ bool dd_frm_storage_engine(THD *thd, const char *db, const char *table_name,
   LEX_STRING db_name = {(char *) db, strlen(db)};
 
   /* There should be at least some lock on the table.  */
-  DBUG_ASSERT(thd->mdl_context.is_lock_owner(MDL_key::TABLE, db,
-                                             table_name, MDL_SHARED));
+  assert(thd->mdl_context.owns_equal_or_stronger_lock(MDL_key::TABLE,
+                                                      db, table_name,
+                                                      MDL_SHARED));
 
   if (check_and_convert_db_name(&db_name, FALSE) != IDENT_NAME_OK)
     return TRUE;
@@ -112,10 +121,14 @@ bool dd_frm_storage_engine(THD *thd, const char *db, const char *table_name,
   dd_frm_type(thd, path, &db_type);
 
   /* Type is unknown if the object is not found or is not a table. */
-  if (db_type == DB_TYPE_UNKNOWN ||
-      !(*table_type= ha_resolve_by_legacy_type(thd, db_type)))
+  if (db_type == DB_TYPE_UNKNOWN)
   {
     my_error(ER_NO_SUCH_TABLE, MYF(0), db, table_name);
+    return TRUE;
+  }
+  else if (!(*table_type= ha_resolve_by_legacy_type(thd, db_type)))
+  {
+    my_error(ER_STORAGE_ENGINE_NOT_LOADED, MYF(0), db, table_name);
     return TRUE;
   }
 
@@ -172,10 +185,9 @@ bool dd_recreate_table(THD *thd, const char *db, const char *table_name)
   DBUG_ENTER("dd_recreate_table");
 
   /* There should be a exclusive metadata lock on the table. */
-  DBUG_ASSERT(thd->mdl_context.is_lock_owner(MDL_key::TABLE, db, table_name,
-                                             MDL_EXCLUSIVE));
-
-  memset(&create_info, 0, sizeof(create_info));
+  assert(thd->mdl_context.owns_equal_or_stronger_lock(MDL_key::TABLE,
+                                                      db, table_name,
+                                                      MDL_EXCLUSIVE));
 
   /* Create a path to the table, but without a extension. */
   build_table_filename(path, sizeof(path) - 1, db, table_name, "", 0);

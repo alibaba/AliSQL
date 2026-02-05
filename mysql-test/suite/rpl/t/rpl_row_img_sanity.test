@@ -19,12 +19,14 @@
 #
 #  See also WL#5096.
 #
--- source include/master-slave.inc
+--source include/not_group_replication_plugin.inc
 -- source include/have_binlog_format_row.inc
+-- source include/no_valgrind_without_big.inc
+-- source include/master-slave.inc
 
 -- connection slave
 call mtr.add_suppression("Slave: Can\'t find record in \'t\' Error_code: 1032");
-call mtr.add_suppression("Slave SQL: .*Could not execute Update_rows event on table test.t; Can.t find record in .t.* Error_code: 1032");
+call mtr.add_suppression("Slave SQL for channel '': .*Could not execute Update_rows event on table test.t; Can.t find record in .t.* Error_code: 1032");
 call mtr.add_suppression("The slave coordinator and worker threads are stopped, possibly leaving data in inconsistent state");
 
 -- connection master
@@ -145,21 +147,6 @@ while (`SELECT HEX(@img_types) != HEX('')`)
     -- let $row_img_expected_slave= $row_img_expected_master
     -- source include/rpl_row_img_parts_master_slave.inc
 
-    # we need to test insert delayed to check if the thread handling
-    # the delayed inserts also marks the correct write set (it has its
-    # own sort of table object).
-    -- let $row_img_query= INSERT DELAYED INTO t(c1,c3) VALUES (100,"a")
-    if (`SELECT @@binlog_row_image = "FULL" or @@binlog_row_image = "NOBLOB"`)
-    {
-      -- let $row_img_expected_master= | 1:100 2:NULL 3:'a'
-    }
-    if  (`SELECT @@binlog_row_image = "MINIMAL"`)
-    { 
-      -- let $row_img_expected_master= | 1:100 3:'a'
-    }
-    -- let $row_img_expected_slave= $row_img_expected_master
-    -- source include/rpl_row_img_parts_master_slave.inc
-
     -- let $row_img_query= INSERT INTO t(c1) VALUES (1000)
     if (`SELECT @@binlog_row_image = "FULL"`)
     {
@@ -172,22 +159,6 @@ while (`SELECT HEX(@img_types) != HEX('')`)
     if  (`SELECT @@binlog_row_image = "MINIMAL"`)
     { 
       -- let $row_img_expected_master= | 1:1000
-    }
-    -- let $row_img_expected_slave= $row_img_expected_master
-    -- source include/rpl_row_img_parts_master_slave.inc
-
-    -- let $row_img_query= INSERT DELAYED INTO t(c1) VALUES (10000)
-    if (`SELECT @@binlog_row_image = "FULL"`)
-    {
-      -- let $row_img_expected_master= | 1:10000 2:NULL 3:NULL
-    } 
-    if  (`SELECT @@binlog_row_image = "NOBLOB"`)
-    { 
-      -- let $row_img_expected_master= | 1:10000 2:NULL
-    }
-    if  (`SELECT @@binlog_row_image = "MINIMAL"`)
-    { 
-      -- let $row_img_expected_master= | 1:10000
     }
     -- let $row_img_expected_slave= $row_img_expected_master
     -- source include/rpl_row_img_parts_master_slave.inc
@@ -512,19 +483,9 @@ CREATE TABLE t (c1 int, c2 int, c3 blob, primary key(c1,c3(512)));
 -- let $row_img_expected_slave = | 1:10 2:NULL 3:'a'
 -- source include/rpl_row_img_parts_master_slave.inc
 
--- let $row_img_query= INSERT DELAYED INTO t(c1,c3) VALUES (100,"a")
--- let $row_img_expected_master= | 1:100 2:NULL 3:'a'
--- let $row_img_expected_slave = | 1:100 2:NULL 3:'a'
--- source include/rpl_row_img_parts_master_slave.inc
-
 -- let $row_img_query= INSERT INTO t(c1) VALUES (1000)
 -- let $row_img_expected_master= | 1:1000 2:NULL
 -- let $row_img_expected_slave = | 1:1000 2:NULL
--- source include/rpl_row_img_parts_master_slave.inc
-
--- let $row_img_query= INSERT DELAYED INTO t(c1) VALUES (10000)
--- let $row_img_expected_master= | 1:10000 2:NULL
--- let $row_img_expected_slave = | 1:10000 2:NULL
 -- source include/rpl_row_img_parts_master_slave.inc
 
 -- let $row_img_query= UPDATE t SET c1=2 WHERE c1=1
@@ -560,19 +521,9 @@ CREATE TABLE t (c1 int, c2 int, c3 blob, primary key(c1,c2));
 -- let $row_img_expected_slave = | 1:10 2:0 3:'a'
 -- source include/rpl_row_img_parts_master_slave.inc
 
--- let $row_img_query= INSERT DELAYED INTO t(c1,c3) VALUES (100,"a")
--- let $row_img_expected_master= | 1:100 2:0 3:'a'
--- let $row_img_expected_slave = | 1:100 2:0 3:'a'
--- source include/rpl_row_img_parts_master_slave.inc
-
 -- let $row_img_query= INSERT INTO t(c1) VALUES (1000)
 -- let $row_img_expected_master= | 1:1000 2:0
 -- let $row_img_expected_slave = | 1:1000 2:0
--- source include/rpl_row_img_parts_master_slave.inc
-
--- let $row_img_query= INSERT DELAYED INTO t(c1) VALUES (10000)
--- let $row_img_expected_master= | 1:10000 2:0
--- let $row_img_expected_slave = | 1:10000 2:0
 -- source include/rpl_row_img_parts_master_slave.inc
 
 -- let $row_img_query= UPDATE t SET c3='b' WHERE c1=1
@@ -806,7 +757,71 @@ let $slave_sql_errno= 1032;
 source include/wait_for_slave_sql_error.inc;
 DROP TABLE t;
 --let $rpl_only_running_threads= 1
+
+# ==== Purpose ====
+#
+# Check that when binlog_row_image= FULL 'UPDATE' query should not using
+# temporary if the PRIMARY KEY not being modified as part of the query.
+#
+# ==== Implementation ====
+#
+# Set binlog_row_image= FULL. Create a table which has both a primary key and
+# a regular int field which is not a key. Execute an UPDATE statement in such
+# a way that it doesn't update the primary key field. See the 'EXPLAIN' output
+# it should not use a temporary table. Repeat the same test in case of
+# binlog_row_image= NOBLOB as well. No temporary table should be used in this
+# case as well.
+#
+# ==== References ====
+#
+# Bug#22510353: UNNECESSARY USING TEMPORARY FOR UPDATE
+#
+###############################################################################
 -- source include/rpl_reset.inc
+-- connection master
+-- let $row_img_set=master:FULL:N,slave:FULL:Y
+-- source include/rpl_row_img_set.inc
+CREATE TABLE t1(id INT PRIMARY KEY, a INT) ENGINE = INNODB;
+
+--source include/sync_slave_sql_with_master.inc
+
+-- connection master
+-- let $row_img_query= INSERT INTO t1 (id, a) VALUES (1, 1)
+-- let $row_img_expected_master= | 1:1 2:1
+-- let $row_img_expected_slave = | 1:1 2:1
+-- source include/rpl_row_img_parts_master_slave.inc
+
+-- echo "Case: FULL - EXPLAIN output should not display Using temporary"
+EXPLAIN UPDATE t1 SET a=a+1 WHERE id < 2;
+
+-- let $row_img_query= UPDATE t1 SET a=a+1 WHERE id < 2
+-- let $row_img_expected_master=  1:1 2:1 | 1:1 2:2
+-- let $row_img_expected_slave = 1:1 2:1 | 1:1 2:2
+-- source include/rpl_row_img_parts_master_slave.inc
+
+-- let $row_img_set=master:NOBLOB:N,slave:NOBLOB:Y
+-- source include/rpl_row_img_set.inc
+
+-- echo "Case: NOBLOB - EXPLAIN output should not display Using temporary"
+EXPLAIN UPDATE t1 SET a=a+1 WHERE id < 2;
+
+-- let $row_img_query= UPDATE t1 SET a=a+1 WHERE id < 2
+-- let $row_img_expected_master=  1:1 2:2 | 1:1 2:3
+-- let $row_img_expected_slave = 1:1 2:2 | 1:1 2:3
+-- source include/rpl_row_img_parts_master_slave.inc
+
+-- let $row_img_set=master:MINIMAL:N,slave:MINIMAL:Y
+-- source include/rpl_row_img_set.inc
+
+EXPLAIN UPDATE t1 SET a=a+1 WHERE id < 2;
+
+-- let $row_img_query= UPDATE t1 SET a=a+1 WHERE id < 2
+-- let $row_img_expected_master= 1:1 | 2:4
+-- let $row_img_expected_slave = 1:1 | 2:4
+-- source include/rpl_row_img_parts_master_slave.inc
+
+DROP TABLE t1;
+--source include/sync_slave_sql_with_master.inc
 
 ## CLEAN UP
 

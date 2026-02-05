@@ -1,19 +1,28 @@
-/* Copyright (c) 2002, 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2002, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
    51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
 
 #include "keycaches.h"
+/* key_memory_KEY_CACHE */
+#include "../mysys/mysys_priv.h"
 
 /****************************************************************************
   Named list handling
@@ -21,7 +30,7 @@
 
 NAMED_ILIST key_caches;
 
-uchar* find_named(I_List<NAMED_ILINK> *list, const char *name, uint length,
+uchar* find_named(I_List<NAMED_ILINK> *list, const char *name, size_t length,
                 NAMED_ILINK **found)
 {
   I_List_iterator<NAMED_ILINK> it(*list);
@@ -66,13 +75,14 @@ KEY_CACHE *get_key_cache(LEX_STRING *cache_name)
                                   cache_name->str, cache_name->length, 0));
 }
 
-KEY_CACHE *create_key_cache(const char *name, uint length)
+KEY_CACHE *create_key_cache(const char *name, size_t length)
 {
   KEY_CACHE *key_cache;
   DBUG_ENTER("create_key_cache");
-  DBUG_PRINT("enter",("name: %.*s", length, name));
+  DBUG_PRINT("enter",("name: %.*s", static_cast<int>(length), name));
   
-  if ((key_cache= (KEY_CACHE*) my_malloc(sizeof(KEY_CACHE),
+  if ((key_cache= (KEY_CACHE*) my_malloc(key_memory_KEY_CACHE,
+                                         sizeof(KEY_CACHE),
                                              MYF(MY_ZEROFILL | MY_WME))))
   {
     if (!new NAMED_ILINK(&key_caches, name, length, (uchar*) key_cache))
@@ -97,7 +107,7 @@ KEY_CACHE *create_key_cache(const char *name, uint length)
 }
 
 
-KEY_CACHE *get_or_create_key_cache(const char *name, uint length)
+KEY_CACHE *get_or_create_key_cache(const char *name, size_t length)
 {
   LEX_STRING key_cache_name;
   KEY_CACHE *key_cache;

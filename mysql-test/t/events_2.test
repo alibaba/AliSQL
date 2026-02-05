@@ -1,3 +1,4 @@
+
 # changes 2008-02-20 hhunger splitted events.test into events_1 and events_2
 #
 # Can't test with embedded server that doesn't support grants
@@ -13,10 +14,7 @@ use events_test;
 # mysql.event intact checking end
 #
 
---let $one_year_from_now = `SELECT NOW() + INTERVAL 1 YEAR`
---replace_result $one_year_from_now ONE_YEAR_FROM_NOW
-eval create event e_26 on schedule at '$one_year_from_now' disable do set @a = 5;
---replace_result $one_year_from_now ONE_YEAR_FROM_NOW
+create event e_26 on schedule at '2037-01-01 00:00:00' disable do set @a = 5;
 select db, name, body, definer, convert_tz(execute_at, 'UTC', 'SYSTEM'), on_completion from mysql.event;
 drop event e_26;
 --error ER_WRONG_VALUE

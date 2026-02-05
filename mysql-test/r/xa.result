@@ -47,8 +47,14 @@ formatID	gtrid_length	bqual_length	data
 11	5	5	testb 0@P`
 1	5	5	testatestb
 xa commit 'testb',0x2030405060,11;
-ERROR XAE04: XAER_NOTA: Unknown XID
+ERROR XAE07: XAER_RMFAIL: The command cannot be executed when global transaction is in the  PREPARED state
+xa rollback 'testb',0x2030405060,11;
+ERROR XAE07: XAER_RMFAIL: The command cannot be executed when global transaction is in the  PREPARED state
 xa rollback 'testa','testb';
+xa commit 'testb',0x2030405060,11;
+ERROR XAE04: XAER_NOTA: Unknown XID
+xa rollback 'testb',0x2030405060,11;
+ERROR XAE04: XAER_NOTA: Unknown XID
 xa start 'zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz';
 ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '' at line 1
 select * from t1;
@@ -67,8 +73,7 @@ update t1 set c = 'bb' where a = 2;
 update t1 set c = 'aa' where a = 1;
 ERROR 40001: Deadlock found when trying to get lock; try restarting transaction
 select count(*) from t1;
-count(*)
-2
+ERROR XA102: XA_RBDEADLOCK: Transaction branch was rolled back: deadlock was detected
 xa end 'a','c';
 ERROR XA102: XA_RBDEADLOCK: Transaction branch was rolled back: deadlock was detected
 xa rollback 'a','c';
@@ -231,3 +236,184 @@ XA PREPARE 'xid1';
 XA ROLLBACK 'xid1';
 # Connection default
 DROP TABLE t1, t2;
+#
+# Bug#14670465 PLEASE PRINT HUMAN READABLE, ESCAPED 
+#              XID DATA IN XA RECOVER OUTPUT
+#
+#
+# xa Recover command was not diplaying non printable ASCII
+# characters in the XID previosuly. Now there is another column
+# in the result set which is a Hex Encoded String of the XID.
+#
+# Check that XIDs which are not normally printable are displayed
+# in readable format when CONVERT XID clause is used.
+xa start 0xABCDEF1234567890, 0x01, 0x02 ;
+xa end 0xABCDEF1234567890, 0x01, 0x02 ;
+xa prepare 0xABCDEF1234567890, 0x01, 0x02 ;
+xa recover convert xid;
+formatID	gtrid_length	bqual_length	data
+2	8	1	0xABCDEF123456789001
+11	5	5	0x74657374622030405060
+xa rollback 0xABCDEF1234567890, 0x01, 0x02 ;
+# Check that XID which has only printable characters are displayed
+# correctly without using of CONVERT XID clause
+xa start 0x4142434445, 0x46, 0x02 ;
+xa end 0x4142434445, 0x46, 0x02 ;
+xa prepare 0x4142434445, 0x46, 0x02 ;
+xa recover;
+formatID	gtrid_length	bqual_length	data
+2	5	1	ABCDEF
+11	5	5	testb 0@P`
+xa rollback 0x4142434445, 0x46, 0x02 ;
+#
+# WL#7155: Test 1: check that if a thread of control terminates then 
+# the Resource Manager dissociate and rollback any associated 
+# transaction branch (see ref. 3.6 on page 18 of XA spec)
+#
+CREATE TABLE t1 (a INT) ENGINE=INNODB;
+XA START 'xid1';
+INSERT INTO t1 VALUES (1);
+XA END 'xid1';
+SELECT * FROM t1;
+a
+DROP TABLE t1;
+#
+# WL#7155: Test 2: Check that if the Resource Manager is doing work outside
+# any global transaction on behalf of the application,
+# xa_start() returns XAER_OUTSIDE (see xa_start description on page 52 of XA spec)  
+#
+SET SESSION autocommit=0;
+START TRANSACTION;
+XA START 'xid1';
+ERROR XAE09: XAER_OUTSIDE: Some work is done outside global transaction
+COMMIT;
+#
+# WL#7155: Test 3: Check that the Resource Manager returns error
+# if the Transaction Manager tries to resume non-existent transaction. 
+#
+XA START 'xid1' RESUME;
+ERROR XAE05: XAER_INVAL: Invalid arguments (or unsupported command)
+#
+# WL#7155: Test 4: Check that the Resource Manager returns ok
+# if the Transaction Manager tries to resume transaction
+# that has been ended before. 
+#
+XA START 'xid1';
+XA END 'xid1';
+XA START 'xid1' RESUME;
+XA END 'xid1';
+#
+# WL#7155: Test 5: Check that the Resource Manager returns error
+# if the Transaction Manager ends some XA transaction and
+# starts another one with RESUME clause right after that.
+#
+XA START 'xid1';
+XA END 'xid1';
+XA START 'xid2' RESUME;
+ERROR XAE04: XAER_NOTA: Unknown XID
+#
+# WL#7155: Test 6: Check that the SUSPEND clause isn't supported for XA END. 
+#
+XA START 'xid1';
+XA END 'xid1' SUSPEND;
+ERROR XAE05: XAER_INVAL: Invalid arguments (or unsupported command)
+XA END 'xid1';
+#
+# WL#7155: Test 7: Check that attempt to end non-existent XA transaction 
+# while another XA transaction is active leads to an error 
+#
+XA START 'xid1';
+XA END 'xid2';
+ERROR XAE04: XAER_NOTA: Unknown XID
+XA END 'xid1';
+#
+# WL#7155: Test 8: Check that XA ROLLBACK can't be called for active XA transaction
+#
+XA START 'xid1';
+XA ROLLBACK 'xid1';
+ERROR XAE07: XAER_RMFAIL: The command cannot be executed when global transaction is in the  ACTIVE state
+XA END 'xid1';
+#
+# WL#7155: Test 9: Check that XA PREPARE returns error for unknown xid
+#
+XA START 'xid1';
+XA END 'xid1';
+XA PREPARE 'xid2';
+ERROR XAE04: XAER_NOTA: Unknown XID
+#
+# WL#7155: Test 10: Check that rollback of XA transaction with unknown xid 
+# leads to an error when there is other prepared XA transaction. 
+#
+XA START 'xid1';
+XA END 'xid1';
+XA PREPARE 'xid1';
+XA ROLLBACK 'xid2';
+ERROR XAE07: XAER_RMFAIL: The command cannot be executed when global transaction is in the  PREPARED state
+XA ROLLBACK 'xid1';
+#
+# Bug#18107853 - XA LIST GETS CORRUPT, CRASH AND/OR HANG AND/OR ASSERTION
+#
+# Check that the server reports an error in case of too long input value of
+# format ID overflows the type of unsigned long
+XA START '1', 0x01, 18446744073709551615;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '18446744073709551615' at line 1
+#
+# Bug#25364178 - XA PREPARE INCONSISTENT WITH XTRABACKUP
+#
+# Check XA state when lock_wait_timeout happens
+# More tests added to flush_read_lock.test
+set session lock_wait_timeout=1;
+create table asd (a int);
+xa start 'test1';
+insert into asd values(1);
+xa end 'test1';
+flush table with read lock;
+# PREPARE error will do auto rollback.
+xa prepare 'test1';
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+show errors;
+Level	Code	Message
+Error	1205	Lock wait timeout exceeded; try restarting transaction
+Error	1402	XA_RBROLLBACK: Transaction branch was rolled back
+unlock tables;
+xa start 'test1';
+insert into asd values(1);
+xa end 'test1';
+xa prepare 'test1';
+flush tables with read lock;
+# LOCK error during ROLLBACK will not alter transaction state.
+xa rollback 'test1';
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+show errors;
+Level	Code	Message
+Error	1205	Lock wait timeout exceeded; try restarting transaction
+Error	1401	XAER_RMERR: Fatal error occurred in the transaction branch - check your data for consistency
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	5	0	test1
+11	5	5	testb 0@P`
+# LOCK error during COMMIT will not alter transaction state.
+xa commit 'test1';
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+show errors;
+Level	Code	Message
+Error	1205	Lock wait timeout exceeded; try restarting transaction
+Error	3197	The resource manager is not able to commit the transaction branch at this time. Please retry later.
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	5	0	test1
+11	5	5	testb 0@P`
+unlock tables;
+xa rollback 'test1';
+xa recover;
+formatID	gtrid_length	bqual_length	data
+11	5	5	testb 0@P`
+drop table asd;
+There should be practically no error, but in theory
+XAER_NOTA: Unknown XID can be returned if con1 disconnection
+took for too long.
+todo: consider to make this test dependent on P_S if
+todo: such case will be ever registered.
+xa rollback 'testb',0x2030405060,11;
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data

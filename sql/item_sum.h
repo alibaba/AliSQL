@@ -1,17 +1,23 @@
 #ifndef ITEM_SUM_INCLUDED
 #define ITEM_SUM_INCLUDED
 
-/* Copyright (c) 2000, 2016, Oracle and/or its affiliates. All rights reserved. reserved.
-   reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -20,12 +26,18 @@
 
 /* classes for sum functions */
 
-#include <my_tree.h>
-#include "sql_udf.h"                            /* udf_handler */
+#include "my_tree.h"        // TREE
+#include "item.h"           // Item_result_field
+#include "json_dom.h"       // Json_wrapper
+#include "sql_alloc.h"      // Sql_alloc
+#include "sql_udf.h"        // udf_handler
+#include "mem_root_array.h"
 
 class Item_sum;
 class Aggregator_distinct;
 class Aggregator_simple;
+class PT_item_list;
+class PT_order_list;
 
 /**
   The abstract base class for the Aggregator_* classes.
@@ -304,6 +316,8 @@ class st_select_lex;
 
 class Item_sum :public Item_result_field
 {
+  typedef Item_result_field super;
+
   friend class Aggregator_distinct;
   friend class Aggregator_simple;
 
@@ -336,9 +350,21 @@ public:
   bool has_with_distinct()     const { return with_distinct; }
 
   enum Sumfunctype
-  { COUNT_FUNC, COUNT_DISTINCT_FUNC, SUM_FUNC, SUM_DISTINCT_FUNC, AVG_FUNC,
-    AVG_DISTINCT_FUNC, MIN_FUNC, MAX_FUNC, STD_FUNC,
-    VARIANCE_FUNC, SUM_BIT_FUNC, UDF_SUM_FUNC, GROUP_CONCAT_FUNC
+  {
+    COUNT_FUNC,          // COUNT
+    COUNT_DISTINCT_FUNC, // COUNT (DISTINCT)
+    SUM_FUNC,            // SUM
+    SUM_DISTINCT_FUNC,   // SUM (DISTINCT)
+    AVG_FUNC,            // AVG
+    AVG_DISTINCT_FUNC,   // AVG (DISTINCT)
+    MIN_FUNC,            // MIN
+    MAX_FUNC,            // MAX
+    STD_FUNC,            // STD/STDDEV/STDDEV_POP
+    VARIANCE_FUNC,       // VARIANCE/VAR_POP and VAR_SAMP
+    SUM_BIT_FUNC,        // BIT_AND, BIT_OR and BIT_XOR
+    UDF_SUM_FUNC,        // user defined functions
+    GROUP_CONCAT_FUNC,   // GROUP_CONCAT
+    JSON_AGG_FUNC,       // JSON_ARRAYAGG and JSON_OBJECTAGG
   };
 
   Item **ref_by; /* pointer to a ref to the object used to register it */
@@ -350,13 +376,7 @@ public:
   int8 max_arg_level;     /* max level of unbound column references          */
   int8 max_sum_func_level;/* max level of aggregation for embedded functions */
   bool quick_group;			/* If incremental update of fields */
-  /*
-    This list is used by the check for mixing non aggregated fields and
-    sum functions in the ONLY_FULL_GROUP_BY_MODE. We save all outer fields
-    directly or indirectly used under this function it as it's unclear
-    at the moment of fixing outer field whether it's aggregated or not.
-  */
-  List<Item_field> outer_fields;
+  st_select_lex *base_select; ///< query block where function is placed
 
 protected:  
   uint arg_count;
@@ -368,11 +388,14 @@ protected:
 public:  
 
   void mark_as_sum_func();
-  Item_sum() :next(NULL), quick_group(1), arg_count(0), forced_const(FALSE)
+  void mark_as_sum_func(st_select_lex *);
+  Item_sum(const POS &pos)
+    :super(pos), next(NULL), quick_group(1), arg_count(0), forced_const(FALSE)
   {
-    mark_as_sum_func();
     init_aggregator();
   }
+
+
   Item_sum(Item *a) :next(NULL), quick_group(1), arg_count(1), args(tmp_args),
    forced_const(FALSE)
   {
@@ -380,16 +403,29 @@ public:
     mark_as_sum_func();
     init_aggregator();
   }
-  Item_sum( Item *a, Item *b ) :next(NULL), quick_group(1), arg_count(2), args(tmp_args),
-    forced_const(FALSE)
+  Item_sum(const POS &pos, Item *a)
+    :super(pos), next(NULL), quick_group(1), arg_count(1), args(tmp_args),
+     forced_const(FALSE)
   {
-    args[0]=a; args[1]=b;
-    mark_as_sum_func();
+    args[0]=a;
     init_aggregator();
   }
-  Item_sum(List<Item> &list);
+
+  Item_sum(const POS &pos, Item *a, Item *b)
+    :super(pos), next(NULL), quick_group(true), arg_count(2), args(tmp_args),
+     forced_const(false)
+  {
+    args[0]= a;
+    args[1]= b;
+    init_aggregator();
+  }
+
+  Item_sum(const POS &pos, PT_item_list *opt_list);
+
   //Copy constructor, need to perform subselects with temporary tables
   Item_sum(THD *thd, Item_sum *item);
+
+  virtual bool itemize(Parse_context *pc, Item **res);
   enum Type type() const { return SUM_FUNC_ITEM; }
   virtual enum Sumfunctype sum_func () const=0;
   /**
@@ -419,7 +455,7 @@ public:
   */
   virtual void update_field()=0;
   virtual bool keep_field_type(void) const { return 0; }
-  virtual void fix_length_and_dec() { maybe_null=1; null_value=1; }
+  virtual void fix_length_and_dec();
   virtual Item *result_item(Field *field)
     { return new Item_field(field); }
   table_map used_tables() const { return used_tables_cache; }
@@ -434,7 +470,7 @@ public:
   virtual bool const_during_execution() const { return false; }
   virtual void print(String *str, enum_query_type query_type);
   void fix_num_length_and_dec();
-
+  bool eq(const Item *item, bool binary_cmp) const;
   /**
     Mark an aggregate as having no rows.
 
@@ -453,10 +489,11 @@ public:
     aggregator_clear();
   }
   virtual void make_unique() { force_copy_fields= TRUE; }
-  Item *get_tmp_table_item(THD *thd);
   virtual Field *create_tmp_field(bool group, TABLE *table);
-  bool walk(Item_processor processor, bool walk_subquery, uchar *argument);
+  bool walk(Item_processor processor, enum_walk walk, uchar *arg);
   virtual bool clean_up_after_removal(uchar *arg);
+  virtual bool aggregate_check_group(uchar *arg);
+  virtual bool aggregate_check_distinct(uchar *arg);
   bool init_sum_func_check(THD *thd);
   bool check_sum_func(THD *thd, Item **ref);
   bool register_sum_func(THD *thd, Item **ref);
@@ -466,6 +503,8 @@ public:
   Item *get_arg(uint i) { return args[i]; }
   Item *set_arg(uint i, THD *thd, Item *new_val);
   uint get_arg_count() const { return arg_count; }
+  /// @todo delete this when we no longer support temporary transformations
+  Item **get_arg_ptr(uint i) { return &args[i]; }
 
   /* Initialization of distinct related members */
   void init_aggregator()
@@ -564,7 +603,7 @@ class Aggregator_distinct : public Aggregator
     Used in conjunction with 'table' to support the access to Field classes 
     for COUNT(DISTINCT). Needed by copy_fields()/copy_funcs().
   */
-  TMP_TABLE_PARAM *tmp_table_param;
+  Temp_table_param *tmp_table_param;
   
   /*
     If there are no blobs in the COUNT(DISTINCT) arguments, we can use a tree,
@@ -666,23 +705,25 @@ protected:
   */
   bool is_evaluated;
 public:
-  Item_sum_num() :Item_sum(),is_evaluated(FALSE) {}
-  Item_sum_num(Item *item_par) 
-    :Item_sum(item_par), is_evaluated(FALSE) {}
-  Item_sum_num(Item *a, Item* b) :Item_sum(a,b),is_evaluated(FALSE) {}
-  Item_sum_num(List<Item> &list) 
-    :Item_sum(list), is_evaluated(FALSE) {}
+  Item_sum_num(const POS &pos, Item *item_par) 
+    :Item_sum(pos, item_par), is_evaluated(FALSE)
+  {}
+
+  Item_sum_num(const POS &pos, PT_item_list *list) 
+    :Item_sum(pos, list), is_evaluated(FALSE)
+  {}
+
   Item_sum_num(THD *thd, Item_sum_num *item) 
     :Item_sum(thd, item),is_evaluated(item->is_evaluated) {}
   bool fix_fields(THD *, Item **);
   longlong val_int()
   {
-    DBUG_ASSERT(fixed == 1);
+    assert(fixed == 1);
     return (longlong) rint(val_real());             /* Real as default */
   }
   String *val_str(String*str);
   my_decimal *val_decimal(my_decimal *);
-  bool get_date(MYSQL_TIME *ltime, uint fuzzydate)
+  bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate)
   {
     return get_date_from_numeric(ltime, fuzzydate); /* Decimal or real */
   }
@@ -697,13 +738,14 @@ public:
 class Item_sum_int :public Item_sum_num
 {
 public:
-  Item_sum_int(Item *item_par) :Item_sum_num(item_par) {}
-  Item_sum_int(List<Item> &list) :Item_sum_num(list) {}
+  Item_sum_int(const POS &pos, Item *item_par) :Item_sum_num(pos, item_par) {}
+
+  Item_sum_int(const POS &pos, PT_item_list *list) :Item_sum_num(pos, list) {}
   Item_sum_int(THD *thd, Item_sum_int *item) :Item_sum_num(thd, item) {}
-  double val_real() { DBUG_ASSERT(fixed == 1); return (double) val_int(); }
+  double val_real() { assert(fixed == 1); return (double) val_int(); }
   String *val_str(String*str);
   my_decimal *val_decimal(my_decimal *);
-  bool get_date(MYSQL_TIME *ltime, uint fuzzydate)
+  bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate)
   {
     return get_date_from_int(ltime, fuzzydate);
   }
@@ -727,10 +769,12 @@ protected:
   void fix_length_and_dec();
 
 public:
-  Item_sum_sum(Item *item_par, bool distinct) :Item_sum_num(item_par) 
+  Item_sum_sum(const POS &pos, Item *item_par, bool distinct)
+    :Item_sum_num(pos, item_par) 
   {
     set_distinct(distinct);
   }
+
   Item_sum_sum(THD *thd, Item_sum_sum *item);
   enum Sumfunctype sum_func () const 
   { 
@@ -765,8 +809,8 @@ class Item_sum_count :public Item_sum_int
   void cleanup();
 
   public:
-  Item_sum_count(Item *item_par)
-    :Item_sum_int(item_par),count(0)
+  Item_sum_count(const POS &pos, Item *item_par)
+    :Item_sum_int(pos, item_par),count(0)
   {}
 
   /**
@@ -777,8 +821,8 @@ class Item_sum_count :public Item_sum_int
     This constructor is called by the parser only for COUNT (DISTINCT).
   */
 
-  Item_sum_count(List<Item> &list)
-    :Item_sum_int(list),count(0)
+  Item_sum_count(const POS &pos, PT_item_list *list)
+    :Item_sum_int(pos, list), count(0)
   {
     set_distinct(TRUE);
   }
@@ -826,7 +870,7 @@ public:
     /* can't be fix_fields()ed */
     return (longlong) rint(val_real());
   }
-  bool get_date(MYSQL_TIME *ltime, uint fuzzydate)
+  bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate)
   {
     return get_date_from_numeric(ltime, fuzzydate); /* Decimal or real */
   }
@@ -841,6 +885,14 @@ public:
   }
   enum Item_result result_type () const { return hybrid_type; }
   bool is_null() { update_null_value(); return null_value; }
+  bool mark_field_in_map(uchar *arg)
+  {
+    /*
+      Filesort (find_all_keys) over a temporary table collects the columns it
+      needs.
+    */
+    return Item::mark_field_in_map(pointer_cast<Mark_field *>(arg), field);
+  }
 };
 
 
@@ -855,7 +907,83 @@ public:
   my_decimal *val_decimal(my_decimal *);
   String *val_str(String*);
   void fix_length_and_dec() {}
-  const char *func_name() const { DBUG_ASSERT(0); return "avg_field"; }
+  const char *func_name() const { assert(0); return "avg_field"; }
+};
+
+
+/// Common abstraction for Item_sum_json_array and Item_sum_json_object
+class Item_sum_json : public Item_sum
+{
+protected:
+  /// String used when reading JSON binary values or JSON text values.
+  String m_value;
+  /// String used for converting JSON text values to utf8mb4 charset.
+  String m_conversion_buffer;
+  /// Wrapper around the container (object/array) which accumulates the value.
+  Json_wrapper m_wrapper;
+
+public:
+  Item_sum_json(THD *thd, Item_sum *item)
+    : Item_sum(thd, item)
+  {}
+  Item_sum_json(const POS &pos, Item *a)
+    : Item_sum(pos, a)
+  {}
+  Item_sum_json(const POS &pos, Item *a, Item *b)
+    : Item_sum(pos, a, b)
+  {}
+
+  virtual bool fix_fields(THD *thd, Item **pItem);
+  enum_field_types field_type() const { return MYSQL_TYPE_JSON; }
+  virtual enum Sumfunctype sum_func() const { return JSON_AGG_FUNC; }
+  virtual Item_result result_type() const { return STRING_RESULT; }
+
+  virtual double val_real();
+  virtual longlong val_int();
+  virtual String *val_str(String *str);
+  virtual bool val_json(Json_wrapper *wr);
+  virtual my_decimal *val_decimal(my_decimal *decimal_buffer);
+  virtual bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate);
+  virtual bool get_time(MYSQL_TIME *ltime);
+
+  virtual void reset_field();
+  virtual void update_field();
+};
+
+
+/// Implements aggregation of values into an array.
+class Item_sum_json_array : public Item_sum_json
+{
+  /// Accumulates the final value.
+  Json_array m_json_array;
+public:
+  Item_sum_json_array(THD *thd, Item_sum *item)
+    : Item_sum_json(thd, item) { }
+  Item_sum_json_array(const POS &pos, Item *a)
+    : Item_sum_json(pos, a) { }
+  virtual const char *func_name() const { return "json_arrayagg("; }
+  virtual void clear();
+  virtual bool add();
+  virtual Item *copy_or_same(THD* thd);
+};
+
+
+/// Implements aggregation of values into an object.
+class Item_sum_json_object : public Item_sum_json
+{
+  /// Accumulates the final value.
+  Json_object m_json_object;
+  /// Buffer used to get the value of the key.
+  String m_tmp_key_value;
+public:
+  Item_sum_json_object(THD *thd, Item_sum *item)
+    : Item_sum_json(thd, item) { }
+  Item_sum_json_object(const POS &pos, Item *a, Item *b)
+    : Item_sum_json(pos, a, b) { }
+  virtual const char *func_name() const { return "json_objectagg("; }
+  virtual void clear();
+  virtual bool add();
+  virtual Item *copy_or_same(THD* thd);
 };
 
 
@@ -865,9 +993,11 @@ public:
   ulonglong count;
   uint prec_increment;
   uint f_precision, f_scale, dec_bin_size;
-  Item_sum_avg(Item *item_par, bool distinct) 
-    :Item_sum_sum(item_par, distinct), count(0) 
+
+  Item_sum_avg(const POS &pos, Item *item_par, bool distinct) 
+    :Item_sum_sum(pos, item_par, distinct), count(0) 
   {}
+
   Item_sum_avg(THD *thd, Item_sum_avg *item)
     :Item_sum_sum(thd, item), count(item->count),
     prec_increment(item->prec_increment) {}
@@ -921,7 +1051,7 @@ public:
   my_decimal *val_decimal(my_decimal *dec_buf)
   { return val_decimal_from_real(dec_buf); }
   void fix_length_and_dec() {}
-  const char *func_name() const { DBUG_ASSERT(0); return "variance_field"; }
+  const char *func_name() const { assert(0); return "variance_field"; }
 };
 
 
@@ -960,9 +1090,11 @@ public:
   uint sample;
   uint prec_increment;
 
-  Item_sum_variance(Item *item_par, uint sample_arg) :Item_sum_num(item_par),
-    hybrid_type(REAL_RESULT), count(0), sample(sample_arg)
-    {}
+  Item_sum_variance(const POS &pos, Item *item_par, uint sample_arg)
+    :Item_sum_num(pos, item_par),
+     hybrid_type(REAL_RESULT), count(0), sample(sample_arg)
+  {}
+
   Item_sum_variance(THD *thd, Item_sum_variance *item);
   enum Sumfunctype sum_func () const { return VARIANCE_FUNC; }
   void clear();
@@ -997,7 +1129,7 @@ public:
   my_decimal *val_decimal(my_decimal *);
   enum Item_result result_type () const { return REAL_RESULT; }
   enum_field_types field_type() const { return MYSQL_TYPE_DOUBLE;}
-  const char *func_name() const { DBUG_ASSERT(0); return "std_field"; }
+  const char *func_name() const { assert(0); return "std_field"; }
 };
 
 /*
@@ -1007,8 +1139,10 @@ public:
 class Item_sum_std :public Item_sum_variance
 {
   public:
-  Item_sum_std(Item *item_par, uint sample_arg)
-    :Item_sum_variance(item_par, sample_arg) {}
+  Item_sum_std(const POS &pos, Item *item_par, uint sample_arg)
+    :Item_sum_variance(pos, item_par, sample_arg)
+  {}
+
   Item_sum_std(THD *thd, Item_sum_std *item)
     :Item_sum_variance(thd, item)
     {}
@@ -1041,6 +1175,12 @@ protected:
     hybrid_type(INT_RESULT), hybrid_field_type(MYSQL_TYPE_LONGLONG),
     cmp_sign(sign), was_values(TRUE)
   { collation.set(&my_charset_bin); }
+  Item_sum_hybrid(const POS &pos, Item *item_par,int sign)
+    :Item_sum(pos, item_par), value(0), arg_cache(0), cmp(0),
+    hybrid_type(INT_RESULT), hybrid_field_type(MYSQL_TYPE_LONGLONG),
+    cmp_sign(sign), was_values(TRUE)
+  { collation.set(&my_charset_bin); }
+
   Item_sum_hybrid(THD *thd, Item_sum_hybrid *item)
     :Item_sum(thd, item), value(item->value), arg_cache(0),
     hybrid_type(item->hybrid_type), hybrid_field_type(item->hybrid_field_type),
@@ -1054,10 +1194,11 @@ protected:
   longlong val_time_temporal();
   longlong val_date_temporal();
   my_decimal *val_decimal(my_decimal *);
-  bool get_date(MYSQL_TIME *ltime, uint fuzzydate);
+  bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate);
   bool get_time(MYSQL_TIME *ltime);
   void reset_field();
   String *val_str(String *);
+  bool val_json(Json_wrapper *wr);
   bool keep_field_type(void) const { return 1; }
   enum Item_result result_type () const { return hybrid_type; }
   enum enum_field_types field_type() const { return hybrid_field_type; }
@@ -1078,6 +1219,9 @@ class Item_sum_min :public Item_sum_hybrid
 {
 public:
   Item_sum_min(Item *item_par) :Item_sum_hybrid(item_par,1) {}
+  Item_sum_min(const POS &pos, Item *item_par) :Item_sum_hybrid(pos, item_par,1)
+  {}
+
   Item_sum_min(THD *thd, Item_sum_min *item) :Item_sum_hybrid(thd, item) {}
   enum Sumfunctype sum_func () const {return MIN_FUNC;}
 
@@ -1091,6 +1235,10 @@ class Item_sum_max :public Item_sum_hybrid
 {
 public:
   Item_sum_max(Item *item_par) :Item_sum_hybrid(item_par,-1) {}
+  Item_sum_max(const POS &pos, Item *item_par)
+    :Item_sum_hybrid(pos, item_par, -1)
+  {}
+
   Item_sum_max(THD *thd, Item_sum_max *item) :Item_sum_hybrid(thd, item) {}
   enum Sumfunctype sum_func () const {return MAX_FUNC;}
 
@@ -1106,17 +1254,23 @@ protected:
   ulonglong reset_bits,bits;
 
 public:
-  Item_sum_bit(Item *item_par,ulonglong reset_arg)
-    :Item_sum_int(item_par),reset_bits(reset_arg),bits(reset_arg) {}
-  Item_sum_bit(THD *thd, Item_sum_bit *item):
-    Item_sum_int(thd, item), reset_bits(item->reset_bits), bits(item->bits) {}
+  Item_sum_bit(const POS &pos, Item *item_par,ulonglong reset_arg)
+    :Item_sum_int(pos, item_par), reset_bits(reset_arg), bits(reset_arg)
+  {}
+
+  Item_sum_bit(THD *thd, Item_sum_bit *item)
+    :Item_sum_int(thd, item), reset_bits(item->reset_bits), bits(item->bits)
+  {}
   enum Sumfunctype sum_func () const {return SUM_BIT_FUNC;}
   void clear();
   longlong val_int();
   void reset_field();
   void update_field();
   void fix_length_and_dec()
-  { decimals= 0; max_length=21; unsigned_flag= 1; maybe_null= null_value= 0; }
+  {
+    decimals= 0; max_length=21; unsigned_flag= 1; maybe_null= null_value= 0;
+    check_deprecated_bin_op(args[0], NULL);
+  }
   void cleanup()
   {
     bits= reset_bits;
@@ -1128,7 +1282,9 @@ public:
 class Item_sum_or :public Item_sum_bit
 {
 public:
-  Item_sum_or(Item *item_par) :Item_sum_bit(item_par,LL(0)) {}
+  Item_sum_or(const POS &pos, Item *item_par) :Item_sum_bit(pos, item_par,0LL)
+  {}
+
   Item_sum_or(THD *thd, Item_sum_or *item) :Item_sum_bit(thd, item) {}
   bool add();
   const char *func_name() const { return "bit_or("; }
@@ -1139,7 +1295,10 @@ public:
 class Item_sum_and :public Item_sum_bit
 {
   public:
-  Item_sum_and(Item *item_par) :Item_sum_bit(item_par, ULONGLONG_MAX) {}
+  Item_sum_and(const POS &pos, Item *item_par)
+    :Item_sum_bit(pos, item_par, ULLONG_MAX)
+  {}
+
   Item_sum_and(THD *thd, Item_sum_and *item) :Item_sum_bit(thd, item) {}
   bool add();
   const char *func_name() const { return "bit_and("; }
@@ -1149,7 +1308,10 @@ class Item_sum_and :public Item_sum_bit
 class Item_sum_xor :public Item_sum_bit
 {
   public:
-  Item_sum_xor(Item *item_par) :Item_sum_bit(item_par,LL(0)) {}
+  Item_sum_xor(const POS &pos, Item *item_par)
+    :Item_sum_bit(pos, item_par, 0LL)
+  {}
+
   Item_sum_xor(THD *thd, Item_sum_xor *item) :Item_sum_bit(thd, item) {}
   bool add();
   const char *func_name() const { return "bit_xor("; }
@@ -1165,23 +1327,23 @@ class Item_sum_xor :public Item_sum_bit
 
 class Item_udf_sum : public Item_sum
 {
+  typedef Item_sum super;
 protected:
   udf_handler udf;
 
 public:
-  Item_udf_sum(udf_func *udf_arg)
-    :Item_sum(), udf(udf_arg)
-  { quick_group=0; }
-  Item_udf_sum(udf_func *udf_arg, List<Item> &list)
-    :Item_sum(list), udf(udf_arg)
+  Item_udf_sum(const POS &pos, udf_func *udf_arg, PT_item_list *opt_list)
+    :Item_sum(pos, opt_list), udf(udf_arg)
   { quick_group=0;}
   Item_udf_sum(THD *thd, Item_udf_sum *item)
     :Item_sum(thd, item), udf(item->udf)
   { udf.not_original= TRUE; }
+
+  virtual bool itemize(Parse_context *pc, Item **res);
   const char *func_name() const { return udf.name(); }
   bool fix_fields(THD *thd, Item **ref)
   {
-    DBUG_ASSERT(fixed == 0);
+    assert(fixed == 0);
 
     if (init_sum_func_check(thd))
       return TRUE;
@@ -1201,27 +1363,29 @@ public:
   void update_field() {};
   void cleanup();
   virtual void print(String *str, enum_query_type query_type);
+
+protected:
+  virtual bool may_have_named_parameters() const { return true; }
 };
 
 
 class Item_sum_udf_float :public Item_udf_sum
 {
  public:
-  Item_sum_udf_float(udf_func *udf_arg)
-    :Item_udf_sum(udf_arg) {}
-  Item_sum_udf_float(udf_func *udf_arg, List<Item> &list)
-    :Item_udf_sum(udf_arg, list) {}
+  Item_sum_udf_float(const POS &pos, udf_func *udf_arg, PT_item_list *opt_list)
+    :Item_udf_sum(pos, udf_arg, opt_list)
+  {}
   Item_sum_udf_float(THD *thd, Item_sum_udf_float *item)
     :Item_udf_sum(thd, item) {}
   longlong val_int()
   {
-    DBUG_ASSERT(fixed == 1);
+    assert(fixed == 1);
     return (longlong) rint(Item_sum_udf_float::val_real());
   }
   double val_real();
   String *val_str(String*str);
   my_decimal *val_decimal(my_decimal *);
-  bool get_date(MYSQL_TIME *ltime, uint fuzzydate)
+  bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate)
   {
     return get_date_from_real(ltime, fuzzydate);
   }
@@ -1237,18 +1401,17 @@ class Item_sum_udf_float :public Item_udf_sum
 class Item_sum_udf_int :public Item_udf_sum
 {
 public:
-  Item_sum_udf_int(udf_func *udf_arg)
-    :Item_udf_sum(udf_arg) {}
-  Item_sum_udf_int(udf_func *udf_arg, List<Item> &list)
-    :Item_udf_sum(udf_arg, list) {}
+  Item_sum_udf_int(const POS &pos, udf_func *udf_arg, PT_item_list *opt_list)
+    :Item_udf_sum(pos, udf_arg, opt_list)
+  {}
   Item_sum_udf_int(THD *thd, Item_sum_udf_int *item)
     :Item_udf_sum(thd, item) {}
   longlong val_int();
   double val_real()
-    { DBUG_ASSERT(fixed == 1); return (double) Item_sum_udf_int::val_int(); }
+  { assert(fixed == 1); return (double) Item_sum_udf_int::val_int(); }
   String *val_str(String*str);
   my_decimal *val_decimal(my_decimal *);
-  bool get_date(MYSQL_TIME *ltime, uint fuzzydate)
+  bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate)
   {
     return get_date_from_int(ltime, fuzzydate);
   }
@@ -1265,10 +1428,9 @@ public:
 class Item_sum_udf_str :public Item_udf_sum
 {
 public:
-  Item_sum_udf_str(udf_func *udf_arg)
-    :Item_udf_sum(udf_arg) {}
-  Item_sum_udf_str(udf_func *udf_arg, List<Item> &list)
-    :Item_udf_sum(udf_arg,list) {}
+  Item_sum_udf_str(const POS &pos, udf_func *udf_arg, PT_item_list *opt_list)
+    :Item_udf_sum(pos, udf_arg, opt_list)
+  {}
   Item_sum_udf_str(THD *thd, Item_sum_udf_str *item)
     :Item_udf_sum(thd, item) {}
   String *val_str(String *);
@@ -1295,7 +1457,7 @@ public:
     return cs->cset->strtoll10(cs, res->ptr(), &end, &err_not_used);
   }
   my_decimal *val_decimal(my_decimal *dec);
-  bool get_date(MYSQL_TIME *ltime, uint fuzzydate)
+  bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate)
   {
     return get_date_from_string(ltime, fuzzydate);
   }
@@ -1312,17 +1474,17 @@ public:
 class Item_sum_udf_decimal :public Item_udf_sum
 {
 public:
-  Item_sum_udf_decimal(udf_func *udf_arg)
-    :Item_udf_sum(udf_arg) {}
-  Item_sum_udf_decimal(udf_func *udf_arg, List<Item> &list)
-    :Item_udf_sum(udf_arg, list) {}
+  Item_sum_udf_decimal(const POS &pos,
+                       udf_func *udf_arg, PT_item_list *opt_list)
+    :Item_udf_sum(pos, udf_arg, opt_list)
+  {}
   Item_sum_udf_decimal(THD *thd, Item_sum_udf_decimal *item)
     :Item_udf_sum(thd, item) {}
   String *val_str(String *);
   double val_real();
   longlong val_int();
   my_decimal *val_decimal(my_decimal *);
-  bool get_date(MYSQL_TIME *ltime, uint fuzzydate)
+  bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate)
   {
     return get_date_from_decimal(ltime, fuzzydate);
   }
@@ -1333,80 +1495,6 @@ public:
   enum Item_result result_type () const { return DECIMAL_RESULT; }
   void fix_length_and_dec() { fix_num_length_and_dec(); }
   Item *copy_or_same(THD* thd);
-};
-
-#else /* Dummy functions to get sql_yacc.cc compiled */
-
-class Item_sum_udf_float :public Item_sum_num
-{
- public:
-  Item_sum_udf_float(udf_func *udf_arg)
-    :Item_sum_num() {}
-  Item_sum_udf_float(udf_func *udf_arg, List<Item> &list) :Item_sum_num() {}
-  Item_sum_udf_float(THD *thd, Item_sum_udf_float *item)
-    :Item_sum_num(thd, item) {}
-  enum Sumfunctype sum_func () const { return UDF_SUM_FUNC; }
-  double val_real() { DBUG_ASSERT(fixed == 1); return 0.0; }
-  void clear() {}
-  bool add() { return 0; }  
-  void update_field() {}
-};
-
-
-class Item_sum_udf_int :public Item_sum_num
-{
-public:
-  Item_sum_udf_int(udf_func *udf_arg)
-    :Item_sum_num() {}
-  Item_sum_udf_int(udf_func *udf_arg, List<Item> &list) :Item_sum_num() {}
-  Item_sum_udf_int(THD *thd, Item_sum_udf_int *item)
-    :Item_sum_num(thd, item) {}
-  enum Sumfunctype sum_func () const { return UDF_SUM_FUNC; }
-  longlong val_int() { DBUG_ASSERT(fixed == 1); return 0; }
-  double val_real() { DBUG_ASSERT(fixed == 1); return 0; }
-  void clear() {}
-  bool add() { return 0; }  
-  void update_field() {}
-};
-
-
-class Item_sum_udf_decimal :public Item_sum_num
-{
- public:
-  Item_sum_udf_decimal(udf_func *udf_arg)
-    :Item_sum_num() {}
-  Item_sum_udf_decimal(udf_func *udf_arg, List<Item> &list)
-    :Item_sum_num() {}
-  Item_sum_udf_decimal(THD *thd, Item_sum_udf_float *item)
-    :Item_sum_num(thd, item) {}
-  enum Sumfunctype sum_func () const { return UDF_SUM_FUNC; }
-  double val_real() { DBUG_ASSERT(fixed == 1); return 0.0; }
-  my_decimal *val_decimal(my_decimal *) { DBUG_ASSERT(fixed == 1); return 0; }
-  void clear() {}
-  bool add() { return 0; }
-  void update_field() {}
-};
-
-
-class Item_sum_udf_str :public Item_sum_num
-{
-public:
-  Item_sum_udf_str(udf_func *udf_arg)
-    :Item_sum_num() {}
-  Item_sum_udf_str(udf_func *udf_arg, List<Item> &list)
-    :Item_sum_num() {}
-  Item_sum_udf_str(THD *thd, Item_sum_udf_str *item)
-    :Item_sum_num(thd, item) {}
-  String *val_str(String *)
-    { DBUG_ASSERT(fixed == 1); null_value=1; return 0; }
-  double val_real() { DBUG_ASSERT(fixed == 1); null_value=1; return 0.0; }
-  longlong val_int() { DBUG_ASSERT(fixed == 1); null_value=1; return 0; }
-  enum Item_result result_type () const { return STRING_RESULT; }
-  void fix_length_and_dec() { maybe_null=1; max_length=0; }
-  enum Sumfunctype sum_func () const { return UDF_SUM_FUNC; }
-  void clear() {}
-  bool add() { return 0; }  
-  void update_field() {}
 };
 
 #endif /* HAVE_DLOPEN */
@@ -1423,7 +1511,9 @@ C_MODE_END
 
 class Item_func_group_concat : public Item_sum
 {
-  TMP_TABLE_PARAM *tmp_table_param;
+  typedef Item_sum super;
+
+  Temp_table_param *tmp_table_param;
   String result;
   String *separator;
   TREE tree_base;
@@ -1438,7 +1528,7 @@ class Item_func_group_concat : public Item_sum
    */
   Unique *unique_filter;
   TABLE *table;
-  ORDER **order;
+  Mem_root_array<ORDER , true> order_array;
   Name_resolution_context *context;
   /** The number of ORDER BY items. */
   uint arg_count_order;
@@ -1449,7 +1539,8 @@ class Item_func_group_concat : public Item_sum
   bool warning_for_row;
   bool always_null;
   bool force_copy_fields;
-  bool no_appended;
+  /** True if result has been written to output buffer. */
+  bool m_result_finalized;
   /*
     Following is 0 normal object and pointer to original one for copy
     (to correctly free resources)
@@ -1467,18 +1558,20 @@ class Item_func_group_concat : public Item_sum
 			   void* item_arg);
 
 public:
-  Item_func_group_concat(Name_resolution_context *context_arg,
-                         bool is_distinct, List<Item> *is_select,
-                         const SQL_I_List<ORDER> &is_order, String *is_separator);
+  Item_func_group_concat(const POS &pos,
+                         bool is_distinct, PT_item_list *select_list,
+                         PT_order_list *opt_order_list, String *separator);
 
   Item_func_group_concat(THD *thd, Item_func_group_concat *item);
   ~Item_func_group_concat();
+
+  virtual bool itemize(Parse_context *pc, Item **res);
   void cleanup();
 
   enum Sumfunctype sum_func () const {return GROUP_CONCAT_FUNC;}
   const char *func_name() const { return "group_concat"; }
   virtual Item_result result_type () const { return STRING_RESULT; }
-  virtual Field *make_string_field(TABLE *table);
+  virtual Field *make_string_field(TABLE *table_arg);
   enum_field_types field_type() const
   {
     if (max_length/collation.collation->mbmaxlen > CONVERT_IF_BIGGER_TO_BLOB )
@@ -1488,8 +1581,8 @@ public:
   }
   void clear();
   bool add();
-  void reset_field() { DBUG_ASSERT(0); }        // not used
-  void update_field() { DBUG_ASSERT(0); }       // not used
+  void reset_field() { assert(0); }        // not used
+  void update_field() { assert(0); }       // not used
   bool fix_fields(THD *,Item **);
   bool setup(THD *thd);
   void make_unique();
@@ -1512,7 +1605,7 @@ public:
   {
     return val_decimal_from_string(decimal_value);
   }
-  bool get_date(MYSQL_TIME *ltime, uint fuzzydate)
+  bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate)
   {
     return get_date_from_string(ltime, fuzzydate);
   }
@@ -1525,7 +1618,10 @@ public:
   void no_rows_in_result() {}
   virtual void print(String *str, enum_query_type query_type);
   virtual bool change_context_processor(uchar *cntx)
-    { context= (Name_resolution_context *)cntx; return FALSE; }
+  {
+    context= reinterpret_cast<Name_resolution_context *>(cntx);
+    return false;
+  }
 };
 
 #endif /* ITEM_SUM_INCLUDED */

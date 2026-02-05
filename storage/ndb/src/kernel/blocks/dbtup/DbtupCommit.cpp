@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -22,7 +29,12 @@
 #include <ndb_limits.h>
 #include <pc.hpp>
 #include <signaldata/TupCommit.hpp>
+#include <EventLogger.hpp>
 #include "../dblqh/Dblqh.hpp"
+
+#define JAM_FILE_ID 416
+
+extern EventLogger *g_eventLogger;
 
 void Dbtup::execTUP_DEALLOCREQ(Signal* signal)
 {
@@ -51,7 +63,7 @@ void Dbtup::execTUP_DEALLOCREQ(Signal* signal)
     PagePtr pagePtr;
     Tuple_header* ptr= (Tuple_header*)get_ptr(&pagePtr, &tmp, regTabPtr.p);
 
-    ndbassert(ptr->m_header_bits & Tuple_header::FREED);
+    ndbrequire(ptr->m_header_bits & Tuple_header::FREED);
 
     if (regTabPtr.p->m_attributes[MM].m_no_of_varsize +
         regTabPtr.p->m_attributes[MM].m_no_of_dynamic)
@@ -102,47 +114,99 @@ void Dbtup::initOpConnection(Operationrec* regOperPtr)
 {
   set_tuple_state(regOperPtr, TUPLE_ALREADY_ABORTED);
   set_trans_state(regOperPtr, TRANS_IDLE);
-  regOperPtr->op_struct.op_type= ZREAD;
-  regOperPtr->op_struct.m_disk_preallocated= 0;
-  regOperPtr->op_struct.m_load_diskpage_on_commit= 0;
-  regOperPtr->op_struct.m_wait_log_buffer= 0;
-  regOperPtr->op_struct.in_active_list = false;
+  regOperPtr->op_type= ZREAD;
+  regOperPtr->op_struct.bit_field.m_disk_preallocated= 0;
+  regOperPtr->op_struct.bit_field.m_load_diskpage_on_commit= 0;
+  regOperPtr->op_struct.bit_field.m_wait_log_buffer= 0;
+  regOperPtr->op_struct.bit_field.in_active_list = false;
   regOperPtr->m_undo_buffer_space= 0;
 }
 
 bool
-Dbtup::is_rowid_lcp_scanned(const Local_key& key1,
-                            const Dbtup::ScanOp& op)
+Dbtup::is_rowid_in_remaining_lcp_set(const Page* page,
+                                     const Local_key& key1,
+                                     const Dbtup::ScanOp& op) const
 {
   Local_key key2 = op.m_scanPos.m_key;
   switch (op.m_state) {
   case Dbtup::ScanOp::First:
+  {
+    jam();
     ndbrequire(key2.isNull());
-    return false;
+    return key1.m_page_no < op.m_endPage;
+  }
   case Dbtup::ScanOp::Current:
+  {
+    /* Impossible state for LCP scans */
+    ndbrequire(false);
+  }
   case Dbtup::ScanOp::Next:
+  {
     ndbrequire(!key2.isNull());
     if (key1.m_page_no < key2.m_page_no)
-      return true;
+    {
+      jam();
+      /* Ignore pages already LCP:ed */
+      return false;
+    }
+    if (key1.m_page_no >= op.m_endPage)
+    {
+      jam();
+      /* Ignore pages beyond last page at LCP start */
+      return false;
+    }
+    if (page->is_page_to_skip_lcp())
+    {
+      jam();
+      /* Ignore new pages created after LCP start */
+      return false;
+    }
     if (key1.m_page_no > key2.m_page_no)
+    {
+      jam();
+      /* Include pages not LCP:ed yet */
+      return true;
+    }
+    ndbassert(key1.m_page_no == key2.m_page_no);
+    if (op.m_scanPos.m_get == ScanPos::Get_next_page_mm)
+    {
+      jam();
+      /**
+       * We got a real-time break while switching to a new page.
+       * In this case we can skip the page since it is already
+       * LCP:ed.
+       */
       return false;
+    }
     if (key1.m_page_idx < key2.m_page_idx)
-      return true;
-    if (key1.m_page_idx > key2.m_page_idx)
+    {
+      jam();
+      /* Ignore rows already LCP:ed */
       return false;
-    /**
-     * key are equal...need to look at scan state
-     */
-    if (op.m_state == Dbtup::ScanOp::Next)
+    }
+    if (key1.m_page_idx > key2.m_page_idx)
+    {
+      jam();
+      /* Include rows not LCP:ed yet */
       return true;
+    }
+    ndbassert(key1.m_page_idx == key2.m_page_idx);
+    /* keys are equal */
+    jam();
+    /* Ignore current row that already have been LCP:ed. */
     return false;
+  }
   case Dbtup::ScanOp::Last:
-    return true;
+  { 
+    jam();
+    return false;
+  }
   default:
     ndbrequire(false);
     break;
   }
-  return false;
+  /* Will never arrive here */
+  return true;
 }
 
 void
@@ -154,7 +218,8 @@ Dbtup::dealloc_tuple(Signal* signal,
                      KeyReqStruct * req_struct,
 		     Operationrec* regOperPtr, 
 		     Fragrecord* regFragPtr, 
-		     Tablerec* regTabPtr)
+		     Tablerec* regTabPtr,
+                     Ptr<GlobalPage> pagePtr)
 {
   Uint32 lcpScan_ptr_i= regFragPtr->m_lcp_scan_op;
 
@@ -166,8 +231,9 @@ Dbtup::dealloc_tuple(Signal* signal,
     Local_key disk;
     memcpy(&disk, ptr->get_disk_ref_ptr(regTabPtr), sizeof(disk));
     PagePtr tmpptr;
-    tmpptr.i = m_pgman_ptr.i;
-    tmpptr.p = reinterpret_cast<Page*>(m_pgman_ptr.p);
+    ndbrequire(pagePtr.i != RNIL);
+    tmpptr.i = pagePtr.i;
+    tmpptr.p = reinterpret_cast<Page*>(pagePtr.p);
     disk_page_free(signal, regTabPtr, regFragPtr, 
 		   &disk, tmpptr, gci_hi);
   }
@@ -180,7 +246,7 @@ Dbtup::dealloc_tuple(Signal* signal,
     c_scanOpPool.getPtr(scanOp, lcpScan_ptr_i);
     Local_key rowid = regOperPtr->m_tuple_location;
     rowid.m_page_no = page->frag_page_id;
-    if (!is_rowid_lcp_scanned(rowid, *scanOp.p))
+    if (is_rowid_in_remaining_lcp_set(page, rowid, *scanOp.p))
     {
       jam();
 
@@ -207,6 +273,7 @@ Dbtup::dealloc_tuple(Signal* signal,
       store_extra_row_bits(attrId, regTabPtr, ptr, gci_lo, /* truncate */true);
     }
   }
+  setInvalidChecksum(ptr, regTabPtr);
 }
 
 void
@@ -221,8 +288,10 @@ Dbtup::handle_lcp_keep_commit(const Local_key* rowid,
   Uint32 * copytuple = get_copy_tuple_raw(&opPtrP->m_copy_tuple_location);
   Tuple_header * dst = get_copy_tuple(copytuple);
   Tuple_header * org = req_struct->m_tuple_ptr;
+  Uint32 old_header_bits = org->m_header_bits;
   if (regTabPtr->need_expand(disk))
   {
+    setup_fixed_tuple_ref(req_struct, opPtrP, regTabPtr);
     setup_fixed_part(req_struct, opPtrP, regTabPtr);
     req_struct->m_tuple_ptr = dst;
     expand_tuple(req_struct, sizes, org, regTabPtr, disk);
@@ -233,6 +302,8 @@ Dbtup::handle_lcp_keep_commit(const Local_key* rowid,
     memcpy(dst, org, 4*regTabPtr->m_offsets[MM].m_fix_header_size);
   }
   dst->m_header_bits |= Tuple_header::COPY_TUPLE;
+
+  updateChecksum(dst, regTabPtr, old_header_bits, dst->m_header_bits);
 
   /**
    * Store original row-id in copytuple[0,1]
@@ -300,9 +371,10 @@ Dbtup::commit_operation(Signal* signal,
 			PagePtr pagePtr,
 			Operationrec* regOperPtr, 
 			Fragrecord* regFragPtr, 
-			Tablerec* regTabPtr)
+			Tablerec* regTabPtr,
+                        Ptr<GlobalPage> globDiskPagePtr)
 {
-  ndbassert(regOperPtr->op_struct.op_type != ZDELETE);
+  ndbassert(regOperPtr->op_type != ZDELETE);
   
   Uint32 lcpScan_ptr_i= regFragPtr->m_lcp_scan_op;
   Uint32 save= tuple_ptr->m_operation_ptr_i;
@@ -316,7 +388,7 @@ Dbtup::commit_operation(Signal* signal,
   Uint32 fixsize= regTabPtr->m_offsets[MM].m_fix_header_size;
   Uint32 mm_vars= regTabPtr->m_attributes[MM].m_no_of_varsize;
   Uint32 mm_dyns= regTabPtr->m_attributes[MM].m_no_of_dynamic;
-  bool update_gci_at_commit = ! regOperPtr->op_struct.m_gci_written;
+  bool update_gci_at_commit = ! regOperPtr->op_struct.bit_field.m_gci_written;
   if((mm_vars+mm_dyns) == 0)
   {
     jam();
@@ -360,7 +432,10 @@ Dbtup::commit_operation(Signal* signal,
         if (len)
         {
           jam();
+          ndbassert(regFragPtr->m_varWordsFree >= vpagePtrP->free_space);
+          regFragPtr->m_varWordsFree -= vpagePtrP->free_space;
           vpagePtrP->shrink_entry(tmp.m_page_idx, len);
+          // Adds the new free space value for the page to the fragment total.
           update_free_page_list(regFragPtr, vpagePtr);
         }
         else
@@ -400,7 +475,7 @@ Dbtup::commit_operation(Signal* signal,
     memcpy(&key, copy->get_disk_ref_ptr(regTabPtr), sizeof(Local_key));
     Uint32 logfile_group_id= regFragPtr->m_logfile_group_id;
 
-    PagePtr diskPagePtr = { (Tup_page*)m_pgman_ptr.p, m_pgman_ptr.i };
+    PagePtr diskPagePtr((Tup_page*)globDiskPagePtr.p, globDiskPagePtr.i);
     ndbassert(diskPagePtr.p->m_page_no == key.m_page_no);
     ndbassert(diskPagePtr.p->m_file_no == key.m_file_no);
     Uint32 sz, *dst;
@@ -444,10 +519,15 @@ Dbtup::commit_operation(Signal* signal,
     c_scanOpPool.getPtr(scanOp, lcpScan_ptr_i);
     Local_key rowid = regOperPtr->m_tuple_location;
     rowid.m_page_no = pagePtr.p->frag_page_id;
-    if (!is_rowid_lcp_scanned(rowid, *scanOp.p))
+    if (is_rowid_in_remaining_lcp_set(pagePtr.p, rowid, *scanOp.p))
     {
+      /**
+       * Rows that are inserted during LCPs are never required to be
+       * recorded as part of the LCP, this can be avoided in multiple ways,
+       * in this case we avoid it by setting bit on Tuple header.
+       */
       jam();
-       copy_bits |= Tuple_header::LCP_SKIP;
+      copy_bits |= Tuple_header::LCP_SKIP;
     }
   }
   
@@ -472,11 +552,7 @@ Dbtup::commit_operation(Signal* signal,
                            /* truncate */true);
     }
   }
-  
-  if (regTabPtr->m_bits & Tablerec::TR_Checksum) {
-    jam();
-    setChecksum(tuple_ptr, regTabPtr);
-  }
+  setChecksum(tuple_ptr, regTabPtr);
 }
 
 void
@@ -487,6 +563,7 @@ Dbtup::disk_page_commit_callback(Signal* signal,
   Uint32 gci_hi, gci_lo;
   Uint32 transId1, transId2;
   OperationrecPtr regOperPtr;
+  Ptr<GlobalPage> diskPagePtr;
 
   jamEntry();
   
@@ -504,14 +581,14 @@ Dbtup::disk_page_commit_callback(Signal* signal,
   tupCommitReq->transId1 = transId1;
   tupCommitReq->transId2 = transId2;
 
-  regOperPtr.p->op_struct.m_load_diskpage_on_commit= 0;
+  regOperPtr.p->op_struct.bit_field.m_load_diskpage_on_commit= 0;
   regOperPtr.p->m_commit_disk_callback_page= page_id;
-  m_global_page_pool.getPtr(m_pgman_ptr, page_id);
+  m_global_page_pool.getPtr(diskPagePtr, page_id);
   
   {
     PagePtr tmp;
-    tmp.i = m_pgman_ptr.i;
-    tmp.p = reinterpret_cast<Page*>(m_pgman_ptr.p);
+    tmp.i = diskPagePtr.i;
+    tmp.p = reinterpret_cast<Page*>(diskPagePtr.p);
     disk_page_set_dirty(tmp);
   }
   
@@ -550,9 +627,8 @@ Dbtup::disk_page_log_buffer_callback(Signal* signal,
   tupCommitReq->transId1 = transId1;
   tupCommitReq->transId2 = transId2;
 
-  ndbassert(regOperPtr.p->op_struct.m_load_diskpage_on_commit == 0);
-  regOperPtr.p->op_struct.m_wait_log_buffer= 0;
-  m_global_page_pool.getPtr(m_pgman_ptr, page);
+  ndbassert(regOperPtr.p->op_struct.bit_field.m_load_diskpage_on_commit == 0);
+  regOperPtr.p->op_struct.bit_field.m_wait_log_buffer= 0;
   
   execTUP_COMMITREQ(signal);
   ndbassert(signal->theData[0] == 0);
@@ -562,7 +638,8 @@ Dbtup::disk_page_log_buffer_callback(Signal* signal,
 
 int Dbtup::retrieve_data_page(Signal *signal,
                               Page_cache_client::Request req,
-                              OperationrecPtr regOperPtr)
+                              OperationrecPtr regOperPtr,
+                              Ptr<GlobalPage> &diskPagePtr)
 {
   req.m_callback.m_callbackData= regOperPtr.i;
   req.m_callback.m_callbackFunction =
@@ -572,11 +649,11 @@ int Dbtup::retrieve_data_page(Signal *signal,
    * Consider commit to be correlated.  Otherwise pk op + commit makes
    * the page hot.   XXX move to TUP which knows better.
    */
-  int flags= regOperPtr.p->op_struct.op_type |
+  int flags= regOperPtr.p->op_type |
     Page_cache_client::COMMIT_REQ | Page_cache_client::CORR_REQ;
   Page_cache_client pgman(this, c_pgman);
   int res= pgman.get_page(signal, req, flags);
-  m_pgman_ptr = pgman.m_ptr;
+  diskPagePtr = pgman.m_ptr;
 
   switch(res){
   case 0:
@@ -594,13 +671,13 @@ int Dbtup::retrieve_data_page(Signal *signal,
   }
   {
     PagePtr tmpptr;
-    tmpptr.i = m_pgman_ptr.i;
-    tmpptr.p = reinterpret_cast<Page*>(m_pgman_ptr.p);
+    tmpptr.i = diskPagePtr.i;
+    tmpptr.p = reinterpret_cast<Page*>(diskPagePtr.p);
 
     disk_page_set_dirty(tmpptr);
   }
   regOperPtr.p->m_commit_disk_callback_page= res;
-  regOperPtr.p->op_struct.m_load_diskpage_on_commit= 0;
+  regOperPtr.p->op_struct.bit_field.m_load_diskpage_on_commit= 0;
 
   return res;
 }
@@ -630,12 +707,14 @@ int Dbtup::retrieve_log_page(Signal *signal,
     signal->theData[0] = 1;
     return res;
   case -1:
+    g_eventLogger->warning("Out of space in RG_DISK_OPERATIONS resource,"
+                           " increase config parameter GlobalSharedMemory");
     ndbrequire("NOT YET IMPLEMENTED" == 0);
     break;
   default:
     jam();
   }
-  regOperPtr.p->op_struct.m_wait_log_buffer= 0;
+  regOperPtr.p->op_struct.bit_field.m_wait_log_buffer= 0;
 
   return res;
 }
@@ -667,6 +746,7 @@ void Dbtup::execTUP_COMMITREQ(Signal* signal)
   TablerecPtr regTabPtr;
   KeyReqStruct req_struct(this, KRS_COMMIT);
   TransState trans_state;
+  Ptr<GlobalPage> diskPagePtr;
   Uint32 no_of_fragrec, no_of_tablerec;
 
   TupCommitReq * const tupCommitReq= (TupCommitReq *)signal->getDataPtr();
@@ -681,7 +761,8 @@ void Dbtup::execTUP_COMMITREQ(Signal* signal)
   jamEntry();
 
   c_operation_pool.getPtr(regOperPtr);
-  
+ 
+  diskPagePtr.i = tupCommitReq->diskpage;
   regFragPtr.i= regOperPtr.p->fragmentPtr;
   trans_state= get_trans_state(regOperPtr.p);
 
@@ -700,17 +781,20 @@ void Dbtup::execTUP_COMMITREQ(Signal* signal)
   /* Put transid in req_struct, so detached triggers can access it */
   req_struct.trans_id1 = transId1;
   req_struct.trans_id2 = transId2;
+  req_struct.m_reorg = regOperPtr.p->op_struct.bit_field.m_reorg;
   regOperPtr.p->m_commit_disk_callback_page = tupCommitReq->diskpage;
 
-#ifdef VM_TRACE
-  if (tupCommitReq->diskpage == RNIL)
+  if (diskPagePtr.i == RNIL)
   {
-    m_pgman_ptr.i = RNIL;
-    m_pgman_ptr.p = 0;
+    jam();
+    diskPagePtr.p = 0;
     req_struct.m_disk_page_ptr.i = RNIL;
     req_struct.m_disk_page_ptr.p = 0;
   }
-#endif
+  else
+  {
+    m_global_page_pool.getPtr(diskPagePtr, diskPagePtr.i);
+  }
   
   ptrCheckGuard(regTabPtr, no_of_tablerec, tablerec);
 
@@ -757,7 +841,7 @@ void Dbtup::execTUP_COMMITREQ(Signal* signal)
   }
   
   bool get_page = false;
-  if(regOperPtr.p->op_struct.m_load_diskpage_on_commit)
+  if(regOperPtr.p->op_struct.bit_field.m_load_diskpage_on_commit)
   {
     jam();
     Page_cache_client::Request req;
@@ -779,46 +863,51 @@ void Dbtup::execTUP_COMMITREQ(Signal* signal)
       memcpy(&req.m_page, 
 	     tmp->get_disk_ref_ptr(regTabPtr.p), sizeof(Local_key));
 
-      if (unlikely(regOperPtr.p->op_struct.op_type == ZDELETE &&
+      if (unlikely(regOperPtr.p->op_type == ZDELETE &&
 		   tmp->m_header_bits & Tuple_header::DISK_ALLOC))
       {
         jam();
 	/**
 	 * Insert+Delete
+         * In this case we want to release the Copy page tuple that was
+         * allocated for the insert operation since the commit of the
+         * delete operation here makes it unnecessary to save the
+         * new record.
 	 */
-        regOperPtr.p->op_struct.m_load_diskpage_on_commit = 0;
-        regOperPtr.p->op_struct.m_wait_log_buffer = 0;	
+        regOperPtr.p->op_struct.bit_field.m_load_diskpage_on_commit = 0;
+        regOperPtr.p->op_struct.bit_field.m_wait_log_buffer = 0;	
         disk_page_abort_prealloc(signal, regFragPtr.p, 
 				 &req.m_page, req.m_page.m_page_idx);
         
         D("Logfile_client - execTUP_COMMITREQ");
         Logfile_client lgman(this, c_lgman, regFragPtr.p->m_logfile_group_id);
-        lgman.free_log_space(regOperPtr.p->m_undo_buffer_space);
+        lgman.free_log_space(regOperPtr.p->m_undo_buffer_space,
+                             jamBuffer());
 	goto skip_disk;
-        if (0) ndbout_c("insert+delete");
-        jamEntry();
-        goto skip_disk;
       }
     } 
     else
     {
       jam();
       // initial delete
-      ndbassert(regOperPtr.p->op_struct.op_type == ZDELETE);
+      ndbassert(regOperPtr.p->op_type == ZDELETE);
       memcpy(&req.m_page, 
 	     tuple_ptr->get_disk_ref_ptr(regTabPtr.p), sizeof(Local_key));
       
       ndbassert(tuple_ptr->m_header_bits & Tuple_header::DISK_PART);
     }
 
-    if (retrieve_data_page(signal, req, regOperPtr) == 0)
+    if (retrieve_data_page(signal,
+                           req,
+                           regOperPtr,
+                           diskPagePtr) == 0)
     {
       return; // Data page has not been retrieved yet.
     }
     get_page = true;
   } 
   
-  if(regOperPtr.p->op_struct.m_wait_log_buffer)
+  if(regOperPtr.p->op_struct.bit_field.m_wait_log_buffer)
   {
     jam();
     /**
@@ -857,32 +946,58 @@ skip_disk:
      */
     Uint32 disk = regOperPtr.p->m_commit_disk_callback_page;
     set_commit_change_mask_info(regTabPtr.p, &req_struct, regOperPtr.p);
-    checkDetachedTriggers(&req_struct, regOperPtr.p, regTabPtr.p, 
-                          disk != RNIL);
+    checkDetachedTriggers(&req_struct,
+                          regOperPtr.p,
+                          regTabPtr.p, 
+                          disk != RNIL,
+                          diskPagePtr.i);
     
     tuple_ptr->m_operation_ptr_i = RNIL;
     
-    if (regOperPtr.p->op_struct.op_type == ZDELETE)
+    if (regOperPtr.p->op_type == ZDELETE)
     {
       jam();
       if (get_page)
       {
         ndbassert(tuple_ptr->m_header_bits & Tuple_header::DISK_PART);
       }
-      dealloc_tuple(signal, gci_hi, gci_lo, page.p, tuple_ptr,
-                    &req_struct, regOperPtr.p, regFragPtr.p, regTabPtr.p);
+      dealloc_tuple(signal,
+                    gci_hi,
+                    gci_lo,
+                    page.p,
+                    tuple_ptr,
+                    &req_struct,
+                    regOperPtr.p,
+                    regFragPtr.p,
+                    regTabPtr.p,
+                    diskPagePtr);
     }
-    else if(regOperPtr.p->op_struct.op_type != ZREFRESH)
+    else if(regOperPtr.p->op_type != ZREFRESH)
     {
       jam();
-      commit_operation(signal, gci_hi, gci_lo, tuple_ptr, page,
-		       regOperPtr.p, regFragPtr.p, regTabPtr.p); 
+      commit_operation(signal,
+                       gci_hi,
+                       gci_lo,
+                       tuple_ptr,
+                       page,
+		       regOperPtr.p,
+                       regFragPtr.p,
+                       regTabPtr.p,
+                       diskPagePtr); 
     }
     else
     {
       jam();
-      commit_refresh(signal, gci_hi, gci_lo, tuple_ptr, page,
-                     &req_struct, regOperPtr.p, regFragPtr.p, regTabPtr.p);
+      commit_refresh(signal,
+                     gci_hi,
+                     gci_lo,
+                     tuple_ptr,
+                     page,
+                     &req_struct,
+                     regOperPtr.p,
+                     regFragPtr.p,
+                     regTabPtr.p,
+                     diskPagePtr);
     }
   }
 
@@ -914,7 +1029,7 @@ Dbtup::set_commit_change_mask_info(const Tablerec* regTabPtr,
   Uint32 masklen = (regTabPtr->m_no_of_attributes + 31) >> 5;
   if (regOperPtr->m_copy_tuple_location.isNull())
   {
-    ndbassert(regOperPtr->op_struct.op_type == ZDELETE);
+    ndbassert(regOperPtr->op_type == ZDELETE);
     req_struct->changeMask.set();
   }
   else
@@ -946,7 +1061,8 @@ Dbtup::commit_refresh(Signal* signal,
                       KeyReqStruct * req_struct,
                       Operationrec* regOperPtr,
                       Fragrecord* regFragPtr,
-                      Tablerec* regTabPtr)
+                      Tablerec* regTabPtr,
+                      Ptr<GlobalPage> diskPagePtr)
 {
   /* Committing a refresh operation.
    * Refresh of an existing row looks like an update
@@ -963,8 +1079,15 @@ Dbtup::commit_refresh(Signal* signal,
   case Operationrec::RF_SINGLE_EXIST:
   case Operationrec::RF_MULTI_EXIST:
     // "Normal" update
-    commit_operation(signal, gci_hi, gci_lo, tuple_ptr, pagePtr,
-                     regOperPtr, regFragPtr, regTabPtr);
+    commit_operation(signal,
+                     gci_hi,
+                     gci_lo,
+                     tuple_ptr,
+                     pagePtr,
+                     regOperPtr,
+                     regFragPtr,
+                     regTabPtr,
+                     diskPagePtr);
     return;
 
   default:
@@ -978,6 +1101,14 @@ Dbtup::commit_refresh(Signal* signal,
    * Tell ACC to delete
    */
   c_lqh->accremoverow(signal, regOperPtr->userpointer, &key);
-  dealloc_tuple(signal, gci_hi, gci_lo, pagePtr.p, tuple_ptr,
-                req_struct, regOperPtr, regFragPtr, regTabPtr);
+  dealloc_tuple(signal,
+                gci_hi,
+                gci_lo,
+                pagePtr.p,
+                tuple_ptr,
+                req_struct,
+                regOperPtr,
+                regFragPtr,
+                regTabPtr,
+                diskPagePtr);
 }

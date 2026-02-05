@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -27,6 +34,11 @@
 #include <CpcClient.hpp>
 #include <Properties.hpp>
 #include <mysql.h>
+#include <my_sys.h>
+#include <my_getopt.h>
+#ifdef HAVE_MY_DEFAULT_H
+#include <my_default.h>
+#endif
 #include <my_dir.h>
 
 enum ErrorCodes 
@@ -118,9 +130,15 @@ struct atrt_testcase
   bool m_report;
   bool m_run_all;
   time_t m_max_time;
-  BaseString m_command;
-  BaseString m_args;
   BaseString m_name;
+  BaseString m_mysqld_options;
+
+  struct Command
+  {
+    atrt_process::Type m_cmd_type;
+    BaseString m_exe;
+    BaseString m_args;
+  } m_cmd; // Todo make array of these...
 };
 
 extern Logger g_logger;
@@ -155,6 +173,9 @@ bool do_command(atrt_config& config);
 bool start_process(atrt_process & proc);
 bool stop_process(atrt_process & proc);
 
+bool connect_mysqld(atrt_process & proc);
+bool disconnect_mysqld(atrt_process & proc);
+
 /**
  * check configuration if any changes has been 
  *   done for the duration of the latest running test
@@ -187,8 +208,24 @@ extern int          g_baseport;
 extern int          g_fqpn;
 extern int          g_fix_nodeid;
 extern int          g_default_ports;
+extern int          g_restart;
 
 extern const char * g_clusters;
+
+/**
+ * Since binaries move location between 5.1 and 5.5
+ *   we keep full path to them here
+ */
+char * find_bin_path(const char * basename);
+char * find_bin_path(const char * prefix, const char * basename);
+extern const char * g_ndb_mgmd_bin_path;
+extern const char * g_ndbd_bin_path;
+extern const char * g_ndbmtd_bin_path;
+extern const char * g_mysqld_bin_path;
+extern const char * g_mysql_install_db_bin_path;
+extern const char * g_libmysqlclient_so_path;
+
+extern const char * g_search_path[];
 
 #ifdef _WIN32
 #include <direct.h>
@@ -255,7 +292,7 @@ static inline char* replace_drive_letters(const char* path) {
     if(path[i] && path[i+1]) {
       if( (!i || isspace(path[i-1]) || ispunct(path[i-1])) && path[i+1] == ':')
 {
-        assert(path[i+2] == '/');
+        require(path[i+2] == '/');
         j += BaseString::snprintf(retval + j, retval_len - 1, "%s/%c", cygdrive, path[i]);
         i++;
         continue;

@@ -1,13 +1,20 @@
-/* Copyright (c) 2000, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -100,7 +107,7 @@ ha_rows hp_rb_records_in_range(HP_INFO *info, int inx,  key_range *min_key,
 uchar *hp_search(HP_INFO *info, HP_KEYDEF *keyinfo, const uchar *key,
                 uint nextflag)
 {
-  reg1 HASH_INFO *pos,*prev_ptr;
+  HASH_INFO *pos,*prev_ptr;
   int flag;
   uint old_nextflag;
   HP_SHARE *share=info->s;
@@ -129,7 +136,7 @@ uchar *hp_search(HP_INFO *info, HP_KEYDEF *keyinfo, const uchar *key,
 	case 2:					/* Search previous */
 	  if (pos->ptr_to_rec == info->current_ptr)
 	  {
-	    my_errno=HA_ERR_KEY_NOT_FOUND;	/* If gpos == 0 */
+	    set_my_errno(HA_ERR_KEY_NOT_FOUND);	/* If gpos == 0 */
 	    info->current_hash_ptr=prev_ptr;
 	    DBUG_RETURN(info->current_ptr=prev_ptr ? prev_ptr->ptr_to_rec : 0);
 	  }
@@ -154,7 +161,7 @@ uchar *hp_search(HP_INFO *info, HP_KEYDEF *keyinfo, const uchar *key,
     }
     while ((pos=pos->next_key));
   }
-  my_errno=HA_ERR_KEY_NOT_FOUND;
+  set_my_errno(HA_ERR_KEY_NOT_FOUND);
   if (nextflag == 2 && ! info->current_ptr)
   {
     /* Do a previous from end */
@@ -163,8 +170,8 @@ uchar *hp_search(HP_INFO *info, HP_KEYDEF *keyinfo, const uchar *key,
   }
 
   if (old_nextflag && nextflag)
-    my_errno=HA_ERR_RECORD_CHANGED;		/* Didn't find old record */
-  DBUG_PRINT("exit",("Error: %d",my_errno));
+    set_my_errno(HA_ERR_RECORD_CHANGED);		/* Didn't find old record */
+  DBUG_PRINT("exit",("Error: %d",my_errno()));
   info->current_hash_ptr=0;  
   DBUG_RETURN((info->current_ptr= 0));
 }
@@ -188,8 +195,8 @@ uchar *hp_search_next(HP_INFO *info, HP_KEYDEF *keyinfo, const uchar *key,
       DBUG_RETURN (info->current_ptr= pos->ptr_to_rec);
     }
   }
-  my_errno=HA_ERR_KEY_NOT_FOUND;
-  DBUG_PRINT("exit",("Error: %d",my_errno));
+  set_my_errno(HA_ERR_KEY_NOT_FOUND);
+  DBUG_PRINT("exit",("Error: %d",my_errno()));
   info->current_hash_ptr=0;
   DBUG_RETURN ((info->current_ptr= 0));
 }
@@ -234,11 +241,9 @@ void hp_movelink(HASH_INFO *pos, HASH_INFO *next_link, HASH_INFO *newlink)
   return;
 }
 
-#ifndef NEW_HASH_FUNCTION
-
 	/* Calc hashvalue for a key */
 
-ulong hp_hashnr(register HP_KEYDEF *keydef, register const uchar *key)
+ulong hp_hashnr(HP_KEYDEF *keydef, const uchar *key)
 {
   /*register*/ 
   ulong nr=1, nr2=4;
@@ -264,10 +269,10 @@ ulong hp_hashnr(register HP_KEYDEF *keydef, register const uchar *key)
     if (seg->type == HA_KEYTYPE_TEXT)
     {
        const CHARSET_INFO *cs= seg->charset;
-       uint length= seg->length;
+       size_t length= seg->length;
        if (cs->mbmaxlen > 1)
        {
-         uint char_length;
+         size_t char_length;
          char_length= my_charpos(cs, pos, pos + length, length/cs->mbmaxlen);
          set_if_smaller(length, char_length);
        }
@@ -277,10 +282,10 @@ ulong hp_hashnr(register HP_KEYDEF *keydef, register const uchar *key)
     {
        const CHARSET_INFO *cs= seg->charset;
        uint pack_length= 2;                     /* Key packing is constant */
-       uint length= uint2korr(pos);
+       size_t length= uint2korr(pos);
        if (cs->mbmaxlen > 1)
        {
-         uint char_length;
+         size_t char_length;
          char_length= my_charpos(cs, pos +pack_length,
                                  pos +pack_length + length,
                                  seg->length/cs->mbmaxlen);
@@ -304,7 +309,7 @@ ulong hp_hashnr(register HP_KEYDEF *keydef, register const uchar *key)
 
 	/* Calc hashvalue for a key in a record */
 
-ulong hp_rec_hashnr(register HP_KEYDEF *keydef, register const uchar *rec)
+ulong hp_rec_hashnr(HP_KEYDEF *keydef, const uchar *rec)
 {
   ulong nr=1, nr2=4;
   HA_KEYSEG *seg,*endseg;
@@ -323,7 +328,7 @@ ulong hp_rec_hashnr(register HP_KEYDEF *keydef, register const uchar *rec)
     if (seg->type == HA_KEYTYPE_TEXT)
     {
       const CHARSET_INFO *cs= seg->charset;
-      uint char_length= seg->length;
+      size_t char_length= seg->length;
       if (cs->mbmaxlen > 1)
       {
         char_length= my_charpos(cs, pos, pos + char_length,
@@ -336,10 +341,10 @@ ulong hp_rec_hashnr(register HP_KEYDEF *keydef, register const uchar *rec)
     {
       const CHARSET_INFO *cs= seg->charset;
       uint pack_length= seg->bit_start;
-      uint length= (pack_length == 1 ? (uint) *(uchar*) pos : uint2korr(pos));
+      size_t length= (pack_length == 1 ? (uint) *(uchar*) pos : uint2korr(pos));
       if (cs->mbmaxlen > 1)
       {
-        uint char_length;
+        size_t char_length;
         char_length= my_charpos(cs, pos + pack_length,
                                 pos + pack_length + length,
                                 seg->length/cs->mbmaxlen);
@@ -359,124 +364,6 @@ ulong hp_rec_hashnr(register HP_KEYDEF *keydef, register const uchar *rec)
   DBUG_PRINT("exit", ("hash: 0x%lx", nr));
   return(nr);
 }
-
-#else
-
-/*
- * Fowler/Noll/Vo hash
- *
- * The basis of the hash algorithm was taken from an idea sent by email to the
- * IEEE Posix P1003.2 mailing list from Phong Vo (kpv@research.att.com) and
- * Glenn Fowler (gsf@research.att.com).  Landon Curt Noll (chongo@toad.com)
- * later improved on their algorithm.
- *
- * The magic is in the interesting relationship between the special prime
- * 16777619 (2^24 + 403) and 2^32 and 2^8.
- *
- * This hash produces the fewest collisions of any function that we've seen so
- * far, and works well on both numbers and strings.
- */
-
-ulong hp_hashnr(register HP_KEYDEF *keydef, register const uchar *key)
-{
-  /*
-    Note, if a key consists of a combination of numeric and
-    a text columns, it most likely won't work well.
-    Making text columns work with NEW_HASH_FUNCTION
-    needs also changes in strings/ctype-xxx.c.
-  */
-  ulong nr= 1, nr2= 4;
-  HA_KEYSEG *seg,*endseg;
-
-  for (seg=keydef->seg,endseg=seg+keydef->keysegs ; seg < endseg ; seg++)
-  {
-    uchar *pos=(uchar*) key;
-    key+=seg->length;
-    if (seg->null_bit)
-    {
-      key++;
-      if (*pos)
-      {
-	nr^= (nr << 1) | 1;
-	/* Add key pack length (2) to key for VARCHAR segments */
-        if (seg->type == HA_KEYTYPE_VARTEXT1)
-          key+= 2;
-	continue;
-      }
-      pos++;
-    }
-    if (seg->type == HA_KEYTYPE_TEXT)
-    {
-      seg->charset->coll->hash_sort(seg->charset, pos, ((uchar*)key)-pos,
-                                    &nr, &nr2);
-    }
-    else if (seg->type == HA_KEYTYPE_VARTEXT1)  /* Any VARCHAR segments */
-    {
-      uint pack_length= 2;                      /* Key packing is constant */
-      uint length= uint2korr(pos);
-      seg->charset->coll->hash_sort(seg->charset, pos+pack_length, length,
-                                    &nr, &nr2);
-      key+= pack_length;
-    }
-    else
-    {
-      for ( ; pos < (uchar*) key ; pos++)
-      {
-	nr *=16777619; 
-	nr ^=(uint) *pos;
-      }
-    }
-  }
-  DBUG_PRINT("exit", ("hash: 0x%lx", nr));
-  return(nr);
-}
-
-	/* Calc hashvalue for a key in a record */
-
-ulong hp_rec_hashnr(register HP_KEYDEF *keydef, register const uchar *rec)
-{
-  ulong nr= 1, nr2= 4;
-  HA_KEYSEG *seg,*endseg;
-
-  for (seg=keydef->seg,endseg=seg+keydef->keysegs ; seg < endseg ; seg++)
-  {
-    uchar *pos=(uchar*) rec+seg->start;
-    if (seg->null_bit)
-    {
-      if (rec[seg->null_pos] & seg->null_bit)
-      {
-	nr^= (nr << 1) | 1;
-	continue;
-      }
-    }
-    if (seg->type == HA_KEYTYPE_TEXT)
-    {
-      uint char_length= seg->length; /* TODO: fix to use my_charpos() */
-      seg->charset->coll->hash_sort(seg->charset, pos, char_length,
-                                    &nr, &nr2);
-    }
-    else if (seg->type == HA_KEYTYPE_VARTEXT1)  /* Any VARCHAR segments */
-    {
-      uint pack_length= seg->bit_start;
-      uint length= (pack_length == 1 ? (uint) *(uchar*) pos : uint2korr(pos));
-      seg->charset->coll->hash_sort(seg->charset, pos+pack_length,
-                                    length, &nr, &nr2);
-    }
-    else
-    {
-      uchar *end= pos+seg->length;
-      for ( ; pos < end ; pos++)
-      {
-	nr *=16777619; 
-	nr ^=(uint) *pos;
-      }
-    }
-  }
-  DBUG_PRINT("exit", ("hash: 0x%lx", nr));
-  return(nr);
-}
-
-#endif
 
 
 /*
@@ -517,13 +404,13 @@ int hp_rec_key_cmp(HP_KEYDEF *keydef, const uchar *rec1, const uchar *rec2,
     if (seg->type == HA_KEYTYPE_TEXT)
     {
       const CHARSET_INFO *cs= seg->charset;
-      uint char_length1;
-      uint char_length2;
+      size_t char_length1;
+      size_t char_length2;
       uchar *pos1= (uchar*)rec1 + seg->start;
       uchar *pos2= (uchar*)rec2 + seg->start;
       if (cs->mbmaxlen > 1)
       {
-        uint char_length= seg->length / cs->mbmaxlen;
+        size_t char_length= seg->length / cs->mbmaxlen;
         char_length1= my_charpos(cs, pos1, pos1 + seg->length, char_length);
         set_if_smaller(char_length1, seg->length);
         char_length2= my_charpos(cs, pos2, pos2 + seg->length, char_length);
@@ -714,7 +601,7 @@ uint hp_rb_make_key(HP_KEYDEF *keydef, uchar *key,
 
   for (seg= keydef->seg, endseg= seg + keydef->keysegs; seg < endseg; seg++)
   {
-    uint char_length;
+    size_t char_length;
     if (seg->null_bit)
     {
       if (!(*key++= 1 - MY_TEST(rec[seg->null_pos] & seg->null_bit)))
@@ -724,12 +611,10 @@ uint hp_rb_make_key(HP_KEYDEF *keydef, uchar *key,
     {
       uint length= seg->length;
       uchar *pos= (uchar*) rec + seg->start;
-      
-#ifdef HAVE_ISNAN
       if (seg->type == HA_KEYTYPE_FLOAT)
       {
 	float nr;
-	float4get(nr, pos);
+	float4get(&nr, pos);
 	if (my_isnan(nr))
 	{
 	  /* Replace NAN with zero */
@@ -741,7 +626,7 @@ uint hp_rb_make_key(HP_KEYDEF *keydef, uchar *key,
       else if (seg->type == HA_KEYTYPE_DOUBLE)
       {
 	double nr;
-	float8get(nr, pos);
+	float8get(&nr, pos);
 	if (my_isnan(nr))
 	{
  	  memset(key, 0, length);
@@ -749,7 +634,6 @@ uint hp_rb_make_key(HP_KEYDEF *keydef, uchar *key,
 	  continue;
 	}
       }
-#endif
       pos+= length;
       while (length--)
       {
@@ -805,7 +689,7 @@ uint hp_rb_pack_key(HP_KEYDEF *keydef, uchar *key, const uchar *old,
   for (seg= keydef->seg, endseg= seg + keydef->keysegs;
        seg < endseg && keypart_map; old+= seg->length, seg++)
   {
-    uint char_length;
+    size_t char_length;
     keypart_map>>= 1;
     if (seg->null_bit)
     {
@@ -977,7 +861,7 @@ void heap_update_auto_increment(HP_INFO *info, const uchar *record)
   case HA_KEYTYPE_FLOAT:                        /* This shouldn't be used */
   {
     float f_1;
-    float4get(f_1,key);
+    float4get(&f_1,key);
     /* Ignore negative values */
     value = (f_1 < (float) 0.0) ? 0 : (ulonglong) f_1;
     break;
@@ -985,7 +869,7 @@ void heap_update_auto_increment(HP_INFO *info, const uchar *record)
   case HA_KEYTYPE_DOUBLE:                       /* This shouldn't be used */
   {
     double f_1;
-    float8get(f_1,key);
+    float8get(&f_1,key);
     /* Ignore negative values */
     value = (f_1 < 0.0) ? 0 : (ulonglong) f_1;
     break;
@@ -997,7 +881,7 @@ void heap_update_auto_increment(HP_INFO *info, const uchar *record)
     value= uint8korr(key);
     break;
   default:
-    DBUG_ASSERT(0);
+    assert(0);
     value=0;                                    /* Error */
     break;
   }

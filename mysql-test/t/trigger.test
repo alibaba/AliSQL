@@ -1,3 +1,8 @@
+# The include statement below is a temp one for tests that are yet to
+#be ported to run with InnoDB,
+#but needs to be kept for tests that would need MyISAM in future.
+--source include/force_myisam_default.inc
+
 # This test uses chmod, can't be run with root permissions
 -- source include/not_as_root.inc
 
@@ -325,8 +330,6 @@ create trigger trg before insert on t2 for each row set @a:=1;
 create trigger trg before insert on t1 for each row set @a:=1;
 --error ER_TRG_ALREADY_EXISTS
 create trigger trg after insert on t1 for each row set @a:=1;
---error ER_NOT_SUPPORTED_YET
-create trigger trg2 before insert on t1 for each row set @a:=1;
 --error ER_TRG_ALREADY_EXISTS
 create trigger trg before insert on t3 for each row set @a:=1;
 create trigger trg2 before insert on t3 for each row set @a:=1;
@@ -1391,7 +1394,7 @@ CREATE TABLE t1(c INT);
 CREATE TABLE t2(c INT);
 
 --error ER_WRONG_STRING_LENGTH
-CREATE DEFINER=1234567890abcdefGHIKL@localhost
+CREATE DEFINER=1234567890abcdefGHIKL1234567890abcdefGHIKL@localhost
   TRIGGER t1_bi BEFORE INSERT ON t1 FOR EACH ROW SET @a = 1;
 
 --error ER_WRONG_STRING_LENGTH
@@ -1559,7 +1562,7 @@ drop table t1;
 # Bug#25398: crash when a trigger contains a SELECT with 
 #            trigger fields in the select list under DISTINCT
 #
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 CREATE TABLE t1 (
   id int NOT NULL DEFAULT '0',
   a  varchar(10) NOT NULL,
@@ -1600,7 +1603,7 @@ UPDATE t1 SET c='Bang!' WHERE id=1;
 SELECT fubar_id FROM t2;
 
 DROP TABLE t1,t2;
-
+SET sql_mode = default;
 #
 # Bug#21285 (Incorrect message error deleting records in a table with a
 #           trigger for inserting)
@@ -2275,7 +2278,7 @@ drop table if exists t1;
 create table t1 (i int, j int);
 
 create trigger t1_bi before insert on t1 for each row begin end;
---error ER_NOT_SUPPORTED_YET
+--error ER_TRG_ALREADY_EXISTS
 create trigger t1_bi before insert on t1 for each row begin end;
 drop trigger t1_bi;
 --error ER_TRG_DOES_NOT_EXIST
@@ -2403,7 +2406,7 @@ DROP TABLE t1, t2;
 CREATE TABLE t1 (id INT NOT NULL);
 CREATE TABLE t2 (id INT NOT NULL);
 INSERT t1 VALUES (1),(2),(3);
-UPDATE t1 SET id=NULL;
+UPDATE IGNORE t1 SET id=NULL;
 CREATE TRIGGER t1_bu BEFORE UPDATE ON t1 FOR EACH ROW
   INSERT INTO t2 VALUES (3);
 UPDATE t1 SET id=NULL;
@@ -2474,7 +2477,7 @@ DROP TEMPORARY TABLE t2;
 #
 # Bug#36649: Condition area is not properly cleaned up after stored routine invocation
 #
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 --disable_warnings
 DROP TRIGGER IF EXISTS trg1;
 DROP TABLE IF EXISTS t1;
@@ -2533,7 +2536,7 @@ INSERT INTO t1 VALUES (1),(2);
 DROP TRIGGER trg1;
 DROP TRIGGER trg2;
 DROP TABLE t1;
-
+SET sql_mode = default;
 
 --echo #
 --echo # Bug #46747 "Crash in MDL_ticket::upgrade_shared_lock_to_exclusive
@@ -2638,6 +2641,198 @@ DROP TRIGGER t2_ai;
 DROP TABLE t1, t2, t3;
 
 --echo #
+--echo # Bug#14493938 - CREATE TEMPORARY TABLE INSIDE TRIGGER -- CRASH (DEBUG ONLY)
+--echo #
+
+CREATE TABLE t1 (a INT, b INT DEFAULT 150);
+
+delimiter |;
+CREATE TRIGGER t1_bi BEFORE INSERT ON t1
+FOR EACH ROW 
+BEGIN
+  CREATE TEMPORARY TABLE t2 AS SELECT NEW.a, NEW.b;
+  INSERT INTO t2(a) VALUES (10);
+  INSERT INTO t2 VALUES (100, 500);
+  INSERT INTO t2(a) VALUES (1000);
+END
+|
+delimiter ;|
+
+INSERT INTO t1 VALUES (1, 2);
+SELECT * FROM t2;
+
+DROP TABLE t1;
+DROP TEMPORARY TABLE t2;
+
+--echo #
+--echo # Bug#15985318 - ASSERTION FAILED: ! thd->in_sub_stmt with certain
+--echo #                                    commands in triggers
+--echo #
+
+CREATE TABLE t1(a INT);
+
+--error ER_COMMIT_NOT_ALLOWED_IN_SF_OR_TRG
+CREATE TRIGGER t1_au AFTER UPDATE ON t1 FOR EACH ROW START SLAVE;
+
+--error ER_COMMIT_NOT_ALLOWED_IN_SF_OR_TRG
+CREATE TRIGGER t1_au AFTER UPDATE ON t1 FOR EACH ROW STOP SLAVE;
+
+--error ER_COMMIT_NOT_ALLOWED_IN_SF_OR_TRG
+CREATE TRIGGER t1_au AFTER UPDATE ON t1 FOR EACH ROW
+CREATE SERVER s FOREIGN DATA WRAPPER mysql OPTIONS (USER 'Remote',
+                                                    HOST '192.168.1.106',
+                                                    DATABASE 'test');
+
+--error ER_COMMIT_NOT_ALLOWED_IN_SF_OR_TRG
+CREATE TRIGGER t1_bu BEFORE UPDATE ON t1 FOR EACH ROW
+ALTER SERVER s OPTIONS (password '1');
+
+--error ER_COMMIT_NOT_ALLOWED_IN_SF_OR_TRG
+CREATE TRIGGER tr1 AFTER UPDATE ON t1 FOR EACH ROW
+DROP SERVER IF EXISTS s;
+
+CREATE DATABASE db1;
+
+--error ER_COMMIT_NOT_ALLOWED_IN_SF_OR_TRG
+CREATE TRIGGER tr1 AFTER UPDATE ON t1 FOR EACH ROW
+ALTER DATABASE db1 CHARACTER SET latin1;
+
+DROP DATABASE db1;
+
+CREATE USER 'u1'@'localhost' IDENTIFIED BY 'pass';
+
+--error ER_COMMIT_NOT_ALLOWED_IN_SF_OR_TRG
+CREATE TRIGGER tr1 AFTER UPDATE ON t1 FOR EACH ROW
+ALTER USER 'u1'@'localhost' PASSWORD EXPIRE;
+
+DROP USER 'u1'@'localhost';
+
+--error ER_COMMIT_NOT_ALLOWED_IN_SF_OR_TRG
+CREATE TRIGGER tr1 AFTER UPDATE ON t1 FOR EACH ROW
+CHANGE MASTER TO MASTER_SSL = 0;
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#17864349 - CHANGING TRUNCATE TABLE TO DROP TABLE & CREATE TABLE
+--echo # MAKES TRIGGER.TEST FAIL
+--echo #
+
+--echo # The following tests check for non in-place update (i.e. using temporary table)
+--echo # of column with different datatypes
+
+SET @save_sql_mode= @@sql_mode;
+SET sql_mode= 'traditional';
+
+let $column1_type_name = INT;
+let $column2_type_name = INT;
+let $column2_value = 3;
+--source include/trigger_17864349.inc
+
+let $column1_type_name = TINYINT;
+let $column2_type_name = TINYINT;
+let $column2_value = 3;
+--source include/trigger_17864349.inc
+
+let $column1_type_name = BOOL;
+let $column2_type_name = BOOL;
+let $column2_value = TRUE;
+--source include/trigger_17864349.inc
+
+let $column1_type_name = SMALLINT;
+let $column2_type_name = SMALLINT;
+let $column2_value = 3;
+--source include/trigger_17864349.inc
+
+let $column1_type_name = BIGINT;
+let $column2_type_name = BIGINT;
+let $column2_value = 3;
+--source include/trigger_17864349.inc
+
+let $column1_type_name = DECIMAL;
+let $column2_type_name = DECIMAL;
+let $column2_value = 3;
+--source include/trigger_17864349.inc
+
+let $column1_type_name = FLOAT;
+let $column2_type_name = FLOAT;
+let $column2_value = 3;
+--source include/trigger_17864349.inc
+
+let $column1_type_name = DOUBLE;
+let $column2_type_name = DOUBLE;
+let $column2_value = 3;
+--source include/trigger_17864349.inc
+
+let $column1_type_name = BIT;
+let $column2_type_name = BIT;
+let $column2_value = 1;
+--source include/trigger_17864349.inc
+
+let $column1_type_name = ENUM('a', 'b', 'c');
+let $column2_type_name = ENUM('a', 'b', 'c');
+let $column2_value = 'b';
+--source include/trigger_17864349.inc
+
+let $column1_type_name = SET('a', 'b', 'c');
+let $column2_type_name = SET('a', 'b', 'c');
+let $column2_value = 'b';
+--source include/trigger_17864349.inc
+
+let $column1_type_name = VARBINARY(10);
+let $column2_type_name = VARBINARY(10);
+let $column2_value = 'binary';
+--source include/trigger_17864349.inc
+
+let $column1_type_name = BINARY(10);
+let $column2_type_name = BINARY(10);
+let $column2_value = 'binary';
+--source include/trigger_17864349.inc
+
+let $column1_type_name = TINYTEXT;
+let $column2_type_name = TINYTEXT;
+let $column2_value = 'text';
+--source include/trigger_17864349.inc
+
+let $column1_type_name = TEXT(10);
+let $column2_type_name = TEXT(10);
+let $column2_value = 'text';
+--source include/trigger_17864349.inc
+
+let $column1_type_name = BLOB;
+let $column2_type_name = BLOB;
+let $column2_value = 'binary';
+--source include/trigger_17864349.inc
+
+let $column1_type_name = VARCHAR(5);
+let $column2_type_name = INT;
+let $column2_value = 3;
+--source include/trigger_17864349.inc
+
+let $column1_type_name = INT;
+let $column2_type_name = VARCHAR(5);
+let $column2_value = 'str';
+--source include/trigger_17864349.inc
+
+let $column1_type_name = VARCHAR(15);
+let $column2_type_name = VARCHAR(5);
+let $column2_value = 'str';
+--source include/trigger_17864349.inc
+
+let $column1_type_name = VARCHAR(15);
+let $column2_type_name = BLOB;
+let $column2_value = 'str';
+--source include/trigger_17864349.inc
+
+let $column1_type_name = TEXT(20);
+let $column2_type_name = TEXT(10);
+let $column2_value = 'text';
+--source include/trigger_17864349.inc
+
+SET sql_mode= @save_sql_mode;
+
+# End of tests for Bug#17864349
+--echo #
 --echo # Bug#18596756 - FAILED PREPARING OF TRIGGER ON TRUNCATED TABLES CAUSE
 --echo #                ERROR 1054.
 --echo #
@@ -2667,4 +2862,285 @@ INSERT INTO t1 VALUES(0);
 
 DROP TABLE t1;
 
---echo End of 6.0 tests.
+--echo #
+--echo # Bug#16522924 : UPDATE TRIGGER INVOKED WHEN UPDATE IGNORE MEANS
+--echo #                      THAT NO UPDATE IS PERFORMED
+--echo #
+CREATE TABLE t1 (a INT PRIMARY KEY);
+CREATE TABLE t2 (after_update CHAR(50));
+CREATE TABLE t3(b INT PRIMARY KEY);
+INSERT INTO t1 VALUES (1), (2);
+INSERT INTO t3 VALUES (1);
+DELIMITER |;
+CREATE TRIGGER post_update_t1 AFTER UPDATE ON t1
+FOR EACH ROW BEGIN
+  INSERT INTO t2 VALUES("POST UPDATE TRIGGER FOR UPDATE IGNORE ON t1 FIRED");
+END|
+DELIMITER ;|
+UPDATE IGNORE t1 SET a=2 WHERE a=1;
+SELECT * FROM t2;
+UPDATE IGNORE t1,t3 SET t1.a=2 WHERE t1.a=1;
+SELECT * FROM t2;
+UPDATE IGNORE t3,t1 SET t1.a=2 WHERE t1.a=1;
+SELECT * FROM t1;
+SELECT * FROM t2;
+DROP TRIGGER post_update_t1;
+DROP TABLE t1,t2,t3;
+
+--echo #
+--echo # WL#9262: All system tables should support 32 character length user names
+--echo #
+
+CREATE USER user_name_robert_golebiowski@oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char;
+CREATE TABLE test.silly_one (ID INT);
+
+CREATE DEFINER=user_name_robert_golebiowski@oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char TRIGGER test.silly_trigger BEFORE INSERT ON test.silly_one FOR EACH ROW SET @x=1;
+
+--replace_column 6 #
+SHOW TRIGGERS FROM test LIKE 'silly_one';
+
+SELECT DEFINER FROM information_schema.triggers WHERE TRIGGER_NAME='silly_trigger';
+
+DROP USER user_name_robert_golebiowski@oh_my_gosh_this_is_a_long_hostname_look_at_it_it_has_60_char;
+DROP TRIGGER test.silly_trigger;
+DROP TABLE test.silly_one;
+
+--echo #
+--echo # Bug#25209512:  CURRENT_TIMESTAMP PRODUCES ZEROS IN TRIGGER
+--echo #
+
+--echo
+--echo # Case 1: With BEFORE INSERT triggers
+--echo # Scenario 1.1: Normal INSERT
+SET TIMESTAMP= UNIX_TIMESTAMP("2017-05-15 07:07:07");
+CREATE TABLE t1( a TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP );
+
+CREATE TRIGGER trigger_for_normal_insert BEFORE INSERT ON t1 FOR EACH ROW
+SET @x:= NEW.a;
+
+INSERT INTO t1() VALUES();
+
+SELECT * FROM t1;
+--echo # Without the patch, x contained zero timestamp.
+SELECT @x;
+
+DROP TABLE t1;
+
+--echo
+--echo # Scenario 1.2: INSERT INTO... SELECT
+CREATE TABLE t1(a DATETIME NOT NULL DEFAULT NOW(), b INT);
+
+CREATE TRIGGER trigger_for_insert_select BEFORE INSERT ON t1 FOR EACH ROW
+SET @x:= NEW.a;
+
+INSERT INTO t1(b) SELECT 1;
+
+SELECT * FROM t1;
+--echo # Without the patch, x contained zero timestamp.
+SELECT @x;
+
+DROP TABLE t1;
+
+--echo
+--echo # Scenario 1.3: Normal REPLACE
+CREATE TABLE t1( a TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP );
+
+CREATE TRIGGER trigger_for_normal_replace BEFORE INSERT ON t1 FOR EACH ROW
+SET @x:= NEW.a;
+
+REPLACE INTO t1() VALUES();
+
+SELECT * FROM t1;
+--echo # Without the patch, x contained zero timestamp.
+SELECT @x;
+
+DROP TABLE t1;
+
+--echo
+--echo # Scenario 1.4: REPLACE INTO... SELECT
+CREATE TABLE t1(a DATETIME NOT NULL DEFAULT NOW(), b INT);
+
+CREATE TRIGGER trigger_for_replace_select BEFORE INSERT ON t1 FOR EACH ROW
+SET @x:= NEW.a;
+
+REPLACE INTO t1(b) SELECT 1;
+
+SELECT * FROM t1;
+--echo # Without the patch, x contained zero timestamp.
+SELECT @x;
+
+DROP TABLE t1;
+
+--echo
+--echo # Case 2: With BEFORE UPDATE triggers
+--echo # Scenario 2.1: Normal UPDATE with ON UPDATE NOW() clause for
+--echo #               the timestamp field.
+SET TIMESTAMP= UNIX_TIMESTAMP("2017-04-11 09:09:09");
+CREATE TABLE t1( a TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                 ON UPDATE NOW(), b INT DEFAULT 1 );
+
+CREATE TRIGGER trigger_before_update BEFORE UPDATE ON t1 FOR EACH ROW
+SET @x:= NEW.a;
+
+INSERT INTO t1 VALUES();
+SELECT * FROM t1;
+
+SET TIMESTAMP= UNIX_TIMESTAMP("2017-04-12 10:10:10");
+UPDATE t1 SET b= 2;
+
+SELECT * FROM t1;
+--echo # Without the patch, x contained the old timestamp.
+SELECT @x;
+
+DROP TABLE t1;
+
+--echo
+--echo # Scenario 2.2: Normal UPDATE without ON UPDATE NOW() clause for
+--echo #               the timestamp field.
+SET TIMESTAMP= UNIX_TIMESTAMP("2017-04-13 08:08:08");
+CREATE TABLE t1( a TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                 b INT DEFAULT 1 );
+
+CREATE TRIGGER trigger_before_update BEFORE UPDATE ON t1 FOR EACH ROW
+SET @x:= NEW.a;
+
+INSERT INTO t1 VALUES();
+SELECT * FROM t1;
+
+SET TIMESTAMP= UNIX_TIMESTAMP("2017-05-04 05:05:05");
+UPDATE t1 SET b= 2;
+
+SELECT * FROM t1;
+--echo # x contains the old timestamp because of the absence of
+--echo # ON UPDATE clause for the timestamp field.
+SELECT @x;
+
+DROP TABLE t1;
+
+--echo
+--echo # Scenario 2.3: UPDATE with join
+SET TIMESTAMP= UNIX_TIMESTAMP("2017-04-25 11:11:11");
+CREATE TABLE t1( a DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                 ON UPDATE CURRENT_TIMESTAMP, b INT);
+CREATE TABLE t2( d INT);
+
+INSERT INTO t1(b) VALUES(1);
+INSERT INTO t2 VALUES(2);
+
+SELECT * FROM t1;
+SELECT * FROM t2;
+
+CREATE TRIGGER trigger_before_update_with_join BEFORE UPDATE ON t1 FOR EACH ROW
+SET @x:= NEW.a;
+
+SET TIMESTAMP= UNIX_TIMESTAMP("2017-04-25 01:01:01");
+UPDATE t1, t2 SET t1.b= t2.d;
+
+SELECT * FROM t1;
+--echo # Without the patch, x contained old timestamp
+SELECT @x;
+
+DROP TABLE t1, t2;
+
+--echo
+--echo # Case 3: LOAD DATA INFILE... with BEFORE INSERT triggers
+SET TIMESTAMP= UNIX_TIMESTAMP("2017-04-17 06:06:06");
+CREATE TABLE t1( a TIMESTAMP NOT NULL DEFAULT NOW(), b INT );
+
+CREATE TRIGGER trigger_for_load_infile BEFORE INSERT ON t1 FOR EACH ROW
+SET @x:= NEW.a;
+
+SELECT 1 INTO OUTFILE 't1.dat' FROM dual;
+LOAD DATA INFILE 't1.dat' INTO TABLE t1(b);
+
+SELECT * FROM t1;
+--echo # Without the patch, x contained zero timestamp
+SELECT @x;
+
+DROP TABLE t1;
+
+let $MYSQLD_DATADIR= `select @@datadir`;
+remove_file $MYSQLD_DATADIR/test/t1.dat;
+
+SET TIMESTAMP= DEFAULT;
+
+
+--echo #
+--echo # BUG 26626277: BUG IN "INSERT... ON DUPLICATE KEY UPDATE" QUERY
+--echo #
+
+--echo # Setup.
+CREATE TABLE t1 (fld1 VARCHAR(64) NOT NULL,
+fld2 INT DEFAULT 0, PRIMARY KEY (fld1));
+
+CREATE TABLE t2 (fld1 VARCHAR(64) NOT NULL,
+fld2 INT(11) DEFAULT NULL, PRIMARY KEY (fld1));
+
+INSERT INTO t1(fld1) VALUES (1100);
+INSERT INTO t2 VALUES (1100, 40);
+
+DELIMITER $$;
+
+CREATE TRIGGER update_after_update
+AFTER UPDATE ON t2 FOR EACH ROW
+BEGIN
+  UPDATE t1 SET t1.fld2 = t1.fld2 + 1
+  WHERE t1.fld1 = NEW.fld1;
+END$$
+
+DELIMITER ;$$
+
+SELECT * FROM t1;
+SELECT * FROM t2;
+
+INSERT INTO t2 (fld1) values (1100) ON DUPLICATE KEY UPDATE
+fld2= 50;
+
+SELECT * FROM t1;
+SELECT * FROM t2;
+
+--echo # Without patch, the after update trigger is not invoked.
+INSERT INTO t2 (fld1) values (1100) ON DUPLICATE KEY UPDATE
+fld2= 50;
+
+SELECT * FROM t1;
+SELECT * FROM t2;
+
+--echo # Tests covering before update trigger.
+
+--echo # Setup.
+TRUNCATE TABLE t1;
+DROP TRIGGER update_after_update;
+INSERT INTO t1(fld1) VALUES (1100);
+
+DELIMITER $$;
+
+CREATE TRIGGER update_before_update
+BEFORE UPDATE ON t2 FOR EACH ROW
+BEGIN
+  UPDATE t1 SET t1.fld2 = t1.fld2 + 1
+  WHERE t1.fld1 = NEW.fld1;
+END$$
+
+DELIMITER ;$$
+
+SELECT * FROM t1;
+SELECT * FROM t2;
+
+INSERT INTO t2 (fld1) values (1100) ON DUPLICATE KEY UPDATE
+fld2= 50;
+
+SELECT * FROM t1;
+SELECT * FROM t2;
+
+INSERT INTO t2 (fld1) values (1100) ON DUPLICATE KEY UPDATE
+fld2= 50;
+
+SELECT * FROM t1;
+SELECT * FROM t2;
+
+--echo # Cleanup
+DROP TRIGGER update_before_update;
+DROP TABLE t1, t2;
+
+--echo End of 5.7 tests.

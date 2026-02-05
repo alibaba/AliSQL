@@ -1,16 +1,23 @@
 #ifndef ITEM_CMPFUNC_INCLUDED
 #define ITEM_CMPFUNC_INCLUDED
 
-/* Copyright (c) 2000, 2015, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -19,13 +26,16 @@
 
 /* compare and test functions */
 
-#include "thr_malloc.h"                         /* sql_calloc */
-#include "item_func.h"             /* Item_int_func, Item_bool_func */
-#include "my_regex.h"
+#include "mem_root_array.h"  // Mem_root_array
+#include "my_regex.h"        // my_regex_t
+#include "item_func.h"       // Item_int_func
+#include "item_row.h"        // Item_row
+#include "template_utils.h"  // down_cast
 
-extern Item_result item_cmp_type(Item_result a,Item_result b);
-class Item_bool_func2;
 class Arg_comparator;
+class Item_sum_hybrid;
+class Item_row;
+struct Json_scalar_holder;
 
 typedef int (Arg_comparator::*arg_cmp_func)();
 
@@ -37,31 +47,41 @@ class Arg_comparator: public Sql_alloc
   arg_cmp_func func;
   Item_result_field *owner;
   Arg_comparator *comparators;   // used only for compare_row()
+  uint16 comparator_count;
   double precision;
   /* Fields used in DATE/DATETIME comparison. */
-  THD *thd;
-  enum_field_types a_type, b_type; // Types of a and b items
   Item *a_cache, *b_cache;         // Cached values of a and b items
   bool is_nulls_eq;                // TRUE <=> compare for the EQUAL_FUNC
   bool set_null;                   // TRUE <=> set owner->null_value
                                    //   when one of arguments is NULL.
   longlong (*get_value_a_func)(THD *thd, Item ***item_arg, Item **cache_arg,
-                               Item *warn_item, bool *is_null);
+                               const Item *warn_item, bool *is_null);
   longlong (*get_value_b_func)(THD *thd, Item ***item_arg, Item **cache_arg,
-                               Item *warn_item, bool *is_null);
+                               const Item *warn_item, bool *is_null);
   bool try_year_cmp_func(Item_result type);
   static bool get_date_from_const(Item *date_arg, Item *str_arg,
                                   ulonglong *value);
+  /**
+    Only used by compare_json() in the case where a JSON value is
+    compared to an SQL value. This member points to pre-allocated
+    memory that can be used instead of the heap when converting the
+    SQL value to a JSON value.
+  */
+  Json_scalar_holder *json_scalar;
 public:
   DTCollation cmp_collation;
   /* Allow owner function to use string buffers. */
   String value1, value2;
 
-  Arg_comparator(): comparators(0), thd(0), a_cache(0), b_cache(0), set_null(TRUE),
-    get_value_a_func(0), get_value_b_func(0) {};
-  Arg_comparator(Item **a1, Item **a2): a(a1), b(a2), comparators(0), thd(0),
+  Arg_comparator(): comparators(0), comparator_count(0),
     a_cache(0), b_cache(0), set_null(TRUE),
-    get_value_a_func(0), get_value_b_func(0) {};
+    get_value_a_func(0), get_value_b_func(0), json_scalar(0)
+  {}
+  Arg_comparator(Item **a1, Item **a2): a(a1), b(a2),
+    comparators(0), comparator_count(0),
+    a_cache(0), b_cache(0), set_null(TRUE),
+    get_value_a_func(0), get_value_b_func(0), json_scalar(0)
+  {}
 
   int set_compare_func(Item_result_field *owner, Item_result type);
   inline int set_compare_func(Item_result_field *owner_arg)
@@ -70,17 +90,12 @@ public:
                                                      (*b)->result_type()));
   }
   int set_cmp_func(Item_result_field *owner_arg,
-			  Item **a1, Item **a2,
-			  Item_result type);
+                   Item **a1, Item **a2,
+                   Item_result type);
 
-  inline int set_cmp_func(Item_result_field *owner_arg,
-			  Item **a1, Item **a2, bool set_null_arg)
-  {
-    set_null= set_null_arg;
-    return set_cmp_func(owner_arg, a1, a2,
-                        item_cmp_type((*a1)->result_type(),
-                                      (*a2)->result_type()));
-  }
+  int set_cmp_func(Item_result_field *owner_arg,
+                   Item **a1, Item **a2, bool set_null_arg);
+
   inline int compare() { return (this->*func)(); }
 
   int compare_string();		 // compare args[0] & args[1]
@@ -104,6 +119,7 @@ public:
   int compare_real_fixed();
   int compare_e_real_fixed();
   int compare_datetime();        // compare args[0] & args[1] as DATETIMEs
+  int compare_json();
 
   static bool can_compare_as_dates(Item *a, Item *b, ulonglong *const_val_arg);
 
@@ -116,17 +132,13 @@ public:
     return (owner->type() == Item::FUNC_ITEM &&
            ((Item_func*)owner)->functype() == Item_func::EQUAL_FUNC);
   }
-  void cleanup()
-  {
-    delete [] comparators;
-    comparators= 0;
-  }
+  void cleanup();
   /*
     Set correct cmp_context if items would be compared as INTs.
   */
   inline void set_cmp_context_for_datetime()
   {
-    DBUG_ASSERT(func == &Arg_comparator::compare_datetime);
+    assert(func == &Arg_comparator::compare_datetime);
     if ((*a)->is_temporal())
       (*a)->cmp_context= INT_RESULT;
     if ((*b)->is_temporal())
@@ -139,10 +151,20 @@ class Item_bool_func :public Item_int_func
 {
 public:
   Item_bool_func() : Item_int_func(), m_created_by_in2exists(false) {}
+  explicit Item_bool_func(const POS &pos)
+  : Item_int_func(pos), m_created_by_in2exists(false)
+  {}
+
   Item_bool_func(Item *a) : Item_int_func(a),
     m_created_by_in2exists(false)  {}
+  Item_bool_func(const POS &pos, Item *a) : Item_int_func(pos, a),
+    m_created_by_in2exists(false)  {}
+
   Item_bool_func(Item *a,Item *b) : Item_int_func(a,b),
     m_created_by_in2exists(false)  {}
+  Item_bool_func(const POS &pos, Item *a,Item *b) : Item_int_func(pos, a,b),
+    m_created_by_in2exists(false)  {}
+
   Item_bool_func(THD *thd, Item_bool_func *item) : Item_int_func(thd, item),
     m_created_by_in2exists(item->m_created_by_in2exists) {}
   bool is_bool_func() { return 1; }
@@ -173,8 +195,8 @@ public:
   virtual void print(String *str, enum_query_type query_type);
 
 protected:
-  Item_func_truth(Item *a, bool a_value, bool a_affirmative)
-  : Item_bool_func(a), value(a_value), affirmative(a_affirmative)
+  Item_func_truth(const POS &pos, Item *a, bool a_value, bool a_affirmative)
+  : Item_bool_func(pos, a), value(a_value), affirmative(a_affirmative)
   {}
 
   ~Item_func_truth()
@@ -199,7 +221,9 @@ private:
 class Item_func_istrue : public Item_func_truth
 {
 public:
-  Item_func_istrue(Item *a) : Item_func_truth(a, true, true) {}
+  Item_func_istrue(const POS &pos, Item *a)
+    : Item_func_truth(pos, a, true, true)
+  {}
   ~Item_func_istrue() {}
   virtual const char* func_name() const { return "istrue"; }
 };
@@ -212,7 +236,9 @@ public:
 class Item_func_isnottrue : public Item_func_truth
 {
 public:
-  Item_func_isnottrue(Item *a) : Item_func_truth(a, true, false) {}
+  Item_func_isnottrue(const POS &pos, Item *a)
+    : Item_func_truth(pos, a, true, false)
+  {}
   ~Item_func_isnottrue() {}
   virtual const char* func_name() const { return "isnottrue"; }
 };
@@ -225,7 +251,9 @@ public:
 class Item_func_isfalse : public Item_func_truth
 {
 public:
-  Item_func_isfalse(Item *a) : Item_func_truth(a, false, true) {}
+  Item_func_isfalse(const POS &pos, Item *a)
+    : Item_func_truth(pos, a, false, true)
+  {}
   ~Item_func_isfalse() {}
   virtual const char* func_name() const { return "isfalse"; }
 };
@@ -238,7 +266,9 @@ public:
 class Item_func_isnotfalse : public Item_func_truth
 {
 public:
-  Item_func_isnotfalse(Item *a) : Item_func_truth(a, false, false) {}
+  Item_func_isnotfalse(const POS &pos, Item *a)
+    : Item_func_truth(pos, a, false, false)
+  {}
   ~Item_func_isnotfalse() {}
   virtual const char* func_name() const { return "isnotfalse"; }
 };
@@ -296,39 +326,75 @@ public:
   Item_cache **get_cache() { return &cache; }
   void keep_top_level_cache();
   Item *transform(Item_transformer transformer, uchar *arg);
+  void replace_argument(THD *thd, Item **oldpp, Item *newp);
 };
 
+/// Abstract factory interface for creating comparison predicates.
 class Comp_creator
 {
 public:
-  Comp_creator() {}                           /* Remove gcc warning */
-  virtual ~Comp_creator() {}                  /* Remove gcc warning */
-  virtual Item_bool_func2* create(Item *a, Item *b) const = 0;
+  virtual ~Comp_creator() {}
+  virtual Item_bool_func* create(Item *a, Item *b) const = 0;
+
+  /// This interface is only used by Item_allany_subselect.
   virtual const char* symbol(bool invert) const = 0;
   virtual bool eqne_op() const = 0;
   virtual bool l_op() const = 0;
 };
 
-class Eq_creator :public Comp_creator
+/// Abstract base class for the comparison operators =, <> and <=>.
+class Linear_comp_creator :public Comp_creator
 {
 public:
-  Eq_creator() {}                             /* Remove gcc warning */
-  virtual ~Eq_creator() {}                    /* Remove gcc warning */
-  virtual Item_bool_func2* create(Item *a, Item *b) const;
-  virtual const char* symbol(bool invert) const { return invert? "<>" : "="; }
-  virtual bool eqne_op() const { return 1; }
-  virtual bool l_op() const { return 0; }
+  virtual Item_bool_func *create(Item *a, Item *b) const;
+  virtual bool eqne_op() const { return true; }
+  virtual bool l_op() const { return false; }
+
+protected:
+  /**
+    Creates only an item tree node, without attempting to rewrite row
+    constructors.
+    @see create()
+  */
+  virtual Item_bool_func *create_scalar_predicate(Item *a, Item *b) const = 0;
+
+  /// Combines a list of conditions <code>exp op exp</code>.
+  virtual Item_bool_func *combine(List<Item> list) const = 0;
 };
 
-class Ne_creator :public Comp_creator
+class Eq_creator :public Linear_comp_creator
 {
 public:
-  Ne_creator() {}                             /* Remove gcc warning */
-  virtual ~Ne_creator() {}                    /* Remove gcc warning */
-  virtual Item_bool_func2* create(Item *a, Item *b) const;
-  virtual const char* symbol(bool invert) const { return invert? "=" : "<>"; }
-  virtual bool eqne_op() const { return 1; }
-  virtual bool l_op() const { return 0; }
+  virtual const char* symbol(bool invert) const { return invert ? "<>" : "="; }
+
+protected:
+  virtual Item_bool_func *create_scalar_predicate(Item *a, Item *b) const;
+  virtual Item_bool_func *combine(List<Item> list) const;
+};
+
+class Equal_creator :public Linear_comp_creator
+{
+public:
+  virtual const char* symbol(bool invert) const
+  {
+    // This will never be called with true.
+    assert(!invert);
+    return "<=>";
+  }
+
+protected:
+  virtual Item_bool_func *create_scalar_predicate(Item *a, Item *b) const;
+  virtual Item_bool_func *combine(List<Item> list) const;
+};
+
+class Ne_creator :public Linear_comp_creator
+{
+public:
+  virtual const char* symbol(bool invert) const { return invert ? "=" : "<>"; }
+
+protected:
+  virtual Item_bool_func *create_scalar_predicate(Item *a, Item *b) const;
+  virtual Item_bool_func *combine(List<Item> list) const;
 };
 
 class Gt_creator :public Comp_creator
@@ -336,7 +402,7 @@ class Gt_creator :public Comp_creator
 public:
   Gt_creator() {}                             /* Remove gcc warning */
   virtual ~Gt_creator() {}                    /* Remove gcc warning */
-  virtual Item_bool_func2* create(Item *a, Item *b) const;
+  virtual Item_bool_func* create(Item *a, Item *b) const;
   virtual const char* symbol(bool invert) const { return invert? "<=" : ">"; }
   virtual bool eqne_op() const { return 0; }
   virtual bool l_op() const { return 0; }
@@ -347,7 +413,7 @@ class Lt_creator :public Comp_creator
 public:
   Lt_creator() {}                             /* Remove gcc warning */
   virtual ~Lt_creator() {}                    /* Remove gcc warning */
-  virtual Item_bool_func2* create(Item *a, Item *b) const;
+  virtual Item_bool_func* create(Item *a, Item *b) const;
   virtual const char* symbol(bool invert) const { return invert? ">=" : "<"; }
   virtual bool eqne_op() const { return 0; }
   virtual bool l_op() const { return 1; }
@@ -358,7 +424,7 @@ class Ge_creator :public Comp_creator
 public:
   Ge_creator() {}                             /* Remove gcc warning */
   virtual ~Ge_creator() {}                    /* Remove gcc warning */
-  virtual Item_bool_func2* create(Item *a, Item *b) const;
+  virtual Item_bool_func* create(Item *a, Item *b) const;
   virtual const char* symbol(bool invert) const { return invert? "<" : ">="; }
   virtual bool eqne_op() const { return 0; }
   virtual bool l_op() const { return 0; }
@@ -369,7 +435,7 @@ class Le_creator :public Comp_creator
 public:
   Le_creator() {}                             /* Remove gcc warning */
   virtual ~Le_creator() {}                    /* Remove gcc warning */
-  virtual Item_bool_func2* create(Item *a, Item *b) const;
+  virtual Item_bool_func* create(Item *a, Item *b) const;
   virtual const char* symbol(bool invert) const { return invert? ">" : "<="; }
   virtual bool eqne_op() const { return 0; }
   virtual bool l_op() const { return 1; }
@@ -386,6 +452,11 @@ protected:
 public:
   Item_bool_func2(Item *a,Item *b)
     :Item_bool_func(a,b), cmp(tmp_arg, tmp_arg+1), abort_on_null(FALSE) {}
+
+  Item_bool_func2(const POS &pos, Item *a,Item *b)
+    :Item_bool_func(pos, a,b), cmp(tmp_arg, tmp_arg+1), abort_on_null(FALSE)
+  {}
+
   void fix_length_and_dec();
   int set_cmp_func()
   {
@@ -420,6 +491,12 @@ public:
   {
     allowed_arg_cols= 0;  // Fetch this value from first argument
   }
+  Item_bool_rowready_func2(const POS &pos, Item *a, Item *b)
+    : Item_bool_func2(pos, a, b)
+  {
+    allowed_arg_cols= 0;  // Fetch this value from first argument
+  }
+
   Item *neg_transformer(THD *thd);
   virtual Item *negated_item();
   bool subst_argument_checker(uchar **arg) { return TRUE; }
@@ -434,26 +511,43 @@ class Item_func_xor :public Item_bool_func2
 {
 public:
   Item_func_xor(Item *i1, Item *i2) :Item_bool_func2(i1, i2) {}
+  Item_func_xor(const POS &pos, Item *i1, Item *i2)
+    : Item_bool_func2(pos, i1, i2)
+  {}
+
   enum Functype functype() const { return XOR_FUNC; }
   const char *func_name() const { return "xor"; }
   longlong val_int();
   void top_level_item() {}
   Item *neg_transformer(THD *thd);
+
+  float get_filtering_effect(table_map filter_for_table,
+                             table_map read_tables,
+                             const MY_BITMAP *fields_to_ignore,
+                             double rows_in_table);
 };
 
 class Item_func_not :public Item_bool_func
 {
 public:
   Item_func_not(Item *a) :Item_bool_func(a) {}
+  Item_func_not(const POS &pos, Item *a) :Item_bool_func(pos, a) {}
+
   longlong val_int();
   enum Functype functype() const { return NOT_FUNC; }
   const char *func_name() const { return "not"; }
   Item *neg_transformer(THD *thd);
   virtual void print(String *str, enum_query_type query_type);
+
+  float get_filtering_effect(table_map filter_for_table,
+                             table_map read_tables,
+                             const MY_BITMAP *fields_to_ignore,
+                             double rows_in_table);
 };
 
 class Item_maxmin_subselect;
-struct st_join_table;
+class JOIN;
+
 /*
   trigcond<param>(arg) ::= param? arg : TRUE
 
@@ -489,15 +583,21 @@ public:
   enum enum_trig_type
   {
     /**
-       In t1 LEFT JOIN t2, ON can be tested on t2's row only if that row is
-       not NULL-complemented
+      This trigger type deactivates join conditions when a row has been
+      NULL-complemented. For example, in t1 LEFT JOIN t2, the join condition
+      can be tested on t2's row only if that row is not NULL-complemented.
     */
     IS_NOT_NULL_COMPL,
+
     /**
-       In t1 LEFT JOIN t2, the WHERE pushed to t2 can be tested only after at
-       least one t2's row has been found
+      This trigger type deactivates predicated from WHERE condition when no
+      row satisfying the join condition has been found. For Example, in t1
+      LEFT JOIN t2, the where condition pushed to t2 can be tested only after
+      at least one t2 row has been produced, which may be a NULL-complemented
+      row.
     */
     FOUND_MATCH,
+
     /**
        In IN->EXISTS subquery transformation, new predicates are added:
        WHERE inner_field=outer_field OR inner_field IS NULL,
@@ -510,23 +610,28 @@ public:
 private:
   /** Pointer to trigger variable */
   bool *trig_var;
-  /** Optional table(s) which are the source of trig_var; for printing */
-  const struct st_join_table *trig_tab;
+  /// Optional: JOIN of table which is the source of trig_var
+  const JOIN *m_join;
+  /// Optional: if join!=NULL: index of table
+  plan_idx m_idx;
   /** Type of trig_var; for printing */
   enum_trig_type trig_type;
 public:
   /**
      @param a             the item for <condition>
      @param f             pointer to trigger variable
-     @param tab           optional table which is source of 'f',
-                          NULL if not applicable
+     @param join          if a table's property is the source of 'f', JOIN
+     which owns this table; NULL otherwise.
+     @param idx           if join!=NULL: index of this table in the
+     JOIN_TAB/QEP_TAB array. NO_PLAN_IDX otherwise.
      @param trig_type_arg type of 'f'
   */
-  Item_func_trig_cond(Item *a, bool *f, struct st_join_table *tab,
+  Item_func_trig_cond(Item *a, bool *f, JOIN *join, plan_idx idx,
                       enum_trig_type trig_type_arg)
-    : Item_bool_func(a), trig_var(f), trig_tab(tab), trig_type(trig_type_arg)
+  : Item_bool_func(a), trig_var(f), m_join(join), m_idx(idx),
+    trig_type(trig_type_arg)
   {}
-  longlong val_int() { return *trig_var ? args[0]->val_int() : 1; }
+  longlong val_int();
   enum Functype functype() const { return TRIG_COND_FUNC; };
   /// '<if>', to distinguish from the if() SQL function
   const char *func_name() const { return "<if>"; };
@@ -554,7 +659,7 @@ public:
      abort_on_null(0), show(0)
     {}
   virtual void top_level_item() { abort_on_null= 1; }
-  bool top_level() { return abort_on_null; }
+  bool is_top_level_item() const { return abort_on_null; }
   longlong val_int();
   enum Functype functype() const { return NOT_ALL_FUNC; }
   const char *func_name() const { return "<not>"; }
@@ -607,7 +712,10 @@ class Item_func_eq :public Item_bool_rowready_func2
 {
 public:
   Item_func_eq(Item *a,Item *b) :
-    Item_bool_rowready_func2(a,b)
+    Item_bool_rowready_func2( a, b)
+  {}
+  Item_func_eq(const POS &pos, Item *a,Item *b) :
+    Item_bool_rowready_func2(pos, a, b)
   {}
   longlong val_int();
   enum Functype functype() const { return EQ_FUNC; }
@@ -617,12 +725,22 @@ public:
   Item *negated_item();
   virtual bool equality_substitution_analyzer(uchar **arg) { return true; }
   virtual Item* equality_substitution_transformer(uchar *arg);
+  bool gc_subst_analyzer(uchar **arg) { return true; }
+
+  float get_filtering_effect(table_map filter_for_table,
+                             table_map read_tables,
+                             const MY_BITMAP *fields_to_ignore,
+                             double rows_in_table);
 };
 
 class Item_func_equal :public Item_bool_rowready_func2
 {
 public:
   Item_func_equal(Item *a,Item *b) :Item_bool_rowready_func2(a,b) {};
+  Item_func_equal(const POS &pos, Item *a,Item *b)
+    : Item_bool_rowready_func2(pos, a,b)
+  {};
+
   longlong val_int();
   void fix_length_and_dec();
   table_map not_null_tables() const { return 0; }
@@ -631,6 +749,11 @@ public:
   cond_result eq_cmp_result() const { return COND_TRUE; }
   const char *func_name() const { return "<=>"; }
   Item *neg_transformer(THD *thd) { return 0; }
+
+  float get_filtering_effect(table_map filter_for_table,
+                             table_map read_tables,
+                             const MY_BITMAP *fields_to_ignore,
+                             double rows_in_table);
 };
 
 
@@ -644,8 +767,13 @@ public:
   cond_result eq_cmp_result() const { return COND_TRUE; }
   const char *func_name() const { return ">="; }
   Item *negated_item();
-};
+  bool gc_subst_analyzer(uchar **arg) { return true; }
 
+  float get_filtering_effect(table_map filter_for_table,
+                             table_map read_tables,
+                             const MY_BITMAP *fields_to_ignore,
+                             double rows_in_table);
+};
 
 class Item_func_gt :public Item_bool_rowready_func2
 {
@@ -657,6 +785,12 @@ public:
   cond_result eq_cmp_result() const { return COND_FALSE; }
   const char *func_name() const { return ">"; }
   Item *negated_item();
+  bool gc_subst_analyzer(uchar **arg) { return true; }
+
+  float get_filtering_effect(table_map filter_for_table,
+                             table_map read_tables,
+                             const MY_BITMAP *fields_to_ignore,
+                             double rows_in_table);
 };
 
 
@@ -670,6 +804,12 @@ public:
   cond_result eq_cmp_result() const { return COND_TRUE; }
   const char *func_name() const { return "<="; }
   Item *negated_item();
+  bool gc_subst_analyzer(uchar **arg) { return true; }
+
+  float get_filtering_effect(table_map filter_for_table,
+                             table_map read_tables,
+                             const MY_BITMAP *fields_to_ignore,
+                             double rows_in_table);
 };
 
 
@@ -683,6 +823,12 @@ public:
   cond_result eq_cmp_result() const { return COND_FALSE; }
   const char *func_name() const { return "<"; }
   Item *negated_item();
+  bool gc_subst_analyzer(uchar **arg) { return true; }
+
+  float get_filtering_effect(table_map filter_for_table,
+                             table_map read_tables,
+                             const MY_BITMAP *fields_to_ignore,
+                             double rows_in_table);
 };
 
 
@@ -696,6 +842,11 @@ public:
   optimize_type select_optimize() const { return OPTIMIZE_KEY; } 
   const char *func_name() const { return "<>"; }
   Item *negated_item();
+
+  float get_filtering_effect(table_map filter_for_table,
+                             table_map read_tables,
+                             const MY_BITMAP *fields_to_ignore,
+                             double rows_in_table);
 };
 
 
@@ -714,13 +865,22 @@ public:
   bool negated;     /* <=> the item represents NOT <func> */
   bool pred_level;  /* <=> [NOT] <func> is used on a predicate level */
 public:
-  Item_func_opt_neg(Item *a, Item *b, Item *c)
-    :Item_int_func(a, b, c), negated(0), pred_level(0) {}
-  Item_func_opt_neg(List<Item> &list)
-    :Item_int_func(list), negated(0), pred_level(0) {}
+  Item_func_opt_neg(const POS &pos, Item *a, Item *b, Item *c, bool is_negation)
+    :Item_int_func(pos, a, b, c), negated(0), pred_level(0) 
+  {
+    if (is_negation)
+      negate();
+  }
+  Item_func_opt_neg(const POS &pos, PT_item_list *list, bool is_negation)
+    :Item_int_func(pos, list), negated(0), pred_level(0)
+  {
+    if (is_negation)
+      negate();
+  }
 public:
   inline void negate() { negated= !negated; }
   inline void top_level_item() { pred_level= 1; }
+  bool is_top_level_item() const { return pred_level; }
   Item *neg_transformer(THD *thd)
   {
     negated= !negated;
@@ -744,8 +904,9 @@ public:
   
   /* Comparators used for DATE/DATETIME comparison. */
   Arg_comparator ge_cmp, le_cmp;
-  Item_func_between(Item *a, Item *b, Item *c)
-    :Item_func_opt_neg(a, b, c), compare_as_dates_with_strings(FALSE),
+  Item_func_between(const POS &pos, Item *a, Item *b, Item *c, bool is_negation)
+    :Item_func_opt_neg(pos, a, b, c, is_negation),
+    compare_as_dates_with_strings(FALSE),
     compare_as_temporal_dates(FALSE),
     compare_as_temporal_times(FALSE) {}
   longlong val_int();
@@ -760,13 +921,20 @@ public:
   bool is_bool_func() { return 1; }
   const CHARSET_INFO *compare_collation() { return cmp_collation.collation; }
   uint decimal_precision() const { return 1; }
+  bool gc_subst_analyzer(uchar **arg) { return true; }
+
+  float get_filtering_effect(table_map filter_for_table,
+                             table_map read_tables,
+                             const MY_BITMAP *fields_to_ignore,
+                             double rows_in_table);
 };
 
 
 class Item_func_strcmp :public Item_bool_func2
 {
 public:
-  Item_func_strcmp(Item *a,Item *b) :Item_bool_func2(a,b) {}
+  Item_func_strcmp(const POS &pos, Item *a, Item *b) :Item_bool_func2(pos, a, b)
+  {}
   longlong val_int();
   optimize_type select_optimize() const { return OPTIMIZE_NONE; }
   const char *func_name() const { return "strcmp"; }
@@ -792,19 +960,30 @@ struct interval_range
 
 class Item_func_interval :public Item_int_func
 {
+  typedef Item_int_func super;
+
   Item_row *row;
   my_bool use_decimal_comparison;
   interval_range *intervals;
 public:
-  Item_func_interval(Item_row *a)
-    :Item_int_func(a),row(a),intervals(0)
+  Item_func_interval(const POS &pos, MEM_ROOT *mem_root, Item *expr1,
+                     Item *expr2, class PT_item_list *opt_expr_list= NULL)
+    :super(pos, alloc_row(pos, mem_root, expr1, expr2, opt_expr_list)),
+     intervals(0)
   {
     allowed_arg_cols= 0;    // Fetch this value from first argument
   }
+
+  virtual bool itemize(Parse_context *pc, Item **res);
   longlong val_int();
   void fix_length_and_dec();
   const char *func_name() const { return "interval"; }
   uint decimal_precision() const { return 2; }
+  void print(String *str, enum_query_type query_type);
+
+private:
+  Item_row *alloc_row(const POS &pos, MEM_ROOT *mem_root, Item *expr1,
+                      Item *expr2, class PT_item_list *opt_expr_list);
 };
 
 
@@ -812,13 +991,23 @@ class Item_func_coalesce :public Item_func_numhybrid
 {
 protected:
   enum_field_types cached_field_type;
-  Item_func_coalesce(Item *a, Item *b) :Item_func_numhybrid(a, b) {}
+  Item_func_coalesce(const POS &pos, Item *a, Item *b)
+    : Item_func_numhybrid(pos, a, b)
+  {}
+  Item_func_coalesce(const POS &pos, Item *a)
+    : Item_func_numhybrid(pos, a)
+  {}
 public:
-  Item_func_coalesce(List<Item> &list) :Item_func_numhybrid(list) {}
+  Item_func_coalesce(const POS &pos, PT_item_list *list);
   double real_op();
   longlong int_op();
   String *str_op(String *);
-  bool date_op(MYSQL_TIME *ltime, uint fuzzydate);
+  /**
+    Get the result of COALESCE as a JSON value.
+    @param[in,out] wr   the result value holder
+  */
+  bool val_json(Json_wrapper *wr);
+  bool date_op(MYSQL_TIME *ltime, my_time_flags_t fuzzydate);
   bool time_op(MYSQL_TIME *ltime);
   my_decimal *decimal_op(my_decimal *);
   void fix_length_and_dec();
@@ -835,17 +1024,35 @@ class Item_func_ifnull :public Item_func_coalesce
 protected:
   bool field_type_defined;
 public:
-  Item_func_ifnull(Item *a, Item *b) :Item_func_coalesce(a,b) {}
+  Item_func_ifnull(const POS &pos, Item *a, Item *b)
+    : Item_func_coalesce(pos, a, b)
+  {}
   double real_op();
   longlong int_op();
   String *str_op(String *str);
-  bool date_op(MYSQL_TIME *ltime, uint fuzzydate);
+  bool date_op(MYSQL_TIME *ltime, my_time_flags_t fuzzydate);
   bool time_op(MYSQL_TIME *ltime);
   my_decimal *decimal_op(my_decimal *);
+  bool val_json(Json_wrapper *result);
   void fix_length_and_dec();
   const char *func_name() const { return "ifnull"; }
   Field *tmp_table_field(TABLE *table);
   uint decimal_precision() const;
+};
+
+
+/**
+   ANY_VALUE(expr) is like expr except that it is not checked by
+   aggregate_check logic. It serves as a solution for users who want to
+   bypass this logic.
+*/
+class Item_func_any_value :public Item_func_coalesce
+{
+public:
+  Item_func_any_value(const POS &pos, Item *a) :Item_func_coalesce(pos, a) {}
+  const char *func_name() const { return "any_value"; }
+  bool aggregate_check_group(uchar *arg);
+  bool aggregate_check_distinct(uchar *arg);
 };
 
 
@@ -857,11 +1064,16 @@ public:
   Item_func_if(Item *a,Item *b,Item *c)
     :Item_func(a,b,c), cached_result_type(INT_RESULT)
   {}
+  Item_func_if(const POS &pos, Item *a,Item *b,Item *c)
+    :Item_func(pos, a,b,c), cached_result_type(INT_RESULT)
+  {}
+
   double val_real();
   longlong val_int();
   String *val_str(String *str);
   my_decimal *val_decimal(my_decimal *);
-  bool get_date(MYSQL_TIME *ltime, uint fuzzydate);
+  bool val_json(Json_wrapper *wr);
+  bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate);
   bool get_time(MYSQL_TIME *ltime);
   enum Item_result result_type () const { return cached_result_type; }
   enum_field_types field_type() const { return cached_field_type; }
@@ -880,8 +1092,8 @@ class Item_func_nullif :public Item_bool_func2
 {
   enum Item_result cached_result_type;
 public:
-  Item_func_nullif(Item *a,Item *b)
-    :Item_bool_func2(a,b), cached_result_type(INT_RESULT)
+  Item_func_nullif(const POS &pos, Item *a, Item *b)
+    :Item_bool_func2(pos, a, b), cached_result_type(INT_RESULT)
   {}
   double val_real();
   longlong val_int();
@@ -910,26 +1122,45 @@ public:
 class in_vector :public Sql_alloc
 {
 public:
-  char *base;
-  uint size;
-  qsort2_cmp compare;
-  const CHARSET_INFO *collation;
-  uint count;
-  uint used_count;
-  in_vector() {}
-  in_vector(uint elements,uint element_length,qsort2_cmp cmp_func, 
-  	    const CHARSET_INFO *cmp_coll)
-    :base((char*) sql_calloc(elements*element_length)),
-     size(element_length), compare(cmp_func), collation(cmp_coll),
-     count(elements), used_count(elements) {}
+  const uint count;  ///< Original size of the vector
+  uint used_count;   ///< The actual size of the vector (NULL may be ignored)
+
+  /**
+    See Item_func_in::fix_length_and_dec for why we need both
+    count and used_count.
+   */
+  explicit in_vector(uint elements)
+    : count(elements), used_count(elements)
+  {}
+
   virtual ~in_vector() {}
   virtual void set(uint pos,Item *item)=0;
   virtual uchar *get_value(Item *item)=0;
-  void sort()
-  {
-    my_qsort2(base,used_count,size,compare,collation);
-  }
-  int find(Item *item);
+
+  /**
+    Shrinks the IN-list array, to fit actual usage.
+   */
+  virtual void shrink_array(size_t n) = 0;
+
+  /**
+    Sorts the IN-list array, so we can do efficient lookup with binary_search.
+   */
+  virtual void sort() = 0;
+
+  /**
+    Calls (the virtual) get_value, i.e. item->val_int() or item->val_str() etc.
+    and then calls find_value() if the value is non-null.
+    @param  item to evaluate, and lookup in the IN-list.
+    @return true if item was found.
+   */
+  bool find_item(Item *item);
+
+  /**
+    Does a binary_search in the 'base' array for the input 'value'
+    @param  value to lookup in the IN-list.
+    @return true if value was found.
+   */
+  virtual bool find_value(const void *value) const = 0;
   
   /* 
     Create an instance of Item_{type} (e.g. Item_decimal) constant object
@@ -952,10 +1183,8 @@ public:
   virtual void value_to_item(uint pos, Item *item) { }
   
   /* Compare values number pos1 and pos2 for equality */
-  bool compare_elems(uint pos1, uint pos2)
-  {
-    return MY_TEST(compare(collation, base + pos1*size, base + pos2*size));
-  }
+  virtual bool compare_elems(uint pos1, uint pos2) const = 0;
+
   virtual Item_result result_type()= 0;
 };
 
@@ -963,8 +1192,16 @@ class in_string :public in_vector
 {
   char buff[STRING_BUFFER_USUAL_SIZE];
   String tmp;
+  // DTOR is not trivial, but we manage memory ourselves.
+  Mem_root_array<String, true> base_objects;
+  // String objects are not sortable, sort pointers instead.
+  Mem_root_array<String*, true> base_pointers;
+
+  qsort2_cmp compare;
+  const CHARSET_INFO *collation;
 public:
-  in_string(uint elements,qsort2_cmp cmp_func, const CHARSET_INFO *cs);
+  in_string(THD *thd,
+            uint elements, qsort2_cmp cmp_func, const CHARSET_INFO *cs);
   ~in_string();
   void set(uint pos,Item *item);
   uchar *get_value(Item *item);
@@ -974,28 +1211,39 @@ public:
   }
   void value_to_item(uint pos, Item *item)
   {    
-    String *str=((String*) base)+pos;
+    String *str= base_pointers[pos];
     Item_string *to= (Item_string*)item;
     to->str_value= *str;
   }
   Item_result result_type() { return STRING_RESULT; }
+
+  virtual void shrink_array(size_t n) { base_pointers.resize(n); }
+
+  virtual void sort();
+  virtual bool find_value(const void *value) const;
+  virtual bool compare_elems(uint pos1, uint pos2) const;
 };
 
 class in_longlong :public in_vector
 {
+public:
+  struct packed_longlong 
+  {
+    longlong val;
+    longlong unsigned_flag;
+  };
 protected:
   /*
     Here we declare a temporary variable (tmp) of the same type as the
     elements of this vector. tmp is used in finding if a given value is in 
     the list. 
   */
-  struct packed_longlong 
-  {
-    longlong val;
-    longlong unsigned_flag;  // Use longlong, not bool, to preserve alignment
-  } tmp;
+  packed_longlong tmp;
+
+  Mem_root_array<packed_longlong, true> base;
+
 public:
-  in_longlong(uint elements);
+  in_longlong(THD *thd, uint elements);
   void set(uint pos,Item *item);
   uchar *get_value(Item *item);
   
@@ -1009,21 +1257,26 @@ public:
   }
   void value_to_item(uint pos, Item *item)
   {
-    ((Item_int*) item)->value= ((packed_longlong*) base)[pos].val;
+    ((Item_int*) item)->value= base[pos].val;
     ((Item_int*) item)->unsigned_flag= (my_bool)
-      ((packed_longlong*) base)[pos].unsigned_flag;
+      base[pos].unsigned_flag;
   }
   Item_result result_type() { return INT_RESULT; }
 
-  friend int cmp_longlong(void *cmp_arg, packed_longlong *a,packed_longlong *b);
+  virtual void shrink_array(size_t n) { base.resize(n); }
+
+  virtual void sort();
+  virtual bool find_value(const void *value) const;
+  virtual bool compare_elems(uint pos1, uint pos2) const;
 };
 
 
 class in_datetime_as_longlong :public in_longlong
 {
 public:
-  in_datetime_as_longlong(uint elements)
-    :in_longlong(elements) {};
+  in_datetime_as_longlong(THD *thd, uint elements)
+    : in_longlong(thd, elements)
+  {};
   Item *create_item()
   {
     return new Item_temporal(MYSQL_TYPE_DATETIME, 0LL);
@@ -1036,8 +1289,9 @@ public:
 class in_time_as_longlong :public in_longlong
 {
 public:
-  in_time_as_longlong(uint elements)
-    :in_longlong(elements) {};
+  in_time_as_longlong(THD *thd, uint elements)
+    : in_longlong(thd, elements)
+  {};
   Item *create_item()
   {
     return new Item_temporal(MYSQL_TYPE_TIME, 0LL);
@@ -1056,18 +1310,18 @@ public:
 class in_datetime :public in_longlong
 {
 public:
-  THD *thd;
   /* An item used to issue warnings. */
   Item *warn_item;
   /* Cache for the left item. */
   Item *lval_cache;
 
-  in_datetime(Item *warn_item_arg, uint elements)
-    :in_longlong(elements), thd(current_thd), warn_item(warn_item_arg),
-     lval_cache(0) {};
+  in_datetime(THD *thd_arg, Item *warn_item_arg, uint elements)
+    : in_longlong(thd_arg, elements), warn_item(warn_item_arg),
+      lval_cache(0)
+  {};
   void set(uint pos,Item *item);
   uchar *get_value(Item *item);
-  friend int cmp_longlong(void *cmp_arg, packed_longlong *a,packed_longlong *b);
+
   Item* create_item()
   { 
     return new Item_temporal(MYSQL_TYPE_DATETIME, (longlong) 0);
@@ -1078,8 +1332,9 @@ public:
 class in_double :public in_vector
 {
   double tmp;
+  Mem_root_array<double, true> base;
 public:
-  in_double(uint elements);
+  in_double(THD *thd, uint elements);
   void set(uint pos,Item *item);
   uchar *get_value(Item *item);
   Item *create_item()
@@ -1088,17 +1343,24 @@ public:
   }
   void value_to_item(uint pos, Item *item)
   {
-    ((Item_float*)item)->value= ((double*) base)[pos];
+    ((Item_float*)item)->value= base[pos];
   }
   Item_result result_type() { return REAL_RESULT; }
+
+  virtual void shrink_array(size_t n) { base.resize(n); }
+
+  virtual void sort();
+  virtual bool find_value(const void *value) const;
+  virtual bool compare_elems(uint pos1, uint pos2) const;
 };
 
 
 class in_decimal :public in_vector
 {
   my_decimal val;
+  Mem_root_array<my_decimal, true> base;
 public:
-  in_decimal(uint elements);
+  in_decimal(THD *thd, uint elements);
   void set(uint pos, Item *item);
   uchar *get_value(Item *item);
   Item *create_item()
@@ -1107,12 +1369,17 @@ public:
   }
   void value_to_item(uint pos, Item *item)
   {
-    my_decimal *dec= ((my_decimal *)base) + pos;
+    my_decimal *dec= &base[pos];
     Item_decimal *item_dec= (Item_decimal*)item;
     item_dec->set_decimal_value(dec);
   }
   Item_result result_type() { return DECIMAL_RESULT; }
 
+  virtual void shrink_array(size_t n) { base.resize(n); }
+
+  virtual void sort();
+  virtual bool find_value(const void *value) const;
+  virtual bool compare_elems(uint pos1, uint pos2) const;
 };
 
 
@@ -1123,14 +1390,29 @@ public:
 class cmp_item :public Sql_alloc
 {
 public:
-  const CHARSET_INFO *cmp_charset;
-  cmp_item() { cmp_charset= &my_charset_bin; }
+  cmp_item() {}
   virtual ~cmp_item() {}
   virtual void store_value(Item *item)= 0;
+  /**
+     @returns result (TRUE, FALSE or UNKNOWN) of
+     "stored argument's value <> item's value"
+  */
   virtual int cmp(Item *item)= 0;
   // for optimized IN with row
-  virtual int compare(cmp_item *item)= 0;
-  static cmp_item* get_comparator(Item_result type, const CHARSET_INFO *cs);
+  virtual int compare(const cmp_item *item) const= 0;
+
+  /**
+    Find the appropriate comparator for the given type.
+
+    @param result_type  Used to find the appropriate comparator.
+    @param item         Item object used to distinguish temporal types.
+    @param cs           Charset
+
+    @return
+      New cmp_item_xxx object.
+  */
+  static cmp_item* get_comparator(Item_result result_type, const Item *item,
+                                  const CHARSET_INFO *cs);
   virtual cmp_item *make_same()= 0;
   virtual void store_value_by_template(cmp_item *tmpl, Item *item)
   {
@@ -1138,61 +1420,63 @@ public:
   }
 };
 
-class cmp_item_string :public cmp_item 
+/// cmp_item which stores a scalar (i.e. non-ROW).
+class cmp_item_scalar : public cmp_item
 {
 protected:
-  String *value_res;
-public:
-  cmp_item_string () {}
-  cmp_item_string (const CHARSET_INFO *cs) { cmp_charset= cs; }
-  void set_charset(const CHARSET_INFO *cs) { cmp_charset= cs; }
-  friend class cmp_item_sort_string;
-  friend class cmp_item_sort_string_in_static;
+  bool m_null_value;                            ///< If stored value is NULL
+  void set_null_value(bool nv) { m_null_value= nv; }
 };
 
-class cmp_item_sort_string :public cmp_item_string
+class cmp_item_string : public cmp_item_scalar
 {
-protected:
+private:
+  String *value_res;
   char value_buff[STRING_BUFFER_USUAL_SIZE];
   String value;
+  const CHARSET_INFO *cmp_charset;
 public:
-  cmp_item_sort_string():
-    cmp_item_string() {}
-  cmp_item_sort_string(const CHARSET_INFO *cs):
-    cmp_item_string(cs),
-    value(value_buff, sizeof(value_buff), cs) {}
-  void store_value(Item *item)
+  cmp_item_string (const CHARSET_INFO *cs)
+    : value(value_buff, sizeof(value_buff), cs), cmp_charset(cs)
+  {}
+
+  virtual int compare(const cmp_item *ci) const
+  {
+    const cmp_item_string *l_cmp= down_cast<const cmp_item_string*>(ci);
+    return sortcmp(value_res, l_cmp->value_res, cmp_charset);
+  }
+
+  virtual void store_value(Item *item)
   {
     String *res= item->val_str(&value);
-    if(res && (res != &value))
+    if (res && (res != &value || !res->is_alloced()))
     {
-      // 'res' may point in item's temporary internal data, so make a copy
+      // 'res' may point in item's transient internal data, so make a copy
       value.copy(*res);
     }
     value_res= &value;
+    set_null_value(item->null_value);
   }
-  int cmp(Item *arg)
+
+  virtual int cmp(Item *arg)
   {
     char buff[STRING_BUFFER_USUAL_SIZE];
-    String tmp(buff, sizeof(buff), cmp_charset), *res;
-    res= arg->val_str(&tmp);
-    return (value_res ? (res ? sortcmp(value_res, res, cmp_charset) : 1) :
-            (res ? -1 : 0));
+    String tmp(buff, sizeof(buff), cmp_charset);
+    String *res= arg->val_str(&tmp);
+    if (m_null_value || arg->null_value)
+      return UNKNOWN;
+    if (value_res && res)
+      return sortcmp(value_res, res, cmp_charset) != 0;
+    else if (!value_res && !res)
+      return FALSE;
+    else
+      return TRUE;
   }
-  int compare(cmp_item *ci)
-  {
-    cmp_item_string *l_cmp= (cmp_item_string *) ci;
-    return sortcmp(value_res, l_cmp->value_res, cmp_charset);
-  } 
-  cmp_item *make_same();
-  void set_charset(const CHARSET_INFO *cs)
-  {
-    cmp_charset= cs;
-    value.set_quick(value_buff, sizeof(value_buff), cs);
-  }
+  virtual cmp_item *make_same();
 };
 
-class cmp_item_int :public cmp_item
+
+class cmp_item_int : public cmp_item_scalar
 {
   longlong value;
 public:
@@ -1200,44 +1484,47 @@ public:
   void store_value(Item *item)
   {
     value= item->val_int();
+    set_null_value(item->null_value);
   }
   int cmp(Item *arg)
   {
-    return value != arg->val_int();
+    const bool rc= value != arg->val_int();
+    return (m_null_value || arg->null_value) ? UNKNOWN : rc;
   }
-  int compare(cmp_item *ci)
+  int compare(const cmp_item *ci) const
   {
-    cmp_item_int *l_cmp= (cmp_item_int *)ci;
+    const cmp_item_int *l_cmp= down_cast<const cmp_item_int*>(ci);
     return (value < l_cmp->value) ? -1 : ((value == l_cmp->value) ? 0 : 1);
   }
   cmp_item *make_same();
 };
 
 /*
-  Compare items in the DATETIME context.
-  Values are obtained with help of the get_datetime_value() function.
+  Compare items of temporal type.
+  Values are obtained with: get_datetime_value() (DATE/DATETIME/TIMESTAMP) and
+                            get_time_value() (TIME).
   If the left item is a constant one then its value is cached in the
   lval_cache variable.
 */
-class cmp_item_datetime :public cmp_item
+class cmp_item_datetime : public cmp_item_scalar
 {
   longlong value;
 public:
-  THD *thd;
   /* Item used for issuing warnings. */
-  Item *warn_item;
+  const Item *warn_item;
   /* Cache for the left item. */
   Item *lval_cache;
+  /// Distinguish between DATE/DATETIME/TIMESTAMP and TIME
+  bool has_date;
 
-  cmp_item_datetime(Item *warn_item_arg)
-    :thd(current_thd), warn_item(warn_item_arg), lval_cache(0) {}
+  cmp_item_datetime(const Item *warn_item_arg);
   void store_value(Item *item);
   int cmp(Item *arg);
-  int compare(cmp_item *ci);
+  int compare(const cmp_item *ci) const;
   cmp_item *make_same();
 };
 
-class cmp_item_real :public cmp_item
+class cmp_item_real : public cmp_item_scalar
 {
   double value;
 public:
@@ -1245,63 +1532,31 @@ public:
   void store_value(Item *item)
   {
     value= item->val_real();
+    set_null_value(item->null_value);
   }
   int cmp(Item *arg)
   {
-    return value != arg->val_real();
+    const bool rc= value != arg->val_real();
+    return (m_null_value || arg->null_value) ? UNKNOWN : rc;
   }
-  int compare(cmp_item *ci)
+  int compare(const cmp_item *ci) const
   {
-    cmp_item_real *l_cmp= (cmp_item_real *) ci;
+    const cmp_item_real *l_cmp= down_cast<const cmp_item_real*>(ci);
     return (value < l_cmp->value)? -1 : ((value == l_cmp->value) ? 0 : 1);
   }
   cmp_item *make_same();
 };
 
 
-class cmp_item_decimal :public cmp_item
+class cmp_item_decimal : public cmp_item_scalar
 {
   my_decimal value;
 public:
   cmp_item_decimal() {}                       /* Remove gcc warning */
   void store_value(Item *item);
   int cmp(Item *arg);
-  int compare(cmp_item *c);
+  int compare(const cmp_item *c) const;
   cmp_item *make_same();
-};
-
-
-/* 
-   cmp_item for optimized IN with row (right part string, which never
-   be changed)
-*/
-
-class cmp_item_sort_string_in_static :public cmp_item_string
-{
- protected:
-  String value;
-public:
-  cmp_item_sort_string_in_static(const CHARSET_INFO *cs):
-    cmp_item_string(cs) {}
-  void store_value(Item *item)
-  {
-    value_res= item->val_str(&value);
-  }
-  int cmp(Item *item)
-  {
-    // Should never be called
-    DBUG_ASSERT(0);
-    return 1;
-  }
-  int compare(cmp_item *ci)
-  {
-    cmp_item_string *l_cmp= (cmp_item_string *) ci;
-    return sortcmp(value_res, l_cmp->value_res, cmp_charset);
-  }
-  cmp_item *make_same()
-  {
-    return new cmp_item_sort_string_in_static(cmp_charset);
-  }
 };
 
 
@@ -1325,6 +1580,8 @@ public:
 
 class Item_func_case :public Item_func
 {
+  typedef Item_func super;
+
   int first_expr_num, else_expr_num;
   enum Item_result cached_result_type, left_result_type;
   String tmp_value;
@@ -1335,8 +1592,9 @@ class Item_func_case :public Item_func
   cmp_item *cmp_items[5]; /* For all result types */
   cmp_item *case_item;
 public:
-  Item_func_case(List<Item> &list, Item *first_expr_arg, Item *else_expr_arg)
-    :Item_func(), first_expr_num(-1), else_expr_num(-1),
+  Item_func_case(const POS &pos, List<Item> &list, Item *first_expr_arg,
+                 Item *else_expr_arg)
+    : super(pos), first_expr_num(-1), else_expr_num(-1),
     cached_result_type(INT_RESULT), left_result_type(INT_RESULT), case_item(0)
   {
     ncases= list.elements;
@@ -1350,14 +1608,15 @@ public:
       else_expr_num= list.elements;
       list.push_back(else_expr_arg);
     }
-    set_arguments(list);
+    set_arguments(list, true);
     memset(&cmp_items, 0, sizeof(cmp_items));
   }
   double val_real();
   longlong val_int();
   String *val_str(String *);
   my_decimal *val_decimal(my_decimal *);
-  bool get_date(MYSQL_TIME *ltime, uint fuzzydate);
+  bool val_json(Json_wrapper *wr);
+  bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate);
   bool get_time(MYSQL_TIME *ltime);
   bool fix_fields(THD *thd, Item **ref);
   void fix_length_and_dec();
@@ -1370,19 +1629,19 @@ public:
   Item *find_item(String *str);
   const CHARSET_INFO *compare_collation() { return cmp_collation.collation; }
   void cleanup();
-  void agg_num_lengths(Item *arg);
 };
 
 /*
-  The Item_func_in class implements the in_expr IN(values_list) function.
+  The Item_func_in class implements
+  in_expr IN (<in value list>)
+  and
+  in_expr NOT IN (<in value list>)
 
   The current implementation distinguishes 2 cases:
-  1) all items in the value_list are constants and have the same
+  1) all items in <in value list> are constants and have the same
     result type. This case is handled by in_vector class.
-  2) items in the value_list have different result types or there is some
-    non-constant items.
-    In this case Item_func_in employs several cmp_item objects to performs
-    comparisons of in_expr and an item from the values_list. One cmp_item
+  2) otherwise Item_func_in employs several cmp_item objects to perform
+    comparisons of in_expr and an item from <in value list>. One cmp_item
     object for each result type. Different result types are collected in the
     fix_length_and_dec() member function by means of collect_cmp_types()
     function.
@@ -1390,24 +1649,28 @@ public:
 class Item_func_in :public Item_func_opt_neg
 {
 public:
-  /* 
-    an array of values when the right hand arguments of IN
-    are all SQL constant and there are no nulls 
-  */
+  /// An array of values, created when the bisection lookup method is used
   in_vector *array;
-  bool have_null;
-  /* 
-    true when all arguments of the IN clause are of compatible types
-    and can be used safely as comparisons for key conditions
+  /**
+    If there is some NULL among <in value list>, during a val_int() call; for
+    example
+    IN ( (1,(3,'col')), ... ), where 'col' is a column which evaluates to
+    NULL.
   */
-  bool arg_types_compatible;
+  bool have_null;
+  /**
+    Set to true by fix_length_and_dec() if the IN list contains a
+    dependent subquery, in which case condition filtering will not be
+    calculated for this item.
+  */
+  bool dep_subq_in_list;
   Item_result left_result_type;
   cmp_item *cmp_items[6]; /* One cmp_item for each result type */
   DTCollation cmp_collation;
 
-  Item_func_in(List<Item> &list)
-    :Item_func_opt_neg(list), array(0), have_null(0),
-    arg_types_compatible(FALSE)
+  Item_func_in(const POS &pos, PT_item_list *list, bool is_negation)
+    :Item_func_opt_neg(pos, list, is_negation), array(NULL),
+    have_null(false), dep_subq_in_list(false)
   {
     memset(&cmp_items, 0, sizeof(cmp_items));
     allowed_arg_cols= 0;  // Fetch this value from first argument
@@ -1418,11 +1681,16 @@ public:
                          st_select_lex *removed_select);
   void fix_length_and_dec();
   uint decimal_precision() const { return 1; }
-  void cleanup()
+
+  /**
+    Cleanup data and comparator arrays.
+
+    @note Used during regular cleanup and to free arrays after GC substitution.
+    @see substitute_gc().
+  */
+  void cleanup_arrays()
   {
     uint i;
-    DBUG_ENTER("Item_func_in::cleanup");
-    Item_int_func::cleanup();
     delete array;
     array= 0;
     for (i= 0; i <= (uint)DECIMAL_RESULT + 1; i++)
@@ -1430,6 +1698,13 @@ public:
       delete cmp_items[i];
       cmp_items[i]= 0;
     }
+  }
+
+  void cleanup()
+  {
+    DBUG_ENTER("Item_func_in::cleanup");
+    Item_int_func::cleanup();
+    cleanup_arrays();
     DBUG_VOID_RETURN;
   }
   optimize_type select_optimize() const
@@ -1437,9 +1712,46 @@ public:
   virtual void print(String *str, enum_query_type query_type);
   enum Functype functype() const { return IN_FUNC; }
   const char *func_name() const { return " IN "; }
-  bool nulls_in_row();
   bool is_bool_func() { return 1; }
   const CHARSET_INFO *compare_collation() { return cmp_collation.collation; }
+  bool gc_subst_analyzer(uchar **arg) { return true; }
+
+  float get_filtering_effect(table_map filter_for_table,
+                             table_map read_tables,
+                             const MY_BITMAP *fields_to_ignore,
+                             double rows_in_table);
+private:
+  /**
+     Usable if <in value list> is made only of constants. Returns true if one
+     of these constants contains a NULL. Example:
+     IN ( (-5, (12,NULL)), ... ).
+  */
+  bool list_contains_null();
+  /**
+    Utility function to help calculate the total filtering effect of
+    IN predicates. This function calculates the filtering effect from
+    a single field (or field reference) on the left hand side of the
+    expression.
+
+    @param fieldref          Field (or field reference) on left hand side of
+                             IN, i.e., this function should be called for 
+                             each fi in "(f1,...,fn) IN (values)"
+    @param filter_for_table  The table we are calculating filter effect for
+    @param fields_to_ignore  Fields in 'filter_for_table' that should not
+                             be part of the filter calculation. The filtering
+                             effect of these fields are already part of the
+                             calculation somehow (e.g. because there is a
+                             predicate "col = <const>", and the optimizer
+                             has decided to do ref access on 'col').
+    @param rows_in_table     The number of rows in table 'filter_for_table'
+
+    @return                  the filtering effect (between 0 and 1) 'the_field'
+                             participates with in this IN predicate.
+  */
+  float get_single_col_filtering_effect(Item_ident *fieldref,
+                                        table_map filter_for_table,
+                                        const MY_BITMAP *fields_to_ignore,
+                                        double rows_in_table);
 };
 
 class cmp_item_row :public cmp_item
@@ -1450,9 +1762,9 @@ public:
   cmp_item_row(): comparators(0), n(0) {}
   ~cmp_item_row();
   void store_value(Item *item);
-  inline void alloc_comparators(Item *item);
+  void alloc_comparators(Item *item);
   int cmp(Item *arg);
-  int compare(cmp_item *arg);
+  int compare(const cmp_item *arg) const;
   cmp_item *make_same();
   void store_value_by_template(cmp_item *tmpl, Item *);
   friend void Item_func_in::fix_length_and_dec();
@@ -1462,13 +1774,23 @@ public:
 class in_row :public in_vector
 {
   cmp_item_row tmp;
+  // DTOR is not trivial, but we manage memory ourselves.
+  Mem_root_array<cmp_item_row, true> base_objects;
+  // Sort pointers, rather than objects.
+  Mem_root_array<cmp_item_row*, true> base_pointers;
 public:
-  in_row(uint elements, Item *);
+  in_row(THD *thd, uint elements, Item *);
   ~in_row();
   void set(uint pos,Item *item);
   uchar *get_value(Item *item);
   friend void Item_func_in::fix_length_and_dec();
   Item_result result_type() { return ROW_RESULT; }
+
+  virtual void shrink_array(size_t n) { base_pointers.resize(n); }
+
+  virtual void sort();
+  virtual bool find_value(const void *value) const;
+  virtual bool compare_elems(uint pos1, uint pos2) const;
 };
 
 /* Functions used by where clause */
@@ -1479,6 +1801,8 @@ protected:
   longlong cached_value;
 public:
   Item_func_isnull(Item *a) :Item_bool_func(a) {}
+  Item_func_isnull(const POS &pos, Item *a) :Item_bool_func(pos, a) {}
+
   longlong val_int();
   enum Functype functype() const { return ISNULL_FUNC; }
   void fix_length_and_dec()
@@ -1510,6 +1834,11 @@ public:
       }
     }
   }
+
+  float get_filtering_effect(table_map filter_for_table,
+                             table_map read_tables,
+                             const MY_BITMAP *fields_to_ignore,
+                             double rows_in_table);
   table_map not_null_tables() const { return 0; }
   optimize_type select_optimize() const { return OPTIMIZE_NULL; }
   Item *neg_transformer(THD *thd);
@@ -1551,6 +1880,10 @@ class Item_func_isnotnull :public Item_bool_func
   bool abort_on_null;
 public:
   Item_func_isnotnull(Item *a) :Item_bool_func(a), abort_on_null(0) {}
+  Item_func_isnotnull(const POS &pos, Item *a)
+    : Item_bool_func(pos, a), abort_on_null(0)
+  {}
+
   longlong val_int();
   enum Functype functype() const { return ISNOTNULL_FUNC; }
   void fix_length_and_dec()
@@ -1566,37 +1899,55 @@ public:
   const CHARSET_INFO *compare_collation()
   { return args[0]->collation.collation; }
   void top_level_item() { abort_on_null=1; }
+
+  float get_filtering_effect(table_map filter_for_table,
+                             table_map read_tables,
+                             const MY_BITMAP *fields_to_ignore,
+                             double rows_in_table);
 };
 
 
 class Item_func_like :public Item_bool_func2
 {
-  // Turbo Boyer-Moore data
-  bool        canDoTurboBM;	// pattern is '%abcd%' case
+  typedef Item_bool_func2 super;
+
+  // Boyer-Moore data
+  bool        can_do_bm;	// pattern is '%abcd%' case
   const char* pattern;
   int         pattern_len;
 
-  // TurboBM buffers, *this is owner
+  // Boyer-Moore buffers, *this is owner
   int* bmGs; //   good suffix shift table, size is pattern_len + 1
   int* bmBc; // bad character shift table, size is alphabet_size
 
-  void turboBM_compute_suffixes(int* suff);
-  void turboBM_compute_good_suffix_shifts(int* suff);
-  void turboBM_compute_bad_character_shifts();
-  bool turboBM_matches(const char* text, int text_len) const;
+  void bm_compute_suffixes(int* suff);
+  void bm_compute_good_suffix_shifts(int* suff);
+  void bm_compute_bad_character_shifts();
+  bool bm_matches(const char* text, size_t text_len) const;
   enum { alphabet_size = 256 };
 
   Item *escape_item;
   
   bool escape_used_in_parsing;
 
+  bool escape_evaluated;  ///< Tells if the escape clause has been evaluated.
+  bool eval_escape_clause(THD *thd);
+
 public:
   int escape;
 
   Item_func_like(Item *a,Item *b, Item *escape_arg, bool escape_used)
-    :Item_bool_func2(a,b), canDoTurboBM(FALSE), pattern(0), pattern_len(0), 
+    :Item_bool_func2(a,b), can_do_bm(false), pattern(0), pattern_len(0), 
      bmGs(0), bmBc(0), escape_item(escape_arg),
-     escape_used_in_parsing(escape_used) {}
+     escape_used_in_parsing(escape_used), escape_evaluated(false) {}
+  Item_func_like(const POS &pos, Item *a, Item *b, Item *opt_escape_arg)
+    :super(pos, a, b), can_do_bm(false), pattern(0), pattern_len(0), 
+     bmGs(0), bmBc(0), escape_item(opt_escape_arg),
+     escape_used_in_parsing(opt_escape_arg != NULL), escape_evaluated(false)
+  {}
+
+  virtual bool itemize(Parse_context *pc, Item **res);
+
   longlong val_int();
   enum Functype functype() const { return LIKE_FUNC; }
   optimize_type select_optimize() const;
@@ -1609,6 +1960,19 @@ public:
                  using "expr LIKE pat ESCAPE 'escape_char'" syntax
   */
   bool escape_was_used_in_parsing() const { return escape_used_in_parsing; }
+
+  /**
+    Has the escape clause been evaluated? It only needs to be evaluated
+    once per execution, since we require it to be constant during execution.
+    The escape member has a valid value if and only if this function returns
+    true.
+  */
+  bool escape_is_evaluated() const { return escape_evaluated; }
+
+  float get_filtering_effect(table_map filter_for_table,
+                             table_map read_tables,
+                             const MY_BITMAP *fields_to_ignore,
+                             double rows_in_table);
 };
 
 
@@ -1624,7 +1988,7 @@ class Item_func_regex :public Item_bool_func
   String conv;
   int regcomp(bool send_error);
 public:
-  Item_func_regex(Item *a,Item *b) :Item_bool_func(a,b),
+  Item_func_regex(const POS &pos, Item *a,Item *b) :Item_bool_func(pos, a,b),
     regex_compiled(0),regex_is_const(0) {}
   void cleanup();
   longlong val_int();
@@ -1642,6 +2006,8 @@ public:
 
 class Item_cond :public Item_bool_func
 {
+  typedef Item_bool_func super;
+
 protected:
   List<Item> list;
   bool abort_on_null;
@@ -1650,46 +2016,56 @@ public:
   /* Item_cond() is only used to create top level items */
   Item_cond(): Item_bool_func(), abort_on_null(1)
   { const_item_cache=0; }
+
   Item_cond(Item *i1,Item *i2)
     :Item_bool_func(), abort_on_null(0)
   {
     list.push_back(i1);
     list.push_back(i2);
   }
+  Item_cond(const POS &pos, Item *i1, Item *i2)
+    :Item_bool_func(pos), abort_on_null(0)
+  {
+    list.push_back(i1);
+    list.push_back(i2);
+  }
+
   Item_cond(THD *thd, Item_cond *item);
   Item_cond(List<Item> &nlist)
     :Item_bool_func(), list(nlist), abort_on_null(0) {}
   bool add(Item *item)
   {
-    DBUG_ASSERT(item);
+    assert(item);
     return list.push_back(item);
   }
   bool add_at_head(Item *item)
   {
-    DBUG_ASSERT(item);
+    assert(item);
     return list.push_front(item);
   }
   void add_at_head(List<Item> *nlist)
   {
-    DBUG_ASSERT(nlist->elements);
+    assert(nlist->elements);
     list.prepand(nlist);
   }
+
+  virtual bool itemize(Parse_context *pc, Item **res);
+
   bool fix_fields(THD *, Item **ref);
   void fix_after_pullout(st_select_lex *parent_select,
                          st_select_lex *removed_select);
 
   enum Type type() const { return COND_ITEM; }
   List<Item>* argument_list() { return &list; }
+  bool eq(const Item *item, bool binary_cmp) const;
   table_map used_tables() const { return used_tables_cache; }
   void update_used_tables();
   virtual void print(String *str, enum_query_type query_type);
   void split_sum_func(THD *thd, Ref_ptr_array ref_pointer_array,
                       List<Item> &fields);
-  friend int setup_conds(THD *thd, TABLE_LIST *tables, TABLE_LIST *leaves,
-                         Item **conds);
   void top_level_item() { abort_on_null=1; }
-  void copy_andor_arguments(THD *thd, Item_cond *item, bool real_items= false);
-  bool walk(Item_processor processor, bool walk_subquery, uchar *arg);
+  void copy_andor_arguments(THD *thd, Item_cond *item);
+  bool walk(Item_processor processor, enum_walk walk, uchar *arg);
   Item *transform(Item_transformer transformer, uchar *arg);
   void traverse_cond(Cond_traverser, void *arg, traverse_order order);
   void neg_arguments(THD *thd);
@@ -1799,9 +2175,9 @@ public:
   }
 
   inline Item* get_const() { return const_item; }
-  void compare_const(Item *c);
-  void add(Item *c, Item_field *f);
-  void add(Item *c);
+  bool compare_const(THD *thd, Item *c);
+  bool add(THD *thd, Item *c, Item_field *f);
+  bool add(THD *thd, Item *c);
   void add(Item_field *f);
   uint members();
   bool contains(Field *field);
@@ -1812,8 +2188,8 @@ public:
   */
   Item_field* get_first() { return fields.head(); }
   Item_field* get_subst_item(const Item_field *field);
-  void merge(Item_equal *item);
-  void update_const();
+  bool merge(THD *thd, Item_equal *item);
+  bool update_const(THD *thd);
   enum Functype functype() const { return MULT_EQUAL_FUNC; }
   longlong val_int(); 
   const char *func_name() const { return "multiple equal"; }
@@ -1823,7 +2199,7 @@ public:
   void fix_length_and_dec();
   bool fix_fields(THD *thd, Item **ref);
   void update_used_tables();
-  bool walk(Item_processor processor, bool walk_subquery, uchar *arg);
+  bool walk(Item_processor processor, enum_walk walk, uchar *arg);
   Item *transform(Item_transformer transformer, uchar *arg);
   virtual void print(String *str, enum_query_type query_type);
   const CHARSET_INFO *compare_collation() 
@@ -1832,6 +2208,11 @@ public:
   virtual bool equality_substitution_analyzer(uchar **arg) { return true; }
 
   virtual Item* equality_substitution_transformer(uchar *arg);
+
+  float get_filtering_effect(table_map filter_for_table,
+                             table_map read_tables,
+                             const MY_BITMAP *fields_to_ignore,
+                             double rows_in_table);
 }; 
 
 class COND_EQUAL: public Sql_alloc
@@ -1873,59 +2254,60 @@ public:
                              the current and level and reference
                              to multiple equalities of upper and levels */  
   Item_cond_and() :Item_cond() {}
+
   Item_cond_and(Item *i1,Item *i2) :Item_cond(i1,i2) {}
+  Item_cond_and(const POS &pos, Item *i1, Item *i2) :Item_cond(pos, i1, i2) {}
+
   Item_cond_and(THD *thd, Item_cond_and *item) :Item_cond(thd, item) {}
   Item_cond_and(List<Item> &list_arg): Item_cond(list_arg) {}
   enum Functype functype() const { return COND_AND_FUNC; }
   longlong val_int();
   const char *func_name() const { return "and"; }
-  Item* copy_andor_structure(THD *thd, bool real_items)
+  Item* copy_andor_structure(THD *thd)
   {
     Item_cond_and *item;
     if ((item= new Item_cond_and(thd, this)))
-      item->copy_andor_arguments(thd, this, real_items);
+      item->copy_andor_arguments(thd, this);
     return item;
   }
   Item *neg_transformer(THD *thd);
+  bool gc_subst_analyzer(uchar **arg) { return true; }
+
+  float get_filtering_effect(table_map filter_for_table,
+                             table_map read_tables,
+                             const MY_BITMAP *fields_to_ignore,
+                             double rows_in_table);
 };
 
-inline bool is_cond_and(Item *item)
-{
-  if (item->type() != Item::COND_ITEM)
-    return FALSE;
-
-  Item_cond *cond_item= (Item_cond*) item;
-  return (cond_item->functype() == Item_func::COND_AND_FUNC);
-}
 
 class Item_cond_or :public Item_cond
 {
 public:
   Item_cond_or() :Item_cond() {}
+
   Item_cond_or(Item *i1,Item *i2) :Item_cond(i1,i2) {}
+  Item_cond_or(const POS &pos, Item *i1,Item *i2) :Item_cond(pos, i1, i2) {}
+
   Item_cond_or(THD *thd, Item_cond_or *item) :Item_cond(thd, item) {}
   Item_cond_or(List<Item> &list_arg): Item_cond(list_arg) {}
   enum Functype functype() const { return COND_OR_FUNC; }
   longlong val_int();
   const char *func_name() const { return "or"; }
-  Item* copy_andor_structure(THD *thd, bool real_items)
+  Item* copy_andor_structure(THD *thd)
   {
     Item_cond_or *item;
     if ((item= new Item_cond_or(thd, this)))
-      item->copy_andor_arguments(thd, this, real_items);
+      item->copy_andor_arguments(thd, this);
     return item;
   }
   Item *neg_transformer(THD *thd);
+  bool gc_subst_analyzer(uchar **arg) { return true; }
+
+  float get_filtering_effect(table_map filter_for_table,
+                             table_map read_tables,
+                             const MY_BITMAP *fields_to_ignore,
+                             double rows_in_table);
 };
-
-inline bool is_cond_or(Item *item)
-{
-  if (item->type() != Item::COND_ITEM)
-    return FALSE;
-
-  Item_cond *cond_item= (Item_cond*) item;
-  return (cond_item->functype() == Item_func::COND_OR_FUNC);
-}
 
 /* Some useful inline functions */
 
@@ -1940,18 +2322,18 @@ inline Item *and_conds(Item *a, Item *b)
 Item *and_expressions(Item *a, Item *b, Item **org_item);
 
 longlong get_datetime_value(THD *thd, Item ***item_arg, Item **cache_arg,
-                            Item *warn_item, bool *is_null);
+                            const Item *warn_item, bool *is_null);
 
 
 bool get_mysql_time_from_str(THD *thd, String *str, timestamp_type warn_type,
                              const char *warn_name, MYSQL_TIME *l_time);
-
 /*
   These need definitions from this file but the variables are defined
   in mysqld.h. The variables really belong in this component, but for
   the time being we leave them in mysqld.cc to avoid merge problems.
 */
 extern Eq_creator eq_creator;
+extern Equal_creator equal_creator;
 extern Ne_creator ne_creator;
 extern Gt_creator gt_creator;
 extern Lt_creator lt_creator;

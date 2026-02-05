@@ -14,6 +14,9 @@
 --source include/have_innodb_16k.inc
 --source include/not_embedded.inc
 
+LET $MYSQLD_DATADIR = `select @@datadir`;
+LET $INNODB_PAGE_SIZE = `select @@innodb_page_size`;
+
 --echo #Check whether unzip is installed on the system
 --echo #Store the command output into a temp file.
 perl;
@@ -40,9 +43,7 @@ if ($stat != 0)
 let $MYSQL_BASEDIR= `select @@basedir`;
 
 --echo # Stop server
--- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
--- shutdown_server 30
--- source include/wait_until_disconnected.inc
+--source include/shutdown_mysqld.inc
 
 --echo # Copy the remote tablespace & DB zip files from suite location to working location.
 --copy_file $MYSQL_BASEDIR/mysql-test/suite/innodb/t/portability_wl5980_windows.zip $MYSQL_TMP_DIR/portability_wl5980_windows.zip
@@ -91,13 +92,13 @@ let $MYSQL_BASEDIR= `select @@basedir`;
 --exec echo $MYSQL_TMP_DIR/mysqld.5980/tab4/test/emp4#p#p1.ibd > $MYSQL_TMP_DIR/mysqld.5980/data/test/emp4#p#p1.isl
 --exec echo $MYSQL_TMP_DIR/mysqld.5980/tab5/test/emp4#p#p2.ibd > $MYSQL_TMP_DIR/mysqld.5980/data/test/emp4#p#p2.isl
 
---exec echo $MYSQL_TMP_DIR/mysqld.5980/part0/test/purchase#p#p0#sp#s0.ibd > $MYSQL_TMP_DIR/mysqld.5980/data/test/purchase#p#p0#sp#s0.isl 
+--exec echo $MYSQL_TMP_DIR/mysqld.5980/part0/test/purchase#p#p0#sp#s0.ibd > $MYSQL_TMP_DIR/mysqld.5980/data/test/purchase#p#p0#sp#s0.isl
 --exec echo $MYSQL_TMP_DIR/mysqld.5980/part1/test/purchase#p#p0#sp#s1.ibd > $MYSQL_TMP_DIR/mysqld.5980/data/test/purchase#p#p0#sp#s1.isl
 --exec echo $MYSQL_TMP_DIR/mysqld.5980/part2/test/purchase#p#p1#sp#s2.ibd > $MYSQL_TMP_DIR/mysqld.5980/data/test/purchase#p#p1#sp#s2.isl
 --exec echo $MYSQL_TMP_DIR/mysqld.5980/part3/test/purchase#p#p1#sp#s3.ibd > $MYSQL_TMP_DIR/mysqld.5980/data/test/purchase#p#p1#sp#s3.isl
 
---exec echo #change path separator Linux "/" format to windows "\" format by Perl script, 
---exec echo #in the *.ISL files , in the Mysql data directory
+--echo # Change path separator Linux "/" format to windows "\\" format by Perl script,
+--echo # in the *.ISL files, in the Mysql data directory
 --perl  EOF
 use File::Copy;
 #use strict;
@@ -134,25 +135,27 @@ EOF
 --echo # mysql.user table. This is to deal with the restriction imposed on
 --echo # plugin field for users in WL6982.
 
---echo # Restart the DB server from unzip location of MySQL Data Dir 
+--echo # Restart the DB server from unzip location of MySQL Data Dir
 -- exec echo "restart: --datadir=$MYSQL_TMP_DIR/mysqld.5980/data/ --skip-grant-tables" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 -- enable_reconnect
 -- source include/wait_until_connected_again.inc
+-- disable_reconnect
 
 -- exec $MYSQL -e "UPDATE mysql.user SET plugin = 'mysql_native_password'"
 
--- echo # Stop server
--- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
--- shutdown_server 30
--- source include/wait_until_disconnected.inc
+--echo Run mysql_upgrade once
+--exec $MYSQL_UPGRADE --skip-verbose --force 2>&1
 
---echo # Restart the DB server from unzip location of MySQL Data Dir 
+-- echo # Stop server
+-- source include/shutdown_mysqld.inc
+
+--echo # Restart the DB server from unzip location of MySQL Data Dir
 -- exec echo "restart: --datadir=$MYSQL_TMP_DIR/mysqld.5980/data/ " > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 -- enable_reconnect
 -- source include/wait_until_connected_again.inc
+-- disable_reconnect
 
 --echo # Check the DB & tables with DML statements.
-use test;
 --replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
 SHOW CREATE TABLE emp1;
 --replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
@@ -183,18 +186,8 @@ SELECT COUNT(*) FROM emp4;
 SELECT COUNT(*) FROM purchase;
 
 --echo # Check the system tables have the proper entry of the tables.
---replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
-SELECT path FROM information_schema.innodb_sys_datafiles
-       WHERE path LIKE '%test%' ORDER BY space;
-SELECT name,file_format,row_format 
-       FROM information_schema.innodb_sys_tablespaces
-       ORDER BY name;
-SELECT name,n_cols,file_format,row_format 
-       FROM information_schema.innodb_sys_tables 
-       WHERE name LIKE '%emp%' ORDER BY name;
-SELECT name,n_cols,file_format,row_format 
-       FROM information_schema.innodb_sys_tables 
-       WHERE name LIKE '%purchase%' ORDER BY name;
+--source suite/innodb/include/show_i_s_tablespaces.inc
+--source suite/innodb/include/show_i_s_tables.inc
 
 --echo #
 --echo # Cleanup

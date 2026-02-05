@@ -7,25 +7,29 @@ Note	####	Storing MySQL user name or password information in the master info rep
 # BUG#17994219: CREATE TABLE .. SELECT PRODUCES INVALID STRUCTURE, 
 #               BREAKS RBR 
 #
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 #After the patch, the display width is set to a default
 #value of 21.
 CREATE TABLE t1 AS SELECT REPEAT('A', 1000) DIV 1 AS a;
 Warnings:
-Warning	1366	Incorrect decimal value: '' for column '' at row -1
+Warning	1366	Incorrect DECIMAL value: '0' for column '' at row -1
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `a` bigint(21) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=latin1
 CREATE TABLE t2 AS SELECT CONVERT(REPEAT('A', 255) USING UCS2) DIV 1 AS a;
 Warnings:
-Warning	1366	Incorrect decimal value: '' for column '' at row -1
+Warning	1366	Incorrect DECIMAL value: '0' for column '' at row -1
 SHOW CREATE TABLE t2;
 Table	Create Table
 t2	CREATE TABLE `t2` (
   `a` bigint(21) DEFAULT NULL
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
+) ENGINE=InnoDB DEFAULT CHARSET=latin1
 #After the patch, no error is reported.
 DROP TABLE t1;
 DROP TABLE t2;
+SET sql_mode = default;
 include/rpl_end.inc

@@ -1,22 +1,28 @@
-/* Copyright (c) 2000, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates. All rights
+ * reserved.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include "sql_priv.h"
 #include "my_global.h"                          // HAVE_*
 
-#ifdef HAVE_QUERY_CACHE
 #include <mysql.h>
 #include "emb_qcache.h"
 #include "embedded_priv.h"
@@ -27,14 +33,14 @@ void Querycache_stream::store_uchar(uchar c)
   if (data_end == cur_data)
     use_next_block(TRUE);
   *(cur_data++)= c;
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   stored_size++;
 #endif
 }
 
 void Querycache_stream::store_short(ushort s)
 {
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   stored_size+= 2;
 #endif
   if (data_end - cur_data > 1)
@@ -57,7 +63,7 @@ void Querycache_stream::store_short(ushort s)
 
 void Querycache_stream::store_int(uint i)
 {
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   stored_size+= 4;
 #endif
   size_t rest_len= data_end - cur_data;
@@ -84,7 +90,7 @@ void Querycache_stream::store_int(uint i)
 
 void Querycache_stream::store_ll(ulonglong ll)
 {
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   stored_size+= 8;
 #endif
   size_t rest_len= data_end - cur_data;
@@ -107,9 +113,9 @@ void Querycache_stream::store_ll(ulonglong ll)
   cur_data+= 8-rest_len;
 }
 
-void Querycache_stream::store_str_only(const char *str, uint str_len)
+void Querycache_stream::store_str_only(const char *str, size_t str_len)
 {
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   stored_size+= str_len;
 #endif
   do
@@ -128,17 +134,17 @@ void Querycache_stream::store_str_only(const char *str, uint str_len)
   } while(str_len);
 }
 
-void Querycache_stream::store_str(const char *str, uint str_len)
+void Querycache_stream::store_str(const char *str, size_t str_len)
 {
-  store_int(str_len);
+  store_int(static_cast<uint>(str_len));
   store_str_only(str, str_len);
 }
 
-void Querycache_stream::store_safe_str(const char *str, uint str_len)
+void Querycache_stream::store_safe_str(const char *str, size_t str_len)
 {
   if (str)
   {
-    store_int(str_len+1);
+    store_int(static_cast<uint>(str_len+1));
     store_str_only(str, str_len);
   }
   else
@@ -224,7 +230,7 @@ ulonglong Querycache_stream::load_ll()
   return result;
 }
 
-void Querycache_stream::load_str_only(char *buffer, uint str_len)
+void Querycache_stream::load_str_only(char *buffer, size_t str_len)
 {
   do
   {
@@ -316,7 +322,7 @@ uint emb_count_querycache_size(THD *thd)
       result+= field->def_length;
   }
   
-  if (thd->protocol == &thd->protocol_binary)
+  if (thd->get_protocol()->type() == Protocol::PROTOCOL_BINARY)
   {
     result+= (uint) (4*n_rows);
     for (; cur_row; cur_row=cur_row->next)
@@ -378,8 +384,8 @@ void emb_store_querycache_result(Querycache_stream *dst, THD *thd)
     dst->store_str(field->catalog, field->catalog_length);
     dst->store_safe_str(field->def, field->def_length);
   }
-  
-  if (thd->protocol == &thd->protocol_binary)
+
+  if (thd->get_protocol()->type() == Protocol::PROTOCOL_BINARY)
   {
     for (; cur_row; cur_row=cur_row->next)
       dst->store_str((char *) cur_row->data, cur_row->length);
@@ -397,7 +403,7 @@ void emb_store_querycache_result(Querycache_stream *dst, THD *thd)
       }
     }
   }
-  DBUG_ASSERT(emb_count_querycache_size(thd) == dst->stored_size);
+  assert(emb_count_querycache_size(thd) == dst->stored_size);
   DBUG_VOID_RETURN;
 }
 
@@ -415,7 +421,7 @@ int emb_load_querycache_result(THD *thd, Querycache_stream *src)
 
   if (!data)
     goto err;
-  init_alloc_root(&data->alloc, 8192,0);
+  init_alloc_root(PSI_NOT_INSTRUMENTED, &data->alloc, 8192, 0);
   f_alloc= &data->alloc;
 
   data->fields= src->load_int();
@@ -447,7 +453,8 @@ int emb_load_querycache_result(THD *thd, Querycache_stream *src)
   data->rows= rows;
   if (!rows)
     goto return_ok;
-  if (thd->protocol == &thd->protocol_binary)
+
+  if (thd->get_protocol()->type() == Protocol::PROTOCOL_BINARY)
   {
     uint length;
     row= (MYSQL_ROWS *)alloc_root(&data->alloc,
@@ -487,11 +494,9 @@ int emb_load_querycache_result(THD *thd, Querycache_stream *src)
   data->embedded_info->prev_ptr= prev_row;
 return_ok:
   net_send_eof(thd, thd->server_status,
-               thd->get_stmt_da()->current_statement_warn_count());
+               thd->get_stmt_da()->current_statement_cond_count());
   DBUG_RETURN(0);
 err:
   DBUG_RETURN(1);
 }
-
-#endif /*HAVE_QUERY_CACHE*/
 

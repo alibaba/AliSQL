@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2000, 2016, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -28,6 +35,7 @@
 #include <signal.h>
 #include <stdarg.h>
 #include <sslopt-vars.h>
+#include <caching_sha2_passwordopt-vars.h>
 #include <welcome_copyright_notice.h>   /* ORACLE_WELCOME_COPYRIGHT_NOTICE */
 
 static char * host=0, *opt_password=0, *user=0;
@@ -42,7 +50,7 @@ static uint opt_enable_cleartext_plugin= 0;
 static my_bool using_opt_enable_cleartext_plugin= 0;
 static my_bool opt_secure_auth= TRUE;
 
-#ifdef HAVE_SMEM 
+#if defined (_WIN32) && !defined (EMBEDDED_LIBRARY)
 static char *shared_memory_base_name=0;
 #endif
 static uint opt_protocol=0;
@@ -115,29 +123,18 @@ int main(int argc, char **argv)
   if (argc > 2)
   {
     fprintf(stderr,"%s: Too many arguments\n",my_progname);
+    free_defaults(argv);
     exit(1);
   }
   mysql_init(&mysql);
   if (opt_compress)
     mysql_options(&mysql,MYSQL_OPT_COMPRESS,NullS);
-#ifdef HAVE_OPENSSL
-  if (opt_use_ssl)
-  {
-    mysql_ssl_set(&mysql, opt_ssl_key, opt_ssl_cert, opt_ssl_ca,
-		  opt_ssl_capath, opt_ssl_cipher);
-    mysql_options(&mysql, MYSQL_OPT_SSL_CRL, opt_ssl_crl);
-    mysql_options(&mysql, MYSQL_OPT_SSL_CRLPATH, opt_ssl_crlpath);
-  }
-  mysql_options(&mysql,MYSQL_OPT_SSL_VERIFY_SERVER_CERT,
-                (char*)&opt_ssl_verify_server_cert);
-#endif
+  SSL_SET_OPTIONS(&mysql);
   if (opt_protocol)
     mysql_options(&mysql,MYSQL_OPT_PROTOCOL,(char*)&opt_protocol);
   if (opt_bind_addr)
     mysql_options(&mysql,MYSQL_OPT_BIND,opt_bind_addr);
-  if (!opt_secure_auth)
-    mysql_options(&mysql, MYSQL_SECURE_AUTH,(char*)&opt_secure_auth);
-#ifdef HAVE_SMEM
+#if defined (_WIN32) && !defined (EMBEDDED_LIBRARY)
   if (shared_memory_base_name)
     mysql_options(&mysql,MYSQL_SHARED_MEMORY_BASE_NAME,shared_memory_base_name);
 #endif
@@ -156,10 +153,14 @@ int main(int argc, char **argv)
   mysql_options(&mysql, MYSQL_OPT_CONNECT_ATTR_RESET, 0);
   mysql_options4(&mysql, MYSQL_OPT_CONNECT_ATTR_ADD,
                  "program_name", "mysqlshow");
-  if (!(mysql_connect_ssl_check(&mysql, host, user, opt_password,
-                                (first_argument_uses_wildcards) ? "" :
-                                argv[0], opt_mysql_port, opt_mysql_unix_port,
-                                0, opt_ssl_required)))
+
+  set_server_public_key(&mysql);
+  set_get_server_public_key_option(&mysql);
+
+  if (!(mysql_real_connect(&mysql,host,user,opt_password,
+			   (first_argument_uses_wildcards) ? "" :
+                           argv[0],opt_mysql_port,opt_mysql_unix_port,
+			   0)))
   {
     fprintf(stderr,"%s: %s\n",my_progname,mysql_error(&mysql));
     exit(1);
@@ -183,9 +184,11 @@ int main(int argc, char **argv)
   }
   mysql_close(&mysql);			/* Close & free connection */
   my_free(opt_password);
-#ifdef HAVE_SMEM
+#if defined (_WIN32) && !defined (EMBEDDED_LIBRARY)
   my_free(shared_memory_base_name);
 #endif
+  mysql_server_end();
+  free_defaults(argv);
   my_end(my_end_arg);
   exit(error ? 1 : 0);
   return 0;				/* No compiler warnings */
@@ -250,7 +253,7 @@ static struct my_option my_long_options[] =
    &opt_mysql_port,
    &opt_mysql_port, 0, GET_UINT, REQUIRED_ARG, 0, 0, 0, 0, 0,
    0},
-#ifdef __WIN__
+#ifdef _WIN32
   {"pipe", 'W', "Use named pipes to connect to server.", 0, 0, 0, GET_NO_ARG,
    NO_ARG, 0, 0, 0, 0, 0, 0},
 #endif
@@ -258,9 +261,9 @@ static struct my_option my_long_options[] =
    "The protocol to use for connection (tcp, socket, pipe, memory).",
    0, 0, 0, GET_STR,  REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
   {"secure-auth", OPT_SECURE_AUTH, "Refuse client connecting to server if it"
-    " uses old (pre-4.1.1) protocol.", &opt_secure_auth,
-    &opt_secure_auth, 0, GET_BOOL, NO_ARG, 1, 0, 0, 0, 0, 0},
-#ifdef HAVE_SMEM
+    " uses old (pre-4.1.1) protocol. Deprecated. Always TRUE",
+    &opt_secure_auth, &opt_secure_auth, 0, GET_BOOL, NO_ARG, 1, 0, 0, 0, 0, 0},
+#if defined (_WIN32) && !defined (EMBEDDED_LIBRARY)
   {"shared-memory-base-name", OPT_SHARED_MEMORY_BASE_NAME,
    "Base name of shared memory.", &shared_memory_base_name,
    &shared_memory_base_name, 0, GET_STR_ALLOC, REQUIRED_ARG,
@@ -273,10 +276,9 @@ static struct my_option my_long_options[] =
    &opt_mysql_unix_port, &opt_mysql_unix_port, 0, GET_STR,
    REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
 #include <sslopt-longopts.h>
-#ifndef DONT_ALLOW_USER_CHANGE
+#include <caching_sha2_passwordopt-longopts.h>
   {"user", 'u', "User for login if not current user.", &user,
    &user, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
-#endif
   {"verbose", 'v',
    "More verbose output; you can use this multiple times to get even more "
    "verbose output.",
@@ -296,6 +298,7 @@ static void print_version(void)
 
 static void usage(void)
 {
+  struct my_option *optp;
   print_version();
   puts(ORACLE_WELCOME_COPYRIGHT_NOTICE("2000"));
   puts("Shows the structure of a MySQL database (databases, tables, and columns).\n");
@@ -308,6 +311,19 @@ If no table is given, then all matching tables in database are shown.\n\
 If no column is given, then all matching columns and column types in table\n\
 are shown.");
   print_defaults("my",load_default_groups);
+  /*
+    Turn default for zombies off so that the help on how to 
+    turn them off text won't show up.
+    This is safe to do since it's followed by a call to exit().
+  */
+  for (optp= my_long_options; optp->name; optp++)
+  {
+    if (optp->id == OPT_SECURE_AUTH)
+    {
+      optp->def_value= 0;
+      break;
+    }
+  }
   my_print_help(my_long_options);
   my_print_variables(my_long_options);
 }
@@ -328,7 +344,8 @@ get_one_option(int optid, const struct my_option *opt MY_ATTRIBUTE((unused)),
     {
       char *start=argument;
       my_free(opt_password);
-      opt_password=my_strdup(argument,MYF(MY_FAE));
+      opt_password=my_strdup(PSI_NOT_INSTRUMENTED,
+                             argument,MYF(MY_FAE));
       while (*argument) *argument++= 'x';		/* Destroy argument */
       if (*start)
 	start[1]=0;				/* Cut length of argument */
@@ -338,7 +355,7 @@ get_one_option(int optid, const struct my_option *opt MY_ATTRIBUTE((unused)),
       tty_password=1;
     break;
   case 'W':
-#ifdef __WIN__
+#ifdef _WIN32
     opt_protocol = MYSQL_PROTOCOL_PIPE;
 #endif
     break;
@@ -362,6 +379,16 @@ get_one_option(int optid, const struct my_option *opt MY_ATTRIBUTE((unused)),
   case 'I':					/* Info */
     usage();
     exit(0);
+  case OPT_SECURE_AUTH:
+    /* --secure-auth is a zombie option. */
+    if (!opt_secure_auth)
+    {
+      fprintf(stderr, "mysqlshow: [ERROR] --skip-secure-auth is not supported.\n");
+      exit(1);
+    }
+    else
+      CLIENT_WARN_DEPRECATED_NO_REPLACEMENT("--secure-auth");
+    break;
   }
   return 0;
 }
@@ -476,7 +503,7 @@ list_dbs(MYSQL *mysql,const char *wild)
 		if ((rresult = mysql_store_result(mysql)))
 		{
 		  rrow = mysql_fetch_row(rresult);
-		  rowcount += (ulong) strtoull(rrow[0], (char**) 0, 10);
+		  rowcount += (ulong) my_strtoull(rrow[0], (char**) 0, 10);
 		  mysql_free_result(rresult);
 		}
 	      }
@@ -493,8 +520,8 @@ list_dbs(MYSQL *mysql,const char *wild)
       }
       else
       {
-	strmov(tables,"N/A");
-	strmov(rows,"N/A");
+	my_stpcpy(tables,"N/A");
+	my_stpcpy(rows,"N/A");
       }
     }
 
@@ -543,7 +570,8 @@ list_tables(MYSQL *mysql,const char *db,const char *table)
       We just hijack the 'rows' variable for a bit to store the escaped
       table name
     */
-    mysql_real_escape_string(mysql, rows, table, (unsigned long)strlen(table));
+    mysql_real_escape_string_quote(mysql, rows, table,
+                                   (unsigned long)strlen(table), '\'');
     my_snprintf(query, sizeof(query), "show%s tables like '%s'",
                 opt_table_type ? " full" : "", rows);
   }
@@ -600,8 +628,8 @@ list_tables(MYSQL *mysql,const char *db,const char *table)
 	ulong rowcount=0L;
 	if (!rresult)
 	{
-	  strmov(fields,"N/A");
-	  strmov(rows,"N/A");
+	  my_stpcpy(fields,"N/A");
+	  my_stpcpy(rows,"N/A");
 	}
 	else
 	{
@@ -618,7 +646,7 @@ list_tables(MYSQL *mysql,const char *db,const char *table)
 	      if ((rresult = mysql_store_result(mysql)))
 	      {
 		rrow = mysql_fetch_row(rresult);
-		rowcount += (unsigned long) strtoull(rrow[0], (char**) 0, 10);
+		rowcount += (unsigned long) my_strtoull(rrow[0], (char**) 0, 10);
 		mysql_free_result(rresult);
 	      }
 	      sprintf(rows,"%10lu",rowcount);
@@ -630,8 +658,8 @@ list_tables(MYSQL *mysql,const char *db,const char *table)
       }
       else
       {
-	strmov(fields,"N/A");
-	strmov(rows,"N/A");
+	my_stpcpy(fields,"N/A");
+	my_stpcpy(rows,"N/A");
       }
     }
     if (opt_table_type)
@@ -673,7 +701,7 @@ static int
 list_table_status(MYSQL *mysql,const char *db,const char *wild)
 {
   char query[NAME_LEN + 100];
-  int len;
+  size_t len;
   MYSQL_RES *result;
   MYSQL_ROW row;
 
@@ -716,7 +744,7 @@ list_fields(MYSQL *mysql,const char *db,const char *table,
   size_t len;
   MYSQL_RES *result;
   MYSQL_ROW row;
-  ulong UNINIT_VAR(rows);
+  ulong rows= 0;
 
   if (mysql_select_db(mysql,db))
   {
@@ -735,7 +763,7 @@ list_fields(MYSQL *mysql,const char *db,const char *table,
       return 1;
     }
     row= mysql_fetch_row(result);
-    rows= (ulong) strtoull(row[0], (char**) 0, 10);
+    rows= (ulong) my_strtoull(row[0], (char**) 0, 10);
     mysql_free_result(result);
   }
 
@@ -762,6 +790,7 @@ list_fields(MYSQL *mysql,const char *db,const char *table,
   while ((row=mysql_fetch_row(result)))
     print_res_row(result,row);
   print_res_top(result);
+  mysql_free_result(result);
   if (opt_show_keys)
   {
     my_snprintf(query, sizeof(query), "show keys from `%s`", table);
@@ -780,8 +809,8 @@ list_fields(MYSQL *mysql,const char *db,const char *table,
     }
     else
       puts("Table has no keys");
+    mysql_free_result(result);
   }
-  mysql_free_result(result);
   return 0;
 }
 

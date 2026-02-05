@@ -31,8 +31,13 @@
 let $message= Section 3.1.6 - Privilege Checks:;
 --source include/show_msg80.inc
 
-
 connection default;
+
+set @orig_sql_mode_session= @@SESSION.sql_mode;
+set @orig_sql_mode_global= @@GLOBAL.sql_mode;
+set GLOBAL sql_mode= (select replace(@@GLOBAL.sql_mode,'NO_AUTO_CREATE_USER',''));
+set SESSION sql_mode= (select replace(@@SESSION.sql_mode,'NO_AUTO_CREATE_USER',''));
+
 USE db_storedproc_1;
 --source suite/funcs_1/include/show_connection.inc
 
@@ -74,6 +79,7 @@ USE db_storedproc_1;
 --source suite/funcs_1/include/show_connection.inc
 
 GRANT CREATE ROUTINE ON db_storedproc_1.* TO 'user_1'@'localhost';
+
 connect (user1b, localhost, user_1, , db_storedproc_1);
 --source suite/funcs_1/include/show_connection.inc
 
@@ -228,7 +234,7 @@ flush privileges;
 
 connect (user5_1, localhost, user_1, , db_storedproc_1);
 --source suite/funcs_1/include/show_connection.inc
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 delimiter //;
 CREATE PROCEDURE sp5_s_i () sql security definer
 BEGIN
@@ -246,7 +252,7 @@ BEGIN
    insert into db_storedproc_1.t3165 values ('inserted', 'from sp5_ins', 1000);
 END//
 delimiter ;//
-
+SET sql_mode = default;
 disconnect user5_1;
 
 connect (user5_2, localhost, user_2, , db_storedproc_1);
@@ -446,6 +452,8 @@ DROP TABLE t3166;
 DROP USER 'user_1'@'localhost';
 DROP USER 'user_2'@'localhost';
 
+set GLOBAL sql_mode= @orig_sql_mode_global;
+set SESSION sql_mode= @orig_sql_mode_session;
 
 # ==============================================================================
 # USE the same .inc to cleanup before and after the test

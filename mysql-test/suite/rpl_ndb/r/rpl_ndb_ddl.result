@@ -1,11 +1,16 @@
 include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
 [connection master]
+include/sync_slave_sql_with_master.inc
 
 -------- switch to master -------
 SET AUTOCOMMIT = 1;
 CREATE DATABASE mysqltest1;
 CREATE DATABASE mysqltest2;
 CREATE TABLE mysqltest1.t1 (f1 BIGINT) ENGINE=NDB;
+include/sync_slave_sql_with_master.inc
 INSERT INTO mysqltest1.t1 SET f1= 0;
 CREATE TABLE mysqltest1.t2 (f1 BIGINT) ENGINE=NDB;
 CREATE TABLE mysqltest1.t3 (f1 BIGINT) ENGINE=NDB;
@@ -30,6 +35,7 @@ CREATE TABLE mysqltest1.t19 (f1 BIGINT) ENGINE=NDB;
 CREATE TEMPORARY TABLE mysqltest1.t23 (f1 BIGINT) ENGINE=MEMORY;
 SET AUTOCOMMIT = 0;
 use mysqltest1;
+include/sync_slave_sql_with_master.inc
 
 -------- switch to slave --------
 SET AUTOCOMMIT = 1;
@@ -404,6 +410,8 @@ MAX(f1)
 
 -------- switch to master -------
 ROLLBACK;
+Warnings:
+Warning	1752	Some temporary tables were dropped, but these operations could not be rolled back.
 SELECT MAX(f1) FROM t1;
 MAX(f1)
 5
@@ -598,6 +606,8 @@ MAX(f1)
 
 -------- switch to master -------
 ROLLBACK;
+Warnings:
+Warning	1751	The creation of some temporary tables could not be rolled back.
 SELECT MAX(f1) FROM t1;
 MAX(f1)
 8
@@ -655,6 +665,7 @@ TEST-INFO: SLAVE:  The INSERT is committed (Succeeded)
 -------- switch to master -------
 SELECT * FROM mysqltest1.t7;
 f1
+include/sync_slave_sql_with_master.inc
 
 -------- switch to slave --------
 SELECT * FROM mysqltest1.t7;
@@ -1408,12 +1419,12 @@ TEST-INFO: SLAVE:  The INSERT is committed (Succeeded)
 -------- switch to master -------
 SHOW TRIGGERS;
 Trigger	Event	Table	Statement	Timing	Created	sql_mode	Definer	character_set_client	collation_connection	Database Collation
-trg1	INSERT	t1	SET @a:=1	BEFORE	NULL		root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
+trg1	INSERT	t1	SET @a:=1	BEFORE	NULL	NO_ENGINE_SUBSTITUTION	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
 
 -------- switch to slave --------
 SHOW TRIGGERS;
 Trigger	Event	Table	Statement	Timing	Created	sql_mode	Definer	character_set_client	collation_connection	Database Collation
-trg1	INSERT	t1	SET @a:=1	BEFORE	NULL		root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
+trg1	INSERT	t1	SET @a:=1	BEFORE	NULL	NO_ENGINE_SUBSTITUTION	root@localhost	latin1	latin1_swedish_ci	latin1_swedish_ci
 
 -------- switch to master -------
 

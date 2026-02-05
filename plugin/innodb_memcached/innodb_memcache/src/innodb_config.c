@@ -1,15 +1,22 @@
 /***********************************************************************
 
-Copyright (c) 2011, 2013, Oracle and/or its affiliates. All rights reserved.
+Copyright (c) 2011, 2023, Oracle and/or its affiliates.
 
-This program is free software; you can redistribute it and/or modify it
-under the terms of the GNU General Public License as published by the
-Free Software Foundation; version 2 of the License.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License, version 2.0,
+as published by the Free Software Foundation.
 
-This program is distributed in the hope that it will be useful, but
-WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
-Public License for more details.
+This program is also distributed with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have included with MySQL.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License, version 2.0, for more details.
 
 You should have received a copy of the GNU General Public License along
 with this program; if not, write to the Free Software Foundation, Inc.,
@@ -523,9 +530,9 @@ innodb_config_meta_hash_init(
 	if (err != DB_SUCCESS) {
 		fprintf(stderr, " InnoDB_Memcached: Please create config table"
 				"'%s' in database '%s' by running"
-				" 'innodb_memcached_config.sql. error %d'\n",
+				" 'innodb_memcached_config.sql. error %s'\n",
 			MCI_CFG_CONTAINER_TABLE, MCI_CFG_DB_NAME,
-			err);
+			ib_cb_ut_strerr(err));
 		err = DB_ERROR;
 		goto func_exit;
 	}
@@ -1142,7 +1149,7 @@ innodb_verify(
 	info->cas_enabled = false;
 	info->exp_enabled = false;
 
-#ifdef __WIN__
+#ifdef _WIN32
 	sprintf(table_name, "%s\%s", dbname, name);
 #else
 	snprintf(table_name, sizeof(table_name), "%s/%s", dbname, name);
@@ -1154,6 +1161,14 @@ innodb_verify(
 	if (err != DB_SUCCESS) {
 		fprintf(stderr, " InnoDB_Memcached: failed to open table"
 				" '%s' \n", table_name);
+		err = DB_ERROR;
+		goto func_exit;
+	}
+
+	if (ib_cb_is_virtual_table(crsr)) {
+		fprintf(stderr, " InnoDB_Memcached: table '%s' cannot"
+				" be mapped since it contains virtual"
+				" columns. \n", table_name);
 		err = DB_ERROR;
 		goto func_exit;
 	}

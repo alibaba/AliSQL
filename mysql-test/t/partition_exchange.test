@@ -9,11 +9,16 @@ DROP TABLE IF EXISTS t1, t2, t3, t, tp, tsp, tmp;
 --echo # Bug#11894100: EXCHANGE PARTITION CAN'T BE EXECUTED IF
 --echo #               ROW_FORMAT WAS SET EXPLICITLY
 --echo #
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 --echo # Same definition (both have ROW_FORMAT set)
+
+# We cannot add ROW_FORMAT=compact to the second CREATE TABLE t2 statement
+# because it is about not having ROW_FORMAT keyword to CREATE TABLE.
+SET GLOBAL innodb_default_row_format=compact;
+
 CREATE TABLE t1 (
  id int(11) NOT NULL AUTO_INCREMENT,
- year year(2) DEFAULT NULL,
+ year year(4) DEFAULT NULL,
  modified timestamp NOT NULL DEFAULT '0000-00-00 00:00:00',
  PRIMARY KEY (id)
 ) ENGINE=InnoDB ROW_FORMAT=COMPACT
@@ -43,7 +48,7 @@ DROP TABLE t2;
 --echo # Only the partitioned table have ROW_FORMAT set.
 CREATE TABLE t2 (
  id int(11) NOT NULL AUTO_INCREMENT,
- year year(2) DEFAULT NULL,
+ year year(4) DEFAULT NULL,
  modified timestamp NOT NULL DEFAULT '0000-00-00 00:00:00',
  PRIMARY KEY (id)
 ) ENGINE=InnoDB;
@@ -59,7 +64,7 @@ WHERE TABLE_SCHEMA = 'test' AND TABLE_NAME IN ('t1', 't2');
 DROP TABLE t1, t2;
 CREATE TABLE t1 (
  id int(11) NOT NULL AUTO_INCREMENT,
- year year(2) DEFAULT NULL,
+ year year(4) DEFAULT NULL,
  modified timestamp NOT NULL DEFAULT '0000-00-00 00:00:00',
  PRIMARY KEY (id)
 ) ENGINE=InnoDB
@@ -67,7 +72,7 @@ PARTITION BY HASH (id)
 PARTITIONS 2;
 CREATE TABLE t2 (
  id int(11) NOT NULL AUTO_INCREMENT,
- year year(2) DEFAULT NULL,
+ year year(4) DEFAULT NULL,
  modified timestamp NOT NULL DEFAULT '0000-00-00 00:00:00',
  PRIMARY KEY (id)
 ) ENGINE=InnoDB ROW_FORMAT = COMPACT;
@@ -83,7 +88,7 @@ WHERE TABLE_SCHEMA = 'test' AND TABLE_NAME IN ('t1', 't2');
 DROP TABLE t1, t2;
 CREATE TABLE t1 (
  id int(11) NOT NULL AUTO_INCREMENT,
- year year(2) DEFAULT NULL,
+ year year(4) DEFAULT NULL,
  modified timestamp NOT NULL DEFAULT '0000-00-00 00:00:00',
  PRIMARY KEY (id)
 ) ENGINE=InnoDB
@@ -91,7 +96,7 @@ PARTITION BY HASH (id)
 PARTITIONS 2;
 CREATE TABLE t2 (
  id int(11) NOT NULL AUTO_INCREMENT,
- year year(2) DEFAULT NULL,
+ year year(4) DEFAULT NULL,
  modified timestamp NOT NULL DEFAULT '0000-00-00 00:00:00',
  PRIMARY KEY (id)
 ) ENGINE=InnoDB;
@@ -107,7 +112,7 @@ WHERE TABLE_SCHEMA = 'test' AND TABLE_NAME IN ('t1', 't2');
 DROP TABLE t1, t2;
 CREATE TABLE t1 (
  id int(11) NOT NULL AUTO_INCREMENT,
- year year(2) DEFAULT NULL,
+ year year(4) DEFAULT NULL,
  modified timestamp NOT NULL DEFAULT '0000-00-00 00:00:00',
  PRIMARY KEY (id)
 ) ENGINE=InnoDB ROW_FORMAT = REDUNDANT
@@ -115,7 +120,7 @@ PARTITION BY HASH (id)
 PARTITIONS 2;
 CREATE TABLE t2 (
  id int(11) NOT NULL AUTO_INCREMENT,
- year year(2) DEFAULT NULL,
+ year year(4) DEFAULT NULL,
  modified timestamp NOT NULL DEFAULT '0000-00-00 00:00:00',
  PRIMARY KEY (id)
 ) ENGINE=InnoDB ROW_FORMAT = REDUNDANT;
@@ -131,7 +136,7 @@ WHERE TABLE_SCHEMA = 'test' AND TABLE_NAME IN ('t1', 't2');
 DROP TABLE t1, t2;
 CREATE TABLE t1 (
  id int(11) NOT NULL AUTO_INCREMENT,
- year year(2) DEFAULT NULL,
+ year year(4) DEFAULT NULL,
  modified timestamp NOT NULL DEFAULT '0000-00-00 00:00:00',
  PRIMARY KEY (id)
 ) ENGINE=InnoDB
@@ -139,7 +144,7 @@ PARTITION BY HASH (id)
 PARTITIONS 2;
 CREATE TABLE t2 (
  id int(11) NOT NULL AUTO_INCREMENT,
- year year(2) DEFAULT NULL,
+ year year(4) DEFAULT NULL,
  modified timestamp NOT NULL DEFAULT '0000-00-00 00:00:00',
  PRIMARY KEY (id)
 ) ENGINE=InnoDB ROW_FORMAT = REDUNDANT;
@@ -156,7 +161,7 @@ WHERE TABLE_SCHEMA = 'test' AND TABLE_NAME IN ('t1', 't2');
 DROP TABLE t1, t2;
 CREATE TABLE t1 (
  id int(11) NOT NULL AUTO_INCREMENT,
- year year(2) DEFAULT NULL,
+ year year(4) DEFAULT NULL,
  modified timestamp NOT NULL DEFAULT '0000-00-00 00:00:00',
  PRIMARY KEY (id)
 ) ENGINE=InnoDB ROW_FORMAT = COMPACT
@@ -164,7 +169,7 @@ PARTITION BY HASH (id)
 PARTITIONS 2;
 CREATE TABLE t2 (
  id int(11) NOT NULL AUTO_INCREMENT,
- year year(2) DEFAULT NULL,
+ year year(4) DEFAULT NULL,
  modified timestamp NOT NULL DEFAULT '0000-00-00 00:00:00',
  PRIMARY KEY (id)
 ) ENGINE=InnoDB ROW_FORMAT = REDUNDANT;
@@ -436,7 +441,7 @@ SET @old_general_log_state = @@global.general_log;
 SET GLOBAL general_log = 0;
 ALTER TABLE general_log ENGINE = MyISAM;
 CREATE TABLE t LIKE general_log;
-ALTER TABLE t PARTITION BY RANGE (UNIX_TIMESTAMP(event_time))
+ALTER TABLE t PARTITION BY RANGE (thread_id)
 (PARTITION p0 VALUES LESS THAN (123456789),
  PARTITION pMAX VALUES LESS THAN MAXVALUE);
 --error ER_WRONG_USAGE
@@ -515,3 +520,474 @@ UNLOCK TABLES;
 dec $count;
 }
 DROP TABLE t, t2, tp;
+
+--echo #
+--echo # Tests for WL#5630: Allow EXCHANGE PARTITION WITHOUT VALIDATION
+--echo #
+CREATE TABLE t (a INT,
+  b VARCHAR(55),
+  PRIMARY KEY (a));
+
+CREATE TABLE tp (a INT,
+  b VARCHAR(55),
+  PRIMARY KEY (a))
+PARTITION BY RANGE (a)
+(PARTITION p0 VALUES LESS THAN (100),
+ PARTITION p1 VALUES LESS THAN MAXVALUE);
+
+CREATE TABLE tsp (a INT,
+  b VARCHAR(55),
+  PRIMARY KEY (a))
+PARTITION BY RANGE (a)
+SUBPARTITION BY HASH(a)
+(PARTITION p0 VALUES LESS THAN (100)
+ (SUBPARTITION sp0,
+  SUBPARTITION sp1),
+ PARTITION p1 VALUES LESS THAN MAXVALUE
+ (SUBPARTITION sp2,
+  SUBPARTITION sp3));
+
+INSERT INTO t VALUES (1, "First value"), (3, "Three"), (5, "Five"),
+                     (6, "Six"), (8, "Eight"), (99, "End of values");
+INSERT INTO tp VALUES (2, "First value"), (10, "Ten"), (50, "Fifty"),
+(200, "Two hundred, end of values"), (61, "Sixty one"), (62, "Sixty two"),
+(63, "Sixty three"), (64, "Sixty four"), (161, "161"), (162, "162"),
+(163, "163"), (164, "164");
+INSERT INTO tsp VALUES (2, "First value"), (10, "Ten"), (50, "Fifty"),
+(200, "Two hundred, end of values"), (61, "Sixty one"), (62, "Sixty two"),
+(63, "Sixty three"), (64, "Sixty four"), (161, "161"), (162, "162"),
+(163, "163"), (164, "164");
+SHOW CREATE TABLE t;
+SHOW CREATE TABLE tp;
+--sorted_result
+SELECT * FROM t;
+--sorted_result
+SELECT * FROM tp PARTITION (p0);
+--sorted_result
+SELECT * FROM tp PARTITION (p1);
+
+# FR1
+--error ER_ROW_DOES_NOT_MATCH_PARTITION
+ALTER TABLE tp EXCHANGE PARTITION p1 WITH TABLE t;
+--error ER_ROW_DOES_NOT_MATCH_PARTITION
+ALTER TABLE tp EXCHANGE PARTITION p1 WITH TABLE t WITH VALIDATION;
+ALTER TABLE tp EXCHANGE PARTITION p1 WITH TABLE t WITHOUT VALIDATION;
+--sorted_result
+SELECT * FROM t;
+--sorted_result
+SELECT * FROM tp PARTITION (p0);
+--sorted_result
+SELECT * FROM tp PARTITION (p1);
+SHOW CREATE TABLE t;
+SHOW CREATE TABLE tp;
+--echo # No need to use WITHOUT VALIDATION on the original partition
+ALTER TABLE tp EXCHANGE PARTITION p1 WITH TABLE t;
+--sorted_result
+SELECT * FROM t;
+--sorted_result
+SELECT * FROM tp PARTITION (p0);
+--sorted_result
+SELECT * FROM tp PARTITION (p1);
+SHOW CREATE TABLE t;
+SHOW CREATE TABLE tp;
+
+--echo # Test exchange subpartition WITHOUT VALIDATION
+--sorted_result
+SELECT * FROM t;
+--sorted_result
+SELECT * FROM tsp PARTITION (sp3);
+ALTER TABLE tsp EXCHANGE PARTITION sp3 WITH TABLE t WITHOUT VALIDATION;
+SHOW CREATE TABLE t;
+SHOW CREATE TABLE tsp;
+--sorted_result
+SELECT * FROM t;
+--sorted_result
+SELECT * FROM tsp PARTITION (sp3);
+ALTER TABLE tsp EXCHANGE PARTITION sp3 WITH TABLE t;
+--sorted_result
+SELECT * FROM t;
+--sorted_result
+SELECT * FROM tsp PARTITION (sp3);
+SHOW CREATE TABLE t;
+SHOW CREATE TABLE tsp;
+
+--echo # Test MANAGEMENT of partition with misplaced rows
+call mtr.add_suppression("row in wrong partition:");
+ALTER TABLE tp EXCHANGE PARTITION p1 WITH TABLE t WITHOUT VALIDATION;
+--sorted_result
+SELECT * FROM tp PARTITION (p0);
+SELECT * FROM tp PARTITION (p1);
+--error ER_ROW_IN_WRONG_PARTITION
+ALTER TABLE tp REBUILD PARTITION p1;
+--error ER_ROW_IN_WRONG_PARTITION
+ALTER TABLE tp REORGANIZE PARTITION p1 INTO
+(PARTITION p1 VALUES LESS THAN (162),
+ PARTITION p2 VALUES LESS THAN MAXVALUE);
+ALTER TABLE tp ANALYZE PARTITION p1;
+ALTER TABLE tp OPTIMIZE PARTITION p1;
+
+--echo # Test REBUILD of partition (with subpartitions) with misplaced rows
+--echo # half of the rows match sp3 and the other half match sp2
+--echo # with duplicates!
+ALTER TABLE tsp EXCHANGE PARTITION sp3 WITH TABLE t WITHOUT VALIDATION;
+SELECT * FROM tsp PARTITION (sp2);
+SELECT * FROM tsp PARTITION (sp3);
+call mtr.add_suppression("Cannot find index .PRIMARY. in InnoDB index translation table.");
+--error ER_DUP_ENTRY,ER_DUP_KEY
+ALTER TABLE tsp REBUILD PARTITION p1;
+--error ER_DUP_ENTRY,ER_DUP_KEY
+ALTER TABLE tsp REORGANIZE PARTITION p1 INTO
+(PARTITION p1 VALUES LESS THAN (162),
+ PARTITION p2 VALUES LESS THAN MAXVALUE);
+ALTER TABLE tsp ANALYZE PARTITION sp3;
+ALTER TABLE tsp OPTIMIZE PARTITION sp3;
+SELECT * FROM tsp PARTITION (sp2);
+SELECT * FROM tsp PARTITION (sp3);
+
+--echo # Test with REBUILD where the rows does not match the current partition
+ALTER TABLE tsp EXCHANGE PARTITION sp3 WITH TABLE t;
+ALTER TABLE tp EXCHANGE PARTITION p1 WITH TABLE t;
+ALTER TABLE tsp EXCHANGE PARTITION sp3 WITH TABLE t WITHOUT VALIDATION;
+SELECT * FROM tsp PARTITION (sp2);
+SELECT * FROM tsp PARTITION (sp3);
+--error ER_ROW_IN_WRONG_PARTITION
+ALTER TABLE tsp REBUILD PARTITION p1;
+--error ER_ROW_IN_WRONG_PARTITION
+ALTER TABLE tsp REORGANIZE PARTITION p1 INTO
+(PARTITION p1 VALUES LESS THAN (162),
+ PARTITION p2 VALUES LESS THAN MAXVALUE);
+--error ER_ROW_IN_WRONG_PARTITION
+ALTER TABLE tsp REORGANIZE PARTITION p1 INTO
+(PARTITION p01 VALUES LESS THAN (162)
+ (SUBPARTITION sp01,
+  SUBPARTITION sp02),
+ PARTITION p02 VALUES LESS THAN MAXVALUE
+ (SUBPARTITION sp03,
+  SUBPARTITION sp04));
+ALTER TABLE tsp ANALYZE PARTITION sp3;
+ALTER TABLE tsp OPTIMIZE PARTITION sp3;
+SELECT * FROM tsp PARTITION (sp2);
+SELECT * FROM tsp PARTITION (sp3);
+--echo # Test with REBUILD where the rows does not match the current partition
+
+DROP TABLE t, tp, tsp;
+
+SET sql_mode = default;
+SET GLOBAL innodb_default_row_format=default;
+--echo #
+--echo # Bug#19730200: EXCHANGE PARTITION FOR PARTITION WITH DATA DIRECTORY
+--echo #
+--mkdir $MYSQL_TMP_DIR/t1_dir
+--mkdir $MYSQL_TMP_DIR/p1_dir
+--mkdir $MYSQL_TMP_DIR/p2_dir
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+eval CREATE TABLE t1 (a int unsigned auto_increment primary key, b varchar(64))
+ENGINE = InnoDB
+DATA DIRECTORY = '$MYSQL_TMP_DIR/t1_dir';
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+eval CREATE TABLE t2 (a int unsigned auto_increment primary key, b varchar(64))
+ENGINE = InnoDB
+PARTITION BY LIST (a)
+(PARTITION p1 VALUES IN (1,3,5,7,9) DATA DIRECTORY = '$MYSQL_TMP_DIR/p1_dir',
+ PARTITION p2 VALUES IN (0,2,4,6,8) DATA DIRECTORY = '$MYSQL_TMP_DIR/p2_dir');
+INSERT INTO t1 VALUES (1, "t1"), (5, "t1");
+INSERT INTO t2 VALUES (3, "p1"), (4, "p2"), (7, "p1"), (8, "p2");
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+SHOW CREATE TABLE t1;
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+SHOW CREATE TABLE t2;
+--echo # List files from t1_dir/test
+--replace_result #p# #P# #sp# #SP#
+--list_files $MYSQL_TMP_DIR/t1_dir/test
+--echo # List files from p1_dir/test
+--replace_result #p# #P# #sp# #SP#
+--list_files $MYSQL_TMP_DIR/p1_dir/test
+--echo # List files from p2_dir/test
+--replace_result #p# #P# #sp# #SP#
+--list_files $MYSQL_TMP_DIR/p2_dir/test
+ALTER TABLE t2 EXCHANGE PARTITION p1 WITH TABLE t1;
+SELECT * FROM t1;
+SELECT * FROM t2;
+--echo # List files from t1_dir/test
+--replace_result #p# #P# #sp# #SP#
+--list_files $MYSQL_TMP_DIR/t1_dir/test
+--echo # List files from p1_dir/test
+--replace_result #p# #P# #sp# #SP#
+--list_files $MYSQL_TMP_DIR/p1_dir/test
+--echo # List files from p2_dir/test
+--replace_result #p# #P# #sp# #SP#
+--list_files $MYSQL_TMP_DIR/p2_dir/test
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+SHOW CREATE TABLE t1;
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+SHOW CREATE TABLE t2;
+FLUSH TABLES t1, t2;
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+SHOW CREATE TABLE t1;
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+SHOW CREATE TABLE t2;
+ALTER TABLE t2 EXCHANGE PARTITION p1 WITH TABLE t1;
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+SHOW CREATE TABLE t1;
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+SHOW CREATE TABLE t2;
+--echo # List files from t1_dir/test
+--replace_result #p# #P# #sp# #SP#
+--list_files $MYSQL_TMP_DIR/t1_dir/test
+--echo # List files from p1_dir/test
+--replace_result #p# #P# #sp# #SP#
+--list_files $MYSQL_TMP_DIR/p1_dir/test
+--echo # List files from p2_dir/test
+--replace_result #p# #P# #sp# #SP#
+--list_files $MYSQL_TMP_DIR/p2_dir/test
+DROP TABLE t1, t2;
+--echo # exchage partition with data dir and range
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+eval CREATE TABLE t1 (a int unsigned auto_increment primary key, b varchar(64))
+ENGINE = InnoDB
+DATA DIRECTORY = '$MYSQL_TMP_DIR/t1_dir';
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+eval CREATE TABLE t2 (a int unsigned auto_increment primary key, b varchar(64))
+ENGINE = InnoDB
+PARTITION BY range (a)
+(PARTITION p1 VALUES less than (10) DATA DIRECTORY = '$MYSQL_TMP_DIR/p1_dir',
+ PARTITION p2 VALUES less than (20) DATA DIRECTORY = '$MYSQL_TMP_DIR/p2_dir');
+INSERT INTO t1 VALUES (1, "t1"), (5, "t1");
+INSERT INTO t2 VALUES (3, "p1"), (4, "p2"), (17, "p1"), (12, "p2");
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+SHOW CREATE TABLE t1;
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+SHOW CREATE TABLE t2;
+--echo # List files from t1_dir/test
+--replace_result #p# #P# #sp# #SP#
+--list_files $MYSQL_TMP_DIR/t1_dir/test
+--echo # List files from p1_dir/test
+--replace_result #p# #P# #sp# #SP#
+--list_files $MYSQL_TMP_DIR/p1_dir/test
+--echo # List files from p2_dir/test
+--replace_result #p# #P# #sp# #SP#
+--list_files $MYSQL_TMP_DIR/p2_dir/test
+ALTER TABLE t2 EXCHANGE PARTITION p1 WITH TABLE t1;
+SELECT * FROM t1;
+SELECT * FROM t2;
+--echo # List files from t1_dir/test
+--replace_result #p# #P# #sp# #SP#
+--list_files $MYSQL_TMP_DIR/t1_dir/test
+--echo # List files from p1_dir/test
+--replace_result #p# #P# #sp# #SP#
+--list_files $MYSQL_TMP_DIR/p1_dir/test
+--echo # List files from p2_dir/test
+--replace_result #p# #P# #sp# #SP#
+--list_files $MYSQL_TMP_DIR/p2_dir/test
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+SHOW CREATE TABLE t1;
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+SHOW CREATE TABLE t2;
+FLUSH TABLES t1, t2;
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+SHOW CREATE TABLE t1;
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+SHOW CREATE TABLE t2;
+ALTER TABLE t2 EXCHANGE PARTITION p1 WITH TABLE t1;
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+SHOW CREATE TABLE t1;
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+SHOW CREATE TABLE t2;
+--echo # List files from t1_dir/test
+--replace_result #p# #P# #sp# #SP#
+--list_files $MYSQL_TMP_DIR/t1_dir/test
+--echo # List files from p1_dir/test
+--replace_result #p# #P# #sp# #SP#
+--list_files $MYSQL_TMP_DIR/p1_dir/test
+--echo # List files from p2_dir/test
+--replace_result #p# #P# #sp# #SP#
+--list_files $MYSQL_TMP_DIR/p2_dir/test
+DROP table t1,t2;
+--rmdir $mysql_tmp_dir/t1_dir/test
+--rmdir $mysql_tmp_dir/p1_dir/test
+--rmdir $mysql_tmp_dir/p2_dir/test
+--rmdir $mysql_tmp_dir/t1_dir
+--rmdir $mysql_tmp_dir/p1_dir
+--rmdir $mysql_tmp_dir/p2_dir
+--echo exchange subpartition
+
+--mkdir $MYSQL_TMP_DIR/t1_dir
+--mkdir $MYSQL_TMP_DIR/sp0_dir
+--mkdir $MYSQL_TMP_DIR/sp3_dir
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+eval CREATE TABLE t1 (id INT, purchased DATE)
+ENGINE = InnoDB
+DATA DIRECTORY = '$MYSQL_TMP_DIR/t1_dir';
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+eval CREATE TABLE t2 (id INT, purchased DATE)
+PARTITION BY RANGE( YEAR(purchased) )
+SUBPARTITION BY HASH( TO_DAYS(purchased) ) (
+PARTITION p0 VALUES LESS THAN (1990) (
+SUBPARTITION s0 data directory='$MYSQL_TMP_DIR/sp0_dir',
+SUBPARTITION s1),
+PARTITION p1 VALUES LESS THAN (2000) (
+SUBPARTITION s2,
+SUBPARTITION s3 data directory='$MYSQL_TMP_DIR/sp3_dir'
+));
+insert into t2 values(1,'1987-05-12 '),(2,'1987-05-14');
+insert into t2 values(3,'1997-05-10 '),(4,'1997-05-18');
+insert into t1 values(1,'1987-05-10 '),(2,'1987-05-08');
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+SHOW CREATE TABLE t1;
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+SHOW CREATE TABLE t2;
+--echo # List files from t1_dir/test
+--replace_result #p# #P# #sp# #SP#
+--list_files $MYSQL_TMP_DIR/t1_dir/test
+--echo # List files from sp0_dir/test
+--replace_result #p# #P# #sp# #SP#
+--list_files $MYSQL_TMP_DIR/sp0_dir/test
+--echo # List files from sp3_dir/test
+--replace_result #p# #P# #sp# #SP#
+--list_files $MYSQL_TMP_DIR/sp3_dir/test
+ALTER TABLE t2 EXCHANGE PARTITION s0 WITH TABLE t1;
+SELECT * FROM t1;
+SELECT * FROM t2;
+--echo # List files from t1_dir/test
+--replace_result #p# #P# #sp# #SP#
+--list_files $MYSQL_TMP_DIR/t1_dir/test
+--echo # List files from sp0_dir/test
+--replace_result #p# #P# #sp# #SP#
+--list_files $MYSQL_TMP_DIR/sp0_dir/test
+--echo # List files from sp3_dir/test
+--replace_result #p# #P# #sp# #SP#
+--list_files $MYSQL_TMP_DIR/sp3_dir/test
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+SHOW CREATE TABLE t1;
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+SHOW CREATE TABLE t2;
+ALTER TABLE t2 EXCHANGE PARTITION s0 WITH TABLE t1;
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+SHOW CREATE TABLE t1;
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+SHOW CREATE TABLE t2;
+--echo # List files from t1_dir/test
+--replace_result #p# #P# #sp# #SP#
+--list_files $MYSQL_TMP_DIR/t1_dir/test
+--echo # List files from sp0_dir/test
+--replace_result #p# #P# #sp# #SP#
+--list_files $MYSQL_TMP_DIR/sp0_dir/test
+--echo # List files from sp3_dir/test
+--replace_result #p# #P# #sp# #SP#
+--list_files $MYSQL_TMP_DIR/sp3_dir/test
+delete from t1;
+insert into t1 values(3,'1997-05-8 '),(4,'1997-05-16');
+ALTER TABLE t2 EXCHANGE PARTITION s3 WITH TABLE t1;
+SELECT * FROM t1;
+SELECT * FROM t2;
+--echo # List files from t1_dir/test
+--replace_result #p# #P# #sp# #SP#
+--list_files $MYSQL_TMP_DIR/t1_dir/test
+--echo # List files from sp0_dir/test
+--replace_result #p# #P# #sp# #SP#
+--list_files $MYSQL_TMP_DIR/sp0_dir/test
+--echo # List files from sp3_dir/test
+--replace_result #p# #P# #sp# #SP#
+--list_files $MYSQL_TMP_DIR/sp3_dir/test
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+SHOW CREATE TABLE t1;
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+SHOW CREATE TABLE t2;
+ALTER TABLE t2 EXCHANGE PARTITION s3 WITH TABLE t1;
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+SHOW CREATE TABLE t1;
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+SHOW CREATE TABLE t2;
+--echo # List files from t1_dir/test
+--replace_result #p# #P# #sp# #SP#
+--list_files $MYSQL_TMP_DIR/t1_dir/test
+--echo # List files from sp0_dir/test
+--replace_result #p# #P# #sp# #SP#
+--list_files $MYSQL_TMP_DIR/sp0_dir/test
+--echo # List files from sp3_dir/test
+--replace_result #p# #P# #sp# #SP#
+--list_files $MYSQL_TMP_DIR/sp3_dir/test
+DROP table t1,t2;
+--rmdir $mysql_tmp_dir/t1_dir/test
+--rmdir $mysql_tmp_dir/sp0_dir/test
+--rmdir $mysql_tmp_dir/sp3_dir/test
+--rmdir $mysql_tmp_dir/t1_dir
+--rmdir $mysql_tmp_dir/sp0_dir
+--rmdir $mysql_tmp_dir/sp3_dir
+
+--echo #
+--echo Bug#28687608 exchange partition with different row_format
+--echo #
+
+SET @orig_default_row_format = @@global.innodb_default_row_format;
+SET GLOBAL innodb_default_row_format=COMPACT;
+CREATE TABLE t1 (
+  col1 INT UNSIGNED,
+  col2 DATETIME
+)
+ENGINE=INNODB
+PARTITION BY RANGE COLUMNS(col2)
+(
+PARTITION p0 VALUES LESS THAN ('1960-01-01'),
+PARTITION p1 VALUES LESS THAN ('1980-01-01')
+);
+
+INSERT INTO t1 VALUES ('1','1958-02-17 06:25:34');
+INSERT INTO t1 VALUES ('2','1962-11-23 11:06:06');
+
+SET GLOBAL innodb_default_row_format=DYNAMIC;
+
+ALTER TABLE t1 ADD PARTITION (PARTITION p2 VALUES LESS THAN ('2000-01-01'));
+
+INSERT INTO t1 VALUES ('3','1999-10-13 05:28:46'), ('4', '1996-09-26 20:00:00');
+
+--replace_result #p# #P# #sp# #SP#
+SELECT NAME,ROW_FORMAT  FROM INFORMATION_SCHEMA.INNODB_SYS_TABLES
+WHERE NAME LIKE '%t1%' ORDER BY TABLE_ID;
+
+CREATE TABLE t2 LIKE t1;
+ALTER TABLE t2 REMOVE PARTITIONING;
+
+--echo exchange compact partition with dynamic;
+
+--error ER_PARTITION_EXCHANGE_DIFFERENT_OPTION
+ALTER TABLE t1 EXCHANGE PARTITION p0 WITH TABLE t2;
+
+ALTER TABLE t1 EXCHANGE PARTITION p2 WITH TABLE t2;
+DROP TABLE t1,t2;
+
+SET GLOBAL innodb_default_row_format=COMPACT;
+CREATE TABLE t1 (a INT,
+  b VARCHAR(55),
+  PRIMARY KEY (a))
+PARTITION BY RANGE (a)
+SUBPARTITION BY HASH(a)
+(PARTITION p0 VALUES LESS THAN (100)
+ (SUBPARTITION sp0,
+  SUBPARTITION sp1),
+ PARTITION p1 VALUES LESS THAN  (200)
+ (SUBPARTITION sp2,
+  SUBPARTITION sp3));
+
+SET GLOBAL innodb_default_row_format=DYNAMIC;
+
+ALTER TABLE t1 ADD PARTITION (PARTITION p2 VALUES LESS THAN (300)
+(SUBPARTITION sp4,
+SUBPARTITION sp5));
+
+INSERT INTO t1(b,a) VALUES('first',40),('second',91),('third',140),
+('forth',191);
+
+--replace_result #p# #P# #sp# #SP#
+SELECT NAME,ROW_FORMAT  FROM INFORMATION_SCHEMA.INNODB_SYS_TABLES
+WHERE NAME LIKE '%t1%' ORDER BY TABLE_ID;
+
+CREATE TABLE t2 like t1;
+ALTER TABLE t2 REMOVE PARTITIONING;
+
+--error ER_PARTITION_EXCHANGE_DIFFERENT_OPTION
+ALTER TABLE t1 EXCHANGE PARTITION sp2 WITH TABLE t2;
+
+ALTER TABLE t1 EXCHANGE PARTITION sp4 WITH TABLE t2;
+DROP TABLE t1,t2;
+SET @@global.innodb_default_row_format=@orig_default_row_format;

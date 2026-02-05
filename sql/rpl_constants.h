@@ -1,14 +1,21 @@
-/* Copyright (c) 2007 MySQL AB, 2008 Sun Microsystems, Inc.
+/* Copyright (c) 2007, 2023, Oracle and/or its affiliates.
    Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -19,19 +26,6 @@
 
 #include "my_global.h"
 
-/**
-   Enumeration of the incidents that can occur for the server.
- */
-enum Incident {
-  /** No incident */
-  INCIDENT_NONE = 0,
-
-  /** There are possibly lost events in the replication stream */
-  INCIDENT_LOST_EVENTS = 1,
-
-  /** Shall be last event of the enumeration */
-  INCIDENT_COUNT
-};
 
 /*
   Constants used to parse the stream of bytes sent by a slave
@@ -75,15 +69,5 @@ enum ExtraRowInfoFormat {
   */
   ERIF_MULTI        =  255
 };
-
-/*
-   1 byte length, 1 byte format
-   Length is total length in bytes, including 2 byte header
-   Length values 0 and 1 are currently invalid and reserved.
-*/
-#define EXTRA_ROW_INFO_LEN_OFFSET 0
-#define EXTRA_ROW_INFO_FORMAT_OFFSET 1
-#define EXTRA_ROW_INFO_HDR_BYTES 2
-#define EXTRA_ROW_INFO_MAX_PAYLOAD (255 - EXTRA_ROW_INFO_HDR_BYTES)
 
 #endif /* RPL_CONSTANTS_H */

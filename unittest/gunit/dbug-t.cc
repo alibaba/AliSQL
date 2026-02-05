@@ -1,13 +1,20 @@
-/* Copyright (c) 2010, 2013, Oracle and/or its affiliates. All rights reserved. 
+/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -27,7 +34,7 @@ using thread::Thread;
 
 namespace dbug_unittest {
 
-#if defined(DBUG_OFF)
+#if defined(NDEBUG)
 TEST(DebugTest, NoSuicide)
 {
   DBUG_SUICIDE();
@@ -41,7 +48,7 @@ TEST(DebugDeathTest, Suicide)
 #endif
 
 
-#if !defined(DBUG_OFF) && !defined(__WIN__)
+#if !defined(NDEBUG) && !defined(_WIN32)
 class DbugGcovThread : public Thread
 {
 public:
@@ -74,29 +81,25 @@ TEST(DebugFlushGcov, FlushGcovParallel)
 #endif
 
 
-#if !defined(DBUG_OFF)
+#if !defined(NDEBUG)
 TEST(DebugPrintTest, PrintEval)
 {
   int y= 0;
 
   // This DBUG_PRINT args should never be evaluated.
-  DBUG_PRINT("never",("%d",1/y));
+  DBUG_PRINT("never",("%d", y+= 1));
+  EXPECT_EQ(y, 0) << "DBUG_PRINT arg is evaluated.";
 }
 
 
-TEST(DebugPrintDeathTest, PrintEval)
+TEST(DebugPrintEvalTest, PrintEval)
 {
   int y= 0;
 
-  ::testing::FLAGS_gtest_death_test_style = "threadsafe";
-
   DBUG_SET("+d,never");
-  /*
-    The DBUG_PRINT would be evaluated resulting in floating point exception
-    killing the server.
-  */
-  EXPECT_DEATH_IF_SUPPORTED(DBUG_PRINT("never",("%d",1/y)), "");
+  DBUG_PRINT("never",("%d", y+= 1));
   DBUG_SET("");
+  EXPECT_GE(y, 1) << "DBUG_PRINT arg is not evaluated.";
 }
 
 
@@ -154,6 +157,24 @@ TEST(DebugSetTest, DebugKeywordsTest)
   DBUG_EXPLAIN(buf,sizeof(buf));
   EXPECT_STREQ("",buf);
   DBUG_SET("");
+
+  // Add two keywords, the second keyword being a prefix of the first keyword.
+  DBUG_SET("+d,simulate_file_error_once,simulate_file_error");
+  DBUG_EXPLAIN(buf,sizeof(buf));
+  EXPECT_STREQ("d,simulate_file_error_once,simulate_file_error",buf);
+  DBUG_SET("");
+
+  // Add same keyword thrice, keyword should show up once in debug list.
+  DBUG_SET("+d,keyword,keyword,keyword");
+  DBUG_EXPLAIN(buf,sizeof(buf));
+  EXPECT_STREQ("d,keyword",buf);
+  DBUG_SET("");
+
+  // Add some combination of keywords with whitespace and duplicates.
+  DBUG_SET("+d, keyword1,  keyword2,   keyword1,keyword3   ");
+  DBUG_EXPLAIN(buf,sizeof(buf));
+  EXPECT_STREQ("d,keyword1,keyword2,keyword3",buf);
+  DBUG_SET("");
 }
-#endif /* DBUG_OFF */
+#endif /* NDEBUG */
 }

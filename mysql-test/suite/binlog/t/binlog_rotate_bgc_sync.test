@@ -18,12 +18,8 @@
 # This test case is binary log format agnostic
 --source include/have_binlog_format_row.inc
 --source include/have_debug_sync.inc
-
-# Set the options to hit the issue
-SET @saved_binlog_error_action= @@GLOBAL.binlog_error_action;
-SET GLOBAL binlog_error_action= ABORT_SERVER;
-SET @saved_sync_binlog= @@GLOBAL.sync_binlog;
-SET GLOBAL sync_binlog= 2;
+--source include/have_myisam.inc
+--source include/have_innodb.inc
 
 # Create two additional connections
 # conn1 will do the binary log group commit
@@ -103,6 +99,3 @@ while ($engine)
 # Disconnect the additional connections
 --disconnect conn1
 --disconnect conn2
-
-SET GLOBAL binlog_error_action= @saved_binlog_error_action;
-SET GLOBAL sync_binlog= @saved_sync_binlog;

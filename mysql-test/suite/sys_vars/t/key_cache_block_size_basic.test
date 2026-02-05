@@ -61,6 +61,8 @@ SELECT @@global.key_cache_block_size = 1024;
 #        Change the value of key_cache_block_size to a valid value            #
 ############################################################################### 
 
+SET @@global.key_cache_block_size = 512;
+SELECT @@global.key_cache_block_size;
 SET @@global.key_cache_block_size = 1024;
 SELECT @@global.key_cache_block_size;
 SET @@global.key_cache_block_size = 16384;
@@ -90,6 +92,9 @@ SET @@global.key_cache_block_size = 511;
 SELECT @@global.key_cache_block_size;
 SET @@global.key_cache_block_size = 16385;
 SELECT @@global.key_cache_block_size;
+--Error ER_WRONG_TYPE_FOR_VAR
+SET @@global.key_cache_block_size = " ";
+SELECT @@global.key_cache_block_size;
 
 --Error ER_WRONG_TYPE_FOR_VAR
 SET @@global.key_cache_block_size = ON;
@@ -115,6 +120,7 @@ SELECT @@session.key_cache_block_size;
 # Check if the value in GLOBAL & SESSION Tables matches values in variable   #
 ##############################################################################
 
+--disable_warnings
 SELECT @@global.key_cache_block_size = VARIABLE_VALUE 
 FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
 WHERE VARIABLE_NAME='key_cache_block_size';
@@ -122,6 +128,7 @@ WHERE VARIABLE_NAME='key_cache_block_size';
 SELECT @@key_cache_block_size = VARIABLE_VALUE 
 FROM INFORMATION_SCHEMA.SESSION_VARIABLES 
 WHERE VARIABLE_NAME='key_cache_block_size';
+--enable_warnings
 
 
 --echo '#---------------------FN_DYNVARS_057_07----------------------#'

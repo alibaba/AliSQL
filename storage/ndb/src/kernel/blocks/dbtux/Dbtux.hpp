@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -24,7 +31,7 @@
 #include <AttributeHeader.hpp>
 #include <ArrayPool.hpp>
 #include <DataBuffer.hpp>
-#include <DLFifoList.hpp>
+#include <IntrusiveList.hpp>
 #include <md5_hash.hpp>
 
 // big brother
@@ -53,53 +60,9 @@
 #include <OutputStream.hpp>
 #endif
 
-// jams
-#undef jam
-#undef jamEntry
-#ifdef DBTUX_GEN_CPP
-#define jam()           jamLine(10000 + __LINE__)
-#define jamEntry()      jamEntryLine(10000 + __LINE__)
-#endif
-#ifdef DBTUX_META_CPP
-#define jam()           jamLine(20000 + __LINE__)
-#define jamEntry()      jamEntryLine(20000 + __LINE__)
-#endif
-#ifdef DBTUX_MAINT_CPP
-#define jam()           jamLine(30000 + __LINE__)
-#define jamEntry()      jamEntryLine(30000 + __LINE__)
-#endif
-#ifdef DBTUX_NODE_CPP
-#define jam()           jamLine(40000 + __LINE__)
-#define jamEntry()      jamEntryLine(40000 + __LINE__)
-#endif
-#ifdef DBTUX_TREE_CPP
-#define jam()           jamLine(50000 + __LINE__)
-#define jamEntry()      jamEntryLine(50000 + __LINE__)
-#endif
-#ifdef DBTUX_SCAN_CPP
-#define jam()           jamLine(60000 + __LINE__)
-#define jamEntry()      jamEntryLine(60000 + __LINE__)
-#endif
-#ifdef DBTUX_SEARCH_CPP
-#define jam()           jamLine(70000 + __LINE__)
-#define jamEntry()      jamEntryLine(70000 + __LINE__)
-#endif
-#ifdef DBTUX_CMP_CPP
-#define jam()           jamLine(80000 + __LINE__)
-#define jamEntry()      jamEntryLine(80000 + __LINE__)
-#endif
-#ifdef DBTUX_STAT_CPP
-#define jam()           jamLine(90000 + __LINE__)
-#define jamEntry()      jamEntryLine(90000 + __LINE__)
-#endif
-#ifdef DBTUX_DEBUG_CPP
-#define jam()           jamLine(100000 + __LINE__)
-#define jamEntry()      jamEntryLine(100000 + __LINE__)
-#endif
-#ifndef jam
-#define jam()           jamLine(__LINE__)
-#define jamEntry()      jamEntryLine(__LINE__)
-#endif
+
+#define JAM_FILE_ID 374
+
 
 #undef max
 #undef min
@@ -117,10 +80,12 @@ public:
 
   // pointer to TUP instance in this thread
   Dbtup* c_tup;
+  void execTUX_BOUND_INFO(Signal* signal);
+  void execREAD_PSEUDO_REQ(Signal* signal);
 
 private:
   // sizes are in words (Uint32)
-  STATIC_CONST( MaxIndexFragments = MAX_FRAG_PER_NODE );
+  STATIC_CONST( MaxIndexFragments = MAX_FRAG_PER_LQH );
   STATIC_CONST( MaxIndexAttributes = MAX_ATTRIBUTES_IN_INDEX );
   STATIC_CONST( MaxAttrDataSize = 2 * MAX_ATTRIBUTES_IN_INDEX + MAX_KEY_SIZE_IN_WORDS );
   STATIC_CONST( MaxXfrmDataSize = MaxAttrDataSize * MAX_XFRM_MULTIPLY);
@@ -609,7 +574,8 @@ private:
   void readKeyAttrs(TuxCtx&, const Frag& frag, TreeEnt ent, KeyData& keyData, Uint32 count);
   void readTablePk(const Frag& frag, TreeEnt ent, Uint32* pkData, unsigned& pkSize);
   void unpackBound(TuxCtx&, const ScanBound& bound, KeyBoundC& searchBound);
-  void findFrag(const Index& index, Uint32 fragId, FragPtr& fragPtr);
+  void findFrag(EmulatedJamBuffer* jamBuf, const Index& index, 
+                Uint32 fragId, FragPtr& fragPtr);
 
   /*
    * DbtuxMeta.cpp
@@ -681,7 +647,6 @@ private:
    * DbtuxScan.cpp
    */
   void execACC_SCANREQ(Signal* signal);
-  void execTUX_BOUND_INFO(Signal* signal);
   void execNEXT_SCANREQ(Signal* signal);
   void execACC_CHECK_SCAN(Signal* signal);
   void execACCKEYCONF(Signal* signal);
@@ -719,7 +684,6 @@ private:
   /*
    * DbtuxStat.cpp
    */
-  void execREAD_PSEUDO_REQ(Signal* signal);
   // one-round-trip tree-dive records in range
   void statRecordsInRange(ScanOpPtr scanPtr, Uint32* out);
   Uint32 getEntriesBeforeOrAfter(Frag& frag, TreePos pos, unsigned idir);
@@ -842,6 +806,8 @@ public:
   static Uint32 mt_buildIndexFragment_wrapper(void*);
 private:
   Uint32 mt_buildIndexFragment(struct mt_BuildIndxCtx*);
+
+  Signal* c_signal_bug32040;
 };
 
 // Dbtux::TupLoc
@@ -1441,5 +1407,8 @@ Dbtux::cmpSearchBound(TuxCtx& ctx, const KeyBoundC& searchBound, const KeyDataC&
 #endif
   return ret;
 }
+
+
+#undef JAM_FILE_ID
 
 #endif

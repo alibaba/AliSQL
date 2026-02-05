@@ -1,13 +1,20 @@
-/* Copyright (c) 2000, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -174,7 +181,7 @@ static int save_state_mrg(File file,PACK_MRG_INFO *isam_file,my_off_t new_length
 static int mrg_close(PACK_MRG_INFO *mrg);
 static int mrg_rrnd(PACK_MRG_INFO *info,uchar *buf);
 static void mrg_reset(PACK_MRG_INFO *mrg);
-#if !defined(DBUG_OFF)
+#if !defined(NDEBUG)
 static void fakebigcodes(HUFF_COUNTS *huff_counts, HUFF_COUNTS *end_count);
 static int fakecmp(my_off_t **count1, my_off_t **count2);
 #endif
@@ -200,6 +207,11 @@ static HUFF_COUNTS *global_count;
 static char zero_string[]={0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 static const char *load_default_groups[]= { "myisampack",0 };
 
+extern st_keycache_thread_var *keycache_thread_var()
+{
+  return &main_thread_keycache_var;
+}
+
 	/* The main program */
 
 int main(int argc, char **argv)
@@ -208,6 +220,10 @@ int main(int argc, char **argv)
   PACK_MRG_INFO merge;
   char **default_argv;
   MY_INIT(argv[0]);
+
+  memset(&main_thread_keycache_var, 0, sizeof(st_keycache_thread_var));
+  mysql_cond_init(PSI_NOT_INSTRUMENTED,
+                  &main_thread_keycache_var.suspend);
 
   if (load_defaults("my",load_default_groups,&argc,&argv))
     exit(1);
@@ -249,10 +265,9 @@ int main(int argc, char **argv)
   (void) fflush(stderr);
   free_defaults(default_argv);
   my_end(verbose ? MY_CHECK_ERROR | MY_GIVE_INFO : MY_CHECK_ERROR);
+  mysql_cond_destroy(&main_thread_keycache_var.suspend);
   exit(error ? 2 : 0);
-#ifndef _lint
   return 0;					/* No compiler warning */
-#endif
 }
 
 enum options_mp {OPT_CHARSETS_DIR_MP=256};
@@ -264,8 +279,13 @@ static struct my_option my_long_options[] =
   {"character-sets-dir", OPT_CHARSETS_DIR_MP,
    "Directory where character sets are.", &charsets_dir,
    &charsets_dir, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+#ifdef NDEBUG
+  {"debug", '#', "This is a non-debug version. Catch this and exit.",
+   0, 0, 0, GET_DISABLED, OPT_ARG, 0, 0, 0, 0, 0, 0},
+#else
   {"debug", '#', "Output debug log. Often this is 'd:t:o,filename'.",
    0, 0, 0, GET_STR, OPT_ARG, 0, 0, 0, 0, 0, 0},
+#endif
   {"force", 'f',
    "Force packing of table even if it gets bigger or if tempfile exists.",
    0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
@@ -337,7 +357,7 @@ get_one_option(int optid, const struct my_option *opt MY_ATTRIBUTE((unused)),
       verbose= 1;
     break;
   case 'T':
-    length= (uint) (strmov(tmp_dir, argument) - tmp_dir);
+    length= (uint) (my_stpcpy(tmp_dir, argument) - tmp_dir);
     if (length != dirname_length(tmp_dir))
     {
       tmp_dir[length]=FN_LIBCHAR;
@@ -400,7 +420,7 @@ static MI_INFO *open_isam_file(char *name,int mode)
 			  (opt_wait ? HA_OPEN_WAIT_IF_LOCKED :
 			   HA_OPEN_ABORT_IF_LOCKED))))
   {
-    (void) fprintf(stderr, "%s gave error %d on open\n", name, my_errno);
+    (void) fprintf(stderr, "%s gave error %d on open\n", name, my_errno());
     DBUG_RETURN(0);
   }
   share=isam_file->s;
@@ -434,7 +454,8 @@ static my_bool open_isam_files(PACK_MRG_INFO *mrg, char **names, uint count)
   uint i,j;
   mrg->count=0;
   mrg->current=0;
-  mrg->file=(MI_INFO**) my_malloc(sizeof(MI_INFO*)*count,MYF(MY_FAE));
+  mrg->file=(MI_INFO**) my_malloc(PSI_NOT_INSTRUMENTED,
+                                  sizeof(MI_INFO*)*count,MYF(MY_FAE));
   mrg->free_file=1;
   mrg->src_file_has_indexes_disabled= 0;
   for (i=0; i < count ; i++)
@@ -507,13 +528,14 @@ static int compress(PACK_MRG_INFO *mrg,char *result_table)
     /* Make a new indexfile based on first file in list */
     uint length;
     uchar *buff;
-    strmov(org_name,result_table);		/* Fix error messages */
+    my_stpcpy(org_name,result_table);		/* Fix error messages */
     (void) fn_format(new_name,result_table,"",MI_NAME_IEXT,2);
     if ((join_isam_file=my_create(new_name,0,tmpfile_createflag,MYF(MY_WME)))
 	< 0)
       goto err;
     length=(uint) share->base.keystart;
-    if (!(buff= (uchar*) my_malloc(length,MYF(MY_WME))))
+    if (!(buff= (uchar*) my_malloc(PSI_NOT_INSTRUMENTED,
+                                   length,MYF(MY_WME))))
       goto err;
     if (my_pread(share->kfile,buff,length,0L,MYF(MY_WME | MY_NABP)) ||
 	my_write(join_isam_file,buff,length,
@@ -791,9 +813,10 @@ static int create_dest_frm(char *source_table, char *dest_table)
 
 static HUFF_COUNTS *init_huff_count(MI_INFO *info,my_off_t records)
 {
-  reg2 uint i;
-  reg1 HUFF_COUNTS *count;
-  if ((count = (HUFF_COUNTS*) my_malloc(info->s->base.fields*
+  uint i;
+  HUFF_COUNTS *count;
+  if ((count = (HUFF_COUNTS*) my_malloc(PSI_NOT_INSTRUMENTED,
+                                        info->s->base.fields*
 					sizeof(HUFF_COUNTS),
 					MYF(MY_ZEROFILL | MY_WME))))
   {
@@ -820,7 +843,8 @@ static HUFF_COUNTS *init_huff_count(MI_INFO *info,my_off_t records)
 		NULL);
       if (records && type != FIELD_BLOB && type != FIELD_VARCHAR)
 	count[i].tree_pos=count[i].tree_buff =
-	  my_malloc(count[i].field_length > 1 ? tree_buff_length : 2,
+	  my_malloc(PSI_NOT_INSTRUMENTED,
+                    count[i].field_length > 1 ? tree_buff_length : 2,
 		    MYF(MY_WME));
     }
   }
@@ -834,7 +858,7 @@ static void free_counts_and_tree_and_queue(HUFF_TREE *huff_trees, uint trees,
 					   HUFF_COUNTS *huff_counts,
 					   uint fields)
 {
-  register uint i;
+  uint i;
 
   if (huff_trees)
   {
@@ -1171,7 +1195,6 @@ static int get_statistic(PACK_MRG_INFO *mrg,HUFF_COUNTS *huff_counts)
 
   mrg->records=record_count;
   mrg->max_blob_length=max_blob_length;
-  my_afree((uchar*) record);
   DBUG_RETURN(error != HA_ERR_END_OF_FILE);
 }
 
@@ -1471,7 +1494,8 @@ static HUFF_TREE* make_huff_trees(HUFF_COUNTS *huff_counts, uint trees)
   HUFF_TREE *huff_tree;
   DBUG_ENTER("make_huff_trees");
 
-  if (!(huff_tree=(HUFF_TREE*) my_malloc(trees*sizeof(HUFF_TREE),
+  if (!(huff_tree=(HUFF_TREE*) my_malloc(PSI_NOT_INSTRUMENTED,
+                                         trees*sizeof(HUFF_TREE),
 					 MYF(MY_WME | MY_ZEROFILL))))
     DBUG_RETURN(0);
 
@@ -1549,14 +1573,16 @@ static int make_huff_tree(HUFF_TREE *huff_tree, HUFF_COUNTS *huff_counts)
   if (!huff_tree->element_buffer)
   {
     if (!(huff_tree->element_buffer=
-	 (HUFF_ELEMENT*) my_malloc(found*2*sizeof(HUFF_ELEMENT),MYF(MY_WME))))
+	 (HUFF_ELEMENT*) my_malloc(PSI_NOT_INSTRUMENTED,
+                                   found*2*sizeof(HUFF_ELEMENT),MYF(MY_WME))))
       return 1;
   }
   else
   {
     HUFF_ELEMENT *temp;
     if (!(temp=
-	  (HUFF_ELEMENT*) my_realloc((uchar*) huff_tree->element_buffer,
+	  (HUFF_ELEMENT*) my_realloc(PSI_NOT_INSTRUMENTED,
+                                     (uchar*) huff_tree->element_buffer,
 				     found*2*sizeof(HUFF_ELEMENT),
 				     MYF(MY_WME))))
       return 1;
@@ -1693,7 +1719,7 @@ static int make_huff_tree(HUFF_TREE *huff_tree, HUFF_COUNTS *huff_counts)
 }
 
 static int compare_tree(void* cmp_arg MY_ATTRIBUTE((unused)),
-			register const uchar *s, register const uchar *t)
+			const uchar *s, const uchar *t)
 {
   uint length;
   for (length=global_count->field_length; length-- ;)
@@ -1894,8 +1920,8 @@ static uint join_same_trees(HUFF_COUNTS *huff_counts, uint trees)
 	    my_free(j->tree->element_buffer);
 	    j->tree->element_buffer=0;
 	    j->tree=i->tree;
-	    bmove((uchar*) i->counts,(uchar*) count.counts,
-		  sizeof(count.counts[0])*256);
+	    memmove((uchar*) i->counts, (uchar*) count.counts,
+                    sizeof(count.counts[0]) * 256);
 	    if (make_huff_tree(i->tree,i))
 	      return (uint) -1;
 	  }
@@ -1933,13 +1959,14 @@ static int make_huff_decode_table(HUFF_TREE *huff_tree, uint trees)
     {
       elements=huff_tree->counts->tree_buff ? huff_tree->elements : 256;
       if (!(huff_tree->code =
-            (ulonglong*) my_malloc(elements*
+            (ulonglong*) my_malloc(PSI_NOT_INSTRUMENTED,
+                                   elements*
                                    (sizeof(ulonglong) + sizeof(uchar)),
                                    MYF(MY_WME | MY_ZEROFILL))))
 	return 1;
       huff_tree->code_len=(uchar*) (huff_tree->code+elements);
       make_traverse_code_tree(huff_tree, huff_tree->root,
-                              8 * sizeof(ulonglong), LL(0));
+                              8 * sizeof(ulonglong), 0LL);
     }
   }
   return 0;
@@ -1992,7 +2019,7 @@ static char *bindigits(ulonglong value, uint bits)
   char *ptr= digits;
   uint idx= bits;
 
-  DBUG_ASSERT(idx < sizeof(digits));
+  assert(idx < sizeof(digits));
   while (idx)
     *(ptr++)= '0' + ((char) (value >> (--idx)) & (char) 1);
   *ptr= '\0';
@@ -2021,7 +2048,7 @@ static char *hexdigits(ulonglong value)
   char *ptr= digits;
   uint idx= 2 * sizeof(value); /* Two hex digits per byte. */
 
-  DBUG_ASSERT(idx < sizeof(digits));
+  assert(idx < sizeof(digits));
   while (idx)
   {
     if ((*(ptr++)= '0' + ((char) (value >> (4 * (--idx))) & (char) 0xf)) > '9')
@@ -2044,8 +2071,8 @@ static int write_header(PACK_MRG_INFO *mrg,uint head_length,uint trees,
   int4store(buff+4,head_length);
   int4store(buff+8, mrg->min_pack_length);
   int4store(buff+12,mrg->max_pack_length);
-  int4store(buff+16,tot_elements);
-  int4store(buff+20,intervall_length);
+  int4store(buff+16, (uint32)tot_elements);
+  int4store(buff+20, (uint32)intervall_length);
   int2store(buff+24,trees);
   buff[26]=(char) mrg->ref_length;
 	/* Save record pointer length */
@@ -2061,7 +2088,7 @@ static int write_header(PACK_MRG_INFO *mrg,uint head_length,uint trees,
 
 static void write_field_info(HUFF_COUNTS *counts, uint fields, uint trees)
 {
-  reg1 uint i;
+  uint i;
   uint huff_tree_bits;
   huff_tree_bits=max_bit(trees ? trees-1 : 0);
 
@@ -2151,7 +2178,7 @@ static my_off_t write_huff_tree(HUFF_TREE *huff_tree, uint trees)
   */
   if (!(packed_tree=(uint*) my_alloca(sizeof(uint)*length*2)))
   {
-    my_error(EE_OUTOFMEMORY, MYF(ME_BELL+ME_FATALERROR), 
+    my_error(EE_OUTOFMEMORY, MYF(ME_FATALERROR),
              sizeof(uint)*length*2);
     return 0;
   }
@@ -2190,7 +2217,6 @@ static my_off_t write_huff_tree(HUFF_TREE *huff_tree, uint trees)
     {				/* This should be impossible */
       (void) fprintf(stderr, "Tree offset got too big: %d, aborted\n",
                    huff_tree->max_offset);
-      my_afree((uchar*) packed_tree);
       return 0;
     }
 
@@ -2362,7 +2388,6 @@ static my_off_t write_huff_tree(HUFF_TREE *huff_tree, uint trees)
   DBUG_PRINT("info", (" "));
   if (verbose >= 2)
     printf("\n");
-  my_afree((uchar*) packed_tree);
   if (errors)
   {
     (void) fprintf(stderr, "Error: Generated decode trees are corrupt. Stop.\n");
@@ -2425,9 +2450,9 @@ static uint *make_offset_code_tree(HUFF_TREE *huff_tree, HUFF_ELEMENT *element,
 
 	/* Get number of bits neaded to represent value */
 
-static uint max_bit(register uint value)
+static uint max_bit(uint value)
 {
-  reg2 uint power=1;
+  uint power=1;
 
   while ((value>>=1))
     power++;
@@ -2452,7 +2477,7 @@ static int compress_isam_file(PACK_MRG_INFO *mrg, HUFF_COUNTS *huff_counts)
 
   /* Allocate a buffer for the records (excluding blobs). */
   if (!(record=(uchar*) my_alloca(isam_file->s->base.reclength)))
-    return -1;
+    DBUG_RETURN(-1);
 
   end_count=huff_counts+isam_file->s->base.fields;
   min_record_length= (uint) ~0;
@@ -2776,7 +2801,7 @@ static int compress_isam_file(PACK_MRG_INFO *mrg, HUFF_COUNTS *huff_counts)
       /* Correct file buffer if the header was smaller */
       if (pack_length != max_pack_length)
       {
-	bmove(record_pos+pack_length,record_pos+max_pack_length,length);
+	memmove(record_pos + pack_length, record_pos + max_pack_length, length);
 	file_buffer.pos-= (max_pack_length-pack_length);
       }
       if (length < (ulong) min_record_length)
@@ -2803,7 +2828,6 @@ static int compress_isam_file(PACK_MRG_INFO *mrg, HUFF_COUNTS *huff_counts)
   if (verbose >= 2)
     printf("wrote %s records.\n", llstr((longlong) record_count, llbuf));
 
-  my_afree((uchar*) record);
   mrg->ref_length=max_pack_length;
   mrg->min_pack_length=max_record_length ? min_record_length : 0;
   mrg->max_pack_length=max_record_length;
@@ -2826,7 +2850,8 @@ static char *make_old_name(char *new_name, char *old_name)
 static void init_file_buffer(File file, pbool read_buffer)
 {
   file_buffer.file=file;
-  file_buffer.buffer= (uchar*) my_malloc(ALIGN_SIZE(RECORD_CACHE_SIZE),
+  file_buffer.buffer= (uchar*) my_malloc(PSI_NOT_INSTRUMENTED,
+                                         ALIGN_SIZE(RECORD_CACHE_SIZE),
 					 MYF(MY_WME));
   file_buffer.end=file_buffer.buffer+ALIGN_SIZE(RECORD_CACHE_SIZE)-8;
   file_buffer.pos_in_file=0;
@@ -2883,7 +2908,8 @@ static int flush_buffer(ulong neaded_length)
   {
     char *tmp;
     neaded_length+=256;				/* some margin */
-    tmp= my_realloc((char*) file_buffer.buffer, neaded_length,MYF(MY_WME));
+    tmp= my_realloc(PSI_NOT_INSTRUMENTED,
+                    (char*) file_buffer.buffer, neaded_length,MYF(MY_WME));
     if (!tmp)
       return 1;
     file_buffer.pos= ((uchar*) tmp +
@@ -2902,10 +2928,10 @@ static void end_file_buffer(void)
 
 	/* output `bits` low bits of `value' */
 
-static void write_bits(register ulonglong value, register uint bits)
+static void write_bits(ulonglong value, uint bits)
 {
-  DBUG_ASSERT(((bits < 8 * sizeof(value)) && ! (value >> bits)) ||
-              (bits == 8 * sizeof(value)));
+  assert(((bits < 8 * sizeof(value)) && ! (value >> bits)) ||
+         (bits == 8 * sizeof(value)));
 
   if ((file_buffer.bits-= (int) bits) >= 0)
   {
@@ -2913,7 +2939,7 @@ static void write_bits(register ulonglong value, register uint bits)
   }
   else
   {
-    reg3 ulonglong bit_buffer;
+    ulonglong bit_buffer;
     bits= (uint) -file_buffer.bits;
     bit_buffer= (file_buffer.bitbucket |
                  ((bits != 8 * sizeof(value)) ? (value >> bits) : 0));
@@ -3106,7 +3132,7 @@ static int mrg_close(PACK_MRG_INFO *mrg)
 }
 
 
-#if !defined(DBUG_OFF)
+#if !defined(NDEBUG)
 /*
   Fake the counts to get big Huffman codes.
 

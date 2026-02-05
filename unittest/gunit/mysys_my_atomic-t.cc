@@ -1,13 +1,20 @@
-/* Copyright (c) 2006, 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2006, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -28,23 +35,18 @@ namespace mysys_my_atomic_unittest {
 
 volatile int32 b32;
 volatile int32  c32;
-my_atomic_rwlock_t rwl;
 
 /* add and sub a random number in a loop. Must get 0 at the end */
-pthread_handler_t test_atomic_add(void *arg)
+extern "C" void *test_atomic_add(void *arg)
 {
   int m= (*(int *)arg)/2;
   int32 x;
   for (x= ((int)(intptr)(&m)); m ; m--)
   {
     x= (x*m+0x87654321) & INT_MAX32;
-    my_atomic_rwlock_wrlock(&rwl);
     my_atomic_add32(&bad, x);
-    my_atomic_rwlock_wrunlock(&rwl);
 
-    my_atomic_rwlock_wrlock(&rwl);
     my_atomic_add32(&bad, -x);
-    my_atomic_rwlock_wrunlock(&rwl);
   }
   mysql_mutex_lock(&mutex);
   if (!--running_threads) mysql_cond_signal(&cond);
@@ -54,20 +56,16 @@ pthread_handler_t test_atomic_add(void *arg)
 
 volatile int64 a64;
 /* add and sub a random number in a loop. Must get 0 at the end */
-pthread_handler_t test_atomic_add64(void *arg)
+extern "C" void *test_atomic_add64(void *arg)
 {
   int m= (*(int *)arg)/2;
   int64 x;
   for (x= ((int64)(intptr)(&m)); m ; m--)
   {
     x= (x*m+0xfdecba987654321LL) & INT_MAX64;
-    my_atomic_rwlock_wrlock(&rwl);
     my_atomic_add64(&a64, x);
-    my_atomic_rwlock_wrunlock(&rwl);
 
-    my_atomic_rwlock_wrlock(&rwl);
     my_atomic_add64(&a64, -x);
-    my_atomic_rwlock_wrunlock(&rwl);
   }
   mysql_mutex_lock(&mutex);
   if (!--running_threads)
@@ -88,36 +86,26 @@ pthread_handler_t test_atomic_add64(void *arg)
   5. subtract result from bad
   must get 0 in bad at the end
 */
-pthread_handler_t test_atomic_fas(void *arg)
+extern "C" void *test_atomic_fas(void *arg)
 {
   int    m= *(int *)arg;
   int32  x;
 
-  my_atomic_rwlock_wrlock(&rwl);
   x= my_atomic_add32(&b32, 1);
-  my_atomic_rwlock_wrunlock(&rwl);
 
-  my_atomic_rwlock_wrlock(&rwl);
   my_atomic_add32(&bad, x);
-  my_atomic_rwlock_wrunlock(&rwl);
 
   for (; m ; m--)
   {
-    my_atomic_rwlock_wrlock(&rwl);
     x= my_atomic_fas32(&c32, x);
-    my_atomic_rwlock_wrunlock(&rwl);
   }
 
   if (!x)
   {
-    my_atomic_rwlock_wrlock(&rwl);
     x= my_atomic_fas32(&c32, x);
-    my_atomic_rwlock_wrunlock(&rwl);
   }
 
-  my_atomic_rwlock_wrlock(&rwl);
   my_atomic_add32(&bad, -x);
-  my_atomic_rwlock_wrunlock(&rwl);
 
   mysql_mutex_lock(&mutex);
   if (!--running_threads) mysql_cond_signal(&cond);
@@ -130,25 +118,19 @@ pthread_handler_t test_atomic_fas(void *arg)
   my_atomic_cas32 - notice that the slowdown is proportional to the
   number of CPUs
 */
-pthread_handler_t test_atomic_cas(void *arg)
+extern "C" void *test_atomic_cas(void *arg)
 {
   int m= (*(int *)arg)/2, ok= 0;
   int32 x, y;
   for (x= ((int)(intptr)(&m)); m ; m--)
   {
-    my_atomic_rwlock_wrlock(&rwl);
     y= my_atomic_load32(&bad);
-    my_atomic_rwlock_wrunlock(&rwl);
     x= (x*m+0x87654321) & INT_MAX32;
     do {
-      my_atomic_rwlock_wrlock(&rwl);
       ok= my_atomic_cas32(&bad, &y, (uint32)y+x);
-      my_atomic_rwlock_wrunlock(&rwl);
     } while (!ok) ;
     do {
-      my_atomic_rwlock_wrlock(&rwl);
       ok= my_atomic_cas32(&bad, &y, y-x);
-      my_atomic_rwlock_wrunlock(&rwl);
     } while (!ok) ;
   }
   mysql_mutex_lock(&mutex);
@@ -160,11 +142,6 @@ pthread_handler_t test_atomic_cas(void *arg)
 
 void do_tests()
 {
-  bad= my_atomic_initialize();
-  EXPECT_FALSE(bad) << "my_atomic_initialize() returned";
-
-  my_atomic_rwlock_init(&rwl);
-
   b32= c32= 0;
   test_concurrently("my_atomic_add32", test_atomic_add, THREADS, CYCLES);
   b32= c32= 0;
@@ -187,23 +164,21 @@ void do_tests()
   }
   a64=0;
   test_concurrently("my_atomic_add64", test_atomic_add64, THREADS, CYCLES);
-
-  my_atomic_rwlock_destroy(&rwl);
 }
 
 
 TEST(Mysys, Atomic)
 {
   mysql_mutex_init(0, &mutex, 0);
-  mysql_cond_init(0, &cond, NULL);
-  pthread_attr_init(&thr_attr);
-  pthread_attr_setdetachstate(&thr_attr, PTHREAD_CREATE_DETACHED);
- 
+  mysql_cond_init(0, &cond);
+  my_thread_attr_init(&thr_attr);
+  my_thread_attr_setdetachstate(&thr_attr, MY_THREAD_CREATE_DETACHED);
+
   do_tests();
 
   mysql_mutex_destroy(&mutex);
   mysql_cond_destroy(&cond);
-  pthread_attr_destroy(&thr_attr);
+  my_thread_attr_destroy(&thr_attr);
 }
 
 }

@@ -1,14 +1,20 @@
-/*  Copyright (c) 2010, 2016, Oracle and/or its affiliates. All rights reserved.
+/*  Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 
-    This program is free software; you can redistribute it and/or
-    modify it under the terms of the GNU General Public License as
-    published by the Free Software Foundation; version 2 of the
-    License.
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License, version 2.0,
+    as published by the Free Software Foundation.
+
+    This program is also distributed with certain software (including
+    but not limited to OpenSSL) that is licensed under separate terms,
+    as designated in a particular file or component or in included license
+    documentation.  The authors of MySQL hereby grant you an additional
+    permission to link the program and your derivative works with the
+    separately licensed software that they have included with MySQL.
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-    GNU General Public License for more details.
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License, version 2.0, for more details.
 
     You should have received a copy of the GNU General Public License
     along with this program; if not, write to the Free Software
@@ -45,6 +51,10 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#ifdef HAVE_DLFCN_H
+#include <dlfcn.h>
+#endif
 
 #if !defined (_GNU_SOURCE)
 # define _GNU_SOURCE /* for RTLD_DEFAULT */
@@ -96,11 +106,44 @@ static int two_questions(MYSQL_PLUGIN_VIO *vio, MYSQL_SERVER_AUTH_INFO *info)
   return strcmp((const char *) pkt, "yes, of course") ? CR_ERROR : CR_OK;
 }
 
+int generate_auth_string_hash(char *outbuf, unsigned int *buflen,
+                              const char *inbuf, unsigned int inbuflen)
+{
+  /*
+    if buffer specified by server is smaller than the buffer given
+    by plugin then return error
+  */
+  if (*buflen < inbuflen)
+    return 1;
+  strncpy(outbuf, inbuf, inbuflen);
+  *buflen= strlen(inbuf);
+  return 0;
+}
+
+int validate_auth_string_hash(char* const inbuf  MY_ATTRIBUTE((unused)),
+                              unsigned int buflen  MY_ATTRIBUTE((unused)))
+{
+  return 0;
+}
+
+int set_salt(const char* password MY_ATTRIBUTE((unused)),
+             unsigned int password_len MY_ATTRIBUTE((unused)),
+             unsigned char* salt MY_ATTRIBUTE((unused)),
+             unsigned char* salt_len)
+{
+  *salt_len= 0;
+  return 0;
+}
+
 static struct st_mysql_auth two_handler=
 {
   MYSQL_AUTHENTICATION_INTERFACE_VERSION,
   "dialog", /* requires dialog client plugin */
-  two_questions
+  two_questions,
+  generate_auth_string_hash,
+  validate_auth_string_hash,
+  set_salt,
+  AUTH_FLAG_PRIVILEGED_USER_FOR_PASSWORD_CHANGE
 };
 
 /* dialog demo where the number of questions is not known in advance */
@@ -137,7 +180,11 @@ static struct st_mysql_auth three_handler=
 {
   MYSQL_AUTHENTICATION_INTERFACE_VERSION,
   "dialog", /* requires dialog client plugin */
-  three_attempts 
+  three_attempts,
+  generate_auth_string_hash,
+  validate_auth_string_hash,
+  set_salt,
+  AUTH_FLAG_PRIVILEGED_USER_FOR_PASSWORD_CHANGE
 };
 
 mysql_declare_plugin(dialog)
@@ -150,7 +197,7 @@ mysql_declare_plugin(dialog)
   PLUGIN_LICENSE_GPL,
   NULL,
   NULL,
-  0x0100,
+  0x0101,
   NULL,
   NULL,
   NULL,
@@ -165,7 +212,7 @@ mysql_declare_plugin(dialog)
   PLUGIN_LICENSE_GPL,
   NULL,
   NULL,
-  0x0100,
+  0x0101,
   NULL,
   NULL,
   NULL,
@@ -287,7 +334,7 @@ static int perform_dialog(MYSQL_PLUGIN_VIO *vio, MYSQL *mysql)
     }
     /* send the reply to the server */
     res= vio->write_packet(vio, (const unsigned char *) reply, 
-						   strlen(reply)+1);
+                           (int)strlen(reply)+1);
 
     if (reply != mysql->passwd && reply != reply_buf)
       free(reply);

@@ -14,12 +14,16 @@ ALTER TABLE t1_values ADD my_varbinary_1000 VARBINARY(1000);
 ALTER TABLE t1_values ADD my_datetime       DATETIME;
 ALTER TABLE t1_values ADD my_date           DATE;
 ALTER TABLE t1_values ADD ts_dummy          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP;
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 ALTER TABLE t1_values ADD my_timestamp      TIMESTAMP NOT NULL DEFAULT '0000-00-00 00:00:00';
 ALTER TABLE t1_values ADD my_time           TIME;
 ALTER TABLE t1_values ADD my_year           YEAR;
 ALTER TABLE t1_values ADD my_bigint         BIGINT;
 ALTER TABLE t1_values ADD my_double         DOUBLE;
 ALTER TABLE t1_values ADD my_decimal        DECIMAL(64,30);
+SET sql_mode = default;
 SET sql_mode = 'traditional';
 INSERT INTO t1_values SET id = 0;
 INSERT INTO t1_values SET
@@ -283,6 +287,8 @@ SET @my_select = 'SELECT my_char_30, id FROM t1_values';
 INSERT INTO t1_values SET select_id = @select_id,
 my_char_30 = 'Viana do Castelo';
 SET sql_mode = '';
+Warnings:
+Warning	3090	Changing sql mode 'NO_AUTO_CREATE_USER' is deprecated. It will be removed in a future release.
 
 "# The basic preparations end and the main test starts here"
 --------------------------------------------------------------------------------
@@ -385,7 +391,7 @@ my_varbinary_1000, id FROM t1_values
 WHERE select_id = 187 OR select_id IS NULL order by id;
 SHOW CREATE VIEW v1;
 View	Create View	character_set_client	collation_connection
-v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select lcase(`t1_values`.`my_varbinary_1000`) AS `LOWER(my_varbinary_1000)`,`t1_values`.`my_varbinary_1000` AS `my_varbinary_1000`,`t1_values`.`id` AS `id` from `t1_values`	latin1	latin1_swedish_ci
+v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select lower(`t1_values`.`my_varbinary_1000`) AS `LOWER(my_varbinary_1000)`,`t1_values`.`my_varbinary_1000` AS `my_varbinary_1000`,`t1_values`.`id` AS `id` from `t1_values`	latin1	latin1_swedish_ci
 SELECT v1.* FROM v1
 WHERE v1.id IN (SELECT id FROM t1_values
 WHERE select_id = 187 OR select_id IS NULL) order by id;
@@ -399,7 +405,7 @@ my_binary_30, id FROM t1_values
 WHERE select_id = 186 OR select_id IS NULL order by id;
 SHOW CREATE VIEW v1;
 View	Create View	character_set_client	collation_connection
-v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select lcase(`t1_values`.`my_binary_30`) AS `LOWER(my_binary_30)`,`t1_values`.`my_binary_30` AS `my_binary_30`,`t1_values`.`id` AS `id` from `t1_values`	latin1	latin1_swedish_ci
+v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select lower(`t1_values`.`my_binary_30`) AS `LOWER(my_binary_30)`,`t1_values`.`my_binary_30` AS `my_binary_30`,`t1_values`.`id` AS `id` from `t1_values`	latin1	latin1_swedish_ci
 SELECT v1.* FROM v1
 WHERE v1.id IN (SELECT id FROM t1_values
 WHERE select_id = 186 OR select_id IS NULL) order by id;
@@ -413,7 +419,7 @@ my_varchar_1000, id FROM t1_values
 WHERE select_id = 185 OR select_id IS NULL order by id;
 SHOW CREATE VIEW v1;
 View	Create View	character_set_client	collation_connection
-v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select lcase(`t1_values`.`my_varchar_1000`) AS `LOWER(my_varchar_1000)`,`t1_values`.`my_varchar_1000` AS `my_varchar_1000`,`t1_values`.`id` AS `id` from `t1_values`	latin1	latin1_swedish_ci
+v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select lower(`t1_values`.`my_varchar_1000`) AS `LOWER(my_varchar_1000)`,`t1_values`.`my_varchar_1000` AS `my_varchar_1000`,`t1_values`.`id` AS `id` from `t1_values`	latin1	latin1_swedish_ci
 SELECT v1.* FROM v1
 WHERE v1.id IN (SELECT id FROM t1_values
 WHERE select_id = 185 OR select_id IS NULL) order by id;
@@ -427,7 +433,7 @@ my_char_30, id FROM t1_values
 WHERE select_id = 184 OR select_id IS NULL order by id;
 SHOW CREATE VIEW v1;
 View	Create View	character_set_client	collation_connection
-v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select lcase(`t1_values`.`my_char_30`) AS `LOWER(my_char_30)`,`t1_values`.`my_char_30` AS `my_char_30`,`t1_values`.`id` AS `id` from `t1_values`	latin1	latin1_swedish_ci
+v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select lower(`t1_values`.`my_char_30`) AS `LOWER(my_char_30)`,`t1_values`.`my_char_30` AS `my_char_30`,`t1_values`.`id` AS `id` from `t1_values`	latin1	latin1_swedish_ci
 SELECT v1.* FROM v1
 WHERE v1.id IN (SELECT id FROM t1_values
 WHERE select_id = 184 OR select_id IS NULL) order by id;
@@ -946,8 +952,8 @@ AaBbCcDdEeFfGgHhIiJjÄäÜüÖö	9999999999999999999999999999999999.999999999999
 	0.000000000000000000000000000000	4
 	-1.000000000000000000000000000000	5
 Warnings:
-Warning	1292	Truncated incorrect DECIMAL value: ''
-Warning	1292	Truncated incorrect DECIMAL value: ''
+Warning	1292	Truncated incorrect DECIMAL value: '-9999999999999999999999999999999999.999999999999999999999999999999'
+Warning	1292	Truncated incorrect DECIMAL value: '9999999999999999999999999999999999.999999999999999999999999999999'
 SHOW CREATE VIEW v1;
 View	Create View	character_set_client	collation_connection
 v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select left('AaBbCcDdEeFfGgHhIiJjÄäÜüÖö',`t1_values`.`my_decimal`) AS `LEFT('AaBbCcDdEeFfGgHhIiJjÄäÜüÖö', my_decimal)`,`t1_values`.`my_decimal` AS `my_decimal`,`t1_values`.`id` AS `id` from `t1_values`	latin1	latin1_swedish_ci
@@ -961,8 +967,8 @@ AaBbCcDdEeFfGgHhIiJjÄäÜüÖö	9999999999999999999999999999999999.999999999999
 	0.000000000000000000000000000000	4
 	-1.000000000000000000000000000000	5
 Warnings:
-Warning	1292	Truncated incorrect DECIMAL value: ''
-Warning	1292	Truncated incorrect DECIMAL value: ''
+Warning	1292	Truncated incorrect DECIMAL value: '-9999999999999999999999999999999999.999999999999999999999999999999'
+Warning	1292	Truncated incorrect DECIMAL value: '9999999999999999999999999999999999.999999999999999999999999999999'
 DROP VIEW v1;
 
 
@@ -1093,7 +1099,7 @@ my_varchar_1000, id FROM t1_values
 WHERE select_id = 144 OR select_id IS NULL order by id;
 SHOW CREATE VIEW v1;
 View	Create View	character_set_client	collation_connection
-v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select lcase(`t1_values`.`my_varchar_1000`) AS `LCASE(my_varchar_1000)`,`t1_values`.`my_varchar_1000` AS `my_varchar_1000`,`t1_values`.`id` AS `id` from `t1_values`	latin1	latin1_swedish_ci
+v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select lower(`t1_values`.`my_varchar_1000`) AS `LCASE(my_varchar_1000)`,`t1_values`.`my_varchar_1000` AS `my_varchar_1000`,`t1_values`.`id` AS `id` from `t1_values`	latin1	latin1_swedish_ci
 SELECT v1.* FROM v1
 WHERE v1.id IN (SELECT id FROM t1_values
 WHERE select_id = 144 OR select_id IS NULL) order by id;
@@ -2600,9 +2606,9 @@ NULL	NULL	1
 0	0.000000000000000000000000000000	4
 0	-1.000000000000000000000000000000	5
 Warnings:
-Warning	1292	Truncated incorrect DECIMAL value: ''
-Warning	1292	Truncated incorrect DECIMAL value: ''
-Warning	1292	Truncated incorrect DECIMAL value: ''
+Warning	1292	Truncated incorrect DECIMAL value: '-9999999999999999999999999999999999.999999999999999999999999999999'
+Warning	1292	Truncated incorrect DECIMAL value: '9999999999999999999999999999999999.999999999999999999999999999999'
+Warning	1292	Truncated incorrect DECIMAL value: '-1.000000000000000000000000000000'
 SHOW CREATE VIEW v1;
 View	Create View	character_set_client	collation_connection
 v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select cast(`t1_values`.`my_decimal` as unsigned) AS `CAST(my_decimal AS UNSIGNED INTEGER)`,`t1_values`.`my_decimal` AS `my_decimal`,`t1_values`.`id` AS `id` from `t1_values`	latin1	latin1_swedish_ci
@@ -2616,9 +2622,9 @@ NULL	NULL	1
 0	0.000000000000000000000000000000	4
 0	-1.000000000000000000000000000000	5
 Warnings:
-Warning	1292	Truncated incorrect DECIMAL value: ''
-Warning	1292	Truncated incorrect DECIMAL value: ''
-Warning	1292	Truncated incorrect DECIMAL value: ''
+Warning	1292	Truncated incorrect DECIMAL value: '-9999999999999999999999999999999999.999999999999999999999999999999'
+Warning	1292	Truncated incorrect DECIMAL value: '9999999999999999999999999999999999.999999999999999999999999999999'
+Warning	1292	Truncated incorrect DECIMAL value: '-1.000000000000000000000000000000'
 DROP VIEW v1;
 
 
@@ -2968,8 +2974,8 @@ NULL	NULL	1
 0	0.000000000000000000000000000000	4
 -1	-1.000000000000000000000000000000	5
 Warnings:
-Warning	1292	Truncated incorrect DECIMAL value: ''
-Warning	1292	Truncated incorrect DECIMAL value: ''
+Warning	1292	Truncated incorrect DECIMAL value: '-9999999999999999999999999999999999.999999999999999999999999999999'
+Warning	1292	Truncated incorrect DECIMAL value: '9999999999999999999999999999999999.999999999999999999999999999999'
 SHOW CREATE VIEW v1;
 View	Create View	character_set_client	collation_connection
 v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS select cast(`t1_values`.`my_decimal` as signed) AS `CAST(my_decimal AS SIGNED INTEGER)`,`t1_values`.`my_decimal` AS `my_decimal`,`t1_values`.`id` AS `id` from `t1_values`	latin1	latin1_swedish_ci
@@ -2983,8 +2989,8 @@ NULL	NULL	1
 0	0.000000000000000000000000000000	4
 -1	-1.000000000000000000000000000000	5
 Warnings:
-Warning	1292	Truncated incorrect DECIMAL value: ''
-Warning	1292	Truncated incorrect DECIMAL value: ''
+Warning	1292	Truncated incorrect DECIMAL value: '-9999999999999999999999999999999999.999999999999999999999999999999'
+Warning	1292	Truncated incorrect DECIMAL value: '9999999999999999999999999999999999.999999999999999999999999999999'
 DROP VIEW v1;
 
 
@@ -3295,9 +3301,9 @@ NULL	NULL	1
 -1.00	-1	5
 -3333.33	-3333.3333	30
 Warnings:
-Warning	1292	Truncated incorrect DECIMAL value: ''
+Warning	1292	Truncated incorrect DECIMAL value: '-1.7976931348623'
 Warning	1264	Out of range value for column 'CAST(my_double AS DECIMAL(37,2))' at row 1
-Warning	1292	Truncated incorrect DECIMAL value: ''
+Warning	1292	Truncated incorrect DECIMAL value: '1.7976931348623'
 Warning	1264	Out of range value for column 'CAST(my_double AS DECIMAL(37,2))' at row 1
 SHOW CREATE VIEW v1;
 View	Create View	character_set_client	collation_connection
@@ -3313,9 +3319,9 @@ NULL	NULL	1
 -1.00	-1	5
 -3333.33	-3333.3333	30
 Warnings:
-Warning	1292	Truncated incorrect DECIMAL value: ''
+Warning	1292	Truncated incorrect DECIMAL value: '-1.7976931348623'
 Warning	1264	Out of range value for column 'CAST(my_double AS DECIMAL(37,2))' at row 1
-Warning	1292	Truncated incorrect DECIMAL value: ''
+Warning	1292	Truncated incorrect DECIMAL value: '1.7976931348623'
 Warning	1264	Out of range value for column 'CAST(my_double AS DECIMAL(37,2))' at row 1
 DROP VIEW v1;
 
@@ -3385,11 +3391,11 @@ NULL	NULL	1
 -1.00	-1	5
 -3333.33	-3333.3333	29
 Warnings:
-Warning	1366	Incorrect decimal value: '' for column '' at row -1
+Warning	1366	Incorrect DECIMAL value: '0' for column '' at row -1
 Warning	1292	Truncated incorrect DECIMAL value: ''
-Warning	1366	Incorrect decimal value: '' for column '' at row -1
+Warning	1366	Incorrect DECIMAL value: '0' for column '' at row -1
 Warning	1292	Truncated incorrect DECIMAL value: '<---------1000 characters-------------------------------------------------------------------------------------------------------'
-Warning	1366	Incorrect decimal value: '' for column '' at row -1
+Warning	1366	Incorrect DECIMAL value: '0' for column '' at row -1
 Warning	1292	Truncated incorrect DECIMAL value: ' ---����@�*$-- '
 SHOW CREATE VIEW v1;
 View	Create View	character_set_client	collation_connection
@@ -3405,11 +3411,11 @@ NULL	NULL	1
 -1.00	-1	5
 -3333.33	-3333.3333	29
 Warnings:
-Warning	1366	Incorrect decimal value: '' for column '' at row -1
+Warning	1366	Incorrect DECIMAL value: '0' for column '' at row -1
 Warning	1292	Truncated incorrect DECIMAL value: ''
-Warning	1366	Incorrect decimal value: '' for column '' at row -1
+Warning	1366	Incorrect DECIMAL value: '0' for column '' at row -1
 Warning	1292	Truncated incorrect DECIMAL value: '<---------1000 characters-------------------------------------------------------------------------------------------------------'
-Warning	1366	Incorrect decimal value: '' for column '' at row -1
+Warning	1366	Incorrect DECIMAL value: '0' for column '' at row -1
 Warning	1292	Truncated incorrect DECIMAL value: ' ---����@�*$-- '
 DROP VIEW v1;
 
@@ -3427,11 +3433,11 @@ NULL	NULL	1
 -1.00	-1	5
 -3333.33	-3333.3333	28
 Warnings:
-Warning	1366	Incorrect decimal value: '' for column '' at row -1
+Warning	1366	Incorrect DECIMAL value: '0' for column '' at row -1
 Warning	1292	Truncated incorrect DECIMAL value: '\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
-Warning	1366	Incorrect decimal value: '' for column '' at row -1
+Warning	1366	Incorrect DECIMAL value: '0' for column '' at row -1
 Warning	1292	Truncated incorrect DECIMAL value: '<--------30 characters------->'
-Warning	1366	Incorrect decimal value: '' for column '' at row -1
+Warning	1366	Incorrect DECIMAL value: '0' for column '' at row -1
 Warning	1292	Truncated incorrect DECIMAL value: ' ---\xC3\xA4\xC3\x96\xC3\xBC\xC3\x9F@\xC2\xB5*$-- \x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
 Warning	1292	Truncated incorrect DECIMAL value: '-1\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
 Warning	1292	Truncated incorrect DECIMAL value: '-3333.3333\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
@@ -3449,11 +3455,11 @@ NULL	NULL	1
 -1.00	-1                            	5
 -3333.33	-3333.3333                    	28
 Warnings:
-Warning	1366	Incorrect decimal value: '' for column '' at row -1
+Warning	1366	Incorrect DECIMAL value: '0' for column '' at row -1
 Warning	1292	Truncated incorrect DECIMAL value: '\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
-Warning	1366	Incorrect decimal value: '' for column '' at row -1
+Warning	1366	Incorrect DECIMAL value: '0' for column '' at row -1
 Warning	1292	Truncated incorrect DECIMAL value: '<--------30 characters------->'
-Warning	1366	Incorrect decimal value: '' for column '' at row -1
+Warning	1366	Incorrect DECIMAL value: '0' for column '' at row -1
 Warning	1292	Truncated incorrect DECIMAL value: ' ---\xC3\xA4\xC3\x96\xC3\xBC\xC3\x9F@\xC2\xB5*$-- \x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
 Warning	1292	Truncated incorrect DECIMAL value: '-1\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
 Warning	1292	Truncated incorrect DECIMAL value: '-3333.3333\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
@@ -3473,11 +3479,11 @@ NULL	NULL	1
 -1.00	-1	5
 -3333.33	-3333.3333	27
 Warnings:
-Warning	1366	Incorrect decimal value: '' for column '' at row -1
+Warning	1366	Incorrect DECIMAL value: '0' for column '' at row -1
 Warning	1292	Truncated incorrect DECIMAL value: ''
-Warning	1366	Incorrect decimal value: '' for column '' at row -1
+Warning	1366	Incorrect DECIMAL value: '0' for column '' at row -1
 Warning	1292	Truncated incorrect DECIMAL value: '<---------1000 characters-------------------------------------------------------------------------------------------------------'
-Warning	1366	Incorrect decimal value: '' for column '' at row -1
+Warning	1366	Incorrect DECIMAL value: '0' for column '' at row -1
 Warning	1292	Truncated incorrect DECIMAL value: ' ---����@�*$-- '
 SHOW CREATE VIEW v1;
 View	Create View	character_set_client	collation_connection
@@ -3493,11 +3499,11 @@ NULL	NULL	1
 -1.00	-1	5
 -3333.33	-3333.3333	27
 Warnings:
-Warning	1366	Incorrect decimal value: '' for column '' at row -1
+Warning	1366	Incorrect DECIMAL value: '0' for column '' at row -1
 Warning	1292	Truncated incorrect DECIMAL value: ''
-Warning	1366	Incorrect decimal value: '' for column '' at row -1
+Warning	1366	Incorrect DECIMAL value: '0' for column '' at row -1
 Warning	1292	Truncated incorrect DECIMAL value: '<---------1000 characters-------------------------------------------------------------------------------------------------------'
-Warning	1366	Incorrect decimal value: '' for column '' at row -1
+Warning	1366	Incorrect DECIMAL value: '0' for column '' at row -1
 Warning	1292	Truncated incorrect DECIMAL value: ' ---����@�*$-- '
 DROP VIEW v1;
 
@@ -3515,11 +3521,11 @@ NULL	NULL	1
 -1.00	-1	5
 -3333.33	-3333.3333	26
 Warnings:
-Warning	1366	Incorrect decimal value: '' for column '' at row -1
+Warning	1366	Incorrect DECIMAL value: '0' for column '' at row -1
 Warning	1292	Truncated incorrect DECIMAL value: '                              '
-Warning	1366	Incorrect decimal value: '' for column '' at row -1
+Warning	1366	Incorrect DECIMAL value: '0' for column '' at row -1
 Warning	1292	Truncated incorrect DECIMAL value: '<--------30 characters------->'
-Warning	1366	Incorrect decimal value: '' for column '' at row -1
+Warning	1366	Incorrect DECIMAL value: '0' for column '' at row -1
 Warning	1292	Truncated incorrect DECIMAL value: ' ---äÖüß@µ*$--           '
 SHOW CREATE VIEW v1;
 View	Create View	character_set_client	collation_connection
@@ -3535,11 +3541,11 @@ NULL	NULL	1
 -1.00	-1	5
 -3333.33	-3333.3333	26
 Warnings:
-Warning	1366	Incorrect decimal value: '' for column '' at row -1
+Warning	1366	Incorrect DECIMAL value: '0' for column '' at row -1
 Warning	1292	Truncated incorrect DECIMAL value: '                              '
-Warning	1366	Incorrect decimal value: '' for column '' at row -1
+Warning	1366	Incorrect DECIMAL value: '0' for column '' at row -1
 Warning	1292	Truncated incorrect DECIMAL value: '<--------30 characters------->'
-Warning	1366	Incorrect decimal value: '' for column '' at row -1
+Warning	1366	Incorrect DECIMAL value: '0' for column '' at row -1
 Warning	1292	Truncated incorrect DECIMAL value: ' ---äÖüß@µ*$--           '
 DROP VIEW v1;
 
@@ -3768,7 +3774,7 @@ CAST(my_varbinary_1000 AS TIME)	my_varbinary_1000	id
 NULL	NULL	1
 NULL		2
 00:00:00	<---------1000 characters-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------->	3
--00:00:00	 ---äÖüß@µ*$-- 	4
+00:00:00	 ---äÖüß@µ*$-- 	4
 -00:00:01	-1	5
 41:58:00	1 17:58	23
 Warnings:
@@ -3806,7 +3812,7 @@ CAST(my_binary_30 AS TIME)	my_binary_30	id
 NULL	NULL	1
 00:00:00	                              	2
 00:00:00	<--------30 characters------->	3
--00:00:00	 ---äÖüß@µ*$--           	4
+00:00:00	 ---äÖüß@µ*$--           	4
 NULL	-1                            	5
 41:58:00	1 17:58                       	22
 Warnings:
@@ -3844,7 +3850,7 @@ CAST(my_varchar_1000 AS TIME)	my_varchar_1000	id
 NULL	NULL	1
 NULL		2
 00:00:00	<---------1000 characters-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------->	3
--00:00:00	 ---äÖüß@µ*$-- 	4
+00:00:00	 ---äÖüß@µ*$-- 	4
 -00:00:01	-1	5
 41:58:00	1 17:58	21
 Warnings:
@@ -3880,7 +3886,7 @@ CAST(my_char_30 AS TIME)	my_char_30	id
 NULL	NULL	1
 NULL		2
 00:00:00	<--------30 characters------->	3
--00:00:00	 ---äÖüß@µ*$--	4
+00:00:00	 ---äÖüß@µ*$--	4
 -00:00:01	-1	5
 41:58:00	1 17:58	20
 Warnings:

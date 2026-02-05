@@ -16,10 +16,23 @@
 #
 # [--let $rpl_only_running_threads= 1]
 # [--let $rpl_debug= 1]
+# [--let $rpl_group_replication= 1]
 # [--let $rpl_gtid_utils= 1]
 # --source include/rpl_end.inc
 #
 # Parameters:
+#   $rpl_skip_sync
+#     By default, all slaves are synced using rpl_sync.inc. Set this
+#     option to 1 to disable this behavior (note that you must
+#     manually sync all servers in this case). Normally you want to
+#     sync, but you need to disable sync if you use multi-source.
+#
+#  $rpl_skip_delete_channels
+#     In multi-source repliation, to restore the SHOW SLAVE STATUS state,
+#     it is necessary to delete the channels that are created. By default,
+#     channels are deleted in multi-source. set it to 1, if channel deletion
+#     is not required.
+#
 #   $rpl_only_running_threads
 #     If one or both of the IO and SQL threads is stopped, sync and
 #     stop only the threads that are running.  See
@@ -27,6 +40,11 @@
 #
 #   $rpl_debug
 #     See include/rpl_init.inc
+#
+#   $rpl_group_replication
+#     This checks for whether we have Group Replication enabled or not. Based
+#     on the check this parameter we execute change master or not in this
+#     inc file.
 #
 #   $rpl_gtid_utils
 #     Source include/gtid_utils_end.inc on every server.
@@ -57,6 +75,11 @@ if (!$rpl_inited)
   --die ERROR IN TEST: rpl_end.inc was sourced when replication was not configured. Most likely, rpl_end.inc was sourced twice or rpl_init.inc has not been sourced.
 }
 
+# By default one shall delete channels to restore the state
+if ($rpl_skip_delete_channels == '')
+{
+  --let $rpl_skip_delete_channels = 0
+}
 
 if ($rpl_debug)
 {
@@ -80,13 +103,56 @@ while ($_rpl_server)
   --dec $_rpl_server
 }
 
---source include/rpl_sync.inc
---source include/rpl_stop_slaves.inc
+if (!$rpl_skip_sync)
+{
+  --source include/rpl_sync.inc
+}
+
+if ($rpl_group_replication)
+{
+  --let $_rpl_server= $rpl_server_count
+  while ($_rpl_server)
+  {
+    --let $rpl_connection_name= server_$_rpl_server
+    --source include/rpl_connection.inc
+
+    --let $_group_replication_member_state= `SELECT SERVICE_STATE FROM performance_schema.replication_connection_status connection_status WHERE connection_status.group_name="$group_replication_group_name"`
+    if ($_group_replication_member_state == 'ON')
+    {
+      --source include/stop_group_replication.inc
+    }
+    --dec $_rpl_server
+  }
+}
+
+if (!$rpl_group_replication)
+{
+  --source include/rpl_stop_slaves.inc
+}
+
+# Restore the server state by deleting all channels
+if ($rpl_multi_source)
+{
+  if (!$rpl_skip_delete_channels)
+  {
+    --let $rpl_reset_slave_all= 1
+    --let $rpl_source_file= include/rpl_reset_slave_helper.inc
+    --source include/rpl_for_each_connection.inc
+    --let $rpl_reset_slave_all= 0
+  }
+}
 
 # mtr configures server 2 to be a slave before it runs the test. We
 # have to restore that state now, so we change topology to 1->2.
---let $rpl_topology= none
+
+# rpl_change_topology executes CHANGE MASTER for each connection.
+# we restore the gtid state by sourcing rpl_change_topology below
 --let $use_gtids= 0
+--let $rpl_group_replication= 0
+
+--source include/rpl_change_topology.inc
+
+--let $rpl_topology=none
 --source include/rpl_change_topology.inc
 
 
@@ -109,7 +175,12 @@ while ($_rpl_server)
   --dec $_rpl_server
 }
 
+# reset as next test can be any of rpl or group_replication
+--let $using_rpl_group_replication_default_connections= 0
+
 --let $rpl_inited= 0
+--let $_rpl_server_count=
+--let $rpl_multi_source= 0
 
 # Do not restore connection, because we have disconnected it.
 --let $skip_restore_connection= 1

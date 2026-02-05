@@ -1,0 +1,193 @@
+#  (C) Copyright Gennadiy Rozental 2001-2015.
+#  Use, modification, and distribution are subject to the
+#  Boost Software License, Version 1.0. (See accompanying file
+#  LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+#
+#  See http://www.boost.org/libs/test for the library home page.
+
+import path ;
+
+import ../../config/checks/config : requires ;
+
+project
+    : requirements
+    ;
+
+#_________________________________________________________________________________________________#
+
+rule boost.test-self-test ( test-rule : test-suite : test-name : usage-variant ? : pattern_file * : source_files * : extra-libs ? : extra-options ? )
+{
+    source_files ?= $(test-suite)/$(test-name).cpp ;
+    usage-variant ?= boost_unit_test_framework/<link>static ;
+
+    return [ $(test-rule) $(source_files) ../build//$(usage-variant) $(extra-libs)
+             : #args
+             : $(pattern_file)
+             : # Activating -pedantic finds more gotchas
+               # Unfortunately, this warns about the use of "long long" in gcc's own stdlib
+               # So deactivate those warnings again
+               <toolset>gcc:<cxxflags>-pedantic
+               <toolset>gcc:<cxxflags>-Wno-long-long
+               <toolset>gcc:<cxxflags>-std=c++11
+               <toolset>clang:<cxxflags>-Wno-c99-extensions
+               <toolset>clang:<cxxflags>-std=c++11
+#               <toolset>clang:<cxxflags>-Wconversion
+#               <toolset>clang:<cxxflags>-Wno-sign-conversion
+#               <toolset>gcc:<cxxflags>-E
+#               <toolset>gcc:<cxxflags>-fno-exceptions
+#               <toolset>gcc:<cxxflags>-DBOOST_NO_EXCEPTION
+#               <toolset>clang:<cxxflags>-fno-exceptions
+#               <toolset>clang:<cxxflags>-DBOOST_NO_EXCEPTION
+               <warnings>all
+               $(extra-options)
+             : $(test-name)
+           ] ;
+}
+
+#_________________________________________________________________________________________________#
+
+rule boost.test-mt-test ( test-rule : test-suite : test-name : usage-variant ? : pattern_file * : source_files * : extra-libs ? )
+{
+    return [ boost.test-self-test $(test-rule)
+             : $(test-suite)
+             : $(test-name)
+             : $(usage-variant)
+             : $(pattern_file)
+             : $(source_files)
+             : $(extra-libs)
+             : <threading>multi
+           ] ;
+}
+
+#_________________________________________________________________________________________________#
+
+rule docs-example-as-test ( test-file )
+{
+    test-file-name = [ path.basename $(test-file) ] ;
+    test-name-rule = [ MATCH (.+)\\.(.+)\\.cpp : $(test-file-name) ] ;
+
+    return [ boost.test-self-test $(test-name-rule[2]) : ../doc/examples : doc-$(test-name-rule[1]) : included : : $(test-file) ] ;
+}
+
+#_________________________________________________________________________________________________#
+
+test-suite "utils-ts"
+:
+  [ boost.test-self-test run : utils-ts : algorithm-test ]
+  [ boost.test-self-test run : utils-ts : basic_cstring-test ]
+  [ boost.test-self-test run : utils-ts : class_properties-test ]
+#  [ boost.test-self-test run : utils-ts : config_file-test ]
+#  [ boost.test-self-test run : utils-ts : config_file_iterator-test ]
+  [ boost.test-self-test run : utils-ts : fixed_mapping-test ]
+  [ boost.test-self-test run : utils-ts : foreach-test ]
+  [ boost.test-self-test run : utils-ts : ifstream_line_iterator-test : : inputs/ifstream_line_iterator.tst1
+                                                                          inputs/ifstream_line_iterator.tst2 ]
+  [ boost.test-self-test run : utils-ts : token_iterator-test ]
+;
+
+#_________________________________________________________________________________________________#
+
+test-suite "usage-variants-ts"
+:
+  [ boost.test-self-test run : usage-variants-ts : single-header-test : included ]
+  [ boost.test-self-test run : usage-variants-ts : single-header-custom-init-test : included ]
+  [ boost.test-self-test run : usage-variants-ts : single-header-custom-main-test : included ]
+
+  [ boost.test-self-test run : usage-variants-ts : static-library-test ]
+  [ boost.test-self-test run : usage-variants-ts : static-library-custom-init-test ]
+
+  [ boost.test-self-test run : usage-variants-ts : shared-library-test : boost_unit_test_framework/<link>shared ]
+  [ boost.test-self-test run : usage-variants-ts : shared-library-custom-init-test : boost_unit_test_framework/<link>shared ]
+  [ boost.test-self-test run : usage-variants-ts : shared-library-custom-main-test : boost_unit_test_framework/<link>shared ]
+;
+
+#_________________________________________________________________________________________________#
+
+test-suite "framework-ts"
+:
+  [ boost.test-self-test run : framework-ts : result-report-test : : baseline-outputs/result-report-test.pattern ]
+  [ boost.test-self-test run : framework-ts : run-by-name-or-label-test ]
+;
+
+#_________________________________________________________________________________________________#
+
+test-suite "writing-test-ts"
+:
+  [ boost.test-self-test run : writing-test-ts : assertion-construction-test ]
+  [ boost.test-self-test run : writing-test-ts : boost_check_equal-str-test ]
+  [ boost.test-self-test run : writing-test-ts : collection-comparison-test ]
+  [ boost.test-self-test run : writing-test-ts : dont_print_log_value-test ]
+  [ boost.test-self-test run : writing-test-ts : fp-comparisons-test ]
+  [ boost.test-self-test run : writing-test-ts : fp-multiprecision-comparison-test ]
+  [ boost.test-self-test run : writing-test-ts : output_test_stream-test ]
+  [ boost.test-self-test run : writing-test-ts : test_tools-test : : baseline-outputs/test_tools-test.pattern ]
+  [ boost.test-self-test run : writing-test-ts : windows-headers-test ]
+  [ boost.test-self-test run : writing-test-ts : tools-under-debugger-test ]
+  [ boost.test-self-test run : writing-test-ts : tools-debuggable-test ]
+;
+
+#_________________________________________________________________________________________________#
+
+test-suite "test-organization-ts"
+:
+  [ boost.test-self-test run : test-organization-ts : parameterized_test-test ]
+  [ boost.test-self-test run : test-organization-ts : test_case_template-test ]
+  [ boost.test-self-test run : test-organization-ts : datasets-test : : : [ glob test-organization-ts/datasets-test/*.cpp ] ]
+  [ boost.test-self-test run : test-organization-ts : test_unit-order-test ]
+  [ boost.test-self-test run : test-organization-ts : test-tree-management-test ]
+;
+
+#_________________________________________________________________________________________________#
+
+test-suite "multithreading-ts"
+:
+  [ boost.test-mt-test run : multithreading-ts : sync-access-test : : : : /boost/thread//boost_thread/<link>static ]
+;
+
+#_________________________________________________________________________________________________#
+
+test-suite "prg_exec_monitor-ts"
+: 
+  [ boost.test-self-test run-fail : prg_exec_monitor-ts : result-code-test : boost_prg_exec_monitor/<link>static ]
+  [ boost.test-self-test run-fail : prg_exec_monitor-ts : system-exception-test : boost_prg_exec_monitor/<link>static ]
+  [ boost.test-self-test run-fail : prg_exec_monitor-ts : uncatched-exception-test : included ]
+  [ boost.test-self-test run-fail : prg_exec_monitor-ts : user-fatal-exception-test : boost_prg_exec_monitor/<link>static ]
+;
+
+#_________________________________________________________________________________________________#
+
+test-suite "execution_monitor-ts"
+:
+  [ boost.test-self-test run : execution_monitor-ts : errors-handling-test : : baseline-outputs/errors-handling-test.pattern
+                                                                               baseline-outputs/errors-handling-test.pattern2 ]
+  [ boost.test-self-test run : execution_monitor-ts : custom-exception-test ]
+;
+
+#_________________________________________________________________________________________________#
+
+import sequence ;
+
+test-suite "doc-examples-ts"
+:
+  [ sequence.transform docs-example-as-test : [ glob ../doc/examples/*.cpp ] ]
+;
+
+#_________________________________________________________________________________________________#
+
+# A target that runs all the tests
+alias test
+:
+  utils-ts
+  usage-variants-ts
+  framework-ts
+  writing-test-ts
+  test-organization-ts
+  multithreading-ts
+  prg_exec_monitor-ts
+  execution_monitor-ts
+  doc-examples-ts
+;
+
+#_________________________________________________________________________________________________#
+
+# EOF

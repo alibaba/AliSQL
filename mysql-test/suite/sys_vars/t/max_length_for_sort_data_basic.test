@@ -118,11 +118,17 @@ SET @@global.max_length_for_sort_data = 8388609;
 SELECT @@global.max_length_for_sort_data;
 SET @@global.max_length_for_sort_data = 0;
 SELECT @@global.max_length_for_sort_data;
+SET @@global.max_length_for_sort_data = 1230974986;
+SELECT @@global.max_length_for_sort_data;
+
 --Error ER_WRONG_TYPE_FOR_VAR
 SET @@global.max_length_for_sort_data = 65530.34;
 SELECT @@global.max_length_for_sort_data;
 --Error ER_WRONG_TYPE_FOR_VAR
 SET @@global.max_length_for_sort_data = test;
+SELECT @@global.max_length_for_sort_data;
+--Error ER_WRONG_TYPE_FOR_VAR
+SET @@global.max_length_for_sort_data = ' ';
 SELECT @@global.max_length_for_sort_data;
 
 SET @@session.max_length_for_sort_data = 8388610;
@@ -133,12 +139,18 @@ SET @@session.max_length_for_sort_data = 3;
 SELECT @@session.max_length_for_sort_data;
 SET @@session.max_length_for_sort_data = 0;
 SELECT @@session.max_length_for_sort_data;
+SET @@session.max_length_for_sort_data = -1203;
+SELECT @@session.max_length_for_sort_data;
+
 --Error ER_WRONG_TYPE_FOR_VAR
 SET @@session.max_length_for_sort_data = 65530.34;
 SET @@session.max_length_for_sort_data = 10737418241;
 SELECT @@session.max_length_for_sort_data;
 --Error ER_WRONG_TYPE_FOR_VAR
 SET @@session.max_length_for_sort_data = test;
+SELECT @@session.max_length_for_sort_data;
+--Error ER_WRONG_TYPE_FOR_VAR
+SET @@session.max_length_for_sort_data = ' ';
 SELECT @@session.max_length_for_sort_data;
 
 
@@ -148,18 +160,22 @@ SELECT @@session.max_length_for_sort_data;
 ####################################################################
 
 
+--disable_warnings
 SELECT @@global.max_length_for_sort_data = VARIABLE_VALUE 
 FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
 WHERE VARIABLE_NAME='max_length_for_sort_data';
+--enable_warnings
 
 --echo '#------------------FN_DYNVARS_080_07-----------------------#'
 ####################################################################
 #  Check if the value in SESSION Table matches value in variable   #
 ####################################################################
 
+--disable_warnings
 SELECT @@session.max_length_for_sort_data = VARIABLE_VALUE 
 FROM INFORMATION_SCHEMA.SESSION_VARIABLES 
 WHERE VARIABLE_NAME='max_length_for_sort_data';
+--enable_warnings
 
 
 --echo '#------------------FN_DYNVARS_080_08-----------------------#'

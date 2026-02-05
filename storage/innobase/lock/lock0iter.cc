@@ -1,14 +1,22 @@
 /*****************************************************************************
 
-Copyright (c) 2007, 2009, Oracle and/or its affiliates. All Rights Reserved.
+Copyright (c) 2007, 2023, Oracle and/or its affiliates.
 
-This program is free software; you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation; version 2 of the License.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License, version 2.0,
+as published by the Free Software Foundation.
 
-This program is distributed in the hope that it will be useful, but WITHOUT
-ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+This program is also distributed with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have included with MySQL.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License, version 2.0, for more details.
 
 You should have received a copy of the GNU General Public License along with
 this program; if not, write to the Free Software Foundation, Inc.,
@@ -27,11 +35,10 @@ Created July 16, 2007 Vasil Dimov
 #define LOCK_MODULE_IMPLEMENTATION
 
 #include "univ.i"
+#include "dict0mem.h"
 #include "lock0iter.h"
 #include "lock0lock.h"
 #include "lock0priv.h"
-#include "ut0dbg.h"
-#include "ut0lst.h"
 
 /*******************************************************************//**
 Initialize lock queue iterator so that it starts to iterate from
@@ -42,7 +49,6 @@ record is stored. It can be undefined (ULINT_UNDEFINED) in two cases:
    bit_no is calculated in this function by using
    lock_rec_find_set_bit(). There is exactly one bit set in the bitmap
    of a wait lock. */
-UNIV_INTERN
 void
 lock_queue_iterator_reset(
 /*======================*/
@@ -78,8 +84,7 @@ lock_queue_iterator_reset(
 Gets the previous lock in the lock queue, returns NULL if there are no
 more locks (i.e. the current lock is the first one). The iterator is
 receded (if not-NULL is returned).
-@return	previous lock or NULL */
-UNIV_INTERN
+@return previous lock or NULL */
 const lock_t*
 lock_queue_iterator_get_prev(
 /*=========================*/

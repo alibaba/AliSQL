@@ -1,14 +1,21 @@
 /*
- Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
+ Copyright (c) 2010, 2021, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
- it under the terms of the GNU General Public License as published by
- the Free Software Foundation; version 2 of the License.
+ it under the terms of the GNU General Public License, version 2.0,
+ as published by the Free Software Foundation.
+
+ This program is also distributed with certain software (including
+ but not limited to OpenSSL) that is licensed under separate terms,
+ as designated in a particular file or component or in included license
+ documentation.  The authors of MySQL hereby grant you an additional
+ permission to link the program and your derivative works with the
+ separately licensed software that they have included with MySQL.
 
  This program is distributed in the hope that it will be useful,
  but WITHOUT ANY WARRANTY; without even the implied warranty of
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- GNU General Public License for more details.
+ GNU General Public License, version 2.0, for more details.
 
  You should have received a copy of the GNU General Public License
  along with this program; if not, write to the Free Software
@@ -31,7 +38,7 @@
 // ---------------------------------------------------------------------------
 
 /**
- * A root class representing Java peer classes in type mappings.
+ * Internal root class for representing Java classes in peer type mappings.
  *
  * Rationale: A dedicated type, distinct from JNI's _jobject, allows for
  * better control of template resolution (avoiding ambiguities) and
@@ -41,61 +48,20 @@
 struct _jtie_Object : _jobject {
 };
 
-// XXX, document: type specifying an Object mapping with a class name
-
-// trait type wrapping named-parametrized Object mappings for specialization
-// XXX make use of
-//   JTIE_DEFINE_METHOD_MEMBER_INFO( _jtie_ObjectMapper< T > )
-// to replace
-//   static const char * const class_name;
-//   static const char * const member_name;
-//   static const char * const member_descriptor;
-//   typedef _jmethodID * memberID_t;
+/**
+ * Internal, generic trait type mapping a Java class.
+ *
+ * Rationale: This generic class has outlived its purpose, but can be used
+ * as a container for additional, class-specific mapping information.
+ */
 template< typename J >
 struct _jtie_ObjectMapper : _jtie_Object {
-    // the name of the Java peer class in the JVM format (i.e., '/'-separated)
-    static const char * const class_name;
-
-    // the name, descriptor, and JNI type of the class's no-arg c'tor
-    static const char * const member_name;
-    static const char * const member_descriptor;
-    typedef _jmethodID * memberID_t;
+    /**
+     * Name and descriptor of this class's no-argument constructor.
+     */
+    // XXX cleanup: use a template decl instead of a macro
+    JTIE_DEFINE_METHOD_MEMBER_INFO( ctor )
 };
-
-// XXX static initialization <-> multiple compilation units <-> jtie_lib.hpp
-template< typename J >
-const char * const _jtie_ObjectMapper< J >::class_name
-    = J::class_name; // XXX static initialization order dependency?
-
-template< typename J >
-const char * const _jtie_ObjectMapper< J >::member_name
-    = "<init>";
-
-template< typename J >
-const char * const _jtie_ObjectMapper< J >::member_descriptor
-    = "()V";
-
-// Design note:
-//
-// As of pre-C++0x, string literals cannot be used as template arguments
-// which must be integral constants with external linkage.
-//
-// So, we cannot declare:
-//
-//    template< const char * >
-//    struct _jtie_ClassNamedObject : _jtie_Object {
-//        static const char * const java_internal_class_name;
-//    };
-//
-// As a feasible workaround, we require the application to provide a
-// trait type for each class, e.g.
-//
-//    struct _m_A : _jobject {
-//        static const char * const java_internal_class_name;
-//    };
-//    const char * const _m_A::java_internal_class_name = "myjapi/A";
-//
-// and we retrieve the class name from there.
 
 /**
  * Defines the trait type aliases for the mapping of a
@@ -127,9 +93,7 @@ const char * const _jtie_ObjectMapper< J >::member_descriptor
  * to be prepended with the C++ keyword "typename".
  */
 #define JTIE_DEFINE_PEER_CLASS_MAPPING( C, T )                          \
-    struct T {                                                          \
-        static const char * const class_name;                           \
-    };                                                                  \
+    struct T {};                                                        \
     typedef ttrait< jobject, C, _jtie_ObjectMapper< T > *               \
                     > ttrait_##T##_t;                                   \
     typedef ttrait< jobject, const C, _jtie_ObjectMapper< T > *         \
@@ -220,18 +184,11 @@ const char * const _jtie_ObjectMapper< J >::member_descriptor
 #endif // XXX cleanup this unsupported mapping
 
 // XXX to document
-// XXX static initialization <-> multiple compilation units <-> jtie_lib.hpp
-// XXX replace
-//   template struct MemberId< _jtie_ObjectMapper< T > >;
-//   template struct MemberIdCache< _jtie_ObjectMapper< T > >;
-// with
-//   JTIE_INSTANTIATE_CLASS_MEMBER_INFO_X(_jtie_ObjectMapper< T >,
-//                                        JCN, "<init>", "()V")
-#define JTIE_INSTANTIATE_PEER_CLASS_MAPPING( T, JCN )           \
-    const char * const T::class_name = JCN;                     \
-    template struct _jtie_ObjectMapper< T >;                    \
-    template struct MemberId< _jtie_ObjectMapper< T > >;        \
-    template struct MemberIdCache< _jtie_ObjectMapper< T > >;
+// XXX cleanup: symmetry with JTIE_DEFINE_METHOD_MEMBER_INFO( ctor ) above
+#define JTIE_INSTANTIATE_PEER_CLASS_MAPPING( T, JCN )                   \
+    template struct _jtie_ObjectMapper< T >;                            \
+    JTIE_INSTANTIATE_CLASS_MEMBER_INFO_1(_jtie_ObjectMapper< T >::ctor, \
+                                         JCN, "<init>", "()V")
 
 // ---------------------------------------------------------------------------
 

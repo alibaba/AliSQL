@@ -1,20 +1,32 @@
-/* Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /*
-  Code for generell handling of priority Queues.
+  Code for handling of priority Queues.
   Implemention of queues from "Algoritms in C" by Robert Sedgewick.
   An optimisation of _downheap suggested in Exercise 7.51 in "Data
   Structures & Algorithms in C++" by Mark Allen Weiss, Second Edition
@@ -23,9 +35,11 @@
 */
 
 #include "mysys_priv.h"
+#include "my_sys.h"
 #include "mysys_err.h"
 #include <queues.h>
 
+int resize_queue(QUEUE *queue, uint max_elements);
 
 /*
   Init queue
@@ -53,7 +67,8 @@ int init_queue(QUEUE *queue, uint max_elements, uint offset_to_key,
 	       void *first_cmp_arg)
 {
   DBUG_ENTER("init_queue");
-  if ((queue->root= (uchar **) my_malloc((max_elements+1)*sizeof(void*),
+  if ((queue->root= (uchar **) my_malloc(key_memory_QUEUE,
+                                         (max_elements+1)*sizeof(void*),
 					 MYF(MY_WME))) == 0)
     DBUG_RETURN(1);
   queue->elements=0;
@@ -166,7 +181,8 @@ int resize_queue(QUEUE *queue, uint max_elements)
   DBUG_ENTER("resize_queue");
   if (queue->max_elements == max_elements)
     DBUG_RETURN(0);
-  if ((new_root= (uchar **) my_realloc((void *)queue->root,
+  if ((new_root= (uchar **) my_realloc(key_memory_QUEUE,
+                                       (void *)queue->root,
 				      (max_elements+1)*sizeof(void*),
 				      MYF(MY_WME))) == 0)
     DBUG_RETURN(1);
@@ -202,10 +218,10 @@ void delete_queue(QUEUE *queue)
 
 	/* Code for insert, search and delete of elements */
 
-void queue_insert(register QUEUE *queue, uchar *element)
+void queue_insert(QUEUE *queue, uchar *element)
 {
-  reg2 uint idx, next;
-  DBUG_ASSERT(queue->elements < queue->max_elements);
+  uint idx, next;
+  assert(queue->elements < queue->max_elements);
   queue->root[0]= element;
   idx= ++queue->elements;
   /* max_at_top swaps the comparison if we want to order by desc */
@@ -220,56 +236,31 @@ void queue_insert(register QUEUE *queue, uchar *element)
   queue->root[idx]= element;
 }
 
-/*
-  Does safe insert. If no more space left on the queue resize it.
-  Return codes:
-    0 - OK
-    1 - Cannot allocate more memory
-    2 - auto_extend is 0, the operation would
-  
-*/
-
-int queue_insert_safe(register QUEUE *queue, uchar *element)
-{
-
-  if (queue->elements == queue->max_elements)
-  {
-    if (!queue->auto_extent)
-      return 2;
-    else if (resize_queue(queue, queue->max_elements + queue->auto_extent))
-      return 1;
-  }
-  
-  queue_insert(queue, element);
-  return 0;
-}
-
-
 	/* Remove item from queue */
 	/* Returns pointer to removed element */
 
-uchar *queue_remove(register QUEUE *queue, uint idx)
+uchar *queue_remove(QUEUE *queue, uint idx)
 {
   uchar *element;
-  DBUG_ASSERT(idx < queue->max_elements);
+  my_bool use_downheap;
+
+  assert(idx < queue->max_elements);
+  /*
+    If we remove the top element in the queue, we use _downheap else queue_fix
+    to maintain the heap property.
+  */
+  use_downheap = (idx == 0);
   element= queue->root[++idx];  /* Intern index starts from 1 */
   queue->root[idx]= queue->root[queue->elements--];
-  _downheap(queue, idx);
+  if (use_downheap)
+    _downheap(queue, idx);
+  else
+    queue_fix(queue);
   return element;
 }
 
-	/* Fix when element on top has been replaced */
 
-#ifndef queue_replaced
-void queue_replaced(QUEUE *queue)
-{
-  _downheap(queue,1);
-}
-#endif
-
-#ifndef OLD_VERSION
-
-void _downheap(register QUEUE *queue, uint idx)
+void _downheap(QUEUE *queue, uint idx)
 {
   uchar *element;
   uint elements,half_queue,offset_to_key, next_index;
@@ -316,43 +307,6 @@ void _downheap(register QUEUE *queue, uint idx)
   }
   queue->root[idx]=element;
 }
-
-#else
-  /*
-    The old _downheap version is kept for comparisons with the benchmark
-    suit or new benchmarks anyone wants to run for comparisons.
-  */
-	/* Fix heap when index have changed */
-void _downheap(register QUEUE *queue, uint idx)
-{
-  uchar *element;
-  uint elements,half_queue,next_index,offset_to_key;
-
-  offset_to_key=queue->offset_to_key;
-  element=queue->root[idx];
-  half_queue=(elements=queue->elements) >> 1;
-
-  while (idx <= half_queue)
-  {
-    next_index=idx+idx;
-    if (next_index < elements &&
-	(queue->compare(queue->first_cmp_arg,
-			queue->root[next_index]+offset_to_key,
-			queue->root[next_index+1]+offset_to_key) *
-	 queue->max_at_top) > 0)
-      next_index++;
-    if ((queue->compare(queue->first_cmp_arg,
-                        queue->root[next_index]+offset_to_key,
-                        element+offset_to_key) * queue->max_at_top) >= 0)
-      break;
-    queue->root[idx]=queue->root[next_index];
-    idx=next_index;
-  }
-  queue->root[idx]=element;
-}
-
-
-#endif
 
 /*
   Fix heap when every element was changed.
@@ -582,13 +536,14 @@ my_bool do_test(uint no_parts, uint l_max_ind, my_bool l_fix_used)
   tot_no_parts= no_parts;
   tot_no_loops= 1024;
   perform_insert(&queue);
-  if ((result= perform_ins_del(&queue, max_ind)))
-  delete_queue(&queue);
+  result= perform_ins_del(&queue, max_ind);
   if (result)
   {
     printf("Error\n");
+    delete_queue(&queue);
     return TRUE;
   }
+  delete_queue(&queue);
   return FALSE;
 }
 
@@ -664,6 +619,72 @@ static void benchmark_test()
     queue_remove(queue, (uint) 0);
   queue_remove_all(queue);
   stop_measurement();
+  delete_queue(queue);
+}
+
+/**
+  Bug#30301356 - SOME EVENTS ARE DELAYED AFTER DROPPING EVENT
+
+  Test that ensures heap property is not violated if we remove an
+  element from an interior node. In the below test, we remove the
+  element 90 at index 6 in the array. After 90 is removed, the
+  parent node's of the deleted node violates the heap property
+  with the queue_remove function. We need to ensure the heap
+  property is satisfied by call queue_fix after removal from an
+  interior node in the queue_remove() function.
+*/
+
+// Element comparator for comparison of elements in heap.
+static int element_comparator(void *null_arg MY_ATTRIBUTE((unused)), uchar *lhs, uchar *rhs)
+{
+  int lkey = *(int *)lhs;
+  int rkey = *(int *)rhs;
+
+  return (lkey < rkey ? -1 : (lkey > rkey ? 1 : 0));
+}
+
+static my_bool is_tree_heap(uint index, QUEUE *queue)
+{
+  uint left, right;
+
+  if (index > queue->elements) return TRUE;
+  left = 2 * index;
+  right = 2 * index + 1;
+
+  if (left <= queue->elements &&
+      element_comparator(NULL, queue->root[index], queue->root[left]) == 1)
+    return FALSE;
+
+  if (left <= queue->elements &&
+      element_comparator(NULL, queue->root[index], queue->root[right]) == 1)
+    return FALSE;
+
+  return is_tree_heap(left, queue) && is_tree_heap(right, queue);
+}
+
+// Check if queue is a valid heap
+my_bool is_queue_valid(QUEUE *queue)
+{
+  unsigned i;
+
+  for(i = 0; i <= queue->elements; i++)
+    if (queue->root[i] == NULL) return FALSE;
+
+  return is_tree_heap(1, queue);
+}
+
+static void remove_queue_element_test()
+{
+  QUEUE queue;
+  int keys[11] = {60, 65, 84, 75, 80, 85, 90, 95, 100, 105, 82};
+  int i;
+  init_queue(&queue, 11, 0, 0, element_comparator, NULL);
+  for (i = 0; i < 11; i++)
+    queue_insert(&queue, (uchar*)&keys[i]);
+  assert(is_queue_valid(&queue));
+  queue_remove(&queue, 6);
+  assert(is_queue_valid(&queue));
+  delete_queue(&queue);
 }
 
 int main()
@@ -682,6 +703,7 @@ int main()
       return -1;
   }
   benchmark_test();
+  remove_queue_element_test();
   printf("OK\n");
   return 0;
 }

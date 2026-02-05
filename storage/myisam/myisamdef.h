@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2000, 2014, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -19,9 +26,11 @@
 #include "myisam.h"			/* Structs & some defines */
 #include "myisampack.h"			/* packing of keys */
 #include <my_tree.h>
-#include <my_pthread.h>
+#include <my_thread.h>
+#include "my_thread_local.h"
 #include <thr_lock.h>
 #include <mysql/psi/mysql_file.h>
+#include <mysql/plugin_ftparser.h>
 
 /* undef map from my_nosys; We need test-if-disk full */
 #if defined(my_write)
@@ -207,7 +216,8 @@ typedef struct st_mi_isam_share {	/* Shared between opens */
     global_changed,			/* If changed since open */
     not_flushed,
     temporary,delay_key_write,
-    concurrent_insert;
+    concurrent_insert,
+    have_rtree;
 
   THR_LOCK lock;
   mysql_mutex_t intern_lock;            /* Locking for use with _locking */
@@ -303,7 +313,7 @@ struct st_myisam_info {
 
   index_cond_func_t index_cond_func;   /* Index condition function */
   void *index_cond_func_arg;           /* parameter for the func */
-#ifdef __WIN__
+#ifdef _WIN32
   my_bool owned_by_merge;                       /* This MyISAM table is part of a merge union */
 #endif
   THR_LOCK_DATA lock;
@@ -321,10 +331,9 @@ typedef struct st_buffpek {
 
 typedef struct st_mi_sort_param
 {
-  pthread_t  thr;
   IO_CACHE read_cache, tempfile, tempfile_for_exceptions;
   DYNAMIC_ARRAY buffpek;
-  MI_BIT_BUFF   bit_buff;               /* For parallel repair of packrec. */
+  MI_BIT_BUFF   bit_buff;               /* For sort repair of packrec. */
 
   /*
     The next two are used to collect statistics, see update_key_parts for
@@ -352,7 +361,7 @@ typedef struct st_mi_sort_param
   int (*key_read)(struct st_mi_sort_param *,void *);
   int (*key_write)(struct st_mi_sort_param *, const void *);
   void (*lock_in_memory)(MI_CHECK *);
-  int (*write_keys)(struct st_mi_sort_param *, register uchar **,
+  int (*write_keys)(struct st_mi_sort_param *, uchar **,
                     uint , struct st_buffpek *, IO_CACHE *);
   uint (*read_to_buffer)(IO_CACHE *,struct st_buffpek *, uint);
   int (*write_key)(struct st_mi_sort_param *, IO_CACHE *,uchar *,
@@ -470,10 +479,8 @@ typedef struct st_mi_sort_param
 
 extern mysql_mutex_t THR_LOCK_myisam;
 
-#if defined(DONT_USE_RW_LOCKS)
-#define mysql_rwlock_wrlock(A) {}
-#define mysql_rwlock_rdlock(A) {}
-#define mysql_rwlock_unlock(A) {}
+#ifdef  __cplusplus
+extern "C" {
 #endif
 
 	/* Some extern variables */
@@ -588,7 +595,7 @@ extern uchar *_mi_get_last_key(MI_INFO *info,MI_KEYDEF *keyinfo,uchar *keypos,
 extern uchar *_mi_get_key(MI_INFO *info, MI_KEYDEF *keyinfo, uchar *page,
 			  uchar *key, uchar *keypos, uint *return_key_length);
 extern uint _mi_keylength(MI_KEYDEF *keyinfo,uchar *key);
-extern uint _mi_keylength_part(MI_KEYDEF *keyinfo, register uchar *key,
+extern uint _mi_keylength_part(MI_KEYDEF *keyinfo, uchar *key,
 			       HA_KEYSEG *end);
 extern uchar *_mi_move_key(MI_KEYDEF *keyinfo,uchar *to,uchar *from);
 extern int _mi_search_next(MI_INFO *info,MI_KEYDEF *keyinfo,uchar *key,
@@ -604,7 +611,7 @@ extern int _mi_dispose(MI_INFO *info,MI_KEYDEF *keyinfo,my_off_t pos,
 extern my_off_t _mi_new(MI_INFO *info,MI_KEYDEF *keyinfo,int level);
 extern uint _mi_make_key(MI_INFO *info,uint keynr,uchar *key,
 			 const uchar *record,my_off_t filepos);
-extern uint _mi_pack_key(register MI_INFO *info, uint keynr, uchar *key,
+extern uint _mi_pack_key(MI_INFO *info, uint keynr, uchar *key,
                          uchar *old, key_part_map keypart_map,
                          HA_KEYSEG **last_used_keyseg);
 extern int _mi_read_key_record(MI_INFO *info,my_off_t filepos,uchar *buf);
@@ -636,6 +643,10 @@ extern int _mi_pack_rec_unpack(MI_INFO *info, MI_BIT_BUFF *bit_buff,
 extern ulonglong mi_safe_mul(ulonglong a,ulonglong b);
 extern int _mi_ft_update(MI_INFO *info, uint keynr, uchar *keybuf,
 			 const uchar *oldrec, const uchar *newrec, my_off_t pos);
+
+#ifdef __cplusplus
+}
+#endif
 
 struct st_sort_info;
 
@@ -765,14 +776,14 @@ int mi_open_datafile(MI_INFO *info, MYISAM_SHARE *share, const char *orn_name,
                      File file_to_dup);
 
 int mi_open_keyfile(MYISAM_SHARE *share);
-void mi_setup_functions(register MYISAM_SHARE *share);
+void mi_setup_functions(MYISAM_SHARE *share);
 my_bool mi_dynmap_file(MI_INFO *info, my_off_t size);
 int mi_munmap_file(MI_INFO *info);
 void mi_remap_file(MI_INFO *info, my_off_t size);
 void _mi_report_crashed(MI_INFO *file, const char *message,
                         const char *sfile, uint sline);
 
-int mi_check_index_cond(register MI_INFO *info, uint keynr, uchar *record);
+int mi_check_index_cond(MI_INFO *info, uint keynr, uchar *record);
 
     /* Functions needed by mi_check */
 volatile int *killed_ptr(MI_CHECK *param);
@@ -781,8 +792,6 @@ void mi_check_print_warning(MI_CHECK *param, const char *fmt,...);
 void mi_check_print_info(MI_CHECK *param, const char *fmt,...);
 int flush_pending_blocks(MI_SORT_PARAM *param);
 int sort_ft_buf_flush(MI_SORT_PARAM *sort_param);
-int thr_write_keys(MI_SORT_PARAM *sort_param);
-pthread_handler_t thr_find_all_keys(void *arg);
 int flush_blocks(MI_CHECK *param, KEY_CACHE *key_cache, File file);
 
 int sort_write_record(MI_SORT_PARAM *sort_param);
@@ -790,19 +799,21 @@ int _create_index_by_sort(MI_SORT_PARAM *info, my_bool no_messages, ulonglong);
 
 extern void mi_set_index_cond_func(MI_INFO *info, index_cond_func_t func,
                                    void *func_arg);
+
+extern thread_local_key_t keycache_tls_key;
 #ifdef __cplusplus
 }
 #endif
 
 #ifdef HAVE_PSI_INTERFACE
 C_MODE_START
-extern PSI_mutex_key mi_key_mutex_MYISAM_SHARE_intern_lock,
-  mi_key_mutex_MI_SORT_INFO_mutex, mi_key_mutex_MI_CHECK_print_msg;
+extern PSI_mutex_key mi_key_mutex_MYISAM_SHARE_intern_lock;
 
 extern PSI_rwlock_key mi_key_rwlock_MYISAM_SHARE_key_root_lock,
   mi_key_rwlock_MYISAM_SHARE_mmap_lock;
 
-extern PSI_cond_key mi_key_cond_MI_SORT_INFO_cond;
+extern PSI_cond_key mi_key_cond_MI_SORT_INFO_cond,
+  mi_keycache_thread_var_suspend;
 
 extern PSI_file_key mi_key_file_datatmp, mi_key_file_dfile, mi_key_file_kfile,
   mi_key_file_log;
@@ -812,4 +823,30 @@ extern PSI_thread_key mi_key_thread_find_all_keys;
 void init_myisam_psi_keys();
 C_MODE_END
 #endif /* HAVE_PSI_INTERFACE */
+
+C_MODE_START
+
+extern PSI_memory_key mi_key_memory_MYISAM_SHARE;
+extern PSI_memory_key mi_key_memory_MI_INFO;
+extern PSI_memory_key mi_key_memory_MI_INFO_ft1_to_ft2;
+extern PSI_memory_key mi_key_memory_MI_INFO_bulk_insert;
+extern PSI_memory_key mi_key_memory_record_buffer;
+extern PSI_memory_key mi_key_memory_FTB;
+extern PSI_memory_key mi_key_memory_FT_INFO;
+extern PSI_memory_key mi_key_memory_FTPARSER_PARAM;
+extern PSI_memory_key mi_key_memory_ft_memroot;
+extern PSI_memory_key mi_key_memory_ft_stopwords;
+extern PSI_memory_key mi_key_memory_MI_SORT_PARAM;
+extern PSI_memory_key mi_key_memory_MI_SORT_PARAM_wordroot;
+extern PSI_memory_key mi_key_memory_SORT_FT_BUF;
+extern PSI_memory_key mi_key_memory_SORT_KEY_BLOCKS;
+extern PSI_memory_key mi_key_memory_filecopy;
+extern PSI_memory_key mi_key_memory_SORT_INFO_buffer;
+extern PSI_memory_key mi_key_memory_MI_DECODE_TREE;
+extern PSI_memory_key mi_key_memory_MYISAM_SHARE_decode_tables;
+extern PSI_memory_key mi_key_memory_preload_buffer;
+extern PSI_memory_key mi_key_memory_stPageList_pages;
+extern PSI_memory_key mi_key_memory_keycache_thread_var;
+
+C_MODE_END
 

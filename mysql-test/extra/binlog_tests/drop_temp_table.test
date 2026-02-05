@@ -66,6 +66,13 @@ connection con2;
 # To be sure that logging has been done, we use a user lock.
 SELECT GET_LOCK("a",10);
 let $VERSION=`SELECT VERSION()`;
+
+if (`SELECT @@GLOBAL.binlog_format != 'ROW'`)
+{
+  let $wait_binlog_event=DROP /*!40005 TEMPORARY */ TABLE IF EXISTS;
+  source include/wait_for_binlog_event.inc;
+}
+
 source include/show_binlog_events.inc;
 DROP DATABASE `drop-temp+table-test`;
 
@@ -82,21 +89,171 @@ DROP DATABASE `drop-temp+table-test`;
 
 RESET MASTER;
 
-CREATE TABLE t1 ( i text );
+if (`SELECT @@GLOBAL.binlog_format != 'ROW'`)
+{
+  CREATE TABLE t1 ( i text );
 
---connect(con1,localhost,root,,)
-CREATE TEMPORARY TABLE ttmp1 ( i text );
-SET @@session.binlog_format=ROW;
-INSERT INTO t1 VALUES ('1');
-SELECT @@session.binlog_format;
---disconnect con1
+  --connect(con1,localhost,root,,)
+  CREATE TEMPORARY TABLE ttmp1 ( i text );
+  SET @@session.binlog_format=ROW;
+  INSERT INTO t1 VALUES ('1');
+  SELECT @@session.binlog_format;
+  --disconnect con1
 
--- connection default
---let $wait_binlog_event= DROP
---source include/wait_for_binlog_event.inc
--- source include/show_binlog_events.inc
-RESET MASTER;
-
-DROP TABLE t1;
+  -- connection default
+  --let $wait_binlog_event= DROP
+  --source include/wait_for_binlog_event.inc
+  --let $mask_binlog_commit_events= 1
+  -- source include/show_binlog_events.inc
+  --let $mask_binlog_commit_events= 0
+  DROP TABLE t1;
+  RESET MASTER;
+}
 
 # End of 4.1 tests
+
+--echo #
+--echo # Bug 83003: Using temporary tables on slaves increases GTID sequence number
+--echo #
+
+--source include/count_sessions.inc
+--connect (con1,localhost,root,,)
+
+SET @saved_binlog_format= @@SESSION.binlog_format;
+SET SESSION binlog_format= STATEMENT;
+CREATE TEMPORARY TABLE temp_needs_logging(a INT) ENGINE=InnoDB;
+SET SESSION binlog_format= @saved_binlog_format;
+
+# Check with both transactional and non-transactional tables as those are logged
+# separately in close_temporary_tables.
+CREATE TEMPORARY TABLE temp_trx(a INT) ENGINE=InnoDB;
+CREATE TEMPORARY TABLE temp_non_trx(a INT) ENGINE=MyISAM;
+
+CREATE TEMPORARY TABLE temp_needs_logging_in_stmt(a INT) ENGINE=InnoDB;
+SET SESSION sql_log_bin= 0;
+CREATE TEMPORARY TABLE temp_binlog_disabled(a INT) ENGINE=InnoDB;
+SET SESSION sql_log_bin= 1;
+
+--disconnect con1
+--connection default
+--source include/wait_until_count_sessions.inc
+
+--source include/show_binlog_events.inc
+
+# End of 5.6 tests
+--echo #
+--echo # BUG#21638823: ASSERTION FAILED:
+--echo # THD->GET_TRANSACTION()->IS_EMPTY(TRANSACTION_CTX::STMT) || THD
+--echo #
+--echo # Test case first checks that it is possible to terminate a connection
+--echo # with a temporary table (which will implicitly remove the temporary
+--echo # table) while in XA_idle. Then checks that an explicit DROP TEMPORARY
+--echo # TABLE is rejected with ER_XAER_RMFAIL as required by the XA spec.
+--echo #
+--echo # Reset master to avoid clutter when dumping binlog
+RESET MASTER;
+--echo # Create separate connection
+connect (con3,localhost,root,,);
+--connection con3
+--echo # Create temporary table
+CREATE TEMPORARY TABLE temp(i int);
+INSERT INTO temp VALUES (0), (1), (2), (3);
+--echo # Start XA txn and leave it in XA_idle
+XA START 'idle_at_disconnect';
+XA END 'idle_at_disconnect';
+--echo # Terminate connection to verify that the temporary table can be
+--echo # removed at disconnect even in XA_idle, and that this does not
+--echo # cause problems for replication
+--disconnect con3
+--source include/wait_until_disconnected.inc
+--connection default
+if (`SELECT @@GLOBAL.binlog_format != 'ROW'`)
+{
+  --let $wait_binlog_event= DROP
+  --source include/wait_for_binlog_event.inc
+}
+--echo # Dump binlog to show that, either the generated DROP comes after tx
+--echo # commit (stmt or mixed), or there is no trace of the XA txn and
+--echo # the temp table (row)
+--source include/show_binlog_events.inc
+--echo #
+--echo # Start XA txn and leave in XA_idle
+XA START 'idle_when_drop_temp';
+XA END 'idle_when_drop_temp';
+--echo # Verify that explicit DROP TEMPORARY TABLE is rejected in XA_idle
+--error ER_XAER_RMFAIL, ER_GTID_UNSAFE_CREATE_DROP_TEMPORARY_TABLE_IN_TRANSACTION
+DROP TEMPORARY TABLE IF EXISTS t;
+
+XA ROLLBACK 'idle_when_drop_temp';
+
+# clean up the binary log at in the end of the test
+# case as well.
+RESET MASTER;
+
+--echo #
+--echo # BUG#28642318: POINT IN TIME RECOVERY USING MYSQLBINLOG BROKEN
+--echo #               WITH TEMPORARY TABLE -> ERRORS
+
+--echo # Test case for DELETE query.
+
+RESET MASTER;
+connect (con1,localhost,root,,);
+
+--echo # Set up.
+--connection default
+--disable_warnings
+SET @save_binlog_format= @@session.binlog_format;
+SET @@session.binlog_format=STATEMENT;
+let $MYSQLD_DATADIR= `select @@datadir`;
+CREATE TABLE t1 (a INT) ENGINE=INNODB;
+
+--connection con1
+SET @@session.binlog_format=STATEMENT;
+CREATE TEMPORARY TABLE t1 (b BLOB) ENGINE=INNODB;
+
+--connection default
+DELETE d1, d2 FROM t1 AS d1, t1 AS d2 WHERE d1.a<>d2.a;
+
+--exec $MYSQL_BINLOG --force-if-open $MYSQLD_DATADIR/master-bin.000001 > $MYSQLTEST_VARDIR/tmp/bug28642318.sql
+
+--connection default
+DROP TABLE t1;
+
+--echo # DELETE query fails with table re-open error without patch.
+--exec $MYSQL -e "SET SQL_LOG_BIN=0; SOURCE $MYSQLTEST_VARDIR/tmp/bug28642318.sql;"
+
+--echo # Clean up.
+--connection con1
+DROP TABLE IF EXISTS t1;
+
+--connection default
+DROP TABLE IF EXISTS t1;
+RESET MASTER;
+
+--echo # Test case for DROP query.
+
+--connection default
+CREATE TABLE t1 (a INT) ENGINE=INNODB;
+
+--connection con1
+CREATE TEMPORARY TABLE t1 (b BLOB) ENGINE=INNODB;
+
+--connection default
+DROP TABLE t1;
+
+--connection con1
+DROP TABLE t1;
+
+--connection default
+--exec $MYSQL_BINLOG --force-if-open $MYSQLD_DATADIR/master-bin.000001 > $MYSQLTEST_VARDIR/tmp/bug28642318.sql
+
+--echo # DROP table query fails with unknown table error without patch.
+--exec $MYSQL -e "SET SQL_LOG_BIN=0; SOURCE $MYSQLTEST_VARDIR/tmp/bug28642318.sql;"
+
+--echo # Clean up
+--connection default
+SET @@session.binlog_format= @save_binlog_format;
+RESET MASTER;
+
+--disconnect con1
+--enable_warnings

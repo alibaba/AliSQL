@@ -53,10 +53,15 @@ EXECUTE stmt;
 INSERT INTO t1 VALUES (1), (2), (3), (4), (5), (6), (7);
 INSERT INTO t2 VALUES (1), (2);
 
+--echo # Check materialized derived table
+
+set @optimizer_switch_saved= @@optimizer_switch;
+set optimizer_switch='derived_merge=off';
 EXPLAIN
 SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT a1.i FROM (SELECT * FROM t1) a1, t2) a2) a3) a4;
 EXPLAIN FORMAT=JSON
 SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT a1.i FROM (SELECT * FROM t1) a1, t2) a2) a3) a4;
+set optimizer_switch= @optimizer_switch_saved;
 
 --echo # subquery in WHERE
 EXPLAIN             SELECT * FROM t1 WHERE i IN (SELECT i FROM t2 WHERE t1.i = 10 ORDER BY RAND());
@@ -99,9 +104,11 @@ EXPLAIN FORMAT=JSON (SELECT * FROM t1) UNION (SELECT * FROM t2) ORDER BY (SELECT
 
 --echo # subquery in the GROUP BY clause
 
+--source include/turn_off_only_full_group_by.inc
 --let $query=SELECT * FROM t1 GROUP BY i > ALL (SELECT i FROM t2) OR i < ALL (SELECT i FROM t2);
 --eval EXPLAIN $query
 --eval EXPLAIN FORMAT=JSON $query
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 
 --echo # subquery in the SELECT list
 
@@ -138,7 +145,7 @@ DROP TABLE t1, t2, t3, t4;
 --echo # semi-join materialization (if enabled)
 
 CREATE TABLE t1 (a INT);
-INSERT INTO t1 VALUES (1), (1), (1);
+INSERT INTO t1 VALUES (1), (1), (1), (1), (1), (1), (1), (1), (1), (1), (1), (1);
 CREATE TABLE t2 (a INT) SELECT * FROM t1;
 CREATE TABLE t3 (a INT) SELECT * FROM t1;
 CREATE TABLE t4 (a INT) SELECT * FROM t1;
@@ -248,6 +255,7 @@ DROP TABLE t1, t2, t3;
 
 --echo # Various queries
 
+--source include/turn_off_only_full_group_by.inc
 let $query=
   SELECT a, b FROM 
     (SELECT 1 AS a, 2 AS b
@@ -257,6 +265,7 @@ let $query=
   ORDER BY b DESC;
 --eval EXPLAIN $query
 --eval EXPLAIN FORMAT=JSON $query
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 
 --echo #
 
@@ -285,14 +294,17 @@ INSERT INTO t2 SELECT i, i * 10 FROM t1;
 let $query=SELECT * FROM t1 ORDER BY (SELECT t2.j FROM t2 WHERE t2.i = t1.i);
 --eval EXPLAIN $query
 --eval EXPLAIN FORMAT=JSON $query
+--source include/turn_off_only_full_group_by.inc
 let $query=SELECT * FROM t1 GROUP BY (SELECT t2.j FROM t2 WHERE t2.i = t1.i);
 --eval EXPLAIN $query
 --eval EXPLAIN FORMAT=JSON $query
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 DROP TABLE t1, t2;
 
-CREATE TABLE t1 (a INT NOT NULL, b INT NOT NULL, PRIMARY KEY(a, b));
+CREATE TABLE t1 (a INT NOT NULL, b INT NOT NULL, KEY k1 (a, b));
 INSERT INTO t1 VALUES (10,1),(10,2),(10,3),(20,4),(20,5),(20,6),
-  (30,7),(30,8),(30,9),(40,10),(40,11),(40,12),(40,13);
+  (30,7),(30,8),(30,9),(40,10),(40,11),(40,12),(40,13),
+  (40,14),(40,15),(40,16),(40,17),(40,18),(40,19),(40,20);
 
 EXPLAIN FORMAT=JSON SELECT a, MIN(b) AS b FROM t1 GROUP BY a ORDER BY b;
 
@@ -333,7 +345,9 @@ let $query=SELECT DISTINCT SUM(b) s FROM t1 GROUP BY a ORDER BY s;
 --eval EXPLAIN FORMAT=JSON $query
 FLUSH STATUS;
 --eval $query
+--disable_warnings
 SHOW SESSION STATUS WHERE (Variable_name LIKE 'Sort_%' OR Variable_name LIKE 'Created_%_tables') AND Value > 0;
+--enable_warnings
 
 DROP TABLE t1;
 
@@ -343,7 +357,9 @@ CREATE TABLE t1 (a INT NOT NULL);
 CREATE TABLE t2 (a INT NOT NULL, PRIMARY KEY (a));
 INSERT INTO t1 VALUES (1);
 INSERT INTO t2 VALUES (1),(2);
+--source include/turn_off_only_full_group_by.inc
 EXPLAIN FORMAT=JSON SELECT SQL_BIG_RESULT DISTINCT t1.a FROM t1,t2 ORDER BY t2.a;
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 DROP TABLE t1, t2;
 
 --echo #

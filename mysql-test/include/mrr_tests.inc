@@ -206,7 +206,7 @@ ANALYZE TABLE t1;
 -- enable_query_log
 
 --echo This must show range + using index condition:
---replace_column 9 x
+--replace_column 10 x 11 x
 explain select * from t1 where a < 10 and b = repeat(char(65+a), 20);
 select * from t1 where a < 10 and b = repeat(char(65+a), 20);
 drop table t0,t1;
@@ -255,8 +255,6 @@ select count(length(a) + length(filler))
 from t2 force index (k1)
 where a>='a-1000-a' and a <'a-1001-a';
 
-# The expected rows differs a bit with different page sizes
---replace_result 98 ROWS 99 ROWS
 eval EXPLAIN $query;
 eval $query;
 
@@ -271,7 +269,7 @@ insert into t2 select A.a, B.a, B.a, A.a, 'filler' from t1 A, t1 B;
 ANALYZE TABLE t2;
 -- enable_result_log
 -- enable_query_log
---replace_column 9 #
+--replace_column 10 #
 explain select * from t2 force index (d) where d < 10;
 drop table t2;
 
@@ -322,7 +320,7 @@ CREATE TABLE t1 (
   KEY `varchar_key` (`varchar_key`)
 );
 
-INSERT INTO t1 VALUES 
+INSERT IGNORE INTO t1 VALUES 
 (1,5,5,'2009-10-16','2009-10-16','09:28:15','09:28:15','2007-09-14 05:34:08','2007-09-14 05:34:08','qk','qk'),
 (2,6,6,'0000-00-00','0000-00-00','23:06:39','23:06:39','0000-00-00 00:00:00','0000-00-00 00:00:00','j','j'),
 (3,10,10,'2000-12-18','2000-12-18','22:16:19','22:16:19','2006-11-04 15:42:50','2006-11-04 15:42:50','aew','aew'),
@@ -360,6 +358,7 @@ ANALYZE TABLE t1;
 
 SELECT id FROM t1 WHERE parent_id IS NOT NULL ORDER BY id DESC LIMIT 1;
 --echo This must show type=index, extra=Using where
+# The filtering effect of IS NOT NULL is from stats of the range optimizer.
 explain SELECT * FROM t1 WHERE parent_id IS NOT NULL ORDER BY id DESC LIMIT 1;
 SELECT * FROM t1 WHERE parent_id IS NOT NULL ORDER BY id DESC LIMIT 1;
 drop table t1;
@@ -591,3 +590,52 @@ eval $query;
 
 DROP TABLE ten, t1, t2, t3, t4, t5;
 
+--echo #
+--echo # Bug 18172819 CRASH ON DSMRR_IMPL::CHOOSE_MRR_IMPL IN SQL/HANDLER.CC 
+--echo #
+
+# Test needs to run with big_tables ON
+set @big_tables_save= @@big_tables;
+set @optimizer_switch_save=@@optimizer_switch;
+set big_tables=ON;
+set optimizer_switch='derived_merge=off';
+SELECT @@big_tables;
+
+CREATE TABLE t1 (
+  i1 INTEGER NOT NULL,
+  c1 VARCHAR(1)
+);
+
+INSERT INTO t1 VALUES (1,'a'), (2, NULL);
+
+CREATE TABLE t2 (
+  c1 VARCHAR(1),
+  i1 INTEGER NOT NULL,
+  KEY (c1)
+);
+
+INSERT INTO t2 VALUES ('a', 1), (NULL, 2);
+
+-- disable_query_log
+-- disable_result_log
+ANALYZE TABLE t1;
+ANALYZE TABLE t2;
+-- enable_result_log
+-- enable_query_log
+
+let query=
+SELECT *
+FROM
+  ( SELECT * FROM  t1 ) AS d1
+WHERE d1.c1 IN ( SELECT c1 FROM t2 )
+  AND d1.c1 IS NULL
+ORDER BY d1.i1;
+
+eval EXPLAIN $query;
+eval $query;
+
+DROP TABLE t1, t2;
+
+# Restore the configuration for big_tables
+set big_tables=@big_tables_save;
+set optimizer_switch=@optimizer_switch_save;

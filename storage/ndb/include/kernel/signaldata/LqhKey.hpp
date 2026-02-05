@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -20,6 +27,9 @@
 
 #include "SignalData.hpp"
 #include <trigger_definitions.h>
+
+#define JAM_FILE_ID 27
+
 
 class LqhKeyReq {
   /**
@@ -71,9 +81,9 @@ private:
   union {
     /**
      * When sent from  TC -> LQH this variable contains scanInfo
-     * When send from LQH -> LQH this variable contains noFiredTriggers
+     * When send from LQH -> LQH this variable contains numFiredTriggers
      */
-    UintR noFiredTriggers;	// DATA 10 
+    UintR numFiredTriggers;	// DATA 10 
     Uint32 scanInfo;            // DATA 10
   };
 
@@ -134,6 +144,7 @@ private:
   static void setSeqNoReplica(UintR & requestInfo, UintR val);
   static void setLastReplicaNo(UintR & requestInfo, UintR val);
   static void setAIInLqhKeyReq(UintR & requestInfo, UintR val);
+  static void clearAIInLqhKeyReq(UintR & requestInfo);
   static void setKeyLen(UintR & requestInfo, UintR val);
   static void setSameClientAndTcFlag(UintR & requestInfo, UintR val);
   static void setReturnedReadLenAIFlag(UintR & requestInfo, UintR val);
@@ -169,10 +180,16 @@ private:
   static void setCorrFactorFlag(UintR & requestInfo, UintR val);
 
   /**
-   * Include corr factor
+   * Include deferred constraints
    */
   static UintR getDeferredConstraints(const UintR & requestInfo);
   static void setDeferredConstraints(UintR & requestInfo, UintR val);
+
+  /**
+   * Include disable foreign keys
+   */
+  static UintR getDisableFkConstraints(const UintR & requestInfo);
+  static void setDisableFkConstraints(UintR & requestInfo, UintR val);
 };
 
 /**
@@ -203,6 +220,7 @@ private:
  * A = CorrFactor flag        - 1  Bit (24)
  * P = Do normal protocol even if dirty-read - 1 Bit (25)
  * D = Deferred constraints   - 1  Bit (26)
+ * F = Disable FK constraints - 1  Bit (0)
 
  * Short LQHKEYREQ :
  *             1111111111222222222233
@@ -213,7 +231,7 @@ private:
  * Long LQHKEYREQ :
  *             1111111111222222222233
  *   01234567890123456789012345678901
- *             llgnqpdisooorrAPDcumxz
+ *   F         llgnqpdisooorrAPDcumxz
  *
  */
 
@@ -244,6 +262,7 @@ private:
 #define RI_CORR_FACTOR_VALUE (24)
 #define RI_NORMAL_DIRTY      (25)
 #define RI_DEFERRED_CONSTAINTS (26)
+#define RI_DISABLE_FK        (0)
 
 /**
  * Scan Info
@@ -514,6 +533,12 @@ LqhKeyReq::setAIInLqhKeyReq(UintR & requestInfo, UintR val){
 
 inline
 void
+LqhKeyReq::clearAIInLqhKeyReq(UintR & requestInfo){
+  requestInfo &= ~((Uint32)RI_AI_IN_THIS_MASK << RI_AI_IN_THIS_SHIFT);
+}
+
+inline
+void
 LqhKeyReq::setKeyLen(UintR & requestInfo, UintR val){
   ASSERT_MAX(val, RI_KEYLEN_MASK, "LqhKeyReq::setKeyLen");
   requestInfo |= (val << RI_KEYLEN_SHIFT);
@@ -647,6 +672,19 @@ LqhKeyReq::getDeferredConstraints(const UintR & requestInfo){
 }
 
 inline
+void
+LqhKeyReq::setDisableFkConstraints(UintR & requestInfo, UintR val){
+  ASSERT_BOOL(val, "LqhKeyReq::setDisableFkConstraints");
+  requestInfo |= (val << RI_DISABLE_FK);
+}
+
+inline
+UintR
+LqhKeyReq::getDisableFkConstraints(const UintR & requestInfo){
+  return (requestInfo >> RI_DISABLE_FK) & 1;
+}
+
+inline
 Uint32
 table_version_major_lqhkeyreq(Uint32 x)
 {
@@ -710,16 +748,22 @@ private:
   };
   Uint32 transId1;
   Uint32 transId2;
-  Uint32 noFiredTriggers; // bit 31 defered trigger
+  Uint32 numFiredTriggers; // bit 31 defered trigger
 
   static Uint32 getFiredCount(Uint32 v) {
     return NoOfFiredTriggers::getFiredCount(v);
   }
-  static Uint32 getDeferredBit(Uint32 v) {
-    return NoOfFiredTriggers::getDeferredBit(v);
+  static Uint32 getDeferredUKBit(Uint32 v) {
+    return NoOfFiredTriggers::getDeferredUKBit(v);
   }
-  static void setDeferredBit(Uint32 & v) {
-    NoOfFiredTriggers::setDeferredBit(v);
+  static void setDeferredUKBit(Uint32 & v) {
+    NoOfFiredTriggers::setDeferredUKBit(v);
+  }
+  static Uint32 getDeferredFKBit(Uint32 v) {
+    return NoOfFiredTriggers::getDeferredFKBit(v);
+  }
+  static void setDeferredFKBit(Uint32 & v) {
+    NoOfFiredTriggers::setDeferredFKBit(v);
   }
 };
 
@@ -755,5 +799,8 @@ private:
   Uint32 transId1;
   Uint32 transId2;
 };
+
+
+#undef JAM_FILE_ID
 
 #endif

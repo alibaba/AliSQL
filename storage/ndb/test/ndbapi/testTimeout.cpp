@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -32,9 +39,8 @@ setTransactionTimeout(NDBT_Context* ctx, NDBT_Step* step){
   NdbRestarter restarter;
   int timeout = ctx->getProperty("TransactionInactiveTimeout",TIMEOUT);
 
-  NdbConfig conf(GETNDB(step)->getNodeId()+1);
-  unsigned int nodeId = conf.getMasterNodeId();
-  if (!conf.getProperty(nodeId,
+  NdbConfig conf;
+  if (!conf.getProperty(conf.getMasterNodeId(),
 			NODE_TYPE_DB, 
 			CFG_DB_TRANSACTION_INACTIVE_TIMEOUT,
 			&g_org_timeout)){
@@ -53,7 +59,11 @@ int
 resetTransactionTimeout(NDBT_Context* ctx, NDBT_Step* step){
   NdbRestarter restarter;
   
-  int val[] = { DumpStateOrd::TcSetApplTransactionTimeout, g_org_timeout };
+  // g_org_timeout will be passed as printed int to mgm,
+  // then converted to Uint32 before sent to tc.
+  // Check convert Uint32 -> int -> Uint32 is safe
+  NDB_STATIC_ASSERT(UINT_MAX32 == (Uint32)(int)UINT_MAX32);
+  int val[] = { DumpStateOrd::TcSetApplTransactionTimeout, (int)g_org_timeout };
   if(restarter.dumpStateAllNodes(val, 2) != 0){
     return NDBT_FAILED;
   }
@@ -66,9 +76,8 @@ setDeadlockTimeout(NDBT_Context* ctx, NDBT_Step* step){
   NdbRestarter restarter;
   int timeout = ctx->getProperty("TransactionDeadlockTimeout", TIMEOUT);
   
-  NdbConfig conf(GETNDB(step)->getNodeId()+1);
-  unsigned int nodeId = conf.getMasterNodeId();
-  if (!conf.getProperty(nodeId,
+  NdbConfig conf;
+  if (!conf.getProperty(conf.getMasterNodeId(),
 			NODE_TYPE_DB, 
 			CFG_DB_TRANSACTION_DEADLOCK_TIMEOUT,
 			&g_org_deadlock))
@@ -88,9 +97,8 @@ getDeadlockTimeout(NDBT_Context* ctx, NDBT_Step* step){
   NdbRestarter restarter;
   
   Uint32 val = 0;
-  NdbConfig conf(GETNDB(step)->getNodeId()+1);
-  unsigned int nodeId = conf.getMasterNodeId();
-  if (!conf.getProperty(nodeId,
+  NdbConfig conf;
+  if (!conf.getProperty(conf.getMasterNodeId(),
 			NODE_TYPE_DB, 
 			CFG_DB_TRANSACTION_DEADLOCK_TIMEOUT,
 			&val))
@@ -107,7 +115,11 @@ int
 resetDeadlockTimeout(NDBT_Context* ctx, NDBT_Step* step){
   NdbRestarter restarter;
   
-  int val[] = { DumpStateOrd::TcSetTransactionTimeout, g_org_deadlock };
+  // g_org_deadlock will be passed as printed int to mgm,
+  // then converted to Uint32 before sent to tc.
+  // Check convert Uint32 -> int -> Uint32 is safe
+  NDB_STATIC_ASSERT(UINT_MAX32 == (Uint32)(int)UINT_MAX32);
+  int val[] = { DumpStateOrd::TcSetTransactionTimeout, (int)g_org_deadlock };
   if(restarter.dumpStateAllNodes(val, 2) != 0){
     return NDBT_FAILED;
   }
@@ -308,9 +320,8 @@ int runDeadlockTimeoutTrans(NDBT_Context* ctx, NDBT_Step* step){
   int stepNo = step->getStepNo();
 
   Uint32 deadlock_timeout;
-  NdbConfig conf(GETNDB(step)->getNodeId()+1);
-  unsigned int nodeId = conf.getMasterNodeId();
-  if (!conf.getProperty(nodeId,
+  NdbConfig conf;
+  if (!conf.getProperty(conf.getMasterNodeId(),
                         NODE_TYPE_DB,
                         CFG_DB_TRANSACTION_DEADLOCK_TIMEOUT,
                         &deadlock_timeout)){
@@ -479,7 +490,7 @@ int runScanRefreshNoTimeout(NDBT_Context* ctx, NDBT_Step* step){
         }
 
         int res;
-        for (size_t j = 0; j < ops.size(); j++)
+        for (unsigned j = 0; j < ops.size(); j++)
         {
           while((res = ops[j]->nextResult()) == 0);
           CHECK(res != -1);

@@ -1,13 +1,20 @@
-# Copyright (c) 2008, 2010, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2008, 2021, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; version 2 of the License.
+# it under the terms of the GNU General Public License, version 2.0,
+# as published by the Free Software Foundation.
+#
+# This program is also distributed with certain software (including
+# but not limited to OpenSSL) that is licensed under separate terms,
+# as designated in a particular file or component or in included license
+# documentation.  The authors of MySQL hereby grant you an additional
+# permission to link the program and your derivative works with the
+# separately licensed software that they have included with MySQL.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# GNU General Public License, version 2.0, for more details.
 #
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
@@ -22,31 +29,15 @@ CHECK_TYPE_SIZE(long NDB_SIZEOF_LONG)
 CHECK_TYPE_SIZE("char*" NDB_SIZEOF_CHARP)
 CHECK_TYPE_SIZE("long long" NDB_SIZEOF_LONG_LONG)
 CONFIGURE_FILE(ndb_types.h.in
-               ${CMAKE_CURRENT_SOURCE_DIR}/ndb_types.h
+               ${CMAKE_CURRENT_BINARY_DIR}/ndb_types.h
                @ONLY)
-
-#
-# Read a value for variable from ndb_configure.m4
-#
-MACRO(NDB_GET_CONFIG_VALUE keyword var)
- IF(NOT ${var})
-   # Read the line which contains the keyword
-   FILE (STRINGS ${NDB_SOURCE_DIR}/VERSION str
-         REGEX "^[ ]*${keyword}=")
-   IF(str)
-     # Remove the keyword=
-     STRING(REPLACE "${keyword}=" "" str ${str})
-     # Remove whitespace
-     STRING(REGEX REPLACE "[ ].*" "" str "${str}")
-     SET(${var} ${str})
-   ENDIF()
- ENDIF()
-ENDMACRO()
+# Exclude ndb_types.h from "make dist"
+LIST(APPEND CPACK_SOURCE_IGNORE_FILES include/ndb_types\\\\.h$)
 
 #
 # Read ndb_configure.m4 and extract the NDB_VERSION_XX=YY variables
 #
-
+INCLUDE("${NDB_SOURCE_DIR}/cmake/ndb_get_config_value.cmake")
 NDB_GET_CONFIG_VALUE(NDB_VERSION_MAJOR major)
 SET(NDB_VERSION_MAJOR "${major}" CACHE INTERNAL "NDB Major Version" FORCE)
 
@@ -84,6 +75,61 @@ ENDIF()
 
 # Create ndb_version.h
 CONFIGURE_FILE(ndb_version.h.in
-               ${CMAKE_CURRENT_SOURCE_DIR}/ndb_version.h
+               ${CMAKE_CURRENT_BINARY_DIR}/ndb_version.h
                @ONLY)
+# Exclude ndb_version.h from "make dist"
+LIST(APPEND CPACK_SOURCE_IGNORE_FILES include/ndb_version\\\\.h$)
 
+
+# Install public headers
+SET(NDB_GENERAL_HEADERS
+    ndb_constants.h
+    ndb_init.h
+    # The below files are generated and thus found in build dir
+    ${CMAKE_CURRENT_BINARY_DIR}/ndb_types.h
+    ${CMAKE_CURRENT_BINARY_DIR}/ndb_version.h)
+
+
+SET(NDB_NDBAPI_HEADERS
+    ndbapi/ndbapi_limits.h
+    ndbapi/ndb_opt_defaults.h
+    ndbapi/Ndb.hpp
+    ndbapi/NdbApi.hpp
+    ndbapi/NdbTransaction.hpp
+    ndbapi/NdbDictionary.hpp
+    ndbapi/NdbError.hpp
+    ndbapi/NdbEventOperation.hpp
+    ndbapi/NdbIndexOperation.hpp
+    ndbapi/NdbOperation.hpp
+    ndbapi/ndb_cluster_connection.hpp
+    ndbapi/NdbBlob.hpp
+    ndbapi/NdbPool.hpp
+    ndbapi/NdbRecAttr.hpp
+    ndbapi/NdbReceiver.hpp
+    ndbapi/NdbScanFilter.hpp
+    ndbapi/NdbScanOperation.hpp
+    ndbapi/NdbIndexScanOperation.hpp
+    ndbapi/NdbIndexStat.hpp
+    ndbapi/ndberror.h
+    ndbapi/NdbInterpretedCode.hpp)
+
+SET(NDB_MGMAPI_HEADERS
+    mgmapi/mgmapi.h
+    mgmapi/mgmapi_error.h
+    mgmapi/mgmapi_debug.h
+    mgmapi/mgmapi_config_parameters.h
+    mgmapi/mgmapi_config_parameters_debug.h
+    mgmapi/ndb_logevent.h
+    mgmapi/ndbd_exit_codes.h)
+
+INSTALL(FILES ${NDB_GENERAL_HEADERS}
+        DESTINATION ${INSTALL_INCLUDEDIR}/storage/ndb
+        COMPONENT Developement)
+
+INSTALL(FILES ${NDB_NDBAPI_HEADERS}
+        DESTINATION ${INSTALL_INCLUDEDIR}/storage/ndb/ndbapi
+        COMPONENT Developement)
+
+INSTALL(FILES ${NDB_MGMAPI_HEADERS}
+        DESTINATION ${INSTALL_INCLUDEDIR}/storage/ndb/mgmapi
+        COMPONENT Developement)

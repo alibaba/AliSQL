@@ -1,14 +1,20 @@
-/*  Copyright (c) 2014, 2016 Oracle and/or its affiliates. All rights reserved.
+/*  Copyright (c) 2014, 2023, Oracle and/or its affiliates.
 
-    This program is free software; you can redistribute it and/or
-    modify it under the terms of the GNU General Public License as
-    published by the Free Software Foundation; version 2 of the
-    License.
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License, version 2.0,
+    as published by the Free Software Foundation.
+
+    This program is also distributed with certain software (including
+    but not limited to OpenSSL) that is licensed under separate terms,
+    as designated in a particular file or component or in included license
+    documentation.  The authors of MySQL hereby grant you an additional
+    permission to link the program and your derivative works with the
+    separately licensed software that they have included with MySQL.
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-    GNU General Public License for more details.
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License, version 2.0, for more details.
 
     You should have received a copy of the GNU General Public License
     along with this program; if not, write to the Free Software
@@ -38,11 +44,39 @@ static int mysql_no_login(
   return CR_ERROR;
 }
 
+int generate_auth_string_hash(char *outbuf MY_ATTRIBUTE((unused)),
+                              unsigned int *buflen,
+                              const char *inbuf MY_ATTRIBUTE((unused)),
+                              unsigned int inbuflen MY_ATTRIBUTE((unused)))
+{
+  *buflen= 0;
+  return 0;
+}
+
+int validate_auth_string_hash(char* const inbuf  MY_ATTRIBUTE((unused)),
+                              unsigned int buflen  MY_ATTRIBUTE((unused)))
+{
+  return 0;
+}
+
+int set_salt(const char* password MY_ATTRIBUTE((unused)),
+             unsigned int password_len MY_ATTRIBUTE((unused)),
+             unsigned char* salt MY_ATTRIBUTE((unused)),
+             unsigned char* salt_len)
+{
+  *salt_len= 0;
+  return 0;
+}
+
 static struct st_mysql_auth mysql_no_login_handler=
 {
   MYSQL_AUTHENTICATION_INTERFACE_VERSION,
   0,
-  mysql_no_login
+  mysql_no_login,
+  generate_auth_string_hash,
+  validate_auth_string_hash,
+  set_salt,
+  AUTH_FLAG_PRIVILEGED_USER_FOR_PASSWORD_CHANGE
 };
 
 mysql_declare_plugin(mysql_no_login)
@@ -55,7 +89,7 @@ mysql_declare_plugin(mysql_no_login)
   PLUGIN_LICENSE_GPL,                           /* License          */
   NULL,                                         /* Init function    */
   NULL,                                         /* Deinit function  */
-  0x0100,                                       /* Version (1.0)    */
+  0x0101,                                       /* Version (1.0)    */
   NULL,                                         /* status variables */
   NULL,                                         /* system variables */
   NULL,                                         /* config options   */

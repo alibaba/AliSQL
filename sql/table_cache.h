@@ -1,13 +1,20 @@
-/* Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2012, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -119,7 +126,7 @@ public:
   void assert_owner() { mysql_mutex_assert_owner(&m_lock); }
 
   inline TABLE* get_table(THD *thd, my_hash_value_type hash_value,
-                          const char *key, uint key_length,
+                          const char *key, size_t key_length,
                           TABLE_SHARE **share);
 
   inline void release_table(THD *thd, TABLE *table);
@@ -132,7 +139,7 @@ public:
 
   void free_all_unused_tables();
 
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   void print_tables();
 #endif
 };
@@ -149,19 +156,22 @@ public:
   /** Maximum supported number of table cache instances. */
   static const int MAX_TABLE_CACHES= 64;
 
+  /** Default number of table cache instances */
+  static const int DEFAULT_MAX_TABLE_CACHES= 16;
+
   bool init();
   void destroy();
 
   /** Get instance of table cache to be used by particular connection. */
   Table_cache* get_cache(THD *thd)
   {
-    return &m_table_cache[thd->thread_id % table_cache_instances];
+    return &m_table_cache[thd->thread_id() % table_cache_instances];
   }
 
   /** Get index for the table cache in container. */
   uint cache_index(Table_cache *cache) const
   {
-    return (cache - &m_table_cache[0]);
+    return static_cast<uint>(cache - &m_table_cache[0]);
   }
 
   uint cached_tables();
@@ -177,7 +187,7 @@ public:
 
   void free_all_unused_tables();
 
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   void print_tables();
 #endif
 
@@ -349,7 +359,7 @@ bool Table_cache::add_used_table(THD *thd, TABLE *table)
 
   assert_owner();
 
-  DBUG_ASSERT(table->in_use == thd);
+  assert(table->in_use == thd);
 
   /*
     Try to get Table_cache_element representing this table in the cache
@@ -367,9 +377,9 @@ bool Table_cache::add_used_table(THD *thd, TABLE *table)
       Allocate new Table_cache_element object and add it to the cache
       and array in TABLE_SHARE.
     */
-    DBUG_ASSERT(! my_hash_search(&m_cache,
-                                 (uchar*)table->s->table_cache_key.str,
-                                 table->s->table_cache_key.length));
+    assert(! my_hash_search(&m_cache,
+                            (uchar*)table->s->table_cache_key.str,
+                            table->s->table_cache_key.length));
 
     if (!(el= new Table_cache_element(table->s)))
       return true;
@@ -459,7 +469,7 @@ void Table_cache::remove_table(TABLE *table)
 */
 
 TABLE* Table_cache::get_table(THD *thd, my_hash_value_type hash_value,
-                              const char *key, uint key_length,
+                              const char *key, size_t key_length,
                               TABLE_SHARE **share)
 {
   Table_cache_element *el;
@@ -477,7 +487,7 @@ TABLE* Table_cache::get_table(THD *thd, my_hash_value_type hash_value,
 
   if ((table= el->free_tables.front()))
   {
-    DBUG_ASSERT(!table->in_use);
+    assert(!table->in_use);
 
     /*
       Unlink table from list of unused TABLE objects for this
@@ -496,9 +506,9 @@ TABLE* Table_cache::get_table(THD *thd, my_hash_value_type hash_value,
 
     table->in_use= thd;
     /* The ex-unused table must be fully functional. */
-    DBUG_ASSERT(table->db_stat && table->file);
+    assert(table->db_stat && table->file);
     /* The children must be detached from the table. */
-    DBUG_ASSERT(! table->file->extra(HA_EXTRA_IS_ATTACHED_CHILDREN));
+    assert(! table->file->extra(HA_EXTRA_IS_ATTACHED_CHILDREN));
   }
 
   return table;
@@ -520,11 +530,11 @@ void Table_cache::release_table(THD *thd, TABLE *table)
 
   assert_owner();
 
-  DBUG_ASSERT(table->in_use);
-  DBUG_ASSERT(table->file);
+  assert(table->in_use);
+  assert(table->file);
 
   /* We shouldn't put the table to 'unused' list if the share is old. */
-  DBUG_ASSERT(! table->s->has_old_version());
+  assert(! table->s->has_old_version());
 
   table->in_use= NULL;
 

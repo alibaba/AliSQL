@@ -106,10 +106,8 @@ WHERE  ( alias2.col_varchar_key IN (
 );
 
 eval CREATE TABLE where_subselect_19379 $query;
---disable_ps_protocol # because of BUG#12595688
 eval SELECT * FROM where_subselect_19379 WHERE (field1, field2) NOT IN
 ($query); 
---enable_ps_protocol
 
 select * from information_schema.OPTIMIZER_TRACE;
 
@@ -215,9 +213,12 @@ let $query=
   order by alias1 . col_varchar_key  , field1
 ;
 
-eval CREATE TABLE where_updatedelete_20769 $query;
+--source include/turn_off_only_full_group_by.inc
 
+eval CREATE TABLE where_updatedelete_20769 $query;
 eval UPDATE where_updatedelete_20769 SET field1 = ( $query );
+
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
 
 DROP TABLE where_updatedelete_20769;
 DROP TABLE t1,t2,t3;
@@ -266,6 +267,19 @@ SELECT * FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
 DROP TABLE t1;
 
 --echo #
+--echo # Bug #18346750 OPTIMIZER_TRACE & DBUG_PRINT CRASH IN ST_SELECT_LEX::PRINT
+--echo #
+
+CREATE TABLE t1 (a INT, PRIMARY KEY (a))
+ PARTITION BY KEY (a) PARTITIONS 2;
+INSERT INTO t1 VALUES (1),(2);
+--ERROR ER_SUBQUERY_NO_1_ROW
+SELECT  1 FROM t1 ,t1 w
+ WHERE t1.a <=> (SELECT 22 FROM t1 GROUP BY (SELECT 1 FROM t1));
+SELECT TRACE LIKE "%select had some error%" FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
+DROP TABLE t1;
+
+--echo #
 --echo # Bug#18791851 CRASH IN ST_SELECT_LEX::PRINT WITH OPTIMIZER_TRACE ON SUBQUERY
 --echo #
 
@@ -311,6 +325,8 @@ CREATE TABLE t4 (
   KEY col_varchar_key (col_varchar_key,col_int_key)
 );
 
+--source include/turn_off_only_full_group_by.inc
+
 SELECT alias1.col_int_nokey AS field1,
        alias2.col_varchar_key AS field2,
        alias1.col_time_key AS field3,
@@ -334,4 +350,173 @@ WHERE
   AND alias1.col_int_key = alias2.pk
 HAVING  alias1.col_int_nokey  IN ( SELECT 2 FROM DUAL ) ;
 
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
+
 DROP TABLE t1,t2,t3,t4;
+
+# Inspired by testcase of
+# Bug #18345786	CRASH AROUND ST_JOIN_TABLE::AND_WITH_CONDITION
+CREATE TABLE t1(a INT);
+SET @a:=(SELECT ROW(1, 2)=
+ROW((SELECT 1 FROM t1 LEFT JOIN t1 t2 ON 1
+               HAVING 3 IN (SELECT 2 FROM DUAL)),
+    1));
+DROP TABLE t1;
+
+--echo #
+--echo # Bug #18945693 CRASH IN PRINT_TABLE_ARRAY AT SQL/SQL_LEX.CC ON 2ND EXEC OF PREPARED STATEMENT
+--echo #
+
+CREATE TABLE t1 (
+  pk INT NOT NULL,
+  col_int_nokey INT,
+  col_int_key INT,
+  col_varchar_key VARCHAR(1),
+  col_varchar_nokey VARCHAR(1)
+);
+
+INSERT INTO t1 VALUES (13,7,3,'y','y'),(14,0,4,'c','c');
+
+CREATE TABLE t2 (
+  pk INT NOT NULL,
+  col_int_nokey INT,
+  col_int_key INT,
+  col_varchar_key VARCHAR(1),
+  col_varchar_nokey VARCHAR(1)
+);
+
+INSERT INTO t2 VALUES (20,9,8,'e','e');
+
+CREATE TABLE t3 (
+  pk INT NOT NULL,
+  col_int_nokey INT,
+  col_int_key INT,
+  col_varchar_key VARCHAR(1),
+  col_varchar_nokey VARCHAR(1)
+);
+
+INSERT INTO t3 VALUES (1,1,7,'k','k');
+
+PREPARE prep_stmt FROM "
+SELECT
+  alias1.col_varchar_nokey AS field1,
+  MAX(alias1.pk) AS field2
+FROM t3 AS alias1
+GROUP BY field1
+HAVING
+  1 > (
+       SELECT MAX(SQ4_alias1.col_varchar_nokey)
+       FROM t1 AS SQ4_alias1
+            RIGHT OUTER JOIN
+            (
+              t2 AS SQ4_alias2
+              JOIN t1 AS SQ4_alias3
+              ON SQ4_alias3.col_int_key = SQ4_alias2.col_int_nokey
+            )
+            ON SQ4_alias3.pk = SQ4_alias2.col_int_nokey
+      )
+";
+
+EXECUTE prep_stmt;
+EXECUTE prep_stmt;
+
+DROP TABLE t1,t2,t3;
+
+--echo #
+--echo # Bug#19063289 CRASH IN PRINT_TABLE_ARRAY ON 2ND EXECUTION OF PS WITH SUBQUERY AND VIEW
+--echo #
+
+CREATE TABLE B (
+pk INTEGER,
+col_int_key INTEGER,
+col_varchar_nokey VARCHAR(1)
+);
+
+CREATE TABLE C (
+col_int_nokey INTEGER,
+col_int_key INTEGER,
+col_varchar_key VARCHAR(1),
+col_varchar_nokey VARCHAR(1)
+) ;
+
+CREATE TABLE CC (
+pk INTEGER,
+col_int_key INTEGER
+) ENGINE=MYISAM;
+
+INSERT INTO CC VALUES (1, 0),(2, 7);
+
+PREPARE stmt FROM "
+SELECT
+alias1.col_int_key AS field1 ,
+COUNT(alias1.pk) AS field2
+FROM
+CC AS alias1
+GROUP BY field1
+HAVING
+alias1.col_int_key >
+  (
+    SELECT
+    MAX(  SQ2_alias2.col_int_key ) AS SQ2_field1
+    FROM
+    C AS SQ2_alias1 LEFT  JOIN
+       ( B AS SQ2_alias2 INNER JOIN C AS SQ2_alias3
+         ON 1)
+       ON 1
+  )
+OR field2 < 2
+";
+EXECUTE stmt;
+EXECUTE stmt;
+
+DROP TABLE B,C,CC;
+
+
+--echo #
+--echo # Bug #23259872: OPTIMIZER CHOOSES TO USE NON PRIMARY
+--echo #                INDEX, EVEN THOUGH COST IS HIGHER
+--echo #
+
+CREATE TABLE t1 (
+  a TINYTEXT NOT NULL,
+  b TINYINT(3) UNSIGNED NOT NULL,
+  PRIMARY KEY (a(32),b),
+  KEY b_idx(b)
+) ENGINE=INNODB;
+INSERT INTO t1 VALUES ('a',1),('a',2),('a',3),('b',1),('c',1),('c',4),('e',2);
+ANALYZE TABLE t1;
+
+SET @optimizer_switch_saved=@@session.optimizer_switch;
+SET @@session.optimizer_switch=default;
+
+SELECT COUNT(*) FROM t1;
+# Uses "access_type_changed" to use range over ref despite b_idx not being the
+# cheapest in range.
+EXPLAIN SELECT * FROM t1 WHERE a IN ('a', 'b') AND b = 2;
+SELECT TRACE into @trace FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
+SELECT @trace RLIKE "rerunning_range_optimizer_for_single_index";
+
+SET @@session.optimizer_switch=@optimizer_switch_saved;
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug #23227428: SQL PLAN IS NOT ACCORDING WITH OPTIMIZER_TRACE
+--echo #
+
+CREATE TABLE t1(c1 INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                c2 CHAR(12)) ENGINE=INNODB;
+disable_query_log;
+let $1 = 1000;
+while ($1)
+{
+ eval INSERT INTO t1(c2) VALUES ('$1');
+ dec $1;
+}
+enable_query_log;
+
+ANALYZE TABLE t1;
+EXPLAIN SELECT c1, c2 FROM t1 ORDER BY c1 DESC LIMIT 1;
+--replace_regex /"cost": 3/"cost": 1/ /"cost": 4/"cost": 1/ /"cost": 203/"cost": 201/ /"cost": 204/"cost": 201/ /"cost_for_plan": 203/"cost_for_plan": 201/ /"cost_for_plan": 204/"cost_for_plan": 201/
+SELECT * FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
+DROP TABLE t1;

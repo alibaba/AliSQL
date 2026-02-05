@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -20,30 +27,32 @@
 #define DBACC_C
 #include "Dbacc.hpp"
 
+#define JAM_FILE_ID 346
+
+
 #define DEBUG(x) { ndbout << "ACC::" << x << endl; }
 
 void Dbacc::initData() 
 {
-  cdirarraysize = ZDIRARRAY;
   coprecsize = ZOPRECSIZE;
   cpagesize = ZPAGESIZE;
   ctablesize = ZTABLESIZE;
   cfragmentsize = ZFRAGMENTSIZE;
-  cdirrangesize = ZDIRRANGESIZE;
-  coverflowrecsize = ZOVERFLOWRECSIZE;
   cscanRecSize = ZSCAN_REC_SIZE;
 
-  
-  dirRange = 0;
-  directoryarray = 0;
+  Pool_context pc;
+  pc.m_block = this;
+  directoryPool.init(RT_DBACC_DIRECTORY, pc);
+
   fragmentrec = 0;
   operationrec = 0;
-  overflowRecord = 0;
   page8 = 0;
   scanRec = 0;
   tabrec = 0;
 
-  cnoOfAllocatedPagesMax = cnoOfAllocatedPages = cpagesize = cpageCount = 0;
+  m_free_pct = 0;
+  m_oom = false;
+  cnoOfAllocatedPagesMax = cnoOfAllocatedPages = cpagesize = cpageCount = m_maxAllocPages = 0;
   // Records with constant sizes
 
   RSS_OP_COUNTER_INIT(cnoOfFreeFragrec);
@@ -67,11 +76,12 @@ void Dbacc::initRecords()
 
     /**
      * 1) Build free-list per chunk
-     * 2) Add chunks to cfirstfreepage-list
+     * 2) Add chunks to cfreepages-list
      */
-    cfirstfreepage = RNIL;
+    cfreepages.init();
     cpagesize = 0;
     cpageCount = 0;
+    LocalPage8List freelist(*this, cfreepages);
     for (Int32 i = chunkcnt - 1; i >= 0; i--)
     {
       Ptr<GlobalPage> pagePtr;
@@ -80,40 +90,27 @@ void Dbacc::initRecords()
       Page8* base = (Page8*)pagePtr.p;
       ndbrequire(base >= page8);
       const Uint32 ptrI = Uint32(base - page8);
+      if (ptrI + cnt > cpagesize)
+        cpagesize = ptrI + cnt;
       for (Uint32 j = 0; j < cnt; j++)
       {
         refresh_watch_dog();
-        base[j].word32[0] = ptrI + j + 1;
+        freelist.addFirst(Page8Ptr::get(&base[j], ptrI + j));
       }
 
-      base[cnt-1].word32[0] = cfirstfreepage;
-      cfirstfreepage = ptrI;
-
       cpageCount += cnt;
-      if (ptrI + cnt > cpagesize)
-        cpagesize = ptrI + cnt;
+      ndbassert(freelist.count() + cnoOfAllocatedPages == cpageCount);
     }
+    m_maxAllocPages = cpagesize;
   }
 
   operationrec = (Operationrec*)allocRecord("Operationrec",
 					    sizeof(Operationrec),
 					    coprecsize);
 
-  dirRange = (DirRange*)allocRecord("DirRange",
-				    sizeof(DirRange), 
-				    cdirrangesize);
-
-  directoryarray = (Directoryarray*)allocRecord("Directoryarray",
-						sizeof(Directoryarray), 
-						cdirarraysize);
-
   fragmentrec = (Fragmentrec*)allocRecord("Fragmentrec",
 					  sizeof(Fragmentrec), 
 					  cfragmentsize);
-
-  overflowRecord = (OverflowRecord*)allocRecord("OverflowRecord",
-						sizeof(OverflowRecord),
-						coverflowrecsize);
 
   scanRec = (ScanRec*)allocRecord("ScanRec",
 				  sizeof(ScanRec), 
@@ -157,33 +154,18 @@ Dbacc::Dbacc(Block_context& ctx, Uint32 instanceNumber):
   addRecSignal(GSN_DROP_FRAG_REQ, &Dbacc::execDROP_FRAG_REQ);
 
   addRecSignal(GSN_DBINFO_SCANREQ, &Dbacc::execDBINFO_SCANREQ);
+  addRecSignal(GSN_NODE_STATE_REP, &Dbacc::execNODE_STATE_REP, true);
 
   initData();
 
 #ifdef VM_TRACE
   {
-    void* tmp[] = { &expDirRangePtr,
-		    &gnsDirRangePtr,
-		    &newDirRangePtr,
-		    &rdDirRangePtr,
-		    &nciOverflowrangeptr,
-                    &expDirptr,
-                    &rdDirptr,
-                    &sdDirptr,
-                    &nciOverflowDirptr,
-                    &fragrecptr,
+    void* tmp[] = { &fragrecptr,
                     &operationRecPtr,
                     &idrOperationRecPtr,
                     &mlpqOperPtr,
                     &queOperPtr,
                     &readWriteOpPtr,
-                    &iopOverflowRecPtr,
-                    &tfoOverflowRecPtr,
-                    &porOverflowRecPtr,
-                    &priOverflowRecPtr,
-                    &rorOverflowRecPtr,
-                    &sorOverflowRecPtr,
-                    &troOverflowRecPtr,
                     &ancPageptr,
                     &colPageptr,
                     &ccoPageptr,
@@ -227,14 +209,6 @@ Dbacc::Dbacc(Block_context& ctx, Uint32 instanceNumber):
 
 Dbacc::~Dbacc() 
 {
-  deallocRecord((void **)&dirRange, "DirRange",
-		sizeof(DirRange), 
-		cdirrangesize);
-  
-  deallocRecord((void **)&directoryarray, "Directoryarray",
-		sizeof(Directoryarray), 
-		cdirarraysize);
-  
   deallocRecord((void **)&fragmentrec, "Fragmentrec",
 		sizeof(Fragmentrec), 
 		cfragmentsize);
@@ -243,10 +217,6 @@ Dbacc::~Dbacc()
 		sizeof(Operationrec),
 		coprecsize);
   
-  deallocRecord((void **)&overflowRecord, "OverflowRecord",
-		sizeof(OverflowRecord),
-		coverflowrecsize);
-
   deallocRecord((void **)&scanRec, "ScanRec",
 		sizeof(ScanRec), 
 		cscanRecSize);

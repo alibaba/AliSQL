@@ -1,14 +1,22 @@
 /*****************************************************************************
 
-Copyright (c) 2006, 2016, Oracle and/or its affiliates. All Rights Reserved.
+Copyright (c) 2006, 2023, Oracle and/or its affiliates.
 
-This program is free software; you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation; version 2 of the License.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License, version 2.0,
+as published by the Free Software Foundation.
 
-This program is distributed in the hope that it will be useful, but WITHOUT
-ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+This program is also distributed with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have included with MySQL.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License, version 2.0, for more details.
 
 You should have received a copy of the GNU General Public License along with
 this program; if not, write to the Free Software Foundation, Inc.,
@@ -39,7 +47,7 @@ Allocate a block.  The thread calling this function must hold
 buf_pool->mutex and must not hold buf_pool->zip_mutex or any
 block->mutex.  The buf_pool->mutex may be released and reacquired.
 This function should only be used for allocating compressed page frames.
-@return	allocated block, never NULL */
+@return allocated block, never NULL */
 UNIV_INLINE
 byte*
 buf_buddy_alloc(
@@ -54,7 +62,7 @@ buf_buddy_alloc(
 				       	storage was allocated from the
 				       	LRU list and buf_pool->mutex was
 				       	temporarily released */
-	MY_ATTRIBUTE((malloc, nonnull));
+	MY_ATTRIBUTE((malloc));
 
 /**********************************************************************//**
 Deallocate a block. */
@@ -66,9 +74,26 @@ buf_buddy_free(
 					the block resides */
 	void*		buf,		/*!< in: block to be freed, must not
 					be pointed to by the buffer pool */
-	ulint		size)		/*!< in: block size,
+	ulint		size);		/*!< in: block size,
 					up to UNIV_PAGE_SIZE */
-	MY_ATTRIBUTE((nonnull));
+
+/** Reallocate a block.
+@param[in]	buf_pool	buffer pool instance
+@param[in]	buf		block to be reallocated, must be pointed
+to by the buffer pool
+@param[in]	size		block size, up to UNIV_PAGE_SIZE
+@retval false	if failed because of no free blocks. */
+bool
+buf_buddy_realloc(
+	buf_pool_t*	buf_pool,
+	void*		buf,
+	ulint		size);
+
+/** Combine all pairs of free buddies.
+@param[in]	buf_pool	buffer pool instance */
+void
+buf_buddy_condense_free(
+	buf_pool_t*	buf_pool);
 
 #ifndef UNIV_NONINL
 # include "buf0buddy.ic"

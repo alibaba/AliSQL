@@ -1,15 +1,22 @@
 /***********************************************************************
 
-Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+Copyright (c) 2011, 2023, Oracle and/or its affiliates.
 
-This program is free software; you can redistribute it and/or modify it
-under the terms of the GNU General Public License as published by the
-Free Software Foundation; version 2 of the License.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License, version 2.0,
+as published by the Free Software Foundation.
 
-This program is distributed in the hope that it will be useful, but
-WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
-Public License for more details.
+This program is also distributed with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have included with MySQL.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License, version 2.0, for more details.
 
 You should have received a copy of the GNU General Public License along
 with this program; if not, write to the Free Software Foundation, Inc.,
@@ -19,7 +26,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 /**************************************************//**
 @file memcached_mysql.cc
-InnoDB Memcached Plugin 
+InnoDB Memcached Plugin
 
 Created 04/12/2011 Jimmy Yang
 *******************************************************/
@@ -41,7 +48,7 @@ struct mysql_memcached_context
 
 /** Variables for configure options */
 static char*	mci_engine_library = NULL;
-static char*	mci_eng_lib_path = NULL; 
+static char*	mci_eng_lib_path = NULL;
 static char*	mci_memcached_option = NULL;
 static unsigned int mci_r_batch_size = 1048576;
 static unsigned int mci_w_batch_size = 32;
@@ -104,6 +111,7 @@ static int daemon_memcached_plugin_deinit(void *p)
                 return(0);
         }
 
+	loop_count = 0;
 	if (!shutdown_complete()) {
 		shutdown_server();
 	}
@@ -139,7 +147,8 @@ static int daemon_memcached_plugin_init(void *p)
 	pthread_attr_t			attr;
 	struct st_plugin_int*		plugin = (struct st_plugin_int *)p;
 
-	con = (mysql_memcached_context*) my_malloc(sizeof(*con), MYF(0));
+	con = (mysql_memcached_context*) my_malloc(PSI_INSTRUMENT_ME,
+                                                   sizeof(*con), MYF(0));
 
 	if (mci_engine_library) {
 		char*	lib_path = (mci_eng_lib_path)
@@ -149,6 +158,7 @@ static int daemon_memcached_plugin_init(void *p)
 				  + strlen(FN_DIRSEP) + 1;
 
 		con->memcached_conf.m_engine_library = (char*) my_malloc(
+                        PSI_INSTRUMENT_ME,
 			lib_len, MYF(0));
 
 		strxmov(con->memcached_conf.m_engine_library, lib_path,

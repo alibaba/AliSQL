@@ -10,8 +10,6 @@
 # DBUG_SUICIDE() hangs under valgrind
 --source include/not_valgrind.inc
 
-SET GLOBAL innodb_file_format=Barracuda;
-
 CREATE TABLE t1(
 	a INT AUTO_INCREMENT PRIMARY KEY,
 	b CHAR(1),
@@ -30,6 +28,8 @@ let SEARCH_FILE = $MYSQLTEST_VARDIR/tmp/my_restart.err;
 # used for modifying the secondary index page. There must be multiple
 # index pages, because changes to the root page are never buffered.
 INSERT INTO t1 VALUES(0,'x',1);
+INSERT INTO t1 SELECT 0,b,c FROM t1;
+INSERT INTO t1 SELECT 0,b,c FROM t1;
 INSERT INTO t1 SELECT 0,b,c FROM t1;
 INSERT INTO t1 SELECT 0,b,c FROM t1;
 INSERT INTO t1 SELECT 0,b,c FROM t1;

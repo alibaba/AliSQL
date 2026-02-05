@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -24,7 +31,7 @@
 
 class NdbRestarter {
 public:
-  NdbRestarter(const char* _addr = 0);
+  NdbRestarter(const char* _addr = 0, class Ndb_cluster_connection * con = 0);
   ~NdbRestarter();
 
   int getDbNodeId(int _i);
@@ -84,6 +91,9 @@ public:
   int insertErrorInNode(int _nodeId, int error);
   int insertErrorInAllNodes(int error);
 
+  int insertError2InNode(int _nodeId, int error, int extra);
+  int insertError2InAllNodes(int error, int extra);
+
   int enterSingleUserMode(int _nodeId);
   int exitSingleUserMode();
 
@@ -101,6 +111,12 @@ public:
   int getNodeTypeVersionRange(ndb_mgm_node_type type, int& minVer, int& maxVer);
   
   int getNodeStatus(int nodeId); // return NDB_MGM_NODE_STATUS_*
+
+  /**
+   * return 2 vectors with nodeId's (partitions)
+   *   so that each partition can survive
+   */
+  Vector<Vector<int> > splitNodes();
 
   NdbMgmHandle handle;  
 
@@ -142,7 +158,9 @@ protected:
 protected:
   ndb_mgm_configuration * getConfig();
 
-public:  
+  class Ndb_cluster_connection * m_cluster_connection;
+  int wait_until_ready(const int * nodes = 0, int cnt = 0, int timeout = 60);
+public:
   Vector<ndb_mgm_node_state> ndbNodes;
 };
 

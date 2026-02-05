@@ -1,3 +1,4 @@
+
 --disable_warnings
 drop table if exists t1,t2;
 --enable_warnings
@@ -36,6 +37,7 @@ select product, sum(profit),avg(profit) from t1 group by product with rollup;
 # Sub totals
 select product, country_id , year, sum(profit) from t1 group by product, country_id, year;
 select product, country_id , year, sum(profit) from t1 group by product, country_id, year with rollup;
+analyze table t1;
 explain extended select product, country_id , year, sum(profit) from t1 group by product, country_id, year with rollup;
 select product, country_id , sum(profit) from t1 group by product desc, country_id with rollup;
 
@@ -64,7 +66,7 @@ select product, country , year, sum(profit) from t1,t2 where t1.country_id=t2.co
 select product, `sum` from (select product, sum(profit) as 'sum' from t1 group by product with rollup) as tmp where product is null;
 select product from t1 where exists (select product, country_id , sum(profit) from t1 as t2 where t1.product=t2.product group by product, country_id with rollup having sum(profit) > 6000);
 
-# The following doesn't return the expected answer, but this is a limitation
+# The following does not return the expected answer, but this is a limitation
 # in the implementation so we should just document it
 select product, country_id , year, sum(profit) from t1 group by product, country_id, year having country_id is NULL;
 select concat(':',product,':'), sum(profit),avg(profit) from t1 group by product with rollup;
@@ -337,6 +339,7 @@ CREATE VIEW v1 AS SELECT * FROM t1;
 
 SELECT type FROM t1 GROUP BY type WITH ROLLUP;
 SELECT type FROM v1 GROUP BY type WITH ROLLUP;
+analyze table v1,t1;
 EXPLAIN SELECT type FROM v1 GROUP BY type WITH ROLLUP;
 
 DROP VIEW v1;
@@ -424,7 +427,8 @@ DROP TABLE t1, t2;
 --echo # Bug#13011553 CRASH IN SORTCMP OR CACHED_ITEM_STR::CMP IF GROUP BY SUBQUERY WITH ROLLUP
 --echo #
 
-CREATE TABLE t1 (f1 DATETIME) ENGINE = MyISAM;
+CREATE TABLE t1 (f1 DATETIME);
+--source include/turn_off_only_full_group_by.inc
 INSERT INTO  t1 VALUES ('2012-12-20 00:00:00'), (NULL);
 
 SELECT f1 FROM t1 GROUP BY
@@ -432,7 +436,7 @@ SELECT f1 FROM t1 GROUP BY
 
 DROP TABLE t1;
 
-CREATE TABLE t1 (f1 DATE) ENGINE = MyISAM;
+CREATE TABLE t1 (f1 DATE);
 INSERT INTO  t1 VALUES ('2012-12-20'), (NULL);
 
 SELECT f1 FROM t1 GROUP BY
@@ -440,7 +444,7 @@ SELECT f1 FROM t1 GROUP BY
 
 DROP TABLE t1;
 
-CREATE TABLE t1 (f1 TIME) ENGINE = MyISAM;
+CREATE TABLE t1 (f1 TIME);
 INSERT INTO  t1 VALUES ('11:11:11'), (NULL);
 
 SELECT f1 FROM t1 GROUP BY
@@ -448,4 +452,27 @@ SELECT f1 FROM t1 GROUP BY
 
 DROP TABLE t1;
 
+--source include/restore_sql_mode_after_turn_off_only_full_group_by.inc
+
 --echo End of 5.5 tests
+
+--echo # Bug#20034943 Assertion failed: argument_count() > 0
+
+CREATE TABLE t1(a INTEGER) engine=innodb;
+SELECT NOW() FROM t1 GROUP BY (select 1) WITH ROLLUP;
+DROP TABLE t1;
+
+CREATE TABLE t1(a INTEGER) engine=innodb;
+SELECT RELEASE_ALL_LOCKS() FROM t1 GROUP BY a WITH ROLLUP;
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#21143151 ASSERTION FAILED: BITMAP_IS_CLEAR_ALL(&SORT_FORM->TMP_SET)
+--echo #
+
+CREATE TABLE t1(a INT);
+INSERT INTO t1 VALUES(0);
+INSERT INTO t1 VALUES(1);
+SELECT NOT EXISTS (SELECT 1) FROM t1 JOIN t1 a USING(a)
+GROUP BY 1 DESC WITH ROLLUP;
+DROP TABLE t1;

@@ -1,15 +1,21 @@
 /*
-   Copyright (C) 2003-2006, 2008 MySQL AB
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -21,6 +27,9 @@
 
 #include <ndb_global.h>
 #include "ArrayPool.hpp"
+
+#define JAM_FILE_ID 307
+
 
 /**
  * DLHashTable2 is a DLHashTable variant meant for cases where different
@@ -180,18 +189,15 @@ DLHashTable2<T, U>::setSize(Uint32 size){
   Uint32 i = 1;
   while(i < size) i *= 2;
 
-  if(mask == (i - 1)){
-    /**
-     * The size is already set to <b>size</b>
-     */
-    return true;
-  }
-
-  if(mask != 0){
-    /**
-     * The mask is already set
-     */
-    return false;
+  if (hashValues != NULL)
+  {
+    /*
+      If setSize() is called twice with different size values then this is 
+      most likely a bug.
+    */
+    assert(mask == i-1); 
+    // Return true if size already set to 'size', false otherwise.
+    return mask == i-1;
   }
   
   mask = (i - 1);
@@ -514,4 +520,7 @@ DLHashTable2<T, U>::find(Ptr<T> & ptr, const T & key) const {
   ptr.p = NULL;
   return false;
 }
+
+#undef JAM_FILE_ID
+
 #endif

@@ -1,7 +1,11 @@
+# The include statement below is a temp one for tests that are yet to
+#be ported to run with InnoDB,
+#but needs to be kept for tests that would need MyISAM in future.
+--source include/force_myisam_default.inc
+
 # test uses multiple mysqld by necessity, hence not in embedded
 -- source include/not_embedded.inc
 -- source include/have_multi_ndb.inc
--- source include/ndb_default_cluster.inc
 
 --disable_warnings
 drop table if exists t1,t2;
@@ -21,7 +25,7 @@ drop table if exists t1,t2;
 # verify that we are indeed in single user mode
 # and test that some operations give correct errors
 --connection server2
---error 1005
+--error 1296
 create table t1 (a int key, b int unique, c int) engine ndb;
 # Bug #27712 Single user mode. Creating logfile group and tablespace is allowed
 # - before bug fix these would succeed

@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -20,6 +27,10 @@
 
 #include "NDBT.hpp"
 #include "NDBT_Test.hpp"
+#include <portlib/NdbEnv.h>
+#include <logger/Logger.hpp>
+
+static int opt_stop_on_error = 0;
 
 NDBT_Context::NDBT_Context(Ndb_cluster_connection& con)
   : m_cluster_connection(con)
@@ -32,8 +43,9 @@ NDBT_Context::NDBT_Context(Ndb_cluster_connection& con)
   stopped = false;
   propertyMutexPtr = NdbMutex_Create();
   propertyCondPtr = NdbCondition_Create();
+  m_env_timeout = 0;
+  m_test_start_time = NdbTick_CurrentMillisecond();
 }
-
 
 NDBT_Context::~NDBT_Context(){
   NdbCondition_Destroy(propertyCondPtr);
@@ -41,29 +53,29 @@ NDBT_Context::~NDBT_Context(){
 }
 
 const NdbDictionary::Table* NDBT_Context::getTab(){
-  assert(tables.size());
+  require(tables.size());
   return tables[0];
 }
 
 NDBT_TestSuite* NDBT_Context::getSuite(){ 
-  assert(suite != NULL);
+  require(suite != NULL);
   return suite;
 }
 
 NDBT_TestCase* NDBT_Context::getCase(){ 
-  assert(testcase != NULL);
+  require(testcase != NULL);
   return testcase;
 }
 
 const char* NDBT_Context::getTableName(int n) const
 { 
-  assert(suite != NULL);
+  require(suite != NULL);
   return suite->m_tables_in_test[n].c_str();
 }
 
 int NDBT_Context::getNumTables() const
 { 
-  assert(suite != NULL);
+  require(suite != NULL);
   return suite->m_tables_in_test.size();
 }
 
@@ -130,7 +142,7 @@ const char* NDBT_Context::getPropertyWait(const char* _name, const char* _waitVa
 void  NDBT_Context::setProperty(const char* _name, Uint32 _val){ 
   NdbMutex_Lock(propertyMutexPtr);
   const bool b = props.put(_name, _val, true);
-  assert(b == true);
+  require(b == true);
   NdbCondition_Broadcast(propertyCondPtr);
   NdbMutex_Unlock(propertyMutexPtr);
 }
@@ -140,7 +152,7 @@ NDBT_Context::decProperty(const char * name){
   NdbMutex_Lock(propertyMutexPtr);
   Uint32 val = 0;
   if(props.get(name, &val)){
-    assert(val > 0);
+    require(val > 0);
     props.put(name, (val - 1), true);
   }
   NdbCondition_Broadcast(propertyCondPtr);
@@ -175,7 +187,7 @@ NDBT_Context::casProperty(const char * name, Uint32 oldValue, Uint32 newValue)
 void  NDBT_Context::setProperty(const char* _name, const char* _val){ 
   NdbMutex_Lock(propertyMutexPtr);
   const bool b = props.put(_name, _val, true);
-  assert(b == true);
+  require(b == true);
   NdbCondition_Broadcast(propertyCondPtr);
   NdbMutex_Unlock(propertyMutexPtr);
 }
@@ -249,12 +261,12 @@ NDBT_Context::getTables()
 }
 
 void NDBT_Context::setSuite(NDBT_TestSuite* psuite){ 
-  assert(psuite != NULL);
+  require(psuite != NULL);
   suite = psuite;
 }
 
 void NDBT_Context::setCase(NDBT_TestCase* pcase){ 
-  assert(pcase != NULL);
+  require(pcase != NULL);
   testcase = pcase;
 }
 
@@ -316,22 +328,21 @@ NDBT_Step::tearDown(){
   m_ndb = NULL;
 }
 
-
 Ndb* NDBT_Step::getNdb() const {
-  assert(m_ndb != NULL);
+  require(m_ndb != NULL);
   return m_ndb;
 }
 
 
 int NDBT_Step::execute(NDBT_Context* ctx) {
-  assert(ctx != NULL);
+  require(ctx != NULL);
 
-  int result;  
-
-  g_info << "  |- " << name << " started [" << ctx->suite->getDate() << "]" 
+  char buf[64]; // For timestamp string
+  g_info << "  |- " << name << " started ["
+         << ctx->suite->getDate(buf, sizeof(buf)) << "]"
 	 << endl;
   
-  result = setUp(ctx->m_cluster_connection);
+  int result = setUp(ctx->m_cluster_connection);
   if (result != NDBT_OK){
     return result;
   }
@@ -339,12 +350,14 @@ int NDBT_Step::execute(NDBT_Context* ctx) {
   result = func(ctx, this);
 
   if (result != NDBT_OK) {
-    g_err << "  |- " << name << " FAILED [" << ctx->suite->getDate() 
-	   << "]" << endl;
+    g_err << "  |- " << name << " FAILED ["
+          << ctx->suite->getDate(buf, sizeof(buf))
+          << "]" << endl;
   }	 
    else {
-    g_info << "  |- " << name << " PASSED [" << ctx->suite->getDate() << "]"
-	   << endl;
+    g_info << "  |- " << name << " PASSED ["
+           << ctx->suite->getDate(buf, sizeof(buf))
+           << "]" << endl;
   }
   
   tearDown();
@@ -353,12 +366,12 @@ int NDBT_Step::execute(NDBT_Context* ctx) {
 }
 
 void NDBT_Step::setContext(NDBT_Context* pctx){
-  assert(pctx != NULL);
+  require(pctx != NULL);
   m_ctx = pctx;
 }
 
 NDBT_Context* NDBT_Step::getContext(){
-  assert(m_ctx != NULL);
+  require(m_ctx != NULL);
   return m_ctx;
 }
 
@@ -391,7 +404,7 @@ NDBT_TestCase::NDBT_TestCase(NDBT_TestSuite* psuite,
   _comment(pcomment),
   suite(psuite)
 {
-  assert(suite != NULL);
+  require(suite != NULL);
 
   m_all_tables = false;
   m_has_run = false;
@@ -414,7 +427,7 @@ NDBT_TestCaseImpl1::NDBT_TestCaseImpl1(NDBT_TestSuite* psuite,
 NDBT_TestCaseImpl1::~NDBT_TestCaseImpl1(){
   NdbCondition_Destroy(waitThreadsCondPtr);
   NdbMutex_Destroy(waitThreadsMutexPtr);
-  size_t i;
+  unsigned i;
   for(i = 0; i < initializers.size();  i++)
     delete initializers[i];
   initializers.clear();
@@ -438,7 +451,7 @@ NDBT_TestCaseImpl1::~NDBT_TestCaseImpl1(){
 }
 
 int NDBT_TestCaseImpl1::addStep(NDBT_Step* pStep){
-  assert(pStep != NULL);
+  require(pStep != NULL);
   steps.push_back(pStep);
   pStep->setStepNo(steps.size());
   int res = NORESULT;
@@ -447,14 +460,14 @@ int NDBT_TestCaseImpl1::addStep(NDBT_Step* pStep){
 }
 
 int NDBT_TestCaseImpl1::addVerifier(NDBT_Verifier* pVerifier){
-  assert(pVerifier != NULL);
+  require(pVerifier != NULL);
   verifiers.push_back(pVerifier);
   return 0;
 }
 
 int NDBT_TestCaseImpl1::addInitializer(NDBT_Initializer* pInitializer,
                                        bool first){
-  assert(pInitializer != NULL);
+  require(pInitializer != NULL);
   if (first)
     initializers.push(pInitializer, 0);
   else
@@ -463,22 +476,22 @@ int NDBT_TestCaseImpl1::addInitializer(NDBT_Initializer* pInitializer,
 }
 
 int NDBT_TestCaseImpl1::addFinalizer(NDBT_Finalizer* pFinalizer){
-  assert(pFinalizer != NULL);
+  require(pFinalizer != NULL);
   finalizers.push_back(pFinalizer);
   return 0;
 }
 
 void NDBT_TestCaseImpl1::addTable(const char* tableName, bool isVerify) {
-  assert(tableName != NULL);
+  require(tableName != NULL);
   const NdbDictionary::Table* pTable = NDBT_Tables::getTable(tableName);
-  assert(pTable != NULL);
+  require(pTable != NULL);
   testTables.push_back(pTable);
   isVerifyTables = isVerify;
 }
 
 bool NDBT_TestCaseImpl1::tableExists(NdbDictionary::Table* aTable) {
   for (unsigned i = 0; i < testTables.size(); i++) {
-    if (strcasecmp(testTables[i]->getName(), aTable->getName()) == 0) {
+    if (native_strcasecmp(testTables[i]->getName(), aTable->getName()) == 0) {
       return true;
     }
   }
@@ -490,7 +503,7 @@ bool NDBT_TestCaseImpl1::isVerify(const NdbDictionary::Table* aTable) {
     int found = false;
     // OK, we either exclude or include this table in the actual test
     for (unsigned i = 0; i < testTables.size(); i++) {
-      if (strcasecmp(testTables[i]->getName(), aTable->getName()) == 0) {
+      if (native_strcasecmp(testTables[i]->getName(), aTable->getName()) == 0) {
 	// Found one!
 	if (isVerifyTables) {
 	  // Found one to test
@@ -512,21 +525,21 @@ bool NDBT_TestCaseImpl1::isVerify(const NdbDictionary::Table* aTable) {
 
 void  NDBT_TestCase::setProperty(const char* _name, Uint32 _val){ 
   const bool b = props.put(_name, _val);
-  assert(b == true);
+  require(b == true);
 }
 
 void  NDBT_TestCase::setProperty(const char* _name, const char* _val){ 
   const bool b = props.put(_name, _val);
-  assert(b == true);
+  require(b == true);
 }
 
 
 void *
 runStep(void * s){
-  assert(s != NULL);
+  require(s != NULL);
   NDBT_Step* pStep = (NDBT_Step*)s;
   NDBT_Context* ctx = pStep->getContext();
-  assert(ctx != NULL);
+  require(ctx != NULL);
    // Execute function
   int res = pStep->execute(ctx);
   if(res != NDBT_OK){
@@ -534,7 +547,7 @@ runStep(void * s){
   }
   // Report 
   NDBT_TestCaseImpl1* pCase = (NDBT_TestCaseImpl1*)ctx->getCase();
-  assert(pCase != NULL);
+  require(pCase != NULL);
   pCase->reportStepResult(pStep, res);
   return NULL;
 }
@@ -554,7 +567,7 @@ void NDBT_TestCaseImpl1::startStepInThread(int stepNo, NDBT_Context* ctx){
   char buf[16];
   BaseString::snprintf(buf, sizeof(buf), "step_%d", stepNo);
   Uint32 stackSize = ctx->getProperty(NDBT_TestCase::getStepThreadStackSizePropName(), 
-                                      Uint32(0));
+                                      Uint32(512 * 1024));
 
   NdbThread* pThread = NdbThread_Create(runStep_C,
 					(void**)pStep,
@@ -581,8 +594,8 @@ void NDBT_TestCaseImpl1::waitSteps(){
 	numStepsFail++;
     }       
   }
-  assert(completedSteps == steps.size());
-  assert(completedSteps == numStepsCompleted);
+  require(completedSteps == steps.size());
+  require(completedSteps == numStepsCompleted);
   
   NdbMutex_Unlock(waitThreadsMutexPtr);
   void *status;
@@ -606,7 +619,7 @@ NDBT_TestCaseImpl1::getNoOfCompletedSteps() const {
 
 void NDBT_TestCaseImpl1::reportStepResult(const NDBT_Step* pStep, int result){
   NdbMutex_Lock(waitThreadsMutexPtr);
-  assert(pStep != NULL);
+  require(pStep != NULL);
   for (unsigned i = 0; i < steps.size(); i++){
     if(steps[i] != NULL && steps[i] == pStep){
       results[i] = result;
@@ -620,10 +633,11 @@ void NDBT_TestCaseImpl1::reportStepResult(const NDBT_Step* pStep, int result){
 }
 
 
-int NDBT_TestCase::execute(NDBT_Context* ctx){
-  int res;
-
-  ndbout << "- " << _name << " started [" << ctx->suite->getDate()
+int NDBT_TestCase::execute(NDBT_Context* ctx)
+{
+  char buf[64]; // For timestamp string
+  ndbout << "- " << _name << " started ["
+         << ctx->suite->getDate(buf, sizeof(buf))
 	 << "]" << endl;
 
   ctx->setCase(this);
@@ -634,7 +648,7 @@ int NDBT_TestCase::execute(NDBT_Context* ctx){
 
     PropertiesType pt;
     const bool b = props.getTypeOf(key, &pt);
-    assert(b == true);
+    require(b == true);
     switch(pt){
     case PropertiesType_Uint32:{
       Uint32 val;
@@ -657,6 +671,7 @@ int NDBT_TestCase::execute(NDBT_Context* ctx){
   // test case consist only of initializer
   startTimer(ctx);
   
+  int res;
   if ((res = runInit(ctx)) == NDBT_OK){
     // If initialiser is ok, run steps
     
@@ -675,12 +690,14 @@ int NDBT_TestCase::execute(NDBT_Context* ctx){
   runFinal(ctx); 
 
   if (res == NDBT_OK) {
-    ndbout << "- " << _name << " PASSED [" << ctx->suite->getDate() << "]"
-	   << endl;
+    ndbout << "- " << _name << " PASSED ["
+           << ctx->suite->getDate(buf, sizeof(buf))
+           << "]" << endl;
   }
   else {
-    ndbout << "- " << _name << " FAILED [" << ctx->suite->getDate() << "]"
-	   << endl;
+    ndbout << "- " << _name << " FAILED ["
+           << ctx->suite->getDate(buf, sizeof(buf))
+           << "]" << endl;
   }
   return res;
 }
@@ -723,9 +740,16 @@ int NDBT_TestCaseImpl1::runSteps(NDBT_Context* ctx){
     startStepInThread(i, ctx);
   waitSteps();
 
+  // Check if any step failed
   for(i = 0; i < steps.size(); i++)
+  {
     if (results[i] != NDBT_OK)
+    {
+      // Found one step which had failed -> report failed
       res = NDBT_FAILED;
+      break;
+    }
+  }
   return res;
 }
 
@@ -814,6 +838,10 @@ NDBT_TestSuite::~NDBT_TestSuite(){
     delete tests[i];
   }
   tests.clear();
+  for(unsigned i=0; i<explicitTests.size(); i++){
+    delete explicitTests[i];
+  }
+  explicitTests.clear();
 }
 
 void NDBT_TestSuite::setCreateTable(bool _flag){
@@ -827,7 +855,7 @@ void NDBT_TestSuite::setCreateAllTables(bool _flag){
   m_createAll = _flag;
 }
 void NDBT_TestSuite::setConnectCluster(bool _flag){
-  assert(m_createTable == false);
+  require(m_createTable == false);
   m_connect_cluster = _flag;
 }
 
@@ -856,8 +884,35 @@ bool NDBT_TestSuite::timerIsOn(){
 }
 
 int NDBT_TestSuite::addTest(NDBT_TestCase* pTest){
-  assert(pTest != NULL);
+  require(pTest != NULL);
   tests.push_back(pTest);
+  return 0;
+}
+
+int NDBT_TestSuite::addExplicitTest(NDBT_TestCase* pTest){
+  require(pTest != NULL);
+  explicitTests.push_back(pTest);
+  return 0;
+}
+
+NDBT_TestCase*
+NDBT_TestSuite::findTest(const char * testname, bool explicitOK)
+{
+  for (unsigned i = 0; i < tests.size(); i++)
+  {
+    if (native_strcasecmp(tests[i]->getName(), testname) == 0)
+      return tests[i];
+  }
+
+  if (explicitOK == false)
+    return 0;
+
+  for (unsigned i = 0; i < explicitTests.size(); i++)
+  {
+    if (native_strcasecmp(explicitTests[i]->getName(), testname) == 0)
+      return explicitTests[i];
+  }
+
   return 0;
 }
 
@@ -865,61 +920,94 @@ int NDBT_TestSuite::executeAll(Ndb_cluster_connection& con,
 			       const char* _testname){
 
   if(tests.size() == 0)
+  {
+    g_err << "Size of test == 0" << endl;
     return NDBT_FAILED;
+  }
 
-  ndbout << name << " started [" << getDate() << "]" << endl;
+  char buf[64]; // For timestamp string
+  ndbout << name << " started [" << getDate(buf, sizeof(buf)) << "]" << endl;
 
+  testSuiteTimer.doStart();
   if(!runonce)
   {
-    testSuiteTimer.doStart();
     for (int t=0; t < NDBT_Tables::getNumTables(); t++){
       const NdbDictionary::Table* ptab = NDBT_Tables::getTable(t);
       ndbout << "|- " << ptab->getName() << endl;
       execute(con, ptab, _testname);
     }
-    testSuiteTimer.doStop();
   }
   else
   {
-    for (unsigned i = 0; i < tests.size(); i++){
-      if (_testname != NULL && strcasecmp(tests[i]->getName(), _testname) != 0)
-	continue;
+    NdbDictionary::Table * pTab = 0;
+    if (_testname == NULL)
+    {
+      for (unsigned i = 0; i < tests.size(); i++)
+      {
+        if (opt_stop_on_error != 0 && numTestsFail > 0)
+          break;
 
-      tests[i]->initBeforeTest();
-      ctx = new NDBT_Context(con);
-
-      ctx->setNumRecords(records);
-      ctx->setNumLoops(loops);
-      ctx->setSuite(this);
-      ctx->setProperty("NoDDL", (Uint32) m_noddl);
-
-      int result = tests[i]->execute(ctx);
-
-      tests[i]->saveTestResult("", result);
-      if (result != NDBT_OK)
-	numTestsFail++;
-      else
-	numTestsOk++;
-      numTestsExecuted++;
-
-      delete ctx;
+        execute(con, tests[i], pTab);
+      }
+    }
+    else
+    {
+      NDBT_TestCase * pt = findTest(_testname);
+      if (pt != 0)
+        execute(con, pt, pTab);
     }
   }
+  testSuiteTimer.doStop();
   return reportAllTables(_testname);
 }
 
-int 
+void
+NDBT_TestSuite::execute(Ndb_cluster_connection& con,
+                        NDBT_TestCase * pTest,
+                        const NdbDictionary::Table *pTab)
+{
+  pTest->initBeforeTest();
+  ctx = new NDBT_Context(con);
+
+  ctx->setNumRecords(records);
+  ctx->setNumLoops(loops);
+  ctx->setSuite(this);
+  ctx->setProperty("NoDDL", (Uint32) m_noddl);
+  if (pTab)
+  {
+    ctx->setTab(pTab);
+  }
+  int result = pTest->execute(ctx);
+  pTest->saveTestResult("", result);
+  if (result != NDBT_OK)
+    numTestsFail++;
+  else
+    numTestsOk++;
+  numTestsExecuted++;
+  delete ctx;
+
+  pTest->m_has_run = true;
+}
+
+int
 NDBT_TestSuite::executeOne(Ndb_cluster_connection& con,
 			   const char* _tabname, const char* _testname){
 
-  if(tests.size() == 0)
+  if (tests.size() == 0 && explicitTests.size() == 0)
+  {
+    g_err << "Test size == 0 and explicit test size == 0" << endl;
     return NDBT_FAILED;
+  }
 
-  ndbout << name << " started [" << getDate() << "]" << endl;
+  char buf[64]; // For timestamp string
+  ndbout << name << " started [" << getDate(buf, sizeof(buf)) << "]" << endl;
 
   const NdbDictionary::Table* ptab = NDBT_Tables::getTable(_tabname);
   if (ptab == NULL)
+  {
+    g_err << "ptab == NULL" << endl;
     return NDBT_FAILED;
+  }
 
   ndbout << "|- " << ptab->getName() << endl;
 
@@ -934,12 +1022,16 @@ NDBT_TestSuite::executeOne(Ndb_cluster_connection& con,
 
 int 
 NDBT_TestSuite::executeOneCtx(Ndb_cluster_connection& con,
-			   const NdbDictionary::Table *ptab, const char* _testname){
-  
-  testSuiteTimer.doStart(); 
-  
+                              const NdbDictionary::Table *ptab,
+                              const char* _testname)
+{
+
+  testSuiteTimer.doStart();
   do{
     if(tests.size() == 0)
+      break;
+
+    if (opt_stop_on_error != 0 && numTestsFail > 0)
       break;
 
     Ndb ndb(&con, "TEST_DB");
@@ -953,38 +1045,33 @@ NDBT_TestSuite::executeOneCtx(Ndb_cluster_connection& con,
       break;
     }
 
-    ndbout << name << " started [" << getDate() << "]" << endl;
+    char buf[64]; // For timestamp string
+    ndbout << name
+           << " started [" << getDate(buf, sizeof(buf)) << "]" << endl;
     ndbout << "|- " << ptab->getName() << endl;
 
-    for (unsigned t = 0; t < tests.size(); t++){
+    if (_testname == NULL)
+    {
+      for (unsigned t = 0; t < tests.size(); t++)
+      {
+        if (opt_stop_on_error != 0 && numTestsFail > 0)
+          break;
 
-      if (_testname != NULL && 
-	      strcasecmp(tests[t]->getName(), _testname) != 0)
-        continue;
+        execute(con, tests[t], ptab);
+      }
 
-      tests[t]->initBeforeTest();
-    
-      ctx = new NDBT_Context(con);
-      ctx->setTab(ptab);
-      ctx->setNumRecords(records);
-      ctx->setNumLoops(loops);
-      ctx->setSuite(this);
-      ctx->setProperty("NoDDL", (Uint32) m_noddl);
-    
-      result = tests[t]->execute(ctx);
-      if (result != NDBT_OK)
-        numTestsFail++;
-      else
-        numTestsOk++;
-      numTestsExecuted++;
-
-    delete ctx;
-  }
-
-    if (numTestsFail > 0)
-      break;
-  }while(0);
-
+      if (numTestsFail > 0)
+        break;
+    }
+    else
+    {
+      NDBT_TestCase * pt = findTest(_testname);
+      if (pt != NULL)
+      {
+        execute(con, pt, ptab);
+      }
+    }
+  } while(0);
   testSuiteTimer.doStop();
   int res = report(_testname);
   return NDBT_ProgramExit(res);
@@ -1021,46 +1108,45 @@ NDBT_TestSuite::createHook(Ndb* ndb, NdbDictionary::Table& tab, int when)
 void NDBT_TestSuite::execute(Ndb_cluster_connection& con,
 			     const NdbDictionary::Table* pTab, 
 			     const char* _testname){
-  int result; 
 
-  for (unsigned t = 0; t < tests.size(); t++){
-
-    if (_testname != NULL && 
-	strcasecmp(tests[t]->getName(), _testname) != 0)
-      continue;
-
-    if (tests[t]->m_all_tables && tests[t]->m_has_run)
+  if (_testname == NULL)
+  {
+    for (unsigned t = 0; t < tests.size(); t++)
     {
-      continue;
+      if (opt_stop_on_error != 0 && numTestsFail > 0)
+        break;
+
+      if (tests[t]->m_all_tables && tests[t]->m_has_run)
+      {
+        continue;
+      }
+
+      if (tests[t]->isVerify(pTab) == false) {
+        continue;
+      }
+
+      execute(con, tests[t], pTab);
     }
+  }
+  else
+  {
+    do
+    {
+      NDBT_TestCase * pt = findTest(_testname);
+      if (pt == NULL)
+        break;
 
-    if (tests[t]->isVerify(pTab) == false) {
-      continue;
-    }
+      if (pt->m_all_tables && pt->m_has_run)
+        break;
 
-    tests[t]->initBeforeTest();
+      if (pt->isVerify(pTab) == false)
+        break;
 
-    ctx = new NDBT_Context(con);
-    ctx->setNumRecords(records);
-    ctx->setNumLoops(loops);
-    ctx->setSuite(this);
-    ctx->setTab(pTab);
-    ctx->setProperty("NoDDL", (Uint32) m_noddl);
+      execute(con, pt, pTab);
 
-    result = tests[t]->execute(ctx);
-    tests[t]->saveTestResult(pTab->getName(), result);
-    if (result != NDBT_OK)
-      numTestsFail++;
-    else
-      numTestsOk++;
-    numTestsExecuted++;
-
-    tests[t]->m_has_run = true;
-
-    delete ctx;
+    } while(0);
   }
 }
-
 
 
 int
@@ -1221,7 +1307,9 @@ runEmptyDropTable(NDBT_Context* ctx, NDBT_Step* step)
 int 
 NDBT_TestSuite::report(const char* _tcname){
   int result;
-  ndbout << "Completed " << name << " [" << getDate() << "]" << endl;
+  char buf[64]; // For timestamp string
+  ndbout << "Completed " << name
+         << " [" << getDate(buf, sizeof(buf)) << "]" << endl;
   printTestCaseSummary(_tcname);
   ndbout << numTestsExecuted << " test(s) executed" << endl;
   ndbout << numTestsOk << " test(s) OK" 
@@ -1242,17 +1330,27 @@ void NDBT_TestSuite::printTestCaseSummary(const char* _tcname){
   ndbout << "= SUMMARY OF TEST EXECUTION ==============" << endl;
   for (unsigned t = 0; t < tests.size(); t++){
     if (_tcname != NULL && 
-	strcasecmp(tests[t]->getName(), _tcname) != 0)
+	native_strcasecmp(tests[t]->getName(), _tcname) != 0)
       continue;
 
     tests[t]->printTestResult();
+  }
+  for (unsigned t = 0; t < explicitTests.size(); t++){
+    if (_tcname != NULL &&
+	native_strcasecmp(explicitTests[t]->getName(), _tcname) != 0)
+      continue;
+
+    explicitTests[t]->printTestResult();
   }
   ndbout << "==========================================" << endl;
 }
 
 int NDBT_TestSuite::reportAllTables(const char* _testname){
   int result;
-  ndbout << "Completed running test [" << getDate() << "]" << endl;
+  char buf[64]; // For timestamp string
+  ndbout << "Completed running test ["
+         << getDate(buf, sizeof(buf))
+         << "]" << endl;
   const int totalNumTests = numTestsExecuted;
   printTestCaseSummary(_testname);
   ndbout << numTestsExecuted<< " test(s) executed" << endl;
@@ -1333,6 +1431,10 @@ static struct my_option my_long_options[] =
   { "forceshortreqs", NDB_OPT_NOSHORT, "Use short signals for NdbApi requests",
     (uchar**) &opt_forceShort, (uchar**) &opt_forceShort, 0,
     GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
+  { "stop-on-error", NDB_OPT_NOSHORT,
+    "Don't run any more tests after one has failed",
+    (uchar**) &opt_stop_on_error, (uchar**) &opt_stop_on_error, 0,
+    GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0 },
   { 0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0}
 };
 
@@ -1378,16 +1480,19 @@ int NDBT_TestSuite::execute(int argc, const char** argv){
 
   ndb_opt_set_usage_funcs(short_usage_sub, usage);
 
-  load_defaults("my",load_default_groups,&argc,&_argv);
+  ndb_load_defaults(NULL, load_default_groups,&argc,&_argv);
+  // Save pointer to memory allocated by 'ndb_load_defaults'
+  char** defaults_argv= _argv;
 
   int ho_error;
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   opt_debug= "d:t:i:F:L";
 #endif
   if ((ho_error=handle_options(&argc, &_argv, my_long_options,
 			       ndb_std_get_one_option)))
   {
     usage();
+    ndb_free_defaults(defaults_argv);
     return NDBT_ProgramExit(NDBT_WRONGARGS);
   }
 
@@ -1466,26 +1571,68 @@ int NDBT_TestSuite::execute(int argc, const char** argv){
                            *dropFunc);
       pt->addFinalizer(ptf);
     }
+
+    for (unsigned t = 0; t < explicitTests.size(); t++)
+    {
+      const char* createFuncName= NULL;
+      NDBT_TESTFUNC* createFunc= NULL;
+      const char* dropFuncName= NULL;
+      NDBT_TESTFUNC* dropFunc= NULL;
+
+      if (!m_noddl)
+      {
+        createFuncName= m_createAll ? "runCreateTable" : "runCreateTable";
+        createFunc=   m_createAll ? &runCreateTables : &runCreateTable;
+        dropFuncName= m_createAll ? "runDropTables" : "runDropTable";
+        dropFunc= m_createAll ? &runDropTables : &runDropTable;
+      }
+      else
+      {
+        /* No DDL allowed, so we substitute 'do nothing' variants
+         * of the create + drop table test procs
+         */
+        createFuncName= "runCheckTableExists";
+        createFunc= &runCheckTableExists;
+        dropFuncName= "runEmptyDropTable";
+        dropFunc= &runEmptyDropTable;
+      }
+
+      NDBT_TestCaseImpl1* pt= (NDBT_TestCaseImpl1*)explicitTests[t];
+      NDBT_Initializer* pti =
+        new NDBT_Initializer(pt,
+                             createFuncName,
+                             *createFunc);
+      pt->addInitializer(pti, true);
+      NDBT_Finalizer* ptf =
+        new NDBT_Finalizer(pt,
+                           dropFuncName,
+                           *dropFunc);
+      pt->addFinalizer(ptf);
+    }
   }
 
   if (opt_print == true){
     printExecutionTree();
+    ndb_free_defaults(defaults_argv);
     return 0;
   }
 
   if (opt_print_html == true){
     printExecutionTreeHTML();
+    ndb_free_defaults(defaults_argv);
     return 0;
   }
 
   if (opt_print_cases == true){
     printCases();
+    ndb_free_defaults(defaults_argv);
     return 0;
   }
 
   Ndb_cluster_connection con(opt_ndb_connectstring, opt_ndb_nodeid);
   if(m_connect_cluster && con.connect(12, 5, 1))
   {
+    ndb_free_defaults(defaults_argv);
     return NDBT_ProgramExit(NDBT_FAILED);
   }
 
@@ -1501,6 +1648,7 @@ int NDBT_TestSuite::execute(int argc, const char** argv){
     res = report(opt_testname);
   }
 
+  ndb_free_defaults(defaults_argv);
   return NDBT_ProgramExit(res);
 }
 
@@ -1509,6 +1657,10 @@ void NDBT_TestSuite::printExecutionTree(){
   ndbout << "Testsuite: " << name << endl;
   for (unsigned t = 0; t < tests.size(); t++){
     tests[t]->print();
+    ndbout << endl;
+  } 
+  for (unsigned t = 0; t < explicitTests.size(); t++){
+    explicitTests[t]->print();
     ndbout << endl;
   } 
 }
@@ -1521,7 +1673,10 @@ void NDBT_TestSuite::printExecutionTreeHTML(){
     tests[t]->printHTML();
     ndbout << endl;
   } 
-
+  for (unsigned t = 0; t < explicitTests.size(); t++){
+    explicitTests[t]->printHTML();
+    ndbout << endl;
+  }
 }
 
 void NDBT_TestSuite::printCases(){
@@ -1530,29 +1685,22 @@ void NDBT_TestSuite::printCases(){
   for (unsigned t = 0; t < tests.size(); t++){
     ndbout << name << " -n " << tests[t]->getName() << endl;
   } 
+  ndbout << "# Number of explicit tests: " << explicitTests.size() << endl;
+  for (unsigned t = 0; t < explicitTests.size(); t++){
+    ndbout << name << " -n " << explicitTests[t]->getName() << endl;
+  } 
 }
 
-const char* NDBT_TestSuite::getDate(){
-  static char theTime[128];
-  struct tm* tm_now;
+const char* NDBT_TestSuite::getDate(char* str, size_t len)
+{
+  // Get current time
   time_t now;
-  now = time((time_t*)NULL);
-#ifdef NDB_WIN32
-  tm_now = localtime(&now);
-#else
-  tm_now = gmtime(&now);
-#endif
-  
-  BaseString::snprintf(theTime, 128,
-	   "%d-%.2d-%.2d %.2d:%.2d:%.2d",
-	   tm_now->tm_year + 1900, 
-	   tm_now->tm_mon + 1, 
-	   tm_now->tm_mday,
-	   tm_now->tm_hour,
-	   tm_now->tm_min,
-	   tm_now->tm_sec);
+  time(&now);
 
-  return theTime;
+  // Print as timestamp to buf
+  Logger::format_timestamp(now, str, len);
+
+  return str;
 }
 
 void NDBT_TestCaseImpl1::printHTML(){
@@ -1572,7 +1720,7 @@ void NDBT_TestCaseImpl1::print(){
   for(const char * key = it.first(); key != 0; key = it.next()){
     PropertiesType pt;
     const bool b = props.getTypeOf(key, &pt);
-    assert(b == true);
+    require(b == true);
     switch(pt){
     case PropertiesType_Uint32:{
       Uint32 val;
@@ -1627,6 +1775,48 @@ void
 NDBT_Context::sync_up_and_wait(const char * key, Uint32 value){
   setProperty(key, value);
   getPropertyWait(key, (unsigned)0);
+}
+
+bool
+NDBT_Context::closeToTimeout(int safety)
+{
+  if (safety == 0)
+    return false;
+
+  if (m_env_timeout == 0)
+  {
+    char buf[1024];
+    const char * p = NdbEnv_GetEnv("ATRT_TIMEOUT", buf, sizeof(buf));
+    if (p)
+    {
+      m_env_timeout = atoi(p);
+      ndbout_c("FOUND ATRT_TIMEOUT: %d", m_env_timeout);
+    }
+    else
+    {
+      m_env_timeout = -1;
+    }
+  }
+
+  if (m_env_timeout < 0)
+    return false;
+
+  Uint64 to = (1000 * m_env_timeout * (100 - safety)) / 100;
+  Uint64 now = NdbTick_CurrentMillisecond();
+  if (now >= m_test_start_time + to)
+  {
+    ndbout_c("closeToTimeout(%d) => true env(timeout): %d",
+             safety, m_env_timeout);
+    return true;
+  }
+
+  return false;
+}
+
+NdbApiConfig const&
+NDBT_Context::getConfig() const
+{
+  return m_cluster_connection.m_impl.m_config;
 }
 
 template class Vector<NDBT_TestCase*>;

@@ -11,15 +11,13 @@
 
 --source include/have_innodb_16k.inc
 --source include/not_embedded.inc
-
---echo # Skip this test other platfoms and run only on Linux.
-if (`select convert(@@version_compile_os using latin1) IN ("Linux") = 0`)
-{
-  skip Need Linux;
-}
+--source include/linux.inc
+--source include/have_util_unzip.inc
 
 --echo # Set the environmental variables
-let MYSQL_BASEDIR= `select @@basedir`;
+LET MYSQL_BASEDIR= `select @@basedir`;
+LET $MYSQLD_DATADIR = `select @@datadir`;
+LET $INNODB_PAGE_SIZE = `select @@innodb_page_size`;
 
 --echo # Stop server
 -- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
@@ -38,7 +36,7 @@ sub find_zip () {
        my $src_file = $File::Find::name;
        my $srcfile = File::Spec->catfile("$src_file") ;
        my $destfile = File::Spec->catfile("$dest_dir", "portability_wl5980_linux.zip");
-       if (! -e $destfile) {   
+       if (! -e $destfile) {
           copy($srcfile,$destfile) or die "copy @args failed: $!";
        }
    }
@@ -91,7 +89,7 @@ EOF
 --exec echo $MYSQL_TMP_DIR/mysqld.5980/tab4/test/emp4#p#p1.ibd > $MYSQL_TMP_DIR/mysqld.5980/data/test/emp4#p#p1.isl
 --exec echo $MYSQL_TMP_DIR/mysqld.5980/tab5/test/emp4#p#p2.ibd > $MYSQL_TMP_DIR/mysqld.5980/data/test/emp4#p#p2.isl
 
---exec echo $MYSQL_TMP_DIR/mysqld.5980/part0/test/purchase#p#p0#sp#s0.ibd > $MYSQL_TMP_DIR/mysqld.5980/data/test/purchase#p#p0#sp#s0.isl 
+--exec echo $MYSQL_TMP_DIR/mysqld.5980/part0/test/purchase#p#p0#sp#s0.ibd > $MYSQL_TMP_DIR/mysqld.5980/data/test/purchase#p#p0#sp#s0.isl
 --exec echo $MYSQL_TMP_DIR/mysqld.5980/part1/test/purchase#p#p0#sp#s1.ibd > $MYSQL_TMP_DIR/mysqld.5980/data/test/purchase#p#p0#sp#s1.isl
 --exec echo $MYSQL_TMP_DIR/mysqld.5980/part2/test/purchase#p#p1#sp#s2.ibd > $MYSQL_TMP_DIR/mysqld.5980/data/test/purchase#p#p1#sp#s2.isl
 --exec echo $MYSQL_TMP_DIR/mysqld.5980/part3/test/purchase#p#p1#sp#s3.ibd > $MYSQL_TMP_DIR/mysqld.5980/data/test/purchase#p#p1#sp#s3.isl
@@ -101,9 +99,27 @@ EOF
 --echo # partition tables will be stored in mixed (Upper & Lower) format on Linux,
 --echo # but on Windows the partition table names are stored in lower case only.
 
+--echo # Restarting the server with skip-grant-tables and updating mysql.user
+--echo # table to deal with the restriction added to plugin value for users
+--echo # in WL6982.
+
+-- exec echo "restart:--lower_case_table_names=1 --datadir=$MYSQL_TMP_DIR/mysqld.5980/data/ --skip-grant-tables" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+-- enable_reconnect
+-- source include/wait_until_connected_again.inc
+-- disable_reconnect
+
+-- exec $MYSQL -e "UPDATE mysql.user SET plugin = 'mysql_native_password'"
+
+--echo Run mysql_upgrade once
+--exec $MYSQL_UPGRADE --skip-verbose --force 2>&1
+
+-- echo # Stop server
+-- source include/shutdown_mysqld.inc
+
 -- exec echo "restart:--lower_case_table_names=1 --datadir=$MYSQL_TMP_DIR/mysqld.5980/data/ " > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 -- enable_reconnect
 -- source include/wait_until_connected_again.inc
+-- disable_reconnect
 
 --echo # Check the DB & tables with DML statements.
 use test;
@@ -137,18 +153,8 @@ SELECT COUNT(*) FROM emp4;
 SELECT COUNT(*) FROM purchase;
 
 --echo # Check the system tables have the proper entry of the tables.
---replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
-SELECT path FROM information_schema.innodb_sys_datafiles
-       WHERE path LIKE '%test%' ORDER BY space;
-SELECT name,file_format,row_format 
-       FROM information_schema.innodb_sys_tablespaces
-       ORDER BY name;
-SELECT name,n_cols,file_format,row_format 
-       FROM information_schema.innodb_sys_tables 
-       WHERE name LIKE '%emp%' ORDER BY name;
-SELECT name,n_cols,file_format,row_format 
-       FROM information_schema.innodb_sys_tables 
-       WHERE name LIKE '%purchase%' ORDER BY name;
+--source suite/innodb/include/show_i_s_tablespaces.inc
+--source suite/innodb/include/show_i_s_tables.inc
 
 --echo #
 --echo # Cleanup

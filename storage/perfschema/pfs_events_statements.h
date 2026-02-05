@@ -1,13 +1,20 @@
-/* Copyright (c) 2010, 2015, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation; version 2 of the License.
+  it under the terms of the GNU General Public License, version 2.0,
+  as published by the Free Software Foundation.
+
+  This program is also distributed with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an additional
+  permission to link the program and your derivative works with the
+  separately licensed software that they have included with MySQL.
 
   This program is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
+  GNU General Public License, version 2.0, for more details.
 
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software
@@ -33,18 +40,20 @@ struct PFS_host;
 /** A statement record. */
 struct PFS_events_statements : public PFS_events
 {
+  enum_object_type m_sp_type;
+  char m_schema_name[NAME_LEN];
+  uint m_schema_name_length;
+  char m_object_name[NAME_LEN];
+  uint m_object_name_length;
+
   /** Database name. */
   char m_current_schema_name[NAME_LEN];
   /** Length of @c m_current_schema_name. */
   uint m_current_schema_name_length;
-  /** SQL_TEXT */
-  char m_sqltext[COL_INFO_SIZE];
-  /** Length of @ m_info. */
-  uint m_sqltext_length;
 
   /** Locked time. */
   ulonglong m_lock_time;
-  
+
   /** Diagnostics area, message text. */
   char m_message_text[MYSQL_ERRMSG_SIZE+1];
   /** Diagnostics area, error number. */
@@ -95,6 +104,14 @@ struct PFS_events_statements : public PFS_events
   uint m_sqltext_cs_number;
 
   /**
+    SQL_TEXT.
+    This pointer is immutable,
+    and always point to pre allocated memory.
+  */
+  char *m_sqltext;
+  /** Length of @ m_info. */
+  uint m_sqltext_length;
+  /**
     Statement digest.
     This underlying token array storage pointer is immutable,
     and always point to pre allocated memory.
@@ -105,12 +122,14 @@ struct PFS_events_statements : public PFS_events
 void insert_events_statements_history(PFS_thread *thread, PFS_events_statements *statement);
 void insert_events_statements_history_long(PFS_events_statements *statement);
 
+extern ulong nested_statement_lost;
+
 extern bool flag_events_statements_current;
 extern bool flag_events_statements_history;
 extern bool flag_events_statements_history_long;
 
 extern bool events_statements_history_long_full;
-extern volatile uint32 events_statements_history_long_index;
+extern PFS_ALIGNED PFS_cacheline_uint32 events_statements_history_long_index;
 extern PFS_events_statements *events_statements_history_long_array;
 extern size_t events_statements_history_long_size;
 

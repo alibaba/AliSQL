@@ -1,4 +1,25 @@
 # -*- cperl -*-
+# Copyright (c) 2007, 2023, Oracle and/or its affiliates.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License, version 2.0,
+# as published by the Free Software Foundation.
+#
+# This program is also distributed with certain software (including
+# but not limited to OpenSSL) that is licensed under separate terms,
+# as designated in a particular file or component or in included license
+# documentation.  The authors of MySQL hereby grant you an additional
+# permission to link the program and your derivative works with the
+# separately licensed software that they have included with MySQL.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License, version 2.0, for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 package My::Exec;
 
@@ -18,6 +39,7 @@ sub get_logfile_name {
     # Get logfile name
     my @cmd_parts = split(' ', $cmd);
     my $logfile_base = fileparse($cmd_parts[0]);
+    $logfile_base =~ s/[^a-zA-Z0-9_]*//g; 
     my $logfile_name = "";
     my $log_dir = $ENV{MYSQLTEST_VARDIR};
     for my $i (1..100)
@@ -34,16 +56,34 @@ sub get_logfile_name {
     return $logfile_name;
 }
 
-# Save a set of lines to a file
-sub save_file {
-    my $filename = shift;
-    my $lines    = shift;
+# Show the last "max_lines" from file
+sub show_last_lines_from_file {
+    my ($filename, $max_lines) = @_;
 
-    my $F = IO::File->new($filename, "w") or die "Can't write to '$filename': $!";
-    foreach my $line (@$lines) {
-        print $F $line
+    my $F = IO::File->new($filename, "r")
+      or print "Failed to open file '$filename' for reading: $!\n" and return;
+
+    my @input = <$F>;
+    my $lines = scalar(@input);
+    $lines = $max_lines if $lines > $max_lines;
+    print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n";
+    print "Last '$lines' lines of output from command:\n";
+    foreach my $line (splice(@input, -$lines))
+    {
+      print $line;
     }
+    print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n";
     $F->close();
+}
+
+# Extract the command name with args, ignoring its location
+sub get_command_name {
+    my $cmd = shift;
+
+    my @cmd_parts = split(' ', $cmd);
+    my $cmd_base_name = fileparse($cmd_parts[0]);
+    my $cmd_base_with_args = substr($cmd , index($cmd, $cmd_base_name));
+    return $cmd_base_with_args;
 }
 
 #
@@ -66,10 +106,16 @@ sub exec_print_on_error {
 
     my $logfile_name = get_logfile_name($cmd);
 
-    $cmd .= " 2>&1";
-    my @output = `$cmd`;
-    print "Result of '$cmd': $?, logfile: '$logfile_name'\n";
-    save_file($logfile_name, \@output);
+    my $cmd_base_name = get_command_name($cmd);
+
+    # Redirect stdout and stderr of command to log file
+    $cmd .= " > $logfile_name 2>&1";
+
+    # Execute command
+    print "Running '$cmd_base_name'\n";
+    system($cmd);
+
+    print "Result of '$cmd_base_name': $?\n";
     if ($? == 0)
     {
 	# Test program suceeded
@@ -91,14 +137,8 @@ sub exec_print_on_error {
 	print "Test program killed by signal $sig\n" if $sig;
 	print "Test program failed with error $return\n" if $return;
 
-	# Show the last lines of the output 
-	my $lines = scalar(@output);
-	$lines = $max_lines if $lines > $max_lines;
-	print "Last '$lines' lines of output from command:\n";  
-	foreach my $line (splice(@output, -$lines))
-	{
-	    print $line;
-	}
+	# Show the "max_lines" last lines from the log file
+	show_last_lines_from_file($logfile_name, $max_lines);
     }
     return 0;
 }

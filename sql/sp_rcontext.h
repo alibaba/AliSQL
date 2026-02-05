@@ -1,13 +1,20 @@
-/* Copyright (c) 2002, 2013, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2002, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
@@ -16,8 +23,10 @@
 #ifndef _SP_RCONTEXT_H_
 #define _SP_RCONTEXT_H_
 
-#include "sql_class.h"                    // select_result_interceptor
+#include "sql_class.h"                    // Query_result_interceptor
 #include "sp_pcontext.h"                  // sp_condition_value
+#include "sql_array.h"
+#include "prealloced_array.h"
 
 ///////////////////////////////////////////////////////////////////////////
 // sp_rcontext declaration.
@@ -98,58 +107,6 @@ private:
   };
 
 public:
-  /// This class stores basic information about SQL-condition, such as:
-  ///   - SQL error code;
-  ///   - error level;
-  ///   - SQLSTATE;
-  ///   - text message.
-  ///
-  /// It's used to organize runtime SQL-handler call stack.
-  ///
-  /// Standard Sql_condition class can not be used, because we don't always have
-  /// an Sql_condition object for an SQL-condition in Diagnostics_area.
-  ///
-  /// Eventually, this class should be moved to sql_error.h, and be a part of
-  /// standard SQL-condition processing (Diagnostics_area should contain an
-  /// object for active SQL-condition, not just information stored in DA's
-  /// fields).
-  class Sql_condition_info
-  {
-  public:
-    /// SQL error code.
-    uint sql_errno;
-
-    /// Error level.
-    Sql_condition::enum_warning_level level;
-
-    /// SQLSTATE.
-    char sql_state[SQLSTATE_LENGTH + 1];
-
-    /// Text message.
-    char message[MYSQL_ERRMSG_SIZE];
-
-    /// The constructor.
-    ///
-    /// @param _sql_errno  SQL error number.
-    /// @param _sql_state  Diagnostic status.
-    /// @param _level      Error level of the condition.
-    /// @param _message    Error message.
-    Sql_condition_info(uint _sql_errno,
-                       const char *_sql_state,
-                       Sql_condition::enum_warning_level _level,
-                       const char *_message)
-     :sql_errno(_sql_errno),
-      level(_level)
-    {
-      memcpy(sql_state, _sql_state, SQLSTATE_LENGTH);
-      sql_state[SQLSTATE_LENGTH]= '\0';
-
-      strncpy(message, _message, MYSQL_ERRMSG_SIZE - 1);
-      message[MYSQL_ERRMSG_SIZE - 1]= '\0';
-    }
-  };
-
-private:
   /// This class represents a call frame of SQL-handler (one invocation of a
   /// handler). Basically, it's needed to store continue instruction pointer for
   /// CONTINUE SQL-handlers.
@@ -160,29 +117,27 @@ private:
     const sp_handler *handler;
 
     /// SQL-condition, triggered handler activation.
-    Sql_condition_info sql_condition_info;
+    Sql_condition *sql_condition;
 
     /// Continue-instruction-pointer for CONTINUE-handlers.
     /// The attribute contains 0 for EXIT-handlers.
     uint continue_ip;
 
+    /// The Diagnostics Area which will be pushed when the handler activates
+    /// and popped when the handler completes.
+    Diagnostics_area handler_da;
+
     /// The constructor.
     ///
-    /// @param _handler      handler triggered due to SQL-condition.
-    /// @param _sql_errno    SQL error number.
-    /// @param _sql_state    Diagnostic status.
-    /// @param  _level       Error level of the condition.
-    /// @param  _message     Error message.
-    /// @param _continue_ip  Continue instruction pointer.
+    /// @param _sql_condition SQL-condition, triggered handler activation.
+    /// @param _continue_ip   Continue instruction pointer.
     Handler_call_frame(const sp_handler *_handler,
-                       uint _sql_errno,
-                       const char *_sql_state,
-                       Sql_condition::enum_warning_level _level,
-                       const char *_message,
+                       Sql_condition *_sql_condition,
                        uint _continue_ip)
      :handler(_handler),
-      sql_condition_info(_sql_errno, _sql_state, _level, _message),
-      continue_ip(_continue_ip)
+      sql_condition(_sql_condition),
+      continue_ip(_continue_ip),
+      handler_da(false)
     { }
  };
 
@@ -239,10 +194,11 @@ public:
   /// @param current_scope  The current BEGIN..END block.
   void pop_handlers(sp_pcontext *current_scope);
 
-  const Sql_condition_info *raised_condition() const
+  /// Get the Handler_call_frame representing the currently active handler.
+  Handler_call_frame *current_handler_frame() const
   {
-    return m_activated_handlers.elements() ?
-      &(*m_activated_handlers.back())->sql_condition_info : NULL;
+    return m_activated_handlers.size() ?
+      m_activated_handlers.back() : NULL;
   }
 
   /// Handle current SQL condition (if any).
@@ -271,16 +227,18 @@ public:
 
   /// Handle return from SQL-handler.
   ///
+  /// @param thd            Thread handle.
   /// @param target_scope   The BEGIN..END block, containing
   ///                       the target (next) instruction.
-  void exit_handler(sp_pcontext *target_scope);
+  void exit_handler(THD *thd,
+                    sp_pcontext *target_scope);
 
-  /// @return the continue instruction pointer if the last activated CONTINUE
+  /// @return the continue instruction pointer of the last activated CONTINUE
   /// handler. This function must not be called for the EXIT handlers.
   uint get_last_handler_continue_ip() const
   {
-    uint ip= (*m_activated_handlers.back())->continue_ip;
-    DBUG_ASSERT(ip != 0);
+    uint ip= m_activated_handlers.back()->continue_ip;
+    assert(ip != 0);
 
     return ip;
   }
@@ -386,6 +344,10 @@ private:
 
   bool set_variable(THD *thd, Field *field, Item **value);
 
+  /// Pop the Handler_call_frame on top of the stack of active handlers.
+  /// Also pop the matching Diagnostics Area and transfer conditions.
+  void pop_handler_frame(THD *thd);
+
 private:
   /// Top-level (root) parsing context for this runtime context.
   const sp_pcontext *m_root_parsing_ctx;
@@ -409,10 +371,10 @@ private:
   bool m_in_sub_stmt;
 
   /// Stack of visible handlers.
-  Dynamic_array<sp_handler_entry *> m_visible_handlers;
+  Prealloced_array<sp_handler_entry *, 16> m_visible_handlers;
 
   /// Stack of caught SQL conditions.
-  Dynamic_array<Handler_call_frame *> m_activated_handlers;
+  Prealloced_array<Handler_call_frame *, 16> m_activated_handlers;
 
   /// Stack of cursors.
   Bounds_checked_array<sp_cursor *> m_cstack;
@@ -438,12 +400,12 @@ class sp_cursor
 private:
   /// An interceptor of cursor result set used to implement
   /// FETCH <cname> INTO <varlist>.
-  class Select_fetch_into_spvars: public select_result_interceptor
+  class Query_fetch_into_spvars: public Query_result_interceptor
   {
     List<sp_variable> *spvar_list;
     uint field_count;
   public:
-    Select_fetch_into_spvars() {}               /* Remove gcc warning */
+    Query_fetch_into_spvars() {}               /* Remove gcc warning */
     uint get_field_count() { return field_count; }
     void set_spvar_list(List<sp_variable> *vars) { spvar_list= vars; }
 
@@ -474,7 +436,7 @@ public:
   { return m_push_instr; }
 
 private:
-  Select_fetch_into_spvars m_result;
+  Query_fetch_into_spvars m_result;
 
   Server_side_cursor *m_server_side_cursor;
   sp_instr_cpush *m_push_instr;

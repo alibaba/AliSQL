@@ -1,3 +1,4 @@
+
 # Tests for SIGNAL and RESIGNAL
 
 --echo #
@@ -1342,7 +1343,7 @@ end $$
 --error ER_WRONG_VALUE_FOR_VAR
 call test_signal() $$
 drop procedure test_signal $$
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 create procedure test_signal()
 begin
   DECLARE aaax VARCHAR(65);
@@ -1397,7 +1398,7 @@ end $$
 
 call test_signal() $$
 drop procedure test_signal $$
-
+SET sql_mode = default;
 # Test that HANDLER can catch conditions raised by SIGNAL
 
 create procedure test_signal()
@@ -1722,9 +1723,8 @@ begin
   DECLARE warn CONDITION FOR SQLSTATE "01234";
   DECLARE CONTINUE HANDLER for 1012
   begin
-    select "before RESIGNAL";
-    RESIGNAL;
-    select "after RESIGNAL";
+     select "handler called";
+     RESIGNAL;
   end;
 
   SIGNAL warn SET
@@ -1772,14 +1772,13 @@ end $$
 --error 1012
 call test_resignal() $$
 drop procedure test_resignal $$
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 create procedure test_resignal()
 begin
   DECLARE CONTINUE HANDLER for sqlwarning
   begin
-    select "before RESIGNAL";
+    select "handler called";
     RESIGNAL;
-    select "after RESIGNAL";
   end;
 
   insert into t_warn set a= 9999999999999999;
@@ -1787,7 +1786,7 @@ end $$
 
 call test_resignal() $$
 drop procedure test_resignal $$
-
+SET sql_mode = default;
 create procedure test_resignal()
 begin
   DECLARE x integer;
@@ -1833,11 +1832,10 @@ begin
   DECLARE warn CONDITION FOR SQLSTATE "01234";
   DECLARE CONTINUE HANDLER for 1012
   begin
-    select "before RESIGNAL";
+    select "handler called";
     RESIGNAL SET
       MESSAGE_TEXT = "RESIGNAL of a warning",
       MYSQL_ERRNO = 5555 ;
-    select "after RESIGNAL";
   end;
 
   SIGNAL warn SET
@@ -1889,16 +1887,15 @@ end $$
 --error 5555
 call test_resignal() $$
 drop procedure test_resignal $$
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 create procedure test_resignal()
 begin
   DECLARE CONTINUE HANDLER for sqlwarning
   begin
-    select "before RESIGNAL";
+    select "handler called";
     RESIGNAL SET
       MESSAGE_TEXT = "RESIGNAL of a warning",
       MYSQL_ERRNO = 5555 ;
-    select "after RESIGNAL";
   end;
 
   insert into t_warn set a= 9999999999999999;
@@ -1906,7 +1903,7 @@ end $$
 
 call test_resignal() $$
 drop procedure test_resignal $$
-
+SET sql_mode = default;
 create procedure test_resignal()
 begin
   DECLARE x integer;
@@ -1958,11 +1955,10 @@ begin
   DECLARE warn CONDITION FOR SQLSTATE "01111";
   DECLARE CONTINUE HANDLER for 1012
   begin
-    select "before RESIGNAL";
+    select "handler called";
     RESIGNAL SQLSTATE "01222" SET
       MESSAGE_TEXT = "RESIGNAL to warning",
       MYSQL_ERRNO = 5555 ;
-    select "after RESIGNAL";
   end;
 
   SIGNAL warn SET
@@ -2026,11 +2022,10 @@ begin
   DECLARE not_found CONDITION FOR SQLSTATE "02ABC";
   DECLARE CONTINUE HANDLER for 1012
   begin
-    select "before RESIGNAL";
+    select "handler called";
     RESIGNAL SQLSTATE "01222" SET
       MESSAGE_TEXT = "RESIGNAL to warning",
       MYSQL_ERRNO = 5555 ;
-    select "after RESIGNAL";
   end;
 
   SIGNAL not_found SET
@@ -2094,11 +2089,10 @@ begin
   DECLARE error CONDITION FOR SQLSTATE "AAAAA";
   DECLARE CONTINUE HANDLER for 1012
   begin
-    select "before RESIGNAL";
+    select "handler called";
     RESIGNAL SQLSTATE "01222" SET
       MESSAGE_TEXT = "RESIGNAL to warning",
       MYSQL_ERRNO = 5555 ;
-    select "after RESIGNAL";
   end;
 
   SIGNAL error SET
@@ -2156,16 +2150,15 @@ drop procedure test_resignal $$
 # 3 tests:
 # {warning}
 # --> RESIGNAL SQLSTATE {warning, not found, error} SET ...
-
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 create procedure test_resignal()
 begin
   DECLARE CONTINUE HANDLER for sqlwarning
   begin
-    select "before RESIGNAL";
+    select "handler called";
     RESIGNAL SQLSTATE "01111" SET
       MESSAGE_TEXT = "RESIGNAL to a warning",
       MYSQL_ERRNO = 5555 ;
-    select "after RESIGNAL";
   end;
 
   insert into t_warn set a= 9999999999999999;
@@ -2211,7 +2204,7 @@ end $$
 call test_resignal() $$
 show warnings $$
 drop procedure test_resignal $$
-
+SET sql_mode = default;
 # 3 tests:
 # {not found}
 # --> RESIGNAL SQLSTATE {warning, not found, error} SET ...
@@ -2222,16 +2215,17 @@ begin
   DECLARE c cursor for select * from t_cursor;
   DECLARE CONTINUE HANDLER for not found
   begin
-    select "before RESIGNAL";
+    select "handler called";
     RESIGNAL SQLSTATE "01111" SET
       MESSAGE_TEXT = "RESIGNAL to a warning",
       MYSQL_ERRNO = 5555 ;
-    select "after RESIGNAL";
   end;
 
   open c;
   fetch c into x;
-  close c;
+# We don't explicitly close for once, but rely on the end-of-scope clean-up
+# because we don't want for CLOSE to reset the diagnostics area ...
+# close c;
 end $$
 
 call test_resignal() $$
@@ -2291,11 +2285,10 @@ create procedure test_resignal()
 begin
   DECLARE CONTINUE HANDLER for sqlexception
   begin
-    select "before RESIGNAL";
+    select "handler called";
     RESIGNAL SQLSTATE "01111" SET
       MESSAGE_TEXT = "RESIGNAL to a warning",
       MYSQL_ERRNO = 5555 ;
-    select "after RESIGNAL";
   end;
 
   drop table no_such_table;
@@ -2401,7 +2394,6 @@ BEGIN
   DECLARE x CONDITION FOR SQLSTATE '42000';
   DECLARE EXIT HANDLER FOR x
   BEGIN
-    SELECT '2';
     SHOW WARNINGS;
     RESIGNAL x SET MYSQL_ERRNO = 9999;
   END;
@@ -2409,7 +2401,6 @@ BEGIN
   BEGIN
     DECLARE EXIT HANDLER FOR x
     BEGIN
-      SELECT '1';
       SHOW WARNINGS;
       RESIGNAL x SET
         SCHEMA_NAME = 'test',
@@ -2426,7 +2417,6 @@ BEGIN
   DECLARE x CONDITION for SQLSTATE '42000';
   DECLARE EXIT HANDLER FOR x
   BEGIN
-    SELECT '3';
     SHOW WARNINGS;
     RESIGNAL x SET
       MESSAGE_TEXT = 'Hi, I am a useless error message',
@@ -2678,5 +2668,404 @@ end $$
 # call test_signal $$
 drop procedure test_signal $$
 
-delimiter ; $$
+delimiter ;$$
 
+
+--echo #
+--echo # WL#6406 Stacked diagnostic areas
+--echo #
+
+--echo # Double RESIGNAL of warning
+--echo #
+SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
+delimiter $$;
+CREATE PROCEDURE p1()
+BEGIN
+  DECLARE CONTINUE HANDLER FOR SQLWARNING
+  BEGIN
+    RESIGNAL;
+    RESIGNAL;
+  END;
+
+  SELECT 10 + 'a';
+END $$
+delimiter ;$$
+
+CALL p1();
+DROP PROCEDURE p1;
+
+delimiter $$;
+CREATE PROCEDURE p1()
+BEGIN
+  DECLARE CONTINUE HANDLER FOR SQLWARNING
+  BEGIN
+    RESIGNAL SET MESSAGE_TEXT= '1st resignal';
+    RESIGNAL SET MESSAGE_TEXT= '2nd resignal';
+  END;
+
+  SELECT 10 + 'a';
+END $$
+delimiter ;$$
+
+CALL p1();
+DROP PROCEDURE p1;
+
+delimiter $$;
+CREATE PROCEDURE p1()
+BEGIN
+  DECLARE CONTINUE HANDLER FOR SQLWARNING
+  BEGIN
+    RESIGNAL SQLSTATE '01000' SET MESSAGE_TEXT= '1st resignal';
+    RESIGNAL SQLSTATE '01000' SET MESSAGE_TEXT= '2nd resignal';
+  END;
+
+  SELECT 10 + 'a';
+END $$
+delimiter ;$$
+
+CALL p1();
+DROP PROCEDURE p1;
+
+--echo # RESIGNAL warning + RESIGNAL error
+--echo #
+
+delimiter $$;
+CREATE PROCEDURE p1()
+BEGIN
+  DECLARE CONTINUE HANDLER FOR SQLWARNING
+  BEGIN
+    RESIGNAL SQLSTATE '01000' SET MESSAGE_TEXT= '1st resignal';
+    RESIGNAL SQLSTATE 'HY000' SET MESSAGE_TEXT= '2nd resignal';
+  END;
+
+  SELECT 10 + 'a';
+END $$
+delimiter ;$$
+
+--error ER_SIGNAL_EXCEPTION
+CALL p1();
+SHOW WARNINGS;
+DROP PROCEDURE p1;
+
+--echo # Unhandled errors raised in nested handlers
+--echo #
+
+delimiter $$;
+CREATE PROCEDURE p1()
+BEGIN
+  DECLARE CONTINUE HANDLER FOR 1051
+  BEGIN
+    DROP DATABASE none;  # Error 1008
+  END;
+  DROP TABLE none;  # Error 1051
+END $$
+delimiter ;$$
+
+--error ER_DB_DROP_EXISTS
+CALL p1();
+SHOW WARNINGS; 
+DROP PROCEDURE p1;
+
+--echo # RESIGNAL of warning which fails
+--echo #
+
+delimiter $$;
+CREATE PROCEDURE p1()
+BEGIN
+  DECLARE CONTINUE HANDLER FOR SQLWARNING RESIGNAL SET MESSAGE_TEXT = asdf;
+  SELECT 10 + 'a';
+END $$
+
+CREATE PROCEDURE p2()
+BEGIN
+  DECLARE CONTINUE HANDLER FOR SQLEXCEPTION SELECT 'handled' as Msg;
+  BEGIN
+    DECLARE CONTINUE HANDLER FOR SQLWARNING RESIGNAL SET MESSAGE_TEXT = asdf;
+    SELECT 10 + 'a';
+  END;
+END $$
+
+CREATE PROCEDURE p3()
+BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION SELECT 'handled' as Msg;
+  BEGIN
+    DECLARE CONTINUE HANDLER FOR SQLWARNING RESIGNAL SET MESSAGE_TEXT = asdf;
+    SELECT 10 + 'a';
+  END;
+END $$
+
+CREATE PROCEDURE p4()
+BEGIN
+  DECLARE CONTINUE HANDLER FOR SQLWARNING
+    RESIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = asdf;
+  SELECT 10 + 'a';
+END $$
+
+CREATE PROCEDURE p5()
+BEGIN
+  DECLARE CONTINUE HANDLER FOR SQLEXCEPTION SELECT 'handled' as Msg;
+  BEGIN
+    DECLARE CONTINUE HANDLER FOR SQLWARNING
+      RESIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = asdf;
+    SELECT 10 + 'a';
+  END;
+END $$
+
+CREATE PROCEDURE p6()
+BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION SELECT 'handled' as Msg;
+  BEGIN
+    DECLARE CONTINUE HANDLER FOR SQLWARNING
+      RESIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = asdf;
+    SELECT 10 + 'a';
+  END;
+END $$
+delimiter ;$$
+
+--error ER_BAD_FIELD_ERROR
+CALL p1();
+CALL p2();
+CALL p3();
+--error ER_BAD_FIELD_ERROR
+CALL p4();
+CALL p5();
+CALL p6();
+
+DROP PROCEDURE p1;
+DROP PROCEDURE p2;
+DROP PROCEDURE p3;
+DROP PROCEDURE p4;
+DROP PROCEDURE p5;
+DROP PROCEDURE p6;
+
+--echo # RESIGNAL of error which fails
+--echo #
+
+delimiter $$;
+CREATE PROCEDURE p1()
+BEGIN
+  DECLARE CONTINUE HANDLER FOR SQLEXCEPTION RESIGNAL SET MESSAGE_TEXT = asdf;
+  DROP TABLE none;
+END $$
+
+CREATE PROCEDURE p2()
+BEGIN
+  DECLARE CONTINUE HANDLER FOR SQLEXCEPTION SELECT 'handled' as Msg;
+  BEGIN
+    DECLARE CONTINUE HANDLER FOR SQLEXCEPTION RESIGNAL SET MESSAGE_TEXT = asdf;
+    DROP TABLE none;
+  END;
+END $$
+
+CREATE PROCEDURE p3()
+BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION SELECT 'handled' as Msg;
+  BEGIN
+    DECLARE CONTINUE HANDLER FOR SQLEXCEPTION RESIGNAL SET MESSAGE_TEXT = asdf;
+    DROP TABLE none;
+  END;
+END $$
+
+CREATE PROCEDURE p4()
+BEGIN
+  DECLARE CONTINUE HANDLER FOR SQLEXCEPTION
+    RESIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = asdf;
+  DROP TABLE none;
+END $$
+
+CREATE PROCEDURE p5()
+BEGIN
+  DECLARE CONTINUE HANDLER FOR SQLEXCEPTION SELECT 'handled' as Msg;
+  BEGIN
+    DECLARE CONTINUE HANDLER FOR SQLEXCEPTION
+      RESIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = asdf;
+    DROP TABLE none;
+  END;
+END $$
+
+CREATE PROCEDURE p6()
+BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION SELECT 'handled' as Msg;
+  BEGIN
+    DECLARE CONTINUE HANDLER FOR SQLEXCEPTION
+      RESIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = asdf;
+    DROP TABLE none;
+  END;
+END $$
+delimiter ;$$
+
+--error ER_BAD_FIELD_ERROR
+CALL p1();
+CALL p2();
+CALL p3();
+--error ER_BAD_FIELD_ERROR
+CALL p4();
+CALL p5();
+CALL p6();
+
+DROP PROCEDURE p1;
+DROP PROCEDURE p2;
+DROP PROCEDURE p3;
+DROP PROCEDURE p4;
+DROP PROCEDURE p5;
+DROP PROCEDURE p6;
+
+--echo # Error condition originating from a DA which has been destroyed
+--echo # when the condition is handled.
+--echo #
+
+DELIMITER |;
+CREATE FUNCTION f1() RETURNS INTEGER
+BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION RESIGNAL;
+  INSERT INTO none VALUES (NULL);
+  RETURN 1;
+END|
+
+CREATE PROCEDURE p1()
+BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION RESIGNAL;
+  SELECT f1();
+END|
+DELIMITER ;|
+
+--error ER_NO_SUCH_TABLE
+CALL p1();
+
+DROP PROCEDURE p1;
+DROP FUNCTION f1;
+
+--echo # RESIGNAL with max_error_count = 0
+--echo #
+
+delimiter |;
+CREATE PROCEDURE p1()
+BEGIN
+  DECLARE CONTINUE HANDLER FOR SQLEXCEPTION RESIGNAL;
+  SIGNAL SQLSTATE 'HY000';
+END|
+
+CREATE PROCEDURE p2()
+BEGIN
+  DECLARE CONTINUE HANDLER FOR SQLWARNING RESIGNAL;
+  SIGNAL SQLSTATE '01000';
+END|
+
+CREATE PROCEDURE p3()
+BEGIN
+  DECLARE CONTINUE HANDLER FOR SQLEXCEPTION
+    RESIGNAL SET MESSAGE_TEXT= 'custom error msg';
+  SIGNAL SQLSTATE 'HY000';
+END|
+
+CREATE PROCEDURE p4()
+BEGIN
+  DECLARE CONTINUE HANDLER FOR SQLWARNING
+    RESIGNAL SET MESSAGE_TEXT= 'custom warning msg';
+  SIGNAL SQLSTATE '01000';
+END|
+
+CREATE PROCEDURE p5()
+BEGIN
+  DECLARE CONTINUE HANDLER FOR SQLEXCEPTION
+    RESIGNAL SQLSTATE '45000' SET MESSAGE_TEXT= 'custom error msg';
+  SIGNAL SQLSTATE 'HY000';
+END|
+
+CREATE PROCEDURE p6()
+BEGIN
+  DECLARE CONTINUE HANDLER FOR SQLWARNING
+    RESIGNAL SQLSTATE '45000' SET MESSAGE_TEXT= 'custom warning msg';
+  SIGNAL SQLSTATE '01000';
+END|
+
+CREATE PROCEDURE p7()
+BEGIN
+  DECLARE CONTINUE HANDLER FOR SQLEXCEPTION SELECT 'handled' AS Msg;
+  BEGIN
+    DECLARE CONTINUE HANDLER FOR SQLEXCEPTION RESIGNAL;
+    SIGNAL SQLSTATE 'HY000';
+  END;
+END|
+
+CREATE PROCEDURE p8()
+BEGIN
+  DECLARE CONTINUE HANDLER FOR SQLWARNING SELECT 'handled' AS Msg;
+  BEGIN
+    DECLARE CONTINUE HANDLER FOR SQLWARNING RESIGNAL;
+    SIGNAL SQLSTATE '01000';
+  END;
+END|
+
+CREATE PROCEDURE p9()
+BEGIN
+  DECLARE CONTINUE HANDLER FOR SQLEXCEPTION SELECT 'handled' AS Msg;
+  BEGIN
+    DECLARE CONTINUE HANDLER FOR SQLEXCEPTION
+      RESIGNAL SET MESSAGE_TEXT= 'custom error msg';
+    SIGNAL SQLSTATE 'HY000';
+  END;
+END|
+
+CREATE PROCEDURE p10()
+BEGIN
+  DECLARE CONTINUE HANDLER FOR SQLWARNING SELECT 'handled' AS Msg;
+  BEGIN
+    DECLARE CONTINUE HANDLER FOR SQLWARNING
+      RESIGNAL SET MESSAGE_TEXT= 'custom warning msg';
+    SIGNAL SQLSTATE '01000';
+  END;
+END|
+
+CREATE PROCEDURE p11()
+BEGIN
+  DECLARE CONTINUE HANDLER FOR SQLEXCEPTION SELECT 'handled' AS Msg;
+  BEGIN
+    DECLARE CONTINUE HANDLER FOR SQLEXCEPTION
+      RESIGNAL SQLSTATE '45000' SET MESSAGE_TEXT= 'custom error msg';
+    SIGNAL SQLSTATE 'HY000';
+  END;
+END|
+
+CREATE PROCEDURE p12()
+BEGIN
+  DECLARE CONTINUE HANDLER FOR SQLEXCEPTION SELECT 'handled' AS Msg;
+  BEGIN
+    DECLARE CONTINUE HANDLER FOR SQLWARNING
+      RESIGNAL SQLSTATE '45000' SET MESSAGE_TEXT= 'custom warning msg';
+    SIGNAL SQLSTATE '01000';
+  END;
+END|
+delimiter ;|
+
+SET max_error_count= 0;
+--error ER_SIGNAL_EXCEPTION
+CALL p1();
+CALL p2();
+--error ER_SIGNAL_EXCEPTION
+CALL p3();
+CALL p4();
+--error ER_SIGNAL_EXCEPTION
+CALL p5();
+CALL p6();
+CALL p7();
+CALL p8();
+CALL p9();
+CALL p10();
+CALL p11();
+CALL p12();
+SET max_error_count= DEFAULT;
+
+DROP PROCEDURE p1;
+DROP PROCEDURE p2;
+DROP PROCEDURE p3;
+DROP PROCEDURE p4;
+DROP PROCEDURE p5;
+DROP PROCEDURE p6;
+DROP PROCEDURE p7;
+DROP PROCEDURE p8;
+DROP PROCEDURE p9;
+DROP PROCEDURE p10;
+DROP PROCEDURE p11;
+DROP PROCEDURE p12;
+SET sql_mode = default;

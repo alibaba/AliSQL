@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -29,7 +36,12 @@
 
 #include <signaldata/DbinfoScan.hpp>
 #include <signaldata/TransIdAI.hpp>
+#include "AttributeOffset.hpp"
+#ifdef TEST_MR
+#include <time.h>
+#endif
 
+#define JAM_FILE_ID 411
 
 /* **************************************************************** */
 /* ---------------------------------------------------------------- */
@@ -45,7 +57,6 @@ void Dbtup::execDEBUG_SIG(Signal* signal)
 }//Dbtup::execDEBUG_SIG()
 
 #ifdef TEST_MR
-#include <time.h>
 
 void startTimer(struct timespec *tp)
 {
@@ -82,7 +93,9 @@ void Dbtup::execDBINFO_SCANREQ(Signal* signal)
   case Ndbinfo::POOLS_TABLEID:
   {
     jam();
-    Ndbinfo::pool_entry pools[] =
+    const DynArr256Pool::Info pmpInfo = c_page_map_pool.getInfo();
+    
+    const Ndbinfo::pool_entry pools[] =
     {
       { "Scan Lock",
         c_scanLockPool.getUsed(),
@@ -120,6 +133,26 @@ void Dbtup::execDBINFO_SCANREQ(Signal* signal)
         c_operation_pool.getEntrySize(),
         c_operation_pool.getUsedHi(),
         { CFG_DB_NO_LOCAL_OPS,CFG_DB_NO_OPS,0,0 }},
+      { "L2PMap pages",
+        pmpInfo.pg_count,
+        0,                  /* No real limit */
+        pmpInfo.pg_byte_sz,
+        /*
+          No HWM for this row as it would be a fixed fraction of "Data memory"
+          and therefore of limited interest.
+        */
+        0,
+        { 0, 0, 0}},
+      { "L2PMap nodes",
+        pmpInfo.inuse_nodes,
+        pmpInfo.pg_count * pmpInfo.nodes_per_page, /* Max within current pages */
+        pmpInfo.node_byte_sz,
+        /*
+          No HWM for this row as it would be a fixed fraction of "Data memory"
+          and therefore of limited interest.
+        */
+        0,
+        { 0, 0, 0 }},
       { "Data memory",
         m_pages_allocated,
         0, // Allocated from global resource group RG_DATAMEM
@@ -200,8 +233,8 @@ void
 Dbtup::execDUMP_STATE_ORD(Signal* signal)
 {
   Uint32 type = signal->theData[0];
-  DumpStateOrd * const dumpState = (DumpStateOrd *)&signal->theData[0];
 
+  (void)type;
 #if 0
   if (type == 100) {
     RelTabMemReq * const req = (RelTabMemReq *)signal->getDataPtrSend();
@@ -266,6 +299,7 @@ Dbtup::execDUMP_STATE_ORD(Signal* signal)
 #endif
 #ifdef ERROR_INSERT
   if (type == DumpStateOrd::EnableUndoDelayDataWrite) {
+    DumpStateOrd * const dumpState = (DumpStateOrd *)&signal->theData[0];
     ndbout << "Dbtup:: delay write of datapages for table = " 
 	   << dumpState->args[1]<< endl;
     c_errorInsert4000TableId = dumpState->args[1];
@@ -332,7 +366,7 @@ Dbtup::execDUMP_STATE_ORD(Signal* signal)
         sum_req += alloc;
     doalloc:
 	Chunk chunk;
-	allocConsPages(alloc, chunk.pageCount, chunk.pageId);
+	allocConsPages(jamBuffer(), alloc, chunk.pageCount, chunk.pageId);
 	ndbrequire(chunk.pageCount <= alloc);
 	if(chunk.pageCount != 0){
 	  chunks.push_back(chunk);
@@ -378,6 +412,7 @@ Dbtup::execDUMP_STATE_ORD(Signal* signal)
   }
 #endif
 
+#ifdef ERROR_INSERT
   if (signal->theData[0] == DumpStateOrd::SchemaResourceSnapshot)
   {
     {
@@ -415,6 +450,7 @@ Dbtup::execDUMP_STATE_ORD(Signal* signal)
     RSS_AP_SNAPSHOT_CHECK2(c_storedProcPool, c_storedProcCountNonAPI);
     return;
   }
+#endif
 }//Dbtup::execDUMP_STATE_ORD()
 
 /* ---------------------------------------------------------------- */
@@ -489,18 +525,18 @@ operator<<(NdbOut& out, const Dbtup::Operationrec& op)
   // table
   out << " [fragmentPtr " << hex << op.fragmentPtr << "]";
   // type
-  out << " [op_type " << dec << op.op_struct.op_type << "]";
+  out << " [op_type " << dec << op.op_type << "]";
   out << " [delete_insert_flag " << dec;
-  out << op.op_struct.delete_insert_flag << "]";
+  out << op.op_struct.bit_field.delete_insert_flag << "]";
   // state
-  out << " [tuple_state " << dec << op.op_struct.tuple_state << "]";
-  out << " [trans_state " << dec << op.op_struct.trans_state << "]";
-  out << " [in_active_list " << dec << op.op_struct.in_active_list << "]";
+  out << " [tuple_state " << dec << op.tuple_state << "]";
+  out << " [trans_state " << dec << op.trans_state << "]";
+  out << " [in_active_list " << dec << op.op_struct.bit_field.in_active_list << "]";
   // links
   out << " [prevActiveOp " << hex << op.prevActiveOp << "]";
   out << " [nextActiveOp " << hex << op.nextActiveOp << "]";
   // tuples
-  out << " [tupVersion " << hex << op.tupVersion << "]";
+  out << " [tupVersion " << hex << op.op_struct.bit_field.tupVersion << "]";
   out << " [m_tuple_location " << op.m_tuple_location << "]";
   out << " [m_copy_tuple_location " << op.m_copy_tuple_location << "]";
   out << "]";
@@ -573,8 +609,6 @@ operator<<(NdbOut& out, const AttributeDescriptor& off)
   memcpy(&word, &off, 4);
   return out;
 }
-
-#include "AttributeOffset.hpp"
 
 NdbOut&
 operator<<(NdbOut& out, const AttributeOffset& off)

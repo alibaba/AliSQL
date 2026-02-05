@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -19,6 +26,9 @@
 #define DATA_BUFFER_HPP
 
 #include "ArrayPool.hpp"
+
+#define JAM_FILE_ID 274
+
 
 /**
  * @class  DataBuffer
@@ -51,6 +61,10 @@ public:
     Uint32 used;       // Words used
     Uint32 firstItem;  // First segment (or RNIL)
     Uint32 lastItem;   // Last segment (or RNIL)
+
+#if defined VM_TRACE || defined ERROR_INSERT
+    bool in_use;
+#endif
 
     /** 
      * Get size of databuffer, in words
@@ -176,11 +190,21 @@ public:
 		  typename DataBuffer<sz>::Head & _src)
     : DataBuffer<sz>(thePool), src(_src)
   {
+#if defined VM_TRACE || defined ERROR_INSERT
+    if (src.in_use == true)
+      abort();
+    src.in_use = true;
+#endif
     this->head = src;
   }
-  
+
   ~LocalDataBuffer(){
     src = this->head;
+#if defined VM_TRACE || defined ERROR_INSERT
+    if (src.in_use == false)
+      abort();
+    src.in_use = false;
+#endif
   }
 private:
   typename DataBuffer<sz>::Head & src;
@@ -192,6 +216,9 @@ DataBuffer<sz>::Head::Head(){
   used = 0;
   firstItem = RNIL;
   lastItem = RNIL;
+#if defined VM_TRACE || defined ERROR_INSERT
+  in_use = false;
+#endif
 }
 
 template<Uint32 sz>
@@ -263,15 +290,11 @@ DataBuffer<sz>::append(const Uint32* src, Uint32 len){
   }
   DataBufferIterator it;
 
-  bool b0, b1; 
-  if ((b0 = position(it, pos)) && (b1 = import(it, src, len)))
-  {
-    return true;
-  }
-
-  ndbout_c("%u %u", b0, b1);
-  abort();
-  return false;
+  bool ok = position(it, pos);
+  require(ok);
+  ok = import(it, src, len);
+  require(ok);
+  return true;
 }
 
 template<Uint32 sz>
@@ -603,6 +626,9 @@ bool
 DataBuffer<sz>::isEmpty() const {
   return (head.used == 0);
 }
+
+
+#undef JAM_FILE_ID
 
 #endif
 

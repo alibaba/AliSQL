@@ -5,11 +5,13 @@
 --source include/have_binlog_format_mixed_or_statement.inc 
 --source include/master-slave.inc
 --source include/not_gtid_enabled.inc
+--source include/have_myisam.inc
 
 disable_query_log;
 call mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
 --connection slave
 call mtr.add_suppression("The master's UUID has changed, although this should not happen unless you have changed it manually.");
+call mtr.add_suppression("Either event.*is from an old master");
 --connection master
 enable_query_log;
 
@@ -345,17 +347,18 @@ SELECT MASTER_POS_WAIT('master-bin.000001', 513) >= 0;
 # Check that the replication succeeded.
 
 SHOW TABLES LIKE 't_';
+--replace_column 6 #
 SHOW TRIGGERS;
+# We disable warnings here since it affects the result file in different ways
+# depending on the mode being used.
+disable_warnings;
+
 SELECT * FROM t1;
 SELECT * FROM t2;
 
 # 2. Check that the trigger is non-SUID on the slave;
 # 3. Check that the trigger can be activated on the slave.
 #
-# We disable warnings here since it affects the result file in
-# different ways depending on the mode being used.
-
-disable_warnings;
 INSERT INTO t1 VALUES(2);
 enable_warnings;
 
@@ -375,6 +378,7 @@ RESET SLAVE;
 
 connection master;
 SHOW TABLES LIKE 't_';
+--replace_column 6 #
 SHOW TRIGGERS;
 
 RESET MASTER;
@@ -536,6 +540,39 @@ let $diff_tables= master:log, slave:log;
 connection master;
 drop table t1, log;
 --source include/sync_slave_sql_with_master.inc
+
+--echo #
+--echo # WL#3253: Multiple triggers with the same value TIME/ACTION per table 
+--echo #
+
+connection master;
+--source include/rpl_reset.inc
+
+SET TIMESTAMP=UNIX_TIMESTAMP('2013-01-31 09:00:00');
+CREATE TABLE t1 (a INT);
+
+CREATE TRIGGER tr1_bi BEFORE INSERT ON t1 FOR EACH ROW SET @a:=1;
+CREATE TRIGGER tr2_bi BEFORE INSERT ON t1 FOR EACH ROW SET @a:=2;
+CREATE TRIGGER tr0_bi BEFORE INSERT ON t1 FOR EACH ROW PRECEDES tr1_bi SET @a:=0;
+CREATE TRIGGER tr1_1_bi BEFORE INSERT ON t1 FOR EACH ROW FOLLOWS tr1_bi SET @a:=11;
+CREATE TRIGGER tr1_bu BEFORE UPDATE ON t1 FOR EACH ROW SET @b:=1;
+CREATE TRIGGER tr2_bu BEFORE UPDATE ON t1 FOR EACH ROW SET @b:=2;
+--echo
+--echo ---> Synchronizing slave with master...
+
+--sync_slave_with_master
+
+--echo ---> connection: slave
+connection slave;
+
+SHOW TRIGGERS;
+
+SELECT trigger_name, action_order, created FROM information_schema.triggers WHERE trigger_schema='test';
+
+connection master;
+
+DROP TABLE t1;
+--sync_slave_with_master
 
 #
 # End of tests

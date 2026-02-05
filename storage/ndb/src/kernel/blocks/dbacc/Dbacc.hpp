@@ -1,16 +1,21 @@
-/** **/
 /*
-   Copyright (C) 2003-2008 MySQL AB, 2008-2010 Sun Microsystems, Inc.
-    All rights reserved. Use is subject to license terms.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -25,7 +30,14 @@
 #endif
 
 #include <pc.hpp>
+#include <DynArr256.hpp>
 #include <SimulatedBlock.hpp>
+#include <LHLevel.hpp>
+#include <IntrusiveList.hpp>
+#include "Container.hpp"
+
+#define JAM_FILE_ID 344
+
 
 #ifdef DBACC_C
 // Debug Macros
@@ -41,8 +53,6 @@ break; \
 case 2: strcpy(tmp_string, "ZPOS_NO_ELEM_IN_PAGE"); \
 break; \
 case 3: strcpy(tmp_string, "ZPOS_CHECKSUM    "); \
-break; \
-case 4: strcpy(tmp_string, "ZPOS_OVERFLOWREC  "); \
 break; \
 case 5: strcpy(tmp_string, "ZPOS_FREE_AREA_IN_PAGE"); \
 break; \
@@ -71,11 +81,7 @@ ndbout << "Ptr: " << ptr.p->word32 << " \tIndex: " << tmp_string << " \tValue: "
  *   OTHER CONSTANTS WHICH ARE CHANGED WHEN THE BUFFER SIZE IS CHANGED. 
  * ----------------------------------------------------------------------- */
 #define ZHEAD_SIZE 32
-#define ZCON_HEAD_SIZE 2
 #define ZBUF_SIZE 28
-#define ZEMPTYLIST 72
-#define ZUP_LIMIT 14
-#define ZDOWN_LIMIT 12
 #define ZSHIFT_PLUS 5
 #define ZSHIFT_MINUS 2
 #define ZFREE_LIMIT 65
@@ -84,28 +90,25 @@ ndbout << "Ptr: " << ptr.p->word32 << " \tIndex: " << tmp_string << " \tValue: "
 /* ------------------------------------------------------------------------- */
 /*  THESE CONSTANTS DEFINE THE USE OF THE PAGE HEADER IN THE INDEX PAGES.    */
 /* ------------------------------------------------------------------------- */
-#define ZPOS_PAGE_ID 0
+#define ZPOS_PAGE_ID Page8::PAGE_ID
 #define ZPOS_PAGE_TYPE 1
 #define ZPOS_PAGE_TYPE_BIT 14
-#define ZPOS_EMPTY_LIST 1
-#define ZPOS_ALLOC_CONTAINERS 2
-#define ZPOS_CHECKSUM 3
-#define ZPOS_OVERFLOWREC 4
+#define ZPOS_EMPTY_LIST Page8::EMPTY_LIST
+#define ZPOS_ALLOC_CONTAINERS Page8::ALLOC_CONTAINERS
+#define ZPOS_CHECKSUM Page8::CHECKSUM
 #define ZPOS_NO_ELEM_IN_PAGE 2
-#define ZPOS_FREE_AREA_IN_PAGE 5
-#define ZPOS_LAST_INDEX 6
-#define ZPOS_INSERT_INDEX 7
-#define ZPOS_ARRAY_POS 8
-#define ZPOS_NEXT_FREE_INDEX 9
-#define ZPOS_NEXT_PAGE 10
-#define ZPOS_PREV_PAGE 11
+#define ZPOS_FREE_AREA_IN_PAGE Page8::FREE_AREA_IN_PAGE
+#define ZPOS_LAST_INDEX Page8::LAST_INDEX
+#define ZPOS_INSERT_INDEX Page8::INSERT_INDEX
+#define ZPOS_ARRAY_POS Page8::ARRAY_POS
+#define ZPOS_NEXT_FREE_INDEX Page8::NEXT_FREE_INDEX
+#define ZPOS_NEXT_PAGE Page8::NEXT_PAGE
+#define ZPOS_PREV_PAGE Page8::PREV_PAGE
 #define ZNORMAL_PAGE_TYPE 0
 #define ZOVERFLOW_PAGE_TYPE 1
 #define ZDEFAULT_LIST 3
 #define ZWORDS_IN_PAGE 2048
 #define ZADDFRAG 0
-#define ZDIRARRAY 68
-#define ZDIRRANGESIZE 65
 //#define ZEMPTY_FRAGMENT 0
 #define ZFRAGMENTSIZE 64
 #define ZFIRSTTIME 1
@@ -122,7 +125,6 @@ ndbout << "Ptr: " << ptr.p->word32 << " \tIndex: " << tmp_string << " \tValue: "
 //#define ZNOT_EMPTY_FRAGMENT 1
 #define ZOP_HEAD_INFO_LN 3
 #define ZOPRECSIZE 740
-#define ZOVERFLOWRECSIZE 5
 #define ZPAGE8_BASE_ADD 1
 #define ZPAGESIZE 128
 #define ZPARALLEL_QUEUE 1
@@ -181,6 +183,18 @@ ndbout << "Ptr: " << ptr.p->word32 << " \tIndex: " << tmp_string << " \tValue: "
 #define ZTO_OP_STATE_ERROR 631
 #define ZTOO_EARLY_ACCESS_ERROR 632
 #define ZDIR_RANGE_FULL_ERROR 633 // on fragment
+
+#if ZBUF_SIZE != ((1 << ZSHIFT_PLUS) - (1 << ZSHIFT_MINUS))
+#error ZBUF_SIZE != ((1 << ZSHIFT_PLUS) - (1 << ZSHIFT_MINUS))
+#endif
+
+static
+inline
+Uint32 mul_ZBUF_SIZE(Uint32 i)
+{
+  return (i << ZSHIFT_PLUS) - (i << ZSHIFT_MINUS);
+}
+
 #endif
 
 class ElementHeader {
@@ -188,7 +202,7 @@ class ElementHeader {
    * 
    * l = Locked    -- If true contains operation else scan bits + hash value
    * s = Scan bits
-   * h = Hash value
+   * h = Reduced hash value. The lower bits used for address is shifted away
    * o = Operation ptr I
    *
    *           1111111111222222222233
@@ -197,17 +211,16 @@ class ElementHeader {
    *  ooooooooooooooooooooooooooooooo
    */
 public:
-  STATIC_CONST( HASH_VALUE_PART_MASK = 0xFFFF );
-  
   static bool getLocked(Uint32 data);
   static bool getUnlocked(Uint32 data);
   static Uint32 getScanBits(Uint32 data);
-  static Uint32 getHashValuePart(Uint32 data);
   static Uint32 getOpPtrI(Uint32 data);
+  static LHBits16 getReducedHashValue(Uint32 data);
 
   static Uint32 setLocked(Uint32 opPtrI);
-  static Uint32 setUnlocked(Uint32 hashValuePart, Uint32 scanBits);
+  static Uint32 setUnlocked(Uint32 scanBits, LHBits16 const& reducedHashValue);
   static Uint32 setScanBit(Uint32 header, Uint32 scanBit);
+  static Uint32 setReducedHashValue(Uint32 header, LHBits16 const& reducedHashValue);
   static Uint32 clearScanBit(Uint32 header, Uint32 scanBit);
 };
 
@@ -230,11 +243,11 @@ ElementHeader::getScanBits(Uint32 data){
   return (data >> 1) & ((1 << MAX_PARALLEL_SCANS_PER_FRAG) - 1);
 }
 
-inline 
-Uint32 
-ElementHeader::getHashValuePart(Uint32 data){
+inline
+LHBits16
+ElementHeader::getReducedHashValue(Uint32 data){
   assert(getUnlocked(data));
-  return data >> 16;
+  return LHBits16::unpack(data >> 16);
 }
 
 inline
@@ -247,12 +260,15 @@ ElementHeader::getOpPtrI(Uint32 data){
 inline 
 Uint32 
 ElementHeader::setLocked(Uint32 opPtrI){
+  assert(opPtrI < 0x8000000);
   return (opPtrI << 1) + 0;
 }
 inline
 Uint32 
-ElementHeader::setUnlocked(Uint32 hashValue, Uint32 scanBits){
-  return (hashValue << 16) + (scanBits << 1) + 1;
+ElementHeader::setUnlocked(Uint32 scanBits, LHBits16 const& reducedHashValue)
+{
+  assert(scanBits < (1 << MAX_PARALLEL_SCANS_PER_FRAG));
+  return (Uint32(reducedHashValue.pack()) << 16) | (scanBits << 1) | 1;
 }
 
 inline
@@ -269,6 +285,15 @@ ElementHeader::clearScanBit(Uint32 header, Uint32 scanBit){
   return header & (~(scanBit << 1));
 }
 
+inline
+Uint32
+ElementHeader::setReducedHashValue(Uint32 header, LHBits16 const& reducedHashValue)
+{
+  assert(getUnlocked(header));
+  return (Uint32(reducedHashValue.pack()) << 16) | (header & 0xffff);
+}
+
+typedef Container::Header ContainerHeader;
 
 class Dbacc: public SimulatedBlock {
   friend class DbaccProxy;
@@ -306,22 +331,46 @@ enum State {
 // Records
 
 /* --------------------------------------------------------------------------------- */
-/* DIRECTORY RANGE                                                                   */
+/* PAGE8                                                                             */
 /* --------------------------------------------------------------------------------- */
-  struct DirRange {
-    Uint32 dirArray[256];
-  }; /* p2c: size = 1024 bytes */
-  
-  typedef Ptr<DirRange> DirRangePtr;
+struct Page8 {
+  Uint32 word32[2048];
+  enum Page_variables {
+    PAGE_ID = 0,
+    EMPTY_LIST = 1,
+    ALLOC_CONTAINERS = 2,
+    CHECKSUM = 3,
+    FREE_AREA_IN_PAGE = 5,
+    LAST_INDEX = 6,
+    INSERT_INDEX = 7,
+    ARRAY_POS = 8,
+    NEXT_FREE_INDEX = 9,
+    NEXT_PAGE = 10,
+    PREV_PAGE = 11
+  };
+}; /* p2c: size = 8192 bytes */
 
-/* --------------------------------------------------------------------------------- */
-/* DIRECTORYARRAY                                                                    */
-/* --------------------------------------------------------------------------------- */
-struct Directoryarray {
-  Uint32 pagep[256];
-}; /* p2c: size = 1024 bytes */
+  typedef Ptr<Page8> Page8Ptr;
 
-  typedef Ptr<Directoryarray> DirectoryarrayPtr;
+struct Page8SLinkMethods
+{
+  static Uint32 getNext(Page8 const& item) { return item.word32[Page8::NEXT_PAGE]; }
+  static void setNext(Page8& item, Uint32 next) { item.word32[Page8::NEXT_PAGE] = next; }
+  static void setPrev(Page8& /* item */, Uint32 /* prev */) { /* no op for single linked list */ }
+};
+
+struct ContainerPageLinkMethods
+{
+  static Uint32 getNext(Page8 const& item) { return item.word32[Page8::NEXT_PAGE]; }
+  static void setNext(Page8& item, Uint32 next) { item.word32[Page8::NEXT_PAGE] = next; }
+  static Uint32 getPrev(Page8 const& item) { return item.word32[Page8::PREV_PAGE]; }
+  static void setPrev(Page8& item, Uint32 prev) { item.word32[Page8::PREV_PAGE] = prev; }
+};
+
+typedef SLCFifoListImpl<Dbacc,Page8,Page8,Page8SLinkMethods> Page8List;
+typedef LocalSLCFifoListImpl<Dbacc,Page8,Page8,Page8SLinkMethods> LocalPage8List;
+typedef DLCFifoListImpl<Dbacc,Page8,Page8,ContainerPageLinkMethods> ContainerPageList;
+typedef LocalDLCFifoListImpl<Dbacc,Page8,Page8,ContainerPageLinkMethods> LocalContainerPageList;
 
 /* --------------------------------------------------------------------------------- */
 /* FRAGMENTREC. ALL INFORMATION ABOUT FRAMENT AND HASH TABLE IS SAVED IN FRAGMENT    */
@@ -337,6 +386,7 @@ struct Fragmentrec {
     Uint32 fragmentid;
     Uint32 myfid;
   };
+  Uint32 tupFragptr;
   Uint32 roothashcheck;
   Uint32 noOfElements;
   Uint32 m_commit_count;
@@ -356,7 +406,6 @@ struct Fragmentrec {
   Uint32 expReceiveIndex;
   Uint32 expReceiveForward;
   Uint32 expSenderDirIndex;
-  Uint32 expSenderDirptr;
   Uint32 expSenderIndex;
   Uint32 expSenderPageptr;
 
@@ -370,10 +419,7 @@ struct Fragmentrec {
 // in its turn references the pages) for the bucket pages and the overflow
 // bucket pages.
 //-----------------------------------------------------------------------------
-  Uint32 directory;
-  Uint32 dirsize;
-  Uint32 overflowdir;
-  Uint32 lastOverIndex;
+  DynArr256::Head directory;
 
 //-----------------------------------------------------------------------------
 // We have a list of overflow pages with free areas. We have a special record,
@@ -383,9 +429,8 @@ struct Fragmentrec {
 // data in them). These are put in the firstFreeDirIndexRec-list.
 // An overflow record representing a page can only be in one of these lists.
 //-----------------------------------------------------------------------------
-  Uint32 firstOverflowRec;
-  Uint32 lastOverflowRec;
-  Uint32 firstFreeDirindexRec;
+  ContainerPageList::Head fullpages; // For pages where only containers on page are allowed to overflow (word32[ZPOS_ALLOC_CONTAINERS] > ZFREE_LIMIT)
+  ContainerPageList::Head sparsepages; // For pages that other pages are still allowed to overflow into (0 < word32[ZPOS_ALLOC_CONTAINERS] <= ZFREE_LIMIT)
 
 //-----------------------------------------------------------------------------
 // Counter keeping track of how many times we have expanded. We need to ensure
@@ -410,14 +455,15 @@ struct Fragmentrec {
 // slackCheck When slack goes over this value it is time to expand.
 // slackCheck = (maxp + p + 1)*(maxloadfactor - minloadfactor) or 
 // bucketSize * hysteresis
+// Since at most RNIL 8KiB-pages can be used for a fragment, the extreme values
+// for slack will be within -2^43 and +2^43 words.
 //-----------------------------------------------------------------------------
+  LHLevelRH level;
   Uint32 localkeylen;
-  Uint32 maxp;
   Uint32 maxloadfactor;
   Uint32 minloadfactor;
-  Uint32 p;
-  Uint32 slack;
-  Uint32 slackCheck;
+  Int64 slack;
+  Int64 slackCheck;
 
 //-----------------------------------------------------------------------------
 // nextfreefrag is the next free fragment if linked into a free list
@@ -450,21 +496,17 @@ struct Fragmentrec {
   Uint16 keyLength;
 
 //-----------------------------------------------------------------------------
-// This flag is used to avoid sending a big number of expand or shrink signals
-// when simultaneously committing many inserts or deletes.
+// Only allow one expand or shrink signal in queue at the time.
 //-----------------------------------------------------------------------------
-  Uint8 expandFlag;
+  bool expandOrShrinkQueued;
 
 //-----------------------------------------------------------------------------
 // hashcheckbit is the bit to check whether to send element to split bucket or not
 // k (== 6) is the number of buckets per page
-// lhfragbits is the number of bits used to calculate the fragment id
-// lhdirbits is the number of bits used to calculate the page id
 //-----------------------------------------------------------------------------
-  Uint8 hashcheckbit;
-  Uint8 k;
-  Uint8 lhfragbits;
-  Uint8 lhdirbits;
+  STATIC_CONST( k = 6 );
+  STATIC_CONST( MIN_HASH_COMPARE_BITS = 7 );
+  STATIC_CONST( MAX_HASH_VALUE_BITS = 31 );
 
 //-----------------------------------------------------------------------------
 // nodetype can only be STORED in this release. Is currently only set, never read
@@ -480,9 +522,18 @@ struct Fragmentrec {
 // flag to mark that execEXPANDCHECK2 has failed due to DirRange full
 //-----------------------------------------------------------------------------
   Uint8 dirRangeFull;
+
+  // Number of Page8 pages allocated for the hash index.
+  Int32 m_noOfAllocatedPages;
+
+public:
+  Uint32 getPageNumber(Uint32 bucket_number) const;
+  Uint32 getPageIndex(Uint32 bucket_number) const;
+  bool enough_valid_bits(LHBits16 const& reduced_hash_value) const;
 };
 
   typedef Ptr<Fragmentrec> FragmentrecPtr;
+  void set_tup_fragptr(Uint32 fragptr, Uint32 tup_fragptr);
 
 /* --------------------------------------------------------------------------------- */
 /* OPERATIONREC                                                                      */
@@ -495,8 +546,7 @@ struct Operationrec {
   Uint32 elementPointer;
   Uint32 fid;
   Uint32 fragptr;
-  Uint32 hashvaluePart;
-  Uint32 hashValue;
+  LHBits32 hashValue;
   Uint32 nextLockOwnerOp;
   Uint32 nextOp;
   Uint32 nextParallelQue;
@@ -522,7 +572,8 @@ struct Operationrec {
   Uint16 tupkeylen;
   Uint32 xfrmtupkeylen;
   Uint32 userblockref;
-  Uint32 scanBits;
+  Uint16 scanBits;
+  LHBits16 reducedHashValue;
 
   enum OpBits {
     OP_MASK                 = 0x0000F // 4 bits for operation type
@@ -556,30 +607,6 @@ struct Operationrec {
 }; /* p2c: size = 168 bytes */
 
   typedef Ptr<Operationrec> OperationrecPtr;
-
-/* --------------------------------------------------------------------------------- */
-/* OVERFLOW_RECORD                                                                   */
-/* --------------------------------------------------------------------------------- */
-struct OverflowRecord {
-  Uint32 dirindex;
-  Uint32 nextOverRec;
-  Uint32 nextOverList;
-  Uint32 prevOverRec;
-  Uint32 prevOverList;
-  Uint32 overpage;
-  Uint32 nextfreeoverrec;
-};
-
-  typedef Ptr<OverflowRecord> OverflowRecordPtr;
-
-/* --------------------------------------------------------------------------------- */
-/* PAGE8                                                                             */
-/* --------------------------------------------------------------------------------- */
-struct Page8 {
-  Uint32 word32[2048];
-}; /* p2c: size = 8192 bytes */
-
-  typedef Ptr<Page8> Page8Ptr;
 
 /* --------------------------------------------------------------------------------- */
 /* SCAN_REC                                                                          */
@@ -625,8 +652,8 @@ struct ScanRec {
 /* TABREC                                                                            */
 /* --------------------------------------------------------------------------------- */
 struct Tabrec {
-  Uint32 fragholder[MAX_FRAG_PER_NODE];
-  Uint32 fragptrholder[MAX_FRAG_PER_NODE];
+  Uint32 fragholder[MAX_FRAG_PER_LQH];
+  Uint32 fragptrholder[MAX_FRAG_PER_LQH];
   Uint32 tabUserPtr;
   BlockReference tabUserRef;
   Uint32 tabUserGsn;
@@ -642,7 +669,13 @@ public:
   class Dblqh* c_lqh;
 
   void execACCMINUPDATE(Signal* signal);
+  void execREAD_PSEUDO_REQ(Signal* signal);
+  // Get the size of the logical to physical page map, in bytes.
+  Uint32 getL2PMapAllocBytes(Uint32 fragId) const;
   void removerow(Uint32 op, const Local_key*);
+
+  // Get the size of the linear hash map in bytes.
+  Uint64 getLinHashByteSize(Uint32 fragId) const;
 
 private:
   BLOCK_DEFINES(Dbacc);
@@ -655,7 +688,6 @@ private:
   void execSHRINKCHECK2(Signal* signal);
   void execACC_OVER_REC(Signal* signal);
   void execNEXTOPERATION(Signal* signal);
-  void execREAD_PSEUDO_REQ(Signal* signal);
 
   // Received signals
   void execSTTOR(Signal* signal);
@@ -676,6 +708,7 @@ private:
   void execDROP_FRAG_REQ(Signal*);
 
   void execDBINFO_SCANREQ(Signal *signal);
+  void execNODE_STATE_REP(Signal*);
 
   // Statement blocks
   void ACCKEY_error(Uint32 fromWhere);
@@ -692,28 +725,20 @@ private:
   void releaseFragResources(Signal* signal, Uint32 fragIndex);
   void releaseRootFragRecord(Signal* signal, RootfragmentrecPtr rootPtr);
   void releaseRootFragResources(Signal* signal, Uint32 tableId);
-  void releaseDirResources(Signal* signal,
-                           Uint32 fragIndex,
-                           Uint32 dirIndex,
-                           Uint32 startIndex);
+  void releaseDirResources(Signal* signal);
   void releaseDirectoryResources(Signal* signal,
                                  Uint32 fragIndex,
                                  Uint32 dirIndex,
                                  Uint32 startIndex,
                                  Uint32 directoryIndex);
-  void releaseOverflowResources(Signal* signal, FragmentrecPtr regFragPtr);
-  void releaseDirIndexResources(Signal* signal, FragmentrecPtr regFragPtr);
   void releaseFragRecord(Signal* signal, FragmentrecPtr regFragPtr);
   void initScanFragmentPart(Signal* signal);
-  Uint32 checkScanExpand(Signal* signal);
-  Uint32 checkScanShrink(Signal* signal);
-  void initialiseDirRec(Signal* signal);
-  void initialiseDirRangeRec(Signal* signal);
+  Uint32 checkScanExpand(Signal* signal, Uint32 splitBucket);
+  Uint32 checkScanShrink(Signal* signal, Uint32 sourceBucket, Uint32 destBucket);
   void initialiseFragRec(Signal* signal);
   void initialiseFsConnectionRec(Signal* signal);
   void initialiseFsOpRec(Signal* signal);
   void initialiseOperationRec(Signal* signal);
-  void initialiseOverflowRec(Signal* signal);
   void initialisePageRec(Signal* signal);
   void initialiseRootfragRec(Signal* signal);
   void initialiseScanRec(Signal* signal);
@@ -733,7 +758,11 @@ private:
 #else
   bool validate_lock_queue(OperationrecPtr) { return true;}
 #endif
-  
+  /**
+    Return true if the sum of per fragment pages counts matches the total
+    page count (cnoOfAllocatedPages). Used for consistency checks. 
+   */
+  bool validatePageCount() const;
 public:  
   void execACCKEY_ORD(Signal* signal, Uint32 opPtrI);
   void startNext(Signal* signal, OperationrecPtr lastOp);
@@ -747,14 +776,14 @@ private:
   
   void expandcontainer(Signal* signal);
   void shrinkcontainer(Signal* signal);
-  void nextcontainerinfoExp(Signal* signal);
+  void nextcontainerinfoExp(Signal* signal, ContainerHeader const containerhead);
   void releaseAndCommitActiveOps(Signal* signal);
   void releaseAndCommitQueuedOps(Signal* signal);
   void releaseAndAbortLockedOps(Signal* signal);
-  void containerinfo(Signal* signal);
+  void containerinfo(Signal* signal, ContainerHeader& containerhead);
   bool getScanElement(Signal* signal);
   void initScanOpRec(Signal* signal);
-  void nextcontainerinfo(Signal* signal);
+  void nextcontainerinfo(Signal* signal, ContainerHeader const containerhead);
   void putActiveScanOp(Signal* signal);
   void putOpScanLockQue();
   void putReadyScanQueue(Signal* signal, Uint32 scanRecIndex);
@@ -768,7 +797,7 @@ private:
   void takeOutScanLockQueue(Uint32 scanRecIndex);
   void takeOutReadyScanQueue(Signal* signal);
   void insertElement(Signal* signal);
-  void insertContainer(Signal* signal);
+  void insertContainer(Signal* signal, ContainerHeader& containerhead);
   void addnewcontainer(Signal* signal);
   void getfreelist(Signal* signal);
   void increaselistcont(Signal* signal);
@@ -776,10 +805,17 @@ private:
   void seizeRightlist(Signal* signal);
   Uint32 readTablePk(Uint32 lkey1, Uint32 lkey2, Uint32 eh, OperationrecPtr);
   Uint32 getElement(Signal* signal, OperationrecPtr& lockOwner);
+  LHBits32 getElementHash(OperationrecPtr& oprec);
+  LHBits32 getElementHash(Uint32 const* element, Int32 forward);
+  LHBits32 getElementHash(Uint32 const* element, Int32 forward, OperationrecPtr& oprec);
+  void shrink_adjust_reduced_hash_value(Uint32 bucket_number);
+  Uint32 getPagePtr(DynArr256::Head&, Uint32);
+  bool setPagePtr(DynArr256::Head& directory, Uint32 index, Uint32 ptri);
+  Uint32 unsetPagePtr(DynArr256::Head& directory, Uint32 index);
   void getdirindex(Signal* signal);
   void commitdelete(Signal* signal);
   void deleteElement(Signal* signal);
-  void getLastAndRemove(Signal* signal);
+  void getLastAndRemove(Signal* signal, ContainerHeader& containerhead);
   void releaseLeftlist(Signal* signal);
   void releaseRightlist(Signal* signal);
   void checkoverfreelist(Signal* signal);
@@ -807,30 +843,20 @@ private:
   void initPage(Signal* signal);
   void initRootfragrec(Signal* signal);
   void putOpInFragWaitQue(Signal* signal);
-  void putOverflowRecInFrag(Signal* signal);
-  void putRecInFreeOverdir(Signal* signal);
-  void releaseDirectory(Signal* signal);
-  void releaseDirrange(Signal* signal);
   void releaseFsConnRec(Signal* signal);
   void releaseFsOpRec(Signal* signal);
   void releaseOpRec(Signal* signal);
-  void releaseOverflowRec(Signal* signal);
   void releaseOverpage(Signal* signal);
   void releasePage(Signal* signal);
-  void releaseLogicalPage(Fragmentrec * fragP, Uint32 logicalPageId);
   void seizeDirectory(Signal* signal);
-  void seizeDirrange(Signal* signal);
   void seizeFragrec(Signal* signal);
   void seizeFsConnectRec(Signal* signal);
   void seizeFsOpRec(Signal* signal);
   void seizeOpRec(Signal* signal);
-  void seizeOverRec(Signal* signal);
   void seizePage(Signal* signal);
   void seizeRootfragrec(Signal* signal);
   void seizeScanRec(Signal* signal);
   void sendSystemerror(Signal* signal, int line);
-  void takeRecOutOfFreeOverdir(Signal* signal);
-  void takeRecOutOfFreeOverpage(Signal* signal);
 
   void addFragRefuse(Signal* signal, Uint32 errorCode);
   void ndbsttorryLab(Signal* signal);
@@ -853,8 +879,6 @@ private:
 
   void zpagesize_error(const char* where);
 
-  void reenable_expand_after_redo_log_exection_complete(Signal*);
-
   // charsets
   void xfrmKeyData(Signal* signal);
 
@@ -868,29 +892,14 @@ private:
   void debug_lh_vars(const char* where) {}
 #endif
 
+public:
+  void getPtr(Ptr<Page8>& page) const;
+private:
   // Variables
 /* --------------------------------------------------------------------------------- */
-/* DIRECTORY RANGE                                                                   */
+/* DIRECTORY                                                                         */
 /* --------------------------------------------------------------------------------- */
-  DirRange *dirRange;
-  DirRangePtr expDirRangePtr;
-  DirRangePtr gnsDirRangePtr;
-  DirRangePtr newDirRangePtr;
-  DirRangePtr rdDirRangePtr;
-  DirRangePtr nciOverflowrangeptr;
-  Uint32 cdirrangesize;
-  Uint32 cfirstfreeDirrange;
-/* --------------------------------------------------------------------------------- */
-/* DIRECTORYARRAY                                                                    */
-/* --------------------------------------------------------------------------------- */
-  Directoryarray *directoryarray;
-  DirectoryarrayPtr expDirptr;
-  DirectoryarrayPtr rdDirptr;
-  DirectoryarrayPtr sdDirptr;
-  DirectoryarrayPtr nciOverflowDirptr;
-  Uint32 cdirarraysize;
-  Uint32 cdirmemory;
-  Uint32 cfirstfreedir;
+  DynArr256Pool   directoryPool;
 /* --------------------------------------------------------------------------------- */
 /* FRAGMENTREC. ALL INFORMATION ABOUT FRAMENT AND HASH TABLE IS SAVED IN FRAGMENT    */
 /*         REC  A POINTER TO FRAGMENT RECORD IS SAVED IN ROOTFRAGMENTREC FRAGMENT    */
@@ -916,19 +925,6 @@ private:
   OperationrecPtr readWriteOpPtr;
   Uint32 cfreeopRec;
   Uint32 coprecsize;
-/* --------------------------------------------------------------------------------- */
-/* OVERFLOW_RECORD                                                                   */
-/* --------------------------------------------------------------------------------- */
-  OverflowRecord *overflowRecord;
-  OverflowRecordPtr iopOverflowRecPtr;
-  OverflowRecordPtr tfoOverflowRecPtr;
-  OverflowRecordPtr porOverflowRecPtr;
-  OverflowRecordPtr priOverflowRecPtr;
-  OverflowRecordPtr rorOverflowRecPtr;
-  OverflowRecordPtr sorOverflowRecPtr;
-  OverflowRecordPtr troOverflowRecPtr;
-  Uint32 cfirstfreeoverrec;
-  Uint32 coverflowrecsize;
 
 /* --------------------------------------------------------------------------------- */
 /* PAGE8                                                                             */
@@ -968,11 +964,15 @@ private:
   Page8Ptr rpPageptr;
   Page8Ptr slPageptr;
   Page8Ptr spPageptr;
-  Uint32 cfirstfreepage;
+  Page8List::Head cfreepages;
   Uint32 cpagesize;
   Uint32 cpageCount;
   Uint32 cnoOfAllocatedPages;
   Uint32 cnoOfAllocatedPagesMax;
+  Uint32 m_maxAllocPages; // == cpagesize * (100 - m_free_pct) / 100
+  Uint32 m_free_pct;
+  bool m_oom; // if cnoOfAllocatedPages > m_maxAllocPages
+
 /* --------------------------------------------------------------------------------- */
 /* ROOTFRAGMENTREC                                                                   */
 /*          DURING EXPAND FRAGMENT PROCESS, EACH FRAGMEND WILL BE EXPAND INTO TWO    */
@@ -996,8 +996,6 @@ private:
   Uint32 ctablesize;
   Uint32 tgseElementptr;
   Uint32 tgseContainerptr;
-  Uint32 trlHead;
-  Uint32 trlRelCon;
   Uint32 trlNextused;
   Uint32 trlPrevused;
   Uint32 tlcnChecksum;
@@ -1008,29 +1006,25 @@ private:
   Uint32 tancBufType;
   Uint32 tancContainerptr;
   Uint32 tancPageindex;
-  Uint32 tancPageid;
+  Uint32 tancPagei;
   Uint32 tidrResult;
   Uint32 tidrElemhead;
   Uint32 tidrForward;
   Uint32 tidrPageindex;
   Uint32 tidrContainerptr;
-  Uint32 tidrContainerhead;
   Uint32 tlastForward;
   Uint32 tlastPageindex;
   Uint32 tlastContainerlen;
   Uint32 tlastElementptr;
   Uint32 tlastContainerptr;
-  Uint32 tlastContainerhead;
   Uint32 trlPageindex;
   Uint32 tdelContainerptr;
   Uint32 tdelElementptr;
   Uint32 tdelForward;
-  Uint32 tiopPageId;
   Uint32 tipPageId;
   Uint32 tgeContainerptr;
   Uint32 tgeElementptr;
   Uint32 tgeForward;
-  Uint32 texpReceivedBucket;
   Uint32 texpDirInd;
   Uint32 texpDirRangeIndex;
   Uint32 texpDirPageIndex;
@@ -1044,8 +1038,6 @@ private:
   Uint32 tciContainerlen;
   Uint32 trscContainerlen;
   Uint32 tsscContainerlen;
-  Uint32 tciContainerhead;
-  Uint32 tnciContainerhead;
   Uint32 tslElementptr;
   Uint32 tisoElementptr;
   Uint32 tsscElementptr;
@@ -1064,7 +1056,6 @@ private:
   Uint32 tmp;
   Uint32 tmpP;
   Uint32 tmpP2;
-  Uint32 tmp1;
   Uint32 tmp2;
   Uint32 tgflPageindex;
   Uint32 tmpindex;
@@ -1078,7 +1069,6 @@ private:
   Uint32 tnciPageindex;
   Uint32 tlastPrevconptr;
   Uint32 tresult;
-  Uint32 tslUpdateHeader;
   Uint32 tuserptr;
   BlockReference tuserblockref;
   Uint32 tlqhPointer;
@@ -1086,7 +1076,6 @@ private:
   Uint32 tholdMore;
   Uint32 tgdiPageindex;
   Uint32 tiopIndex;
-  Uint32 tnciTmp;
   Uint32 tullIndex;
   Uint32 turlIndex;
   Uint32 tlfrTmp1;
@@ -1106,7 +1095,6 @@ private:
   Uint32 cexcForward;
   Uint32 cexcPageindex;
   Uint32 cexcContainerptr;
-  Uint32 cexcContainerhead;
   Uint32 cexcContainerlen;
   Uint32 cexcElementptr;
   Uint32 cexcPrevconptr;
@@ -1123,5 +1111,32 @@ private:
   Uint32 c_errorInsert3000_TableId;
   Uint32 c_memusage_report_frequency;
 };
+
+inline Uint32 Dbacc::Fragmentrec::getPageNumber(Uint32 bucket_number) const
+{
+  assert(bucket_number < RNIL);
+  return bucket_number >> k;
+}
+
+inline Uint32 Dbacc::Fragmentrec::getPageIndex(Uint32 bucket_number) const
+{
+  assert(bucket_number < RNIL);
+  return bucket_number & ((1 << k) - 1);
+}
+
+inline bool Dbacc::Fragmentrec::enough_valid_bits(LHBits16 const& reduced_hash_value) const
+{
+  // Forte C 5.0 needs use of intermediate constant
+  int const bits = MIN_HASH_COMPARE_BITS;
+  return level.getNeededValidBits(bits) <= reduced_hash_value.valid_bits();
+}
+
+inline void Dbacc::getPtr(Ptr<Page8>& page) const
+{
+  ptrCheckGuard(page, cpagesize, page8);
+}
+
+
+#undef JAM_FILE_ID
 
 #endif

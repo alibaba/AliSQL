@@ -1,13 +1,20 @@
-/* Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
@@ -17,8 +24,6 @@
 /* Write some debug info */
 
 
-#include "sql_priv.h"
-#include "unireg.h"
 #include "sql_test.h"
 #include "sql_base.h" // table_def_cache, table_cache_count, unused_tables
 #include "sql_show.h" // calc_sum_of_all_status
@@ -28,19 +33,19 @@
 #include "sql_optimizer.h"  // JOIN
 #include "opt_explain.h"    // join_type_str
 #include <hash.h>
-#include <thr_alarm.h>
-#if defined(HAVE_MALLOC_INFO) && defined(HAVE_MALLOC_H)
-#include <malloc.h>
-#elif defined(HAVE_MALLOC_INFO) && defined(HAVE_SYS_MALLOC_H)
-#include <sys/malloc.h>
-#endif
-
-#ifdef HAVE_EVENT_SCHEDULER
+#ifndef EMBEDDED_LIBRARY
 #include "events.h"
 #endif
-
-#include "global_threads.h"
 #include "table_cache.h" // table_cache_manager
+#include "mysqld_thd_manager.h"  // Global_THD_manager
+#include "prealloced_array.h"
+
+#include <algorithm>
+#include <functional>
+
+#if defined(HAVE_MALLOC_INFO) && defined(HAVE_MALLOC_H)
+#include <malloc.h>
+#endif
 
 const char *lock_descriptions[TL_WRITE_ONLY + 1] =
 {
@@ -51,8 +56,8 @@ const char *lock_descriptions[TL_WRITE_ONLY + 1] =
   /* TL_READ_HIGH_PRIORITY      */  "High priority read lock",
   /* TL_READ_NO_INSERT          */  "Read lock without concurrent inserts",
   /* TL_WRITE_ALLOW_WRITE       */  "Write lock that allows other writers",
+  /* TL_WRITE_CONCURRENT_DEFAULT*/  NULL,
   /* TL_WRITE_CONCURRENT_INSERT */  "Concurrent insert lock",
-  /* TL_WRITE_DELAYED           */  "Lock used by delayed insert",
   /* TL_WRITE_DEFAULT           */  NULL,
   /* TL_WRITE_LOW_PRIORITY      */  "Low priority write lock",
   /* TL_WRITE                   */  "High priority write lock",
@@ -60,13 +65,13 @@ const char *lock_descriptions[TL_WRITE_ONLY + 1] =
 };
 
 
-#ifndef DBUG_OFF
+#ifndef NDEBUG
 
 void
 print_where(Item *cond,const char *info, enum_query_type query_type)
 {
   char buff[256];
-  String str(buff,(uint32) sizeof(buff), system_charset_info);
+  String str(buff, sizeof(buff), system_charset_info);
   str.length(0);
   if (cond)
     cond->print(&str, query_type);
@@ -103,7 +108,7 @@ TEST_join(JOIN *join)
 {
   uint i,ref;
   DBUG_ENTER("TEST_join");
-
+  assert(!join->join_tab);
   /*
     Assemble results of all the calls to full_name() first,
     in order not to garble the tabular output below.
@@ -111,10 +116,10 @@ TEST_join(JOIN *join)
   String ref_key_parts[MAX_TABLES];
   for (i= 0; i < join->tables; i++)
   {
-    JOIN_TAB *tab= join->join_tab + i;
-    for (ref= 0; ref < tab->ref.key_parts; ref++)
+    JOIN_TAB *tab= join->best_ref[i];
+    for (ref= 0; ref < tab->ref().key_parts; ref++)
     {
-      ref_key_parts[i].append(tab->ref.items[ref]->full_name());
+      ref_key_parts[i].append(tab->ref().items[ref]->full_name());
       ref_key_parts[i].append("  ");
     }
   }
@@ -123,34 +128,32 @@ TEST_join(JOIN *join)
   (void) fputs("\nInfo about JOIN\n",DBUG_FILE);
   for (i=0 ; i < join->tables ; i++)
   {
-    JOIN_TAB *tab=join->join_tab+i;
-    TABLE *form=tab->table;
+    JOIN_TAB *tab= join->best_ref[i];
+    TABLE *form=tab->table();
     if (!form)
       continue;
     char key_map_buff[128];
     fprintf(DBUG_FILE,"%-16.16s  type: %-7s  q_keys: %s  refs: %d  key: %d  len: %d\n",
 	    form->alias,
-	    join_type_str[tab->type],
-	    tab->keys.print(key_map_buff),
-	    tab->ref.key_parts,
-	    tab->ref.key,
-	    tab->ref.key_length);
-    if (tab->select)
+	    join_type_str[tab->type()],
+	    tab->keys().print(key_map_buff),
+	    tab->ref().key_parts,
+	    tab->ref().key,
+	    tab->ref().key_length);
+    if (tab->quick())
     {
       char buf[MAX_KEY/8+1];
       if (tab->use_quick == QS_DYNAMIC_RANGE)
 	fprintf(DBUG_FILE,
 		"                  quick select checked for each record (keys: %s)\n",
-		tab->select->quick_keys.print(buf));
-      else if (tab->select->quick)
+                form->quick_keys.print(buf));
+      else
       {
 	fprintf(DBUG_FILE, "                  quick select used:\n");
-        tab->select->quick->dbug_dump(18, FALSE);
+        tab->quick()->dbug_dump(18, FALSE);
       }
-      else
-	(void) fputs("                  select used\n",DBUG_FILE);
     }
-    if (tab->ref.key_parts)
+    if (tab->ref().key_parts)
     {
       fprintf(DBUG_FILE,
               "                  refs:  %s\n", ref_key_parts[i].ptr());
@@ -160,12 +163,12 @@ TEST_join(JOIN *join)
   DBUG_VOID_RETURN;
 }
 
-#endif /* !DBUG_OFF */
+#endif /* !NDEBUG */
 
 void print_keyuse_array(Opt_trace_context *trace,
                         const Key_use_array *keyuse_array)
 {
-#if !defined(DBUG_OFF) || defined(OPTIMIZER_TRACE)
+#if !defined(NDEBUG) || defined(OPTIMIZER_TRACE)
   if (unlikely(!trace->is_started()))
     return;
   Opt_trace_object wrapper(trace);
@@ -180,42 +183,40 @@ void print_keyuse_array(Opt_trace_context *trace,
                        keyuse.optimize, keyuse.used_tables,
                        (ulong)keyuse.ref_table_rows, keyuse.keypart_map));
     Opt_trace_object(trace).
-      add_utf8_table(keyuse.table).
+      add_utf8_table(keyuse.table_ref).
       add_utf8("field", (keyuse.keypart == FT_KEYPART) ? "<fulltext>" :
-               keyuse.table->key_info[keyuse.key].
+               keyuse.table_ref->table->key_info[keyuse.key].
                key_part[keyuse.keypart].field->field_name).
       add("equals", keyuse.val).
       add("null_rejecting", keyuse.null_rejecting);
   }
-#endif /* !DBUG_OFF || OPTIMIZER_TRACE */
+#endif /* !NDEBUG || OPTIMIZER_TRACE */
 }
 
-#ifndef DBUG_OFF
+#ifndef NDEBUG
 /* purecov: begin inspected */
 
-/* 
+/** 
   Print the current state during query optimization.
 
-  SYNOPSIS
-    print_plan()
-    join         pointer to the structure providing all context info for
-                 the query
-    read_time    the cost of the best partial plan
-    record_count estimate for the number of records returned by the best
-                 partial plan
-    idx          length of the partial QEP in 'join->positions';
-                 also an index in the array 'join->best_ref';
-    info         comment string to appear above the printout
-
-  DESCRIPTION
+  @param join              pointer to the structure providing all context
+                           info for the query
+  @param idx               length of the partial QEP in 'join->positions'
+                           also an index in the array 'join->best_ref'
+  @param record_count      estimate for the number of records returned by
+                           the best partial plan
+  @param read_time         the cost of the best partial plan.
+                           If a complete plan is printed (join->best_read is 
+                           set), this argument is ignored. 
+  @param current_read_time the accumulated cost of the current partial plan
+  @param info              comment string to appear above the printout 
+  
+  @details
     This function prints to the log file DBUG_FILE the members of 'join' that
     are used during query optimization (join->positions, join->best_positions,
     and join->best_ref) and few other related variables (read_time,
     record_count).
     Useful to trace query optimizer functions.
-
-  RETURN
-    None
 */
 
 void
@@ -251,7 +252,7 @@ print_plan(JOIN* join, uint idx, double record_count, double read_time,
   for (i= 0; i < idx ; i++)
   {
     pos = join->positions[i];
-    table= pos.table->table;
+    table= pos.table->table();
     if (table)
       fputs(table->alias, DBUG_FILE);
     fputc(' ', DBUG_FILE);
@@ -268,7 +269,7 @@ print_plan(JOIN* join, uint idx, double record_count, double read_time,
     for (i= 0; i < idx ; i++)
     {
       pos= join->best_positions[i];
-      table= pos.table->table;
+      table= pos.table->table();
       if (table)
         fputs(table->alias, DBUG_FILE);
       fputc(' ', DBUG_FILE);
@@ -281,10 +282,10 @@ print_plan(JOIN* join, uint idx, double record_count, double read_time,
   for (plan_nodes= join->best_ref ; *plan_nodes ; plan_nodes++)
   {
     join_table= (*plan_nodes);
-    fputs(join_table->table->s->table_name.str, DBUG_FILE);
+    fputs(join_table->table()->s->table_name.str, DBUG_FILE);
     fprintf(DBUG_FILE, "(%lu,%lu,%lu)",
             (ulong) join_table->found_records,
-            (ulong) join_table->records,
+            (ulong) join_table->records(),
             (ulong) join_table->read_time);
     fputc(' ', DBUG_FILE);
   }
@@ -293,29 +294,26 @@ print_plan(JOIN* join, uint idx, double record_count, double read_time,
   DBUG_UNLOCK_FILE;
 }
 
-#endif  /* !DBUG_OFF */
+#endif  /* !NDEBUG */
 
 C_MODE_START
-static int dl_compare(const void *p1, const void *p2);
 static int print_key_cache_status(const char *name, KEY_CACHE *key_cache);
 C_MODE_END
 
 typedef struct st_debug_lock
 {
-  ulong thread_id;
+  my_thread_id thread_id;
   char table_name[FN_REFLEN];
   bool waiting;
   const char *lock_text;
   enum thr_lock_type type;
 } TABLE_LOCK_INFO;
 
-static int dl_compare(const void *p1, const void *p2)
+typedef Prealloced_array<TABLE_LOCK_INFO, 20> Saved_locks_array;
+
+static inline int dl_compare(const TABLE_LOCK_INFO *a,
+                             const TABLE_LOCK_INFO *b)
 {
-  TABLE_LOCK_INFO *a, *b;
-
-  a= (TABLE_LOCK_INFO *) p1;
-  b= (TABLE_LOCK_INFO *) p2;
-
   if (a->thread_id > b->thread_id)
     return 1;
   if (a->thread_id < b->thread_id)
@@ -328,7 +326,19 @@ static int dl_compare(const void *p1, const void *p2)
 }
 
 
-static void push_locks_into_array(DYNAMIC_ARRAY *ar, THR_LOCK_DATA *data,
+class DL_commpare :
+  public std::binary_function<const TABLE_LOCK_INFO &,
+                              const TABLE_LOCK_INFO &, bool>
+{
+public:
+  bool operator()(const TABLE_LOCK_INFO &a, const TABLE_LOCK_INFO &b)
+  {
+    return dl_compare(&a, &b) < 0;
+  }
+};
+
+
+static void push_locks_into_array(Saved_locks_array *ar, THR_LOCK_DATA *data,
 				  bool wait, const char *text)
 {
   if (data)
@@ -337,7 +347,7 @@ static void push_locks_into_array(DYNAMIC_ARRAY *ar, THR_LOCK_DATA *data,
     if (table && table->s->tmp_table == NO_TMP_TABLE)
     {
       TABLE_LOCK_INFO table_lock_info;
-      table_lock_info.thread_id= table->in_use->thread_id;
+      table_lock_info.thread_id= table->in_use->thread_id();
       memcpy(table_lock_info.table_name, table->s->table_cache_key.str,
 	     table->s->table_cache_key.length);
       table_lock_info.table_name[strlen(table_lock_info.table_name)]='.';
@@ -345,7 +355,7 @@ static void push_locks_into_array(DYNAMIC_ARRAY *ar, THR_LOCK_DATA *data,
       table_lock_info.lock_text=text;
       // lock_type is also obtainable from THR_LOCK_DATA
       table_lock_info.type=table->reginfo.lock_type;
-      (void) push_dynamic(ar,(uchar*) &table_lock_info);
+      ar->push_back(table_lock_info);
     }
   }
 }
@@ -368,11 +378,9 @@ static void push_locks_into_array(DYNAMIC_ARRAY *ar, THR_LOCK_DATA *data,
 static void display_table_locks(void)
 {
   LIST *list;
-  void *saved_base;
-  DYNAMIC_ARRAY saved_table_locks;
+  Saved_locks_array saved_table_locks(key_memory_locked_thread_list);
+  saved_table_locks.reserve(table_cache_manager.cached_tables() + 20);
 
-  (void) my_init_dynamic_array(&saved_table_locks,sizeof(TABLE_LOCK_INFO),
-                               table_cache_manager.cached_tables() + 20,50);
   mysql_mutex_lock(&THR_LOCK_lock);
   for (list= thr_lock_thread_list; list; list= list_rest(list))
   {
@@ -391,26 +399,25 @@ static void display_table_locks(void)
   }
   mysql_mutex_unlock(&THR_LOCK_lock);
 
-  if (!saved_table_locks.elements)
-    goto end;
+  if (saved_table_locks.empty())
+    return;
 
-  saved_base= dynamic_element(&saved_table_locks, 0, TABLE_LOCK_INFO *);
-  my_qsort(saved_base, saved_table_locks.elements, sizeof(TABLE_LOCK_INFO),
-           dl_compare);
-  freeze_size(&saved_table_locks);
+  saved_table_locks.shrink_to_fit();
+
+  std::sort(saved_table_locks.begin(), saved_table_locks.end(), DL_commpare());
 
   puts("\nThread database.table_name          Locked/Waiting        Lock_type\n");
 
-  unsigned int i;
-  for (i=0 ; i < saved_table_locks.elements ; i++)
+  Saved_locks_array::iterator it;
+  for (it= saved_table_locks.begin(); it != saved_table_locks.end(); ++it)
   {
-    TABLE_LOCK_INFO *dl_ptr=dynamic_element(&saved_table_locks,i,TABLE_LOCK_INFO*);
-    printf("%-8ld%-28.28s%-22s%s\n",
-	   dl_ptr->thread_id,dl_ptr->table_name,dl_ptr->lock_text,lock_descriptions[(int)dl_ptr->type]);
+    printf("%-8u%-28.28s%-22s%s\n",
+	   it->thread_id,
+           it->table_name,
+           it->lock_text,
+           lock_descriptions[(int)it->type]);
   }
   puts("\n\n");
-end:
-  delete_dynamic(&saved_table_locks);
 }
 
 
@@ -456,22 +463,23 @@ reads:          %10s\n\n",
 void mysql_print_status()
 {
   char current_dir[FN_REFLEN];
-  STATUS_VAR tmp;
+  STATUS_VAR current_global_status_var;
 
-  calc_sum_of_all_status(&tmp);
   printf("\nStatus information:\n\n");
   (void) my_getwd(current_dir, sizeof(current_dir),MYF(0));
   printf("Current dir: %s\n", current_dir);
-  printf("Running threads: %u  Stack size: %ld\n", get_thread_count(),
+  printf("Running threads: %u  Stack size: %ld\n",
+         Global_THD_manager::get_instance()->get_thd_count(),
 	 (long) my_thread_stack_size);
   thr_print_locks();				// Write some debug info
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   print_cached_tables();
 #endif
   /* Print key cache status */
   puts("\nKey caches:");
   process_key_caches(print_key_cache_status);
   mysql_mutex_lock(&LOCK_status);
+  calc_sum_of_all_status(&current_global_status_var);
   printf("\nhandler status:\n\
 read_key:   %10llu\n\
 read_next:  %10llu\n\
@@ -480,42 +488,30 @@ read_first: %10llu\n\
 write:      %10llu\n\
 delete      %10llu\n\
 update:     %10llu\n",
-	 tmp.ha_read_key_count,
-	 tmp.ha_read_next_count,
-	 tmp.ha_read_rnd_count,
-	 tmp.ha_read_first_count,
-	 tmp.ha_write_count,
-	 tmp.ha_delete_count,
-	 tmp.ha_update_count);
+	 current_global_status_var.ha_read_key_count,
+	 current_global_status_var.ha_read_next_count,
+	 current_global_status_var.ha_read_rnd_count,
+	 current_global_status_var.ha_read_first_count,
+	 current_global_status_var.ha_write_count,
+	 current_global_status_var.ha_delete_count,
+	 current_global_status_var.ha_update_count);
   mysql_mutex_unlock(&LOCK_status);
   printf("\nTable status:\n\
 Opened tables: %10lu\n\
 Open tables:   %10lu\n\
 Open files:    %10lu\n\
 Open streams:  %10lu\n",
-	 (ulong) tmp.opened_tables,
+	 (ulong) current_global_status_var.opened_tables,
 	 (ulong) table_cache_manager.cached_tables(),
-	 (ulong) my_file_opened,
-	 (ulong) my_stream_opened);
-
-  ALARM_INFO alarm_info;
-#ifndef DONT_USE_THR_ALARM
-  thr_alarm_info(&alarm_info);
-  printf("\nAlarm status:\n\
-Active alarms:   %u\n\
-Max used alarms: %u\n\
-Next alarm time: %lu\n",
-	 alarm_info.active_alarms,
-	 alarm_info.max_used_alarms,
-	 alarm_info.next_alarm_time);
-#endif
+	 my_file_opened,
+	 my_stream_opened);
   display_table_locks();
 #ifdef HAVE_MALLOC_INFO
   printf("\nMemory status:\n");
   malloc_info(0, stdout);
 #endif
 
-#ifdef HAVE_EVENT_SCHEDULER
+#ifndef EMBEDDED_LIBRARY
   Events::dump_internal_status();
 #endif
   puts("");
@@ -523,7 +519,7 @@ Next alarm time: %lu\n",
 }
 
 
-#ifndef DBUG_OFF
+#ifndef NDEBUG
 #ifdef EXTRA_DEBUG_DUMP_TABLE_LISTS
 
 

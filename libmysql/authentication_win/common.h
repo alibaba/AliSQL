@@ -1,13 +1,20 @@
-/* Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -19,7 +26,7 @@
 #include <my_global.h>
 #include <windows.h>
 #include <sspi.h>              // for CtxtHandle
-#include <mysql/plugin_auth.h> // for MYSQL_PLUGIN_VIO
+#include <mysql/plugin_auth_common.h> // for MYSQL_PLUGIN_VIO
 
 /// Maximum length of the target service name.
 #define MAX_SERVICE_NAME_LENGTH  1024
@@ -59,7 +66,7 @@ void          set_log_level(unsigned int);
   to fprintf() (see error_log_vprint() function).
 */
 
-#if defined(DEBUG_ERROR_LOG) && defined(DBUG_OFF)
+#if defined(DEBUG_ERROR_LOG) && defined(NDEBUG)
 #define ERROR_LOG(Level, Msg)     do {} while (0)
 #else
 #define ERROR_LOG(Level, Msg)     error_log_print< error_log_level::Level > Msg
@@ -92,7 +99,7 @@ const char* get_last_error_message(Error_message_buf);
   unless the dbug library implementation is used or debug messages are disabled.
 */
 
-#ifndef DBUG_OFF
+#ifndef NDEBUG
 
 #define DBUG_PRINT_DO(Keyword, Msg) \
   do { \
@@ -132,13 +139,6 @@ void debug_msg(const char *fmt, ...)
 
 #undef DBUG_RETURN
 #define DBUG_RETURN(X) return (X)
-
-#undef DBUG_ASSERT
-#ifndef DBUG_OFF
-#define DBUG_ASSERT(X) assert (X)
-#else
-#define DBUG_ASSERT(X) do {} while (0)
-#endif
 
 #undef DBUG_DUMP
 #define DBUG_DUMP(A,B,C) do {} while (0)
@@ -272,7 +272,7 @@ public:
     return (PSID)m_data->User.Sid;
   }
 
-#ifndef DBUG_OFF
+#ifndef NDEBUG
 
 private:
     char *m_as_string;  ///< Cached string representation of the SID.

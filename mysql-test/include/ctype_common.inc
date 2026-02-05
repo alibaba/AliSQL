@@ -8,7 +8,7 @@
 # use SHOW FULL COLUMNS instead.
 #
 # Please surround all CREATE TABLE with --disable_warnings
-# and --enable_warnings to be able to set storage_engine
+# and --enable_warnings to be able to set default_storage_engine
 # without having to check if the hanlder exists.
 
 SET @safe_character_set_server= @@character_set_server;
@@ -58,7 +58,7 @@ DROP TABLE t1;
 # Bug #32726: crash with cast in order by clause and cp932 charset
 #
 create table t1 (a set('a') not null);
-insert into t1 values (),();
+insert ignore into t1 values (),();
 select cast(a as char(1)) from t1;
 select a sounds like a from t1;
 select 1 from t1 order by cast(a as char(1));

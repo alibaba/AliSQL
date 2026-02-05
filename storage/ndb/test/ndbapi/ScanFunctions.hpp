@@ -1,15 +1,22 @@
 /*
-   Copyright (C) 2003-2006, 2008 MySQL AB
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
     All rights reserved. Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -29,7 +36,7 @@ class AttribList {
 public:
   AttribList(){};
   ~AttribList(){
-    for(size_t i = 0; i < attriblist.size(); i++){      
+    for(unsigned i = 0; i < attriblist.size(); i++){      
       delete attriblist[i];
     }
   };
@@ -95,19 +102,19 @@ ScanFunctions::scanReadFunctions(Ndb* pNdb,
     if (pTrans == NULL) {
       const NdbError err = pNdb->getNdbError();
       if (err.status == NdbError::TemporaryError){
-	ERR(err);
+	NDB_ERR(err);
 	NdbSleep_MilliSleep(50);
 	retryAttempt++;
 	continue;
       }
-      ERR(err);
+      NDB_ERR(err);
       return NDBT_FAILED;
     }
     
     // Execute the scan without defining a scan operation
     pOp = pTrans->getNdbScanOperation(tab.getName());	
     if (pOp == NULL) {
-      ERR(pTrans->getNdbError());
+      NDB_ERR(pTrans->getNdbError());
       pNdb->closeTransaction(pTrans);
       return NDBT_FAILED;
     }
@@ -115,7 +122,7 @@ ScanFunctions::scanReadFunctions(Ndb* pNdb,
     if( pOp->readTuples(exclusive ? 
 			NdbScanOperation::LM_Exclusive : 
 			NdbScanOperation::LM_Read) ) {
-      ERR(pTrans->getNdbError());
+      NDB_ERR(pTrans->getNdbError());
       pNdb->closeTransaction(pTrans);
       return NDBT_FAILED;
     }
@@ -124,7 +131,7 @@ ScanFunctions::scanReadFunctions(Ndb* pNdb,
     if (action == OnlyOpenScanOnce){
       // Call openScan one more time when it's already defined
       if( pOp->readTuples(NdbScanOperation::LM_Read) ) {
-	ERR(pTrans->getNdbError());
+	NDB_ERR(pTrans->getNdbError());
 	pNdb->closeTransaction(pTrans);
 	return NDBT_FAILED;
       }
@@ -133,7 +140,7 @@ ScanFunctions::scanReadFunctions(Ndb* pNdb,
     if (action==EqualAfterOpenScan){
       check = pOp->equal(tab.getColumn(0)->getName(), 10);
       if( check == -1 ) {
-	ERR(pTrans->getNdbError());
+	NDB_ERR(pTrans->getNdbError());
 	pNdb->closeTransaction(pTrans);
 	return NDBT_FAILED;
       }	
@@ -141,7 +148,7 @@ ScanFunctions::scanReadFunctions(Ndb* pNdb,
     
     for(int a = 0; a<tab.getNoOfColumns(); a++){
       if(pOp->getValue(tab.getColumn(a)->getName()) == NULL) {
-	ERR(pTrans->getNdbError());
+	NDB_ERR(pTrans->getNdbError());
 	pNdb->closeTransaction(pTrans);
 	return NDBT_FAILED;
       }
@@ -149,7 +156,7 @@ ScanFunctions::scanReadFunctions(Ndb* pNdb,
     
     check = pTrans->execute(NoCommit);
     if( check == -1 ) {
-      ERR(pTrans->getNdbError());
+      NDB_ERR(pTrans->getNdbError());
       pNdb->closeTransaction(pTrans);
       return NDBT_FAILED;
     }
@@ -170,7 +177,7 @@ ScanFunctions::scanReadFunctions(Ndb* pNdb,
 	  // Test that we can closeTrans without stopScan
 	  pOp->close();
 	  if( check == -1 ) {
-	    ERR(pTrans->getNdbError());
+	    NDB_ERR(pTrans->getNdbError());
 	    pNdb->closeTransaction(pTrans);
 	    return NDBT_FAILED;
 	  }
@@ -197,7 +204,7 @@ ScanFunctions::scanReadFunctions(Ndb* pNdb,
       const NdbError err = pTrans->getNdbError();
 
       if (err.status == NdbError::TemporaryError){
-	ERR(err);
+	NDB_ERR(err);
 	
 	// Be cruel, call nextScanResult after error
 	for(int i=0; i<10; i++){
@@ -223,7 +230,7 @@ ScanFunctions::scanReadFunctions(Ndb* pNdb,
 
 	continue;
       }
-      ERR(err);
+      NDB_ERR(err);
       pNdb->closeTransaction(pTrans);
       return NDBT_FAILED;
     }
@@ -335,7 +342,7 @@ void AttribList::buildAttribList(const NdbDictionary::Table* pTab){
   attriblist.push_back(attr);  
 
 #if 1
-  for(size_t j = 0; j < attriblist.size(); j++){
+  for(unsigned j = 0; j < attriblist.size(); j++){
 
     g_info << attriblist[j]->numAttribs << ": " ;
     for(int a = 0; a < attriblist[j]->numAttribs; a++)

@@ -27,8 +27,10 @@
 # There are some part of the test are temporarily disabled because of
 # the following bugs, please enable then once they get fixed:
 #  - BUG#22473427
-#  - Bug#22587377
 
+# This test takes long time, so only run it with the --big-test mtr-flag.
+--source include/not_group_replication_plugin.inc
+source include/big_test.inc;
 source include/have_debug.inc;
 source include/master-slave.inc;
 
@@ -164,11 +166,9 @@ send CREATE EVENT e2
   DO INSERT INTO test.t1 VALUES (2);
 source include/kill_query_and_diff_master_slave.inc;
 
-# Temporarily disabled,see Bug#22587377-RPL.RPL_KILLED_DDL
-# FAILS SPORADICALLY ON PB2 IN 5.5 AND 5.6
-#send ALTER EVENT e1
-#  ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 2 DAY;
-#source include/kill_query_and_diff_master_slave.inc;
+send ALTER EVENT e1
+  ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 2 DAY;
+source include/kill_query_and_diff_master_slave.inc;
 
 send DROP EVENT e1;
 source include/kill_query_and_diff_master_slave.inc;

@@ -1,24 +1,30 @@
 /*
-   Copyright (c) 2008, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2008, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
    51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
 
-#include "sql_priv.h"
-#include "unireg.h"
 #include "sp_head.h"
 #include "event_parse_data.h"
 #include "sql_time.h"                           // TIME_to_timestamp
+#include "item_timefunc.h"                      // get_interval_value
 
 /*
   Returns a new instance
@@ -126,7 +132,7 @@ Event_parse_data::check_if_in_the_past(THD *thd, my_time_t ltime_utc)
   {
     switch (thd->lex->sql_command) {
     case SQLCOM_CREATE_EVENT:
-      push_warning(thd, Sql_condition::WARN_LEVEL_NOTE,
+      push_warning(thd, Sql_condition::SL_NOTE,
                    ER_EVENT_CANNOT_CREATE_IN_THE_PAST,
                    ER(ER_EVENT_CANNOT_CREATE_IN_THE_PAST));
       break;
@@ -134,7 +140,7 @@ Event_parse_data::check_if_in_the_past(THD *thd, my_time_t ltime_utc)
       my_error(ER_EVENT_CANNOT_ALTER_IN_THE_PAST, MYF(0));
       break;
     default:
-      DBUG_ASSERT(0);
+      assert(0);
     }
 
     do_not_create= TRUE;
@@ -143,7 +149,7 @@ Event_parse_data::check_if_in_the_past(THD *thd, my_time_t ltime_utc)
   {
     status= Event_parse_data::DISABLED;
     status_changed= true;
-    push_warning(thd, Sql_condition::WARN_LEVEL_NOTE,
+    push_warning(thd, Sql_condition::SL_NOTE,
                  ER_EVENT_EXEC_TIME_IN_THE_PAST,
                  ER(ER_EVENT_EXEC_TIME_IN_THE_PAST));
   }
@@ -216,7 +222,7 @@ Event_parse_data::init_execute_at(THD *thd)
   /* no starts and/or ends in case of execute_at */
   DBUG_PRINT("info", ("starts_null && ends_null should be 1 is %d",
                       (starts_null && ends_null)));
-  DBUG_ASSERT(starts_null && ends_null);
+  assert(starts_null && ends_null);
 
   if ((not_used= item_execute_at->get_date(&ltime, TIME_NO_ZERO_DATE)))
     goto wrong_value;
@@ -257,7 +263,7 @@ int
 Event_parse_data::init_interval(THD *thd)
 {
   String value;
-  INTERVAL interval_tmp;
+  Interval interval_tmp;
 
   DBUG_ENTER("Event_parse_data::init_interval");
   if (!item_expression)
@@ -329,7 +335,7 @@ Event_parse_data::init_interval(THD *thd)
     expression= interval_tmp.minute * 60 + interval_tmp.second;
     break;
   case INTERVAL_LAST:
-    DBUG_ASSERT(0);
+    assert(0);
   default:
     ;/* these are the microsec stuff */
   }
@@ -475,7 +481,7 @@ void
 Event_parse_data::report_bad_value(const char *item_name, Item *bad_item)
 {
   char buff[120];
-  String str(buff,(uint32) sizeof(buff), system_charset_info);
+  String str(buff, sizeof(buff), system_charset_info);
   String *str2= bad_item->fixed? bad_item->val_str(&str):NULL;
   my_error(ER_WRONG_VALUE, MYF(0), item_name, str2? str2->c_ptr_safe():"NULL");
 }
@@ -526,7 +532,7 @@ Event_parse_data::init_definer(THD *thd)
 {
   DBUG_ENTER("Event_parse_data::init_definer");
 
-  DBUG_ASSERT(thd->lex->definer);
+  assert(thd->lex->definer);
 
   const char *definer_user= thd->lex->definer->user.str;
   const char *definer_host= thd->lex->definer->host.str;

@@ -1,14 +1,22 @@
 /*****************************************************************************
 
-Copyright (c) 1995, 2013, Oracle and/or its affiliates. All Rights Reserved
+Copyright (c) 1995, 2023, Oracle and/or its affiliates.
 
-This program is free software; you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation; version 2 of the License.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License, version 2.0,
+as published by the Free Software Foundation.
 
-This program is distributed in the hope that it will be useful, but WITHOUT
-ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+This program is also distributed with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have included with MySQL.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License, version 2.0, for more details.
 
 You should have received a copy of the GNU General Public License along with
 this program; if not, write to the Free Software Foundation, Inc.,
@@ -26,12 +34,11 @@ Created 11/17/1995 Heikki Tuuri
 #ifndef buf0types_h
 #define buf0types_h
 
-#if defined(INNODB_PAGE_ATOMIC_REF_COUNT) && defined(HAVE_ATOMIC_BUILTINS)
-#define PAGE_ATOMIC_REF_COUNT
-#endif /* INNODB_PAGE_ATOMIC_REF_COUNT && HAVE_ATOMIC_BUILTINS */
+#include "os0event.h"
+#include "ut0ut.h"
 
 /** Buffer page (uncompressed or compressed) */
-struct buf_page_t;
+class buf_page_t;
 /** Buffer block for which an uncompressed page exists */
 struct buf_block_t;
 /** Buffer pool chunk comprising buf_block_t */
@@ -44,6 +51,8 @@ struct buf_pool_stat_t;
 struct buf_buddy_stat_t;
 /** Doublewrite memory struct */
 struct buf_dblwr_t;
+/** Flush observer for bulk create index */
+class FlushObserver;
 
 /** A buffer frame. @see page_t */
 typedef	byte	buf_frame_t;
@@ -96,6 +105,24 @@ enum srv_checksum_algorithm_t {
 						when reading */
 };
 
+inline
+bool
+is_checksum_strict(srv_checksum_algorithm_t algo)
+{
+	return(algo == SRV_CHECKSUM_ALGORITHM_STRICT_CRC32
+	       || algo == SRV_CHECKSUM_ALGORITHM_STRICT_INNODB
+	       || algo == SRV_CHECKSUM_ALGORITHM_STRICT_NONE);
+}
+
+inline
+bool
+is_checksum_strict(ulint algo)
+{
+	return(algo == SRV_CHECKSUM_ALGORITHM_STRICT_CRC32
+	       || algo == SRV_CHECKSUM_ALGORITHM_STRICT_INNODB
+	       || algo == SRV_CHECKSUM_ALGORITHM_STRICT_NONE);
+}
+
 /** Parameters of binary buddy system for compressed pages (buf0buddy.h) */
 /* @{ */
 /** Zip shift value for the smallest page size */
@@ -116,5 +143,17 @@ the underlying memory is aligned by this amount:
 this must be equal to UNIV_PAGE_SIZE */
 #define BUF_BUDDY_HIGH	(BUF_BUDDY_LOW << BUF_BUDDY_SIZES)
 /* @} */
+
+#ifndef UNIV_INNOCHECKSUM
+
+#include "ut0mutex.h"
+#include "sync0rw.h"
+
+typedef ib_bpmutex_t BPageMutex;
+typedef ib_mutex_t BufPoolMutex;
+typedef ib_mutex_t FlushListMutex;
+typedef BPageMutex BufPoolZipMutex;
+typedef rw_lock_t BPageLock;
+#endif /* !UNIV_INNOCHECKSUM */
 
 #endif /* buf0types.h */

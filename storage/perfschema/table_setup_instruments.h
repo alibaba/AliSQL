@@ -1,13 +1,20 @@
-/* Copyright (c) 2008, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2008, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation; version 2 of the License.
+  it under the terms of the GNU General Public License, version 2.0,
+  as published by the Free Software Foundation.
+
+  This program is also distributed with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an additional
+  permission to link the program and your derivative works with the
+  separately licensed software that they have included with MySQL.
 
   This program is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
+  GNU General Public License, version 2.0, for more details.
 
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software Foundation,
@@ -34,6 +41,10 @@ struct row_setup_instruments
 {
   /** Columns NAME, ENABLED, TIMED. */
   PFS_instr_class *m_instr_class;
+  /** True if column ENABLED can be updated. */
+  bool m_update_enabled;
+  /** True if column TIMED can be updated. */
+  bool m_update_timed;
 };
 
 /** Position of a cursor on PERFORMANCE_SCHEMA.SETUP_INSTRUMENTS. */
@@ -48,9 +59,13 @@ struct pos_setup_instruments : public PFS_double_index
   static const uint VIEW_TABLE= 6;
   static const uint VIEW_STAGE= 7;
   static const uint VIEW_STATEMENT= 8;
-  static const uint VIEW_SOCKET= 9;
-  static const uint VIEW_IDLE= 10;
-  static const uint LAST_VIEW= 10;
+  static const uint VIEW_TRANSACTION=9;
+  static const uint VIEW_SOCKET= 10;
+  static const uint VIEW_IDLE= 11;
+  static const uint VIEW_BUILTIN_MEMORY= 12;
+  static const uint VIEW_MEMORY= 13;
+  static const uint VIEW_METADATA= 14;
+  static const uint LAST_VIEW= 14;
 
   pos_setup_instruments()
     : PFS_double_index(FIRST_VIEW, 1)
@@ -76,9 +91,11 @@ struct pos_setup_instruments : public PFS_double_index
 class table_setup_instruments : public PFS_engine_table
 {
 public:
+  static PFS_engine_table_share_state m_share_state;
   /** Table share. */
   static PFS_engine_table_share m_share;
   static PFS_engine_table* create();
+  static ha_rows get_row_count();
 
   virtual int rnd_next();
   virtual int rnd_pos(const void *pos);
@@ -102,7 +119,7 @@ public:
   {}
 
 private:
-  void make_row(PFS_instr_class *klass);
+  void make_row(PFS_instr_class *klass, bool update_enabled, bool update_timed);
 
   /** Table share lock. */
   static THR_LOCK m_table_lock;

@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -36,6 +43,9 @@
 #include <signaldata/StopReq.hpp>
 
 #include "timer.hpp"
+
+#define JAM_FILE_ID 362
+
 
 #ifdef QMGR_C
 
@@ -99,10 +109,11 @@ public:
     ZINIT = 1, 		        /* All nodes start in phase INIT         */
     ZSTARTING = 2, 		/* Node is connecting to cluster         */
     ZRUNNING = 3, 		/* Node is running in the cluster        */
-    ZPREPARE_FAIL = 4,       /* PREPARATION FOR FAILURE               */
-    ZFAIL_CLOSING = 5,             /* API/NDB IS DISCONNECTING              */
+    ZPREPARE_FAIL = 4,          /* PREPARATION FOR FAILURE               */
+    ZFAIL_CLOSING = 5,          /* API/NDB IS DISCONNECTING              */
     ZAPI_ACTIVE = 6,            /* API IS RUNNING IN NODE                */
-    ZAPI_INACTIVE = 7           /* Inactive API */
+    ZAPI_INACTIVE = 7,          /* Inactive API */
+    ZAPI_ACTIVATION_ONGOING = 8 /* API is being activated */
   };
 
   struct StartRecord {
@@ -212,7 +223,7 @@ public:
     FailState failState;
     BlockReference blockRef;
     Uint64 m_secret;
-    Uint64 m_alloc_timeout;
+    NDB_TICKS m_alloc_timeout;
     Uint16 m_failconf_blocks[QMGR_MAX_FAIL_STATE_BLOCKS];
 
     NodeRec() { bzero(m_failconf_blocks, sizeof(m_failconf_blocks)); }
@@ -253,7 +264,7 @@ public:
     Uint8 recvCount;
     NdbNodeBitmask recvMask;	// left to recv
     Uint32 code;		// code field from signal
-    Uint32 failureNr;            // cfailureNr at arbitration start
+    Uint32 failureNr;           // cfailureNr at arbitration start
     Uint32 timeout;             // timeout for CHOOSE state
     NDB_TICKS timestamp;	// timestamp for checking timeouts
 
@@ -264,12 +275,12 @@ public:
     }
 
     inline void setTimestamp() {
-      timestamp = NdbTick_CurrentMillisecond();
+      timestamp = NdbTick_getCurrentTicks();
     }
 
-    inline NDB_TICKS getTimediff() {
-      NDB_TICKS now = NdbTick_CurrentMillisecond();
-      return now < timestamp ? 0 : now - timestamp;
+    inline Uint64 getTimediff() {
+      const NDB_TICKS now = NdbTick_getCurrentTicks();
+      return NdbTick_Elapsed(timestamp, now).milliSec();
     }
   };
   
@@ -364,13 +375,19 @@ private:
   void execNODE_PINGREQ(Signal* signal);
   void execNODE_PINGCONF(Signal* signal);
 
+  // Ndbinfo signal
+  void execDBINFO_SCANREQ(Signal *signal);
+
+  // NDBCNTR informing us our node is fully started
+  void execNODE_STARTED_REP(Signal *signal);
+
   // Statement blocks
   void check_readnodes_reply(Signal* signal, Uint32 nodeId, Uint32 gsn);
   Uint32 check_startup(Signal* signal);
 
   void api_failed(Signal* signal, Uint32 aFailedNode);
   void node_failed(Signal* signal, Uint16 aFailedNode);
-  void checkStartInterface(Signal* signal, Uint64 now);
+  void checkStartInterface(Signal* signal, NDB_TICKS now);
   void failReport(Signal* signal,
                   Uint16 aFailedNode,
                   UintR aSendFailRep,
@@ -390,7 +407,7 @@ private:
   void electionWon(Signal* signal);
   void cmInfoconf010Lab(Signal* signal);
   
-  void apiHbHandlingLab(Signal* signal, Uint64 now);
+  void apiHbHandlingLab(Signal* signal, NDB_TICKS now);
   void timerHandlingLab(Signal* signal);
   void hbReceivedLab(Signal* signal);
   void sendCmRegrefLab(Signal* signal, BlockReference ref, 
@@ -408,7 +425,7 @@ private:
                      Uint16 sourceNode);
   void sendCommitFailReq(Signal* signal);
   void presToConfLab(Signal* signal);
-  void sendSttorryLab(Signal* signal);
+  void sendSttorryLab(Signal* signal, bool first_phase);
   void sttor020Lab(Signal* signal);
   void closeComConfLab(Signal* signal);
   void apiRegReqLab(Signal* signal);
@@ -479,8 +496,7 @@ private:
 			  GlobalSignalNumber gsn,
 			  Uint32 blockRef,
 			  Uint32 failNo,
-			  Uint32 noOfNodes,
-			  const NodeId theNodes[]);
+			  const NdbNodeBitmask& nodes);
 
   void handleApiCloseComConf(Signal* signal);
   void add_failconf_block(NodeRecPtr, Uint32 block);
@@ -511,16 +527,12 @@ private:
   Uint32 c_restartPartionedTimeout;
   Uint32 c_restartFailureTimeout;
   Uint32 c_restartNoNodegroupTimeout;
-  Uint64 c_start_election_time;
+  NDB_TICKS c_start_election_time;
 
   Uint16 creadyDistCom;
 
   Uint16 cdelayRegreq;
   Uint16 cpresidentAlive;
-  Uint16 cnoFailedNodes;
-  Uint16 cnoPrepFailedNodes;
-  Uint16 cnoCommitFailedNodes;
-  Uint16 cactivateApiCheck;
   Uint16 c_allow_api_connect;
   UintR chbApiDelay;
 
@@ -531,7 +543,6 @@ private:
 
   QmgrState ctoStatus;
   bool cHbSent;
-  NDB_TICKS clatestTransactionCheck;
 
   Timer interface_check_timer;
   Timer hb_check_timer;
@@ -539,9 +550,9 @@ private:
   Timer hb_api_timer;
 
 
-  Uint16 cfailedNodes[MAX_NDB_NODES];
-  Uint16 cprepFailedNodes[MAX_NDB_NODES];
-  Uint16 ccommitFailedNodes[MAX_NDB_NODES];
+  NdbNodeBitmask cfailedNodes;
+  NdbNodeBitmask cprepFailedNodes;
+  NdbNodeBitmask ccommitFailedNodes;
   
   struct OpAllocNodeIdReq {
     RequestTracker m_tracker;
@@ -575,6 +586,19 @@ private:
 #ifdef ERROR_INSERT
   Uint32 nodeFailCount;
 #endif
+
+  Uint32 get_hb_count(Uint32 nodeId) const {
+    return globalData.get_hb_count(nodeId);
+  }
+
+  Uint32& set_hb_count(Uint32 nodeId) {
+    return globalData.set_hb_count(nodeId);
+  }
+
+  void execISOLATE_ORD(Signal* signal);
 };
+
+
+#undef JAM_FILE_ID
 
 #endif

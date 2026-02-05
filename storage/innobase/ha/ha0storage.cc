@@ -1,14 +1,22 @@
 /*****************************************************************************
 
-Copyright (c) 2007, 2011, Oracle and/or its affiliates. All Rights Reserved.
+Copyright (c) 2007, 2023, Oracle and/or its affiliates.
 
-This program is free software; you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation; version 2 of the License.
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License, version 2.0,
+as published by the Free Software Foundation.
 
-This program is distributed in the hope that it will be useful, but WITHOUT
-ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+This program is also distributed with certain software (including
+but not limited to OpenSSL) that is licensed under separate terms,
+as designated in a particular file or component or in included license
+documentation.  The authors of MySQL hereby grant you an additional
+permission to link the program and your derivative works with the
+separately licensed software that they have included with MySQL.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License, version 2.0, for more details.
 
 You should have received a copy of the GNU General Public License along with
 this program; if not, write to the Free Software Foundation, Inc.,
@@ -25,7 +33,7 @@ its own storage, avoiding duplicates.
 Created September 22, 2007 Vasil Dimov
 *******************************************************/
 
-#include "univ.i"
+#include "ha_prototypes.h"
 #include "ha0storage.h"
 #include "hash0hash.h"
 #include "mem0mem.h"
@@ -83,7 +91,6 @@ data_len bytes need to be allocated) and the size of storage is going to
 become more than "memlim" then "data" is not added and NULL is returned.
 To disable this behavior "memlim" can be set to 0, which stands for
 "no limit". */
-UNIV_INTERN
 const void*
 ha_storage_put_memlim(
 /*==================*/
@@ -169,14 +176,13 @@ test_ha_storage()
 		p = ha_storage_put(storage, buf, sizeof(buf));
 
 		if (p != stored[i]) {
-
-			fprintf(stderr, "ha_storage_put() returned %p "
-				"instead of %p, i=%d\n", p, stored[i], i);
+			ib::warn() << "ha_storage_put() returned " << p
+				<< " instead of " << stored[i] << ", i=" << i;
 			return;
 		}
 	}
 
-	fprintf(stderr, "all ok\n");
+	ib::info() << "all ok";
 
 	ha_storage_free(storage);
 }

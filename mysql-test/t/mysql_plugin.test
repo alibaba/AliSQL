@@ -47,8 +47,8 @@ use File::Basename;
   my $my_print_defaults= $ENV{MYSQL_MY_PRINT_DEFAULTS};
   my $my_print_defaults_basedir=dirname($my_print_defaults);
   my $daemonexample_ini= "$ENV{DAEMONEXAMPLE_DIR}/daemon_example.ini";
-  my $plugindir_ini= "$ENV{PLUGIN_DIR}/daemon_example.ini";
   my $notfound= "";
+  $daemonexample_ini =~ s,/plugin/debug/,/plugin/,;
   open(FILE, ">", "$ENV{MYSQL_TMP_DIR}/mysqld.inc") or die;
   print FILE "let \$MYSQLD_BASEDIR= $mysqld_basedir;\n";
   print FILE "let \$MYSQL_MY_PRINT_DEFAULTS_BASEDIR= $my_print_defaults_basedir;\n";
@@ -56,13 +56,12 @@ use File::Basename;
   {
     print FILE "let \$DAEMONEXAMPLE_DIR= $not_found;\n";
   }
-  if ((!-e $plugindir_ini) || (!-r $plugindir_ini))
+  else
   {
-    print FILE "let \$PLUGIN_DIR= $not_found;\n";
+    print FILE "let \$MYSQL_PLUGIN_INI= $daemonexample_ini;\n";
   }
   close FILE;
 EOF
-
 
 source $MYSQL_TMP_DIR/mysqld.inc;
 remove_file $MYSQL_TMP_DIR/mysqld.inc;
@@ -94,13 +93,9 @@ if ($MYSQLD == '')
 
 # Check for daemon_example.ini location. Skip if not found in either
 # the plugin_dir path or the daemon_example_dir path.
-if ($PLUGIN_DIR == '')
+if ($DAEMONEXAMPLE_DIR == '')
 {
-  if ($DAEMONEXAMPLE_DIR == '')
-  {
-    --skip Test requires known location of daemon_example.ini file.  
-  }
-  let $PLUGIN_DIR = $DAEMONEXAMPLE_DIR;
+  --skip Test requires known location of daemon_example.ini file.  
 }
 
 # Build client command for reuse.
@@ -117,17 +112,17 @@ SELECT * FROM mysql.plugin WHERE dl like 'libdaemon%' ORDER BY name;
 --echo #
 
 --exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
---shutdown_server 10
+--shutdown_server 
 --source include/wait_until_disconnected.inc
 
 #
 # Enable the plugin
 #
---exec $MYSQL_PLUGIN_CMD ENABLE daemon_example
+--exec $MYSQL_PLUGIN_CMD --plugin-ini=$MYSQL_PLUGIN_INI ENABLE daemon_example
 
-#
+
 # Ensure enabling an enabled plugin doesn't fail
---exec $MYSQL_PLUGIN_CMD ENABLE daemon_example
+--exec $MYSQL_PLUGIN_CMD --plugin-ini=$MYSQL_PLUGIN_INI ENABLE daemon_example
 
 #
 # Restart the server
@@ -155,18 +150,18 @@ eval INSERT INTO mysql.plugin VALUES ('wonky', '$DAEMONEXAMPLE');
 SELECT * FROM mysql.plugin WHERE dl like 'libdaemon%' ORDER BY name;
 
 --exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
---shutdown_server 10
+--shutdown_server 
 --source include/wait_until_disconnected.inc
 
 #
 # Disable the plugin - to remove winky, wonky entries
 #
---exec $MYSQL_PLUGIN_CMD DISABLE daemon_example
+--exec $MYSQL_PLUGIN_CMD --plugin-ini=$MYSQL_PLUGIN_INI DISABLE daemon_example
 
 #
 # Enable the plugin again
 #
---exec $MYSQL_PLUGIN_CMD ENABLE daemon_example
+--exec $MYSQL_PLUGIN_CMD --plugin-ini=$MYSQL_PLUGIN_INI ENABLE daemon_example
 
 #
 # Restart the server
@@ -182,7 +177,7 @@ SELECT * FROM mysql.plugin WHERE dl like 'libdaemon%' ORDER BY name;
 SELECT * FROM mysql.plugin WHERE dl like '%libdaemon%' ORDER BY name;
 
 --exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
---shutdown_server 10
+--shutdown_server 
 --source include/wait_until_disconnected.inc
 
 # To test the case where the same plugin is reloaded with a different soname,
@@ -213,7 +208,7 @@ SELECT * FROM mysql.plugin WHERE dl like '%libdaemon%' ORDER BY name;
 --echo #
 
 --exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
---shutdown_server 10
+--shutdown_server 
 --source include/wait_until_disconnected.inc
 
 #
@@ -243,7 +238,7 @@ SELECT * FROM mysql.plugin WHERE dl like '%libdaemon%' ORDER BY name;
 #
 
 --exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
---shutdown_server 10
+--shutdown_server 
 --source include/wait_until_disconnected.inc
 
 --echo #
@@ -268,14 +263,14 @@ SELECT * FROM mysql.plugin WHERE dl like '%libdaemon%' ORDER BY name;
 --echo # Attempt to omit DISABLE|ENABLE
 --echo #
 --error 1,2,256
---exec $MYSQL_PLUGIN_CMD daemon_example 2>&1
+--exec $MYSQL_PLUGIN_CMD --plugin-ini=$MYSQL_PLUGIN_INI daemon_example 2>&1
 
 --echo # 
 --echo # Attempt to use bad paths - datadir
 --echo #
 let $MYSQL_PLUGIN_CMD= $MYSQL_PLUGIN -n --datadir=/data_not_there/ --basedir=$MYSQL_BASEDIR --plugin-dir=$PLUGIN_DIR --mysqld=$MYSQLD_BASEDIR --my-print-defaults=$MYSQL_MY_PRINT_DEFAULTS_BASEDIR;
 --error 1,2,256
---exec $MYSQL_PLUGIN_CMD DISABLE daemon_example 2>&1
+--exec $MYSQL_PLUGIN_CMD --plugin-ini=$MYSQL_PLUGIN_INI DISABLE daemon_example 2>&1
 
 --echo # 
 --echo # Attempt to use bad paths - basedir
@@ -283,28 +278,28 @@ let $MYSQL_PLUGIN_CMD= $MYSQL_PLUGIN -n --datadir=/data_not_there/ --basedir=$MY
 let $MYSQL_PLUGIN_CMD= $MYSQL_PLUGIN -n --datadir=$MYSQLD_DATADIR --basedir=/basedir_not_there/ --plugin-dir=$PLUGIN_DIR --mysqld=$MYSQLD_BASEDIR --my-print-defaults=$MYSQL_MY_PRINT_DEFAULTS_BASEDIR;
 replace_result "/basedir_not_there//" "/basedir_not_there/";
 --error 1,2,256
---exec $MYSQL_PLUGIN_CMD DISABLE daemon_example 2>&1
+--exec $MYSQL_PLUGIN_CMD --plugin-ini=$MYSQL_PLUGIN_INI DISABLE daemon_example 2>&1
 
 --echo # 
 --echo # Attempt to use bad paths - plugin_dir
 --echo #
 let $MYSQL_PLUGIN_CMD= $MYSQL_PLUGIN -n --datadir=$MYSQLD_DATADIR --basedir=$MYSQL_BASEDIR --plugin-dir=/plugin_not_there/ --mysqld=$MYSQLD_BASEDIR --my-print-defaults=$MYSQL_MY_PRINT_DEFAULTS_BASEDIR;
 --error 1,2,256
---exec $MYSQL_PLUGIN_CMD DISABLE daemon_example 2>&1
+--exec $MYSQL_PLUGIN_CMD --plugin-ini=$MYSQL_PLUGIN_INI DISABLE daemon_example 2>&1
 
 --echo # 
 --echo # Attempt to use bad paths - mysqld
 --echo #
 let $MYSQL_PLUGIN_CMD= $MYSQL_PLUGIN -n --datadir=$MYSQLD_DATADIR --basedir=$MYSQL_BASEDIR --plugin-dir=$PLUGIN_DIR --mysqld=/mysqld_not_there/ --my-print-defaults=$MYSQL_MY_PRINT_DEFAULTS_BASEDIR;
 --error 1,2,256
---exec $MYSQL_PLUGIN_CMD DISABLE daemon_example 2>&1
+--exec $MYSQL_PLUGIN_CMD --plugin-ini=$MYSQL_PLUGIN_INI DISABLE daemon_example 2>&1
 
 --echo # 
 --echo # Attempt to use bad paths - my_print_defaults
 --echo #
 let $MYSQL_PLUGIN_CMD= $MYSQL_PLUGIN -n --datadir=$MYSQLD_DATADIR --basedir=$MYSQL_BASEDIR --plugin-dir=$PLUGIN_DIR --mysqld=$MYSQLD_BASEDIR --my-print-defaults=/my_print_defaults_not_there/;
 --error 1,2,256
---exec $MYSQL_PLUGIN_CMD DISABLE daemon_example 2>&1
+--exec $MYSQL_PLUGIN_CMD --plugin-ini=$MYSQL_PLUGIN_INI DISABLE daemon_example 2>&1
 
 
 --echo # 
@@ -326,21 +321,21 @@ let $MYSQL_PLUGIN_CMD= $MYSQL_PLUGIN -n --datadir=$MYSQLD_DATADIR --basedir=$MYS
 --echo #
 let $MYSQL_PLUGIN_CMD= $MYSQL_PLUGIN -n --datadir=$MYSQLD_DATADIR --plugin-dir=$PLUGIN_DIR --mysqld=$MYSQLD_BASEDIR --my-print-defaults=$MYSQL_MY_PRINT_DEFAULTS_BASEDIR;
 --error 1,2,139,256
---exec $MYSQL_PLUGIN_CMD DISABLE daemon_example 2>&1
+--exec $MYSQL_PLUGIN_CMD --plugin-ini=$MYSQL_PLUGIN_INI DISABLE daemon_example 2>&1
 
 --echo # 
 --echo # Missing data_dir option
 --echo #
 let $MYSQL_PLUGIN_CMD= $MYSQL_PLUGIN -n --basedir=$MYSQL_BASEDIR --plugin-dir=$PLUGIN_DIR --mysqld=$MYSQLD_BASEDIR --my-print-defaults=$MYSQL_MY_PRINT_DEFAULTS_BASEDIR;
 --error 1,2,139,256
---exec $MYSQL_PLUGIN_CMD DISABLE daemon_example 2>&1
+--exec $MYSQL_PLUGIN_CMD --plugin-ini=$MYSQL_PLUGIN_INI DISABLE daemon_example 2>&1
 
 --echo # 
 --echo # Missing plugin_dir option
 --echo #
 let $MYSQL_PLUGIN_CMD= $MYSQL_PLUGIN -n --datadir=$MYSQL_DATADIR --basedir=$MYSQL_BASEDIR --mysqld=$MYSQLD_BASEDIR --my-print-defaults=$MYSQL_MY_PRINT_DEFAULTS_BASEDIR;
 --error 1,2,139,256
---exec $MYSQL_PLUGIN_CMD DISABLE daemon_example 2>&1
+--exec $MYSQL_PLUGIN_CMD --plugin-ini=$MYSQL_PLUGIN_INI DISABLE daemon_example 2>&1
 
 --echo #
 --echo # Show the help.
@@ -350,7 +345,7 @@ let $MYSQL_PLUGIN_CMD= $MYSQL_PLUGIN -n --datadir=$MYSQL_DATADIR --basedir=$MYSQ
 --exec $MYSQL_PLUGIN --help
 
 --replace_result $MYSQL_PLUGIN mysql_plugin $MYSQL_SERVER_VERSION XX.XX.XX
---replace_regex /Ver [0-9.]+/Ver V.V.VV/
+--replace_regex /Ver [0-9.]+/Ver V.V.VV/ 
 --exec $MYSQL_PLUGIN --version
 
 #

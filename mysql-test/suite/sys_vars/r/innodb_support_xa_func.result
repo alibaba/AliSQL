@@ -1,20 +1,26 @@
 '#--------------------FN_DYNVARS_046_01-------------------------#'
 SET @@global.innodb_support_xa = OFF;
+Warnings:
+Warning	131	Using innodb_support_xa is deprecated and the parameter may be removed in future releases. Only innodb_support_xa=ON is allowed.
 'connect (con1,localhost,root,,,,)'
 'connection con1'
 SELECT @@global.innodb_support_xa;
 @@global.innodb_support_xa
-0
+1
 SELECT @@session.innodb_support_xa;
 @@session.innodb_support_xa
-0
+1
 '#--------------------FN_DYNVARS_046_01-------------------------#'
 'connection default'
 SET @@global.innodb_support_xa = 1;
+Warnings:
+Warning	131	Using innodb_support_xa is deprecated and the parameter may be removed in future releases.
 drop table if exists t1, t2;
 create table t1 (a int) engine=innodb;
 '---check when innodb_support_xa is 1---'
 SET @@innodb_support_xa = 1;
+Warnings:
+Warning	131	Using innodb_support_xa is deprecated and the parameter may be removed in future releases.
 xa start 'test1';
 INSERT t1 values (10);
 xa end 'test1';
@@ -24,6 +30,8 @@ SELECT * from t1;
 a
 '---check when innodb_support_xa is 0---'
 SET @@innodb_support_xa = 0;
+Warnings:
+Warning	131	Using innodb_support_xa is deprecated and the parameter may be removed in future releases. Only innodb_support_xa=ON is allowed.
 xa start 'test1';
 INSERT t1 values (10);
 xa end 'test1';
@@ -33,7 +41,11 @@ SELECT * from t1;
 a
 '------general xa testing--------'
 SET @@global.innodb_support_xa = 1;
+Warnings:
+Warning	131	Using innodb_support_xa is deprecated and the parameter may be removed in future releases.
 SET @@innodb_support_xa = 1;
+Warnings:
+Warning	131	Using innodb_support_xa is deprecated and the parameter may be removed in future releases.
 xa start 'testa','testb';
 INSERT t1 values (30);
 COMMIT;
@@ -65,7 +77,7 @@ formatID	gtrid_length	bqual_length	data
 11	5	5	testb 0@P`
 1	5	5	testatestb
 xa commit 'testb',0x2030405060,11;
-ERROR XAE04: XAER_NOTA: Unknown XID
+ERROR XAE07: XAER_RMFAIL: The command cannot be executed when global transaction is in the  PREPARED state
 xa commit 'testa','testb';
 'connection con1'
 xa rollback 'testb',0x2030405060,11;

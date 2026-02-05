@@ -1,13 +1,20 @@
-/* Copyright (c) 2011, 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -18,6 +25,8 @@
 #include <gtest/gtest.h>
 
 #include "sql_array.h"
+
+#include <algorithm>
 
 namespace bounds_check_array_unittest {
 
@@ -69,7 +78,7 @@ TEST_F(BoundsCheckedArray, Empty)
   EXPECT_EQ(pi, int_array.array());
 }
 
-#if !defined(DBUG_OFF)
+#if !defined(NDEBUG)
 
 // Google Test recommends DeathTest suffix for classes used in death tests.
 typedef BoundsCheckedArray BoundsCheckedArrayDeathTest;
@@ -117,7 +126,7 @@ TEST_F(BoundsCheckedArrayDeathTest, BoundsCheckResizeAssign)
                             ".*Assertion .*n < m_size.*");
 }
 
-#endif  // !defined(DBUG_OFF)
+#endif  // !defined(NDEBUG)
 
 TEST_F(BoundsCheckedArray, Indexing)
 {
@@ -173,7 +182,8 @@ TEST_F(BoundsCheckedArray, Equality)
   EXPECT_EQ(int_array, int_array);
 
   Int_array int_array_copy(int_array);
-  EXPECT_EQ(int_array, int_array_copy);
+  EXPECT_EQ(int_array, int_array_copy) << " original " << int_array
+                                       << " copy " << int_array_copy;
 
   int_array_copy.resize(c_array_size - 1);
   EXPECT_NE(int_array, int_array_copy);
@@ -184,6 +194,17 @@ TEST_F(BoundsCheckedArray, Equality)
 
   int_array_two.pop_front();
   EXPECT_NE(int_array, int_array_two);
+}
+
+TEST_F(BoundsCheckedArray, Sort)
+{
+  int_array= Int_array(c_array, c_array_size);
+  std::random_shuffle(int_array.begin(), int_array.end());
+  std::sort(int_array.begin(), int_array.end());
+  Int_array::const_iterator it;
+  int ix;
+  for (ix= 0, it= int_array.begin(); it != int_array.end(); ++it, ++ix)
+    EXPECT_EQ(ix, *it);
 }
 
 }  // namespace

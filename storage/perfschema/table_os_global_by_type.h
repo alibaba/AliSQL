@@ -1,13 +1,20 @@
-/* Copyright (c) 2010, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2010, 2023, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
-  it under the terms of the GNU General Public License as published by
-  the Free Software Foundation; version 2 of the License.
+  it under the terms of the GNU General Public License, version 2.0,
+  as published by the Free Software Foundation.
+
+  This program is also distributed with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an additional
+  permission to link the program and your derivative works with the
+  separately licensed software that they have included with MySQL.
 
   This program is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
+  GNU General Public License, version 2.0, for more details.
 
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software
@@ -25,6 +32,7 @@
 #include "pfs_engine_table.h"
 #include "pfs_instr_class.h"
 #include "pfs_instr.h"
+#include "pfs_program.h"
 #include "table_helper.h"
 
 /**
@@ -38,16 +46,9 @@
 */
 struct row_os_global_by_type
 {
-  /** Column OBJECT_TYPE. */
-  enum_object_type m_object_type;
-  /** Column SCHEMA_NAME. */
-  char m_schema_name[NAME_LEN];
-  /** Length in bytes of @c m_schema_name. */
-  uint m_schema_name_length;
-  /** Column OBJECT_NAME. */
-  char m_object_name[NAME_LEN];
-  /** Length in bytes of @c m_object_name. */
-  uint m_object_name_length;
+  /** Column OBJECT_TYPE, SCHEMA_NAME, OBJECT_NAME. */
+  PFS_object_row m_object;
+
   /** Columns COUNT_STAR, SUM/MIN/AVG/MAX TIMER_WAIT. */
   PFS_stat_row m_stat;
 };
@@ -85,10 +86,12 @@ struct pos_os_global_by_type : public PFS_double_index,
 class table_os_global_by_type : public PFS_engine_table
 {
 public:
+  static PFS_engine_table_share_state m_share_state;
   /** Table share */
   static PFS_engine_table_share m_share;
   static PFS_engine_table* create();
   static int delete_all_rows();
+  static ha_rows get_row_count();
 
   virtual int rnd_next();
   virtual int rnd_pos(const void *pos);
@@ -107,7 +110,8 @@ public:
   {}
 
 protected:
-  void make_row(PFS_table_share *table_share);
+  void make_table_row(PFS_table_share *table_share);
+  void make_program_row(PFS_program *pfs_program);
 
 private:
   /** Table share lock. */

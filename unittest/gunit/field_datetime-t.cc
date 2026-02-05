@@ -1,13 +1,20 @@
-/* Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2012, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -51,9 +58,9 @@ private:
   void initialize()
   {
     ptr= buffer;
-    null_ptr= &null_byte;
     memset(buffer, 0, PACK_LENGTH);
     null_byte= '\0';
+    set_null_ptr(&null_byte, 1);
   }
 
 public:
@@ -69,6 +76,7 @@ public:
   }
 
   void make_writable() { bitmap_set_bit(table->write_set, field_index); }
+  void make_readable() { bitmap_set_bit(table->read_set, field_index); }
 };
 
 
@@ -82,6 +90,7 @@ TEST_F(FieldDatetimeTest, StoreLegalStringValues)
   Fake_TABLE table(&field_dt);
   table.in_use= thd();
   field_dt.make_writable();
+  field_dt.make_readable();
   thd()->count_cuted_fields= CHECK_FIELD_WARN;
 
   {
@@ -108,6 +117,7 @@ TEST_F(FieldDatetimeTest, StoreIllegalStringValues)
   Fake_TABLE table(&field_dt);
   table.in_use= thd();
   field_dt.make_writable();
+  field_dt.make_readable();
   thd()->count_cuted_fields= CHECK_FIELD_WARN;
 
   // Bad year
@@ -168,10 +178,9 @@ TEST_F(FieldDatetimeTest, StoreIllegalStringValues)
 
 
 // Store zero date using different combinations of SQL modes
-static const int no_modes= 4;
+static const int no_modes= 3;
 static const sql_mode_t strict_modes[no_modes]=
  {
-   0,
    MODE_STRICT_TRANS_TABLES,
    MODE_STRICT_ALL_TABLES,
    MODE_STRICT_TRANS_TABLES | MODE_STRICT_ALL_TABLES
@@ -191,6 +200,7 @@ TEST_F(FieldDatetimeTest, StoreZeroDateSqlModeNoZeroRestrictions)
   Fake_TABLE table(&field_dt);
   table.in_use= thd();
   field_dt.make_writable();
+  field_dt.make_readable();
   thd()->count_cuted_fields= CHECK_FIELD_WARN;
 
   for (int i= 0; i < no_modes; i++)
@@ -233,7 +243,6 @@ TEST_F(FieldDatetimeTest, StoreZeroDateSqlModeNoZeroRestrictions)
 
 static const type_conversion_status nozero_expected_status[]=
   {
-    TYPE_NOTE_TIME_TRUNCATED,
     TYPE_ERR_BAD_VALUE,
     TYPE_ERR_BAD_VALUE,
     TYPE_ERR_BAD_VALUE
@@ -252,6 +261,7 @@ TEST_F(FieldDatetimeTest, StoreZeroDateSqlModeNoZeroDate)
   Fake_TABLE table(&field_dt);
   table.in_use= thd();
   field_dt.make_writable();
+  field_dt.make_readable();
   thd()->count_cuted_fields= CHECK_FIELD_WARN;
 
   // With "MODE_NO_ZERO_DATE" set - Errors if date is all null
@@ -263,7 +273,7 @@ TEST_F(FieldDatetimeTest, StoreZeroDateSqlModeNoZeroDate)
                            "0000-00-00 00:00:00",
                            nozero_expected_status[i],
                            MODE_NO_ZERO_DATE | strict_modes[i],
-                           ER_WARN_DATA_OUT_OF_RANGE);
+                           ER_TRUNCATED_WRONG_VALUE);
   }
 
   // Zero year, month or day is fine
@@ -313,6 +323,7 @@ TEST_F(FieldDatetimeTest, StoreZeroDateSqlModeNoZeroInDate)
   Fake_TABLE table(&field_dt);
   table.in_use= thd();
   field_dt.make_writable();
+  field_dt.make_readable();
   thd()->count_cuted_fields= CHECK_FIELD_WARN;
 
   // With "MODE_NO_ZERO_IN_DATE" set - Entire date zero is ok
@@ -348,7 +359,7 @@ TEST_F(FieldDatetimeTest, StoreZeroDateSqlModeNoZeroInDate)
                            "0000-00-00 00:00:00",
                            nozero_expected_status[i],
                            MODE_NO_ZERO_IN_DATE | strict_modes[i],
-                           ER_WARN_DATA_OUT_OF_RANGE);
+                           ER_TRUNCATED_WRONG_VALUE);
   }
 
   // Day 0 is NOT valid in strict mode, stores all-zero date
@@ -360,7 +371,7 @@ TEST_F(FieldDatetimeTest, StoreZeroDateSqlModeNoZeroInDate)
                            "0000-00-00 00:00:00",
                            nozero_expected_status[i],
                            MODE_NO_ZERO_IN_DATE | strict_modes[i],
-                           ER_WARN_DATA_OUT_OF_RANGE);
+                           ER_TRUNCATED_WRONG_VALUE);
   }
 }
 

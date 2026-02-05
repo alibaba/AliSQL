@@ -1,0 +1,507 @@
+[/
+ / Copyright (c) 2003 Boost.Test team 
+ /
+ / Distributed under the Boost Software License, Version 1.0. (See accompanying
+ / file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+ /]
+
+
+[section:rt_param_reference Runtime parameters reference]
+
+Each parameter specification includes: 
+
+# the full parameter name
+# corresponding environment variable name
+# command line argument name
+# acceptable values and 
+# a long description
+
+The default value for the parameter is bold in the
+acceptable values list. All values are case sensitive and are required to exactly match the parameter specification.
+
+
+
+[/ ###############################################################################################]
+
+[section:show_progress `show_progress`]
+
+Makes the framework to print progress information. More details [link boost_test.test_output.test_output_progress here].
+
+[h4 Acceptable values]
+
+* [*no] (default)
+* yes
+
+[h4 Environment variable]
+
+  BOOST_TEST_SHOW_PROGRESS
+
+[endsect]
+
+[/ ###############################################################################################]
+
+[section:build_info `build_info`]
+
+Print build information that include: 
+
+* platform
+* compiler
+* STL implementation in use and 
+* boost version
+
+[h4 Acceptable values]
+
+* [*no] (default)
+* yes
+
+[h4 Environment variable]
+
+  BOOST_TEST_BUILD_INFO
+
+[endsect] [/ build_info]
+
+[/ ###############################################################################################]
+
+[section:auto_dbg `auto_start_dbg`]
+
+Automatically attach debugger in case of system failure.
+
+Specifies whether Boost.Test should try to attach a debugger in case if fatal system error occurs. If value is ['yes]
+the default debugger configured for the platform is going to be attempted. Alternatively the debugger identified 
+by the argument value of the parameter is used. For more details on advanced debugger support in Boost.Test check 
+the [headerref boost/test/debug.hpp section dedicated to Boost.Test debug API], in particular the function [funcref boost::debug::set_debugger].
+
+[h4 Acceptable values]
+
+* [*no]
+* yes
+* ['debugger identifier]
+
+[h4 Environment variable]
+
+  BOOST_TEST_AUTO_START_DBG
+
+  
+[warning There is a link to the Boost.Test debug API, never heard about]
+[endsect] [/auto_start_dbg]
+
+
+
+[/ ###############################################################################################]
+[section:catch_system `catch_system_errors`]
+
+Value "no" prohibits the framework from catching asynchronous system events. This could be used for test programs
+executed within GUI or to get a coredump for stack analysis. See [link ref_usage_recommendations usage recommendations] pages for more details.
+
+[h4 Acceptable values]
+
+* [*yes] (default)
+* no
+
+[h4 Environment variable]
+
+  BOOST_TEST_CATCH_SYSTEM_ERRORS
+
+[endsect] [/catch_system_errors]
+
+[/ ###############################################################################################]
+[section:break_exec_path `break_exec_path`]
+
+this runtime parameter is used by exception safety tester. By default exception safety tester only reports index of 
+execution path and  test case name where failure occurred. Using this parameter you can make the tester to break the 
+execution right before entering this path.
+      
+[h4 Acceptable values]
+
+* string consisting of space separate test_name:execution_path_number pairs
+
+[h4 Environment variable]
+
+  BOOST_TEST_BREAK_EXEC_PATH
+
+[endsect] [/break_exec_path]
+
+[/ ###############################################################################################]
+[section:color_output `color_output`]
+
+The __UTF__ is able to produce color output on systems which supports it. To enable this behavior set the parameter to 
+`yes`. By default the output produces in not colored.
+
+      
+[h4 Acceptable values]
+
+* [*no] (default)
+* yes
+
+
+[h4 Environment variable]
+
+  BOOST_TEST_COLOR_OUTPUT
+
+[endsect] [/color_output]
+
+[/ ###############################################################################################]
+[section:log_format `log_format`]
+
+Allows selecting the __UTF__ log format from the list of formats supplied by the framework. To specify custom log
+format use the [link ref_log_formatter_api custom log formatting API].
+      
+[h4 Acceptable values]
+
+* [*HRF] (default)
+* XML
+
+['HRF] stands for human readable format, while ['XML] is dedicated to  automated output processing
+
+[h4 Environment variable]
+
+  BOOST_TEST_LOG_FORMAT
+
+[endsect] [/log_format]
+
+
+[/ ###############################################################################################]
+[section:log_level `log_level`]
+
+Allows setting the __UTF__ [link ref_log_level_explanations log level] in a range from a
+complete log, when all successful tests are confirmed and all test suite messages are included, to an empty
+log when nothing is logged a test output stream. 
+
+[note Log levels are accumulating, in other words each log level includes also all the information reported  by less restrictive ones.]
+      
+      
+[h4 Acceptable values]
+
+[table Log levels
+  [
+    [value]
+    [feature]
+  ]
+  [
+    [all]
+    [report all log messages including the passed test notification]
+  ]
+  [
+    [success]
+    [the same as all]
+  ]
+  [
+    [test_suite]
+    [Shows test suite messages]
+  ]
+  [
+    [message]
+    [Shows user messages]
+  ]  
+  [
+    [warning]
+    [Reports warnings issued by user]
+  ]  
+  [
+    [[*error] (default)]
+    [Reports all error conditions]
+  ]  
+  [
+    [cpp_exception]
+    [Reports uncaught C++ exception]
+  ]  
+  [
+    [system_error]
+    [Reports system originated non-fatal errors. For example, timeout or floating point exception.]
+  ]  
+  [
+    [fatal_error]
+    [Reports only user or system originated fatal errors. For example, memory access violation.]
+  ]  
+  [
+    [nothing]
+    [Does not report any information.]
+  ]  
+
+]
+
+
+[h4 Environment variable]
+
+  BOOST_TEST_LOG_LEVEL
+
+[endsect] [/log_level]
+
+[/ ###############################################################################################]
+[section:run_test `run_test`]
+
+Specifies the tests to run. It can be specified more than once.
+      
+[h4 Acceptable values]
+
+The following grammar productions describe the syntax of allowed values:
+
+```
+value         ::= relative_spec? test_set
+relative_spec ::= '+' | '!'
+test_set      ::= label | path
+label         ::= '@' identifier
+path          ::= (suite '/')? patern_list
+patern_list   ::= (pattern ',')* pattern
+suite         ::= (pattern '/')* pattern
+pattern       ::= '*'? identifier '*'?
+```
+
+Regarding the meaning of these values [link ref_command_line_control see here].
+
+[h4 Environment variable]
+
+  BOOST_TESTS_TO_RUN
+
+[endsect] [/run_test]
+  
+[/ ###############################################################################################]
+[section:output_format `output_format`]
+
+Combines an effect of __param_report_format__ and __param_log_format__ parameters. Has higher priority than either one of them if specified.      
+      
+[h4 Acceptable values]
+
+* [*HRF] (default)
+* XML
+
+['HRF] stands for human readable format, while ['XML] is dedicated to  automated output processing
+
+[h4 Environment variable]
+
+  BOOST_TEST_OUTPUT_FORMAT
+
+[endsect] [/output_format]   
+
+[/ ###############################################################################################]
+[section:report_format `report_format`]
+
+Allows selecting the __UTF__ report format from the list of formats supplied by the framework. To specify a custom report format use unit_test_report API.
+
+[warning Provide something concrete to the user]
+      
+[h4 Acceptable values]
+
+* [*HRF] (default)
+* XML
+
+['HRF] stands for human readable format, while ['XML] is dedicated to  automated output processing
+
+[h4 Environment variable]
+
+  BOOST_TEST_REPORT_FORMAT
+
+[endsect] [/report_format]   
+
+[/ ###############################################################################################]
+[section:result_code `result_code`]
+
+Value "no" enforces the framework to always return zero result code. This could be used for test programs 
+executed within GUI. See the [link ref_usage_recommendations usage recommendations] section for more details.
+      
+[h4 Acceptable values]
+
+* [*yes] (default)
+* no
+
+[h4 Environment variable]
+
+  BOOST_TEST_RESULT_CODE
+
+[endsect] [/result_code]      
+
+[/ ###############################################################################################]
+[section:report_level `report_level`]
+
+Allows setting the level of details carried by the testing results report generated by the framework. Use value 
+"no" to eliminate the results report completely. See the 
+[link ref_tests_report test report] section for description of different report formats.
+      
+[h4 Acceptable values]
+
+* [*confirm] (default)
+* no
+* short
+* detailed
+
+[h4 Environment variable]
+
+  BOOST_TEST_REPORT_LEVEL
+
+[endsect] [/report_level]      
+
+[/ ###############################################################################################]
+[section:random `random`]
+
+Runs the tests in random order.
+
+Positive value makes the framework to run the test cases in random order. Also if this value is greater than 1,
+it is used as a random seed. In other case random seed is generated based on current time.
+
+[caution If computed from time, the seed is not outputted to the report]
+      
+[h4 Acceptable values]
+
+* [*0] (default)
+* 1
+* integer value > 1
+
+[h4 Environment variable]
+
+  BOOST_TEST_RANDOM
+
+[endsect] [/random]  
+
+[/ ###############################################################################################]
+[section:detect_memory_leaks `detect_memory_leaks`]
+
+Detect memory leaks.
+
+Positive value tells the framework to detect the memory leaks (if any). In addition any value greater than 1
+is treated as leak allocation number and setups runtime breakpoint. In other words setting this parameter to
+the positive value N greater than 1 causes the framework to set a breakpoint at Nth memory allocation (don't
+do that from the command line - only when you are under debugger). 
+
+[note If your test program produces memory
+leaks notifications, they are combined with allocation number values you could use to set a breakpoint.]
+
+[caution Currently only applies to MS family of compilers in debug builds.]
+      
+[h4 Acceptable values]
+
+* 0 
+* [*1] (default)
+* integer value > 1
+
+[h4 Environment variable]
+
+  BOOST_TEST_DETECT_MEMORY_LEAK
+
+[endsect] [/detect_memory_leaks]  
+
+[/ ###############################################################################################]
+[section:use_alt_stack `use_alt_stack`]
+
+Uses an alternative stack.
+
+Specifies whether or not the execution monitor should employ an alternative stack for signals 
+processing, on platforms where they are supported.
+
+[warning indicate which platforms are supported]
+[warning add a link to the execution monitor]
+      
+[h4 Acceptable values]
+
+* [*yes] (default)
+* no
+
+[h4 Environment variable]
+
+  BOOST_TEST_USE_ALT_STACK
+
+[endsect] [/use_alt_stack]  
+
+[/ ###############################################################################################]
+[section:detect_fp_exceptions `detect_fp_exceptions`]
+
+Traps or not floating point exceptions.
+
+Enables/disable hardware traps for the floating point exception (if supported).
+      
+[h4 Acceptable values]
+
+* [*no] (default)
+* yes
+
+[h4 Environment variable]
+
+  BOOST_TEST_DETECT_FP_EXCEPTIONS
+
+[endsect] [/detect_fp_exceptions]  
+
+[/ ###############################################################################################]
+[section:log_sink `log_sink`]
+
+Sets the logging sink to the one specified.
+
+This parameter allows to easily redirect the test logs. The parameter value is 
+
+* either the string containing either a file name, in which case the __UTF__ will redirect log into this file
+* or `stdout` (the default), in which case log is redirected into standard output stream
+* or `stderr` , in which case log is redirected into standard error stream.
+      
+[h4 Acceptable values]
+
+* [*`stdout`] (default)
+* `stderr`
+* arbitrary file name
+
+[h4 Environment variable]
+
+  BOOST_TEST_LOG_SINK
+
+[endsect] [/log_sink]  
+
+[/ ###############################################################################################]
+[section:report_sink `report_sink`]
+
+Sets the report sink to the one specified.
+
+This parameter allows to easily redirect the test result report. See __param_log_sink__ for more details.
+      
+[h4 Acceptable values]
+
+* [*`stderr`] (default)
+* `stdout`
+* arbitrary file name
+
+[h4 Environment variable]
+
+  BOOST_TEST_REPORT_SINK
+
+[endsect] [/report_sink]  
+
+[/ ###############################################################################################]
+[section:save_pattern `save_pattern`]
+
+Provides parameters for testing output streams. See __output_test_stream_tool__ section for details on these tests.
+
+This parameter serves no particular purpose within the framework itself. It can be used by test modules relying 
+on [classref boost::test_tools::output_test_stream] to implement testing logic. `output_test_stream` has two modes of operation: 
+
+* save the pattern file 
+* and match against a previously stored pattern file. 
+
+You can use this parameter to switch between these modes, by passing the parameter value to the `output_test_stream` constructor.
+The value of the command line parameter is available from the code like this:
+
+``
+bool is_save_pattern_flag_set = boost::unit_test::runtime_config::save_pattern();
+``
+      
+[h4 Acceptable values]
+
+* [*no] (default)
+* yes
+
+Equivalent to ['yes] when called without any argument.
+
+[h4 Environment variable]
+
+  BOOST_TEST_SAVE_PATTERN
+
+[endsect] [/save_pattern] 
+
+[/ ###############################################################################################]
+[section:list_content `list_content`]
+
+Lists the content of the tests that would be run. If set on the command line, no test will be run and the content
+of the test bed will be printed, one test per line.
+
+[h4 Environment variable]
+  
+  BOOST_TEST_LIST_CONTENT
+
+[endsect]
+
+[endsect] [/ runtime parameters reference]

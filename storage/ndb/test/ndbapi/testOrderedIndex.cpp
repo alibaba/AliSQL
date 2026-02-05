@@ -1,15 +1,22 @@
 /*
-   Copyright (C) 2003-2006 MySQL AB
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
     All rights reserved. Use is subject to license terms.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -76,7 +83,7 @@ getTableProperty(NDBT_Context* ctx, NDBT_Table* pTab, const char* name)
   sprintf(key, "%s-%s", name, pTab->getName());
   //Uint32 num = ctx->getProperty(key, (Uint32)-1);
   Uint32 num = workaround[pTab->getTableId()];
-  assert(num != (Uint32)-1);
+  require(num != (Uint32)-1);
   return num;
 }
 
@@ -151,7 +158,7 @@ runFullScan(NDBT_Context* ctx, NDBT_Step* step)
     char buf[200];
     sprintf(buf, "%s_X%03d", pTab->getName(), numIndex);
     NDBT_Index* pInd = NDBT_Index::discoverIndexFromDb(pNdb, buf, pTab->getName());
-    assert(pInd != 0);
+    require(pInd != 0);
     g_info << "Scan index:" << pInd->getName() << endl << *pInd;
     NdbConnection* pCon = pNdb->startTransaction();
     if (pCon == 0) {

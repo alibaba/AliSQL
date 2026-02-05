@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2010, 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2010, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -24,9 +31,13 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.openjpa.datacache.QueryCache;
+import org.apache.openjpa.datacache.QueryCacheStoreQuery;
 import org.apache.openjpa.jdbc.kernel.ConnectionInfo;
 import org.apache.openjpa.jdbc.kernel.JDBCFetchConfiguration;
 import org.apache.openjpa.jdbc.kernel.JDBCStoreManager;
+import org.apache.openjpa.jdbc.kernel.PreparedSQLStoreQuery;
+import org.apache.openjpa.jdbc.kernel.SQLStoreQuery;
 import org.apache.openjpa.jdbc.meta.ClassMapping;
 import org.apache.openjpa.jdbc.meta.ValueMapping;
 import org.apache.openjpa.jdbc.schema.Table;
@@ -61,9 +72,6 @@ import com.mysql.clusterj.core.util.Logger;
 import com.mysql.clusterj.core.util.LoggerFactoryService;
 import com.mysql.clusterj.query.QueryDomainType;
 
-/**
- *
- */
 public class NdbOpenJPAStoreManager extends JDBCStoreManager {
 
     /** My message translator */
@@ -137,7 +145,7 @@ public class NdbOpenJPAStoreManager extends JDBCStoreManager {
         // return null if the oid is null (this will be the case if a foreign key element is null)
         ClassMapping cls = vm.getDeclaredTypeMapping();
         NdbOpenJPADomainTypeHandlerImpl<?> domainTypeHandler = getDomainTypeHandler(cls);
-        Object handler = domainTypeHandler.createKeyValueHandler(oid);
+        Object handler = domainTypeHandler.createKeyValueHandler(oid, null);
         if (handler == null) {
             return null;
         }
@@ -251,7 +259,7 @@ public class NdbOpenJPAStoreManager extends JDBCStoreManager {
 //                    domainTypeHandler.createKeyValueHandler(id.getIdObject()));
                 // initialize via OpenJPA protocol
                 // select all columns from table
-                ValueHandler keyValueHandler = domainTypeHandler.createKeyValueHandler(id.getIdObject());
+                ValueHandler keyValueHandler = domainTypeHandler.createKeyValueHandler(id.getIdObject(), null);
                 ResultData resultData = session.selectUnique(domainTypeHandler,
                         keyValueHandler,
                         null);
@@ -431,12 +439,59 @@ public class NdbOpenJPAStoreManager extends JDBCStoreManager {
         super.beforeStateChange(sm, fromState, toState);
     }
 
+    /**
+     * First method call for JPQL query string:
+     * - parameter language: javax.persistence.JPQL
+     * - returns: NdbOpenJPAStoreQuery
+     *
+     * Successive method calls for the same JPQL query string send in a different language -
+     * - parameter language: openjpa.prepared.SQL
+     * - returns: QueryCacheStoreQuery if query cache is active or PreparedSQLStoreQuery if not
+     * 
+     * Method calls for SQL query string send in a different language -
+     * - parameter language: openjpa.SQL
+     * - returns: QueryCacheStoreQuery if query cache is active or SQLStoreQuery if not
+     */
     @Override
     public StoreQuery newQuery(String language) {
-        ExpressionParser ep = QueryLanguages.parserForLanguage(language);
-        return new NdbOpenJPAStoreQuery(this, ep);
+        ExpressionParser expressionParser = QueryLanguages.parserForLanguage(language);
+        StoreQuery storeQuery = newStoreQuery(language, expressionParser); 
+        if (logger.isDetailEnabled()) {
+            logger.detail(("NdbOpenJPAStoreManager.newQuery language: " + language + " parser: " + expressionParser));
+        }
+        if (storeQuery == null || expressionParser == null) {
+            // error -- no parser; or SQL or prepared SQL
+            return storeQuery;
+        }
+
+        QueryCache queryCache = storeContext.getConfiguration().getDataCacheManagerInstance().getSystemQueryCache();
+        if (queryCache == null) {
+            // no query cache is active -- return the StoreQuery
+            return storeQuery;
+        }
+        
+        // query cache is active -- return the QueryCacheStoreQuery
+        return new QueryCacheStoreQuery(storeQuery, queryCache);
     }
 
+    /** Create a StoreQuery based on the language.
+     * 
+     * @param language languages supported: javax.persistence.JPQL, openjpa.prepared.SQL, openjpa.SQL
+     * @return StoreQuery for the language or null if the language is not supported
+     */
+    private StoreQuery newStoreQuery(String language, ExpressionParser expressionParser) {
+        if (expressionParser != null) { 
+            return new NdbOpenJPAStoreQuery(this, expressionParser);
+        }
+        if (QueryLanguages.LANG_SQL.equals(language)) {
+            return new SQLStoreQuery(this);
+        }
+        if (QueryLanguages.LANG_PREPARED_SQL.equals(language)) {
+            return new PreparedSQLStoreQuery(this);
+        }
+        return null;
+    }
+    
     @Override
     public void beginOptimistic() {
         if (logger.isTraceEnabled()) {
@@ -584,6 +639,7 @@ public class NdbOpenJPAStoreManager extends JDBCStoreManager {
         session.startAutoTransaction();
         try {
             Operation op = session.getSelectOperation(storeTable);
+            op.beginDefinition();
             int[] keyFields = domainTypeHandler.getKeyFieldNumbers();
             BitSet fieldsInResult = new BitSet();
             for (int i : keyFields) {
@@ -597,6 +653,7 @@ public class NdbOpenJPAStoreManager extends JDBCStoreManager {
                 fieldHandler.operationGetValue(op);
                 fieldsInResult.set(fieldHandler.getFieldNumber());
             }
+            op.endDefinition();
             ResultData resultData = op.resultData();
             NdbOpenJPAResult result = new NdbOpenJPAResult(resultData, domainTypeHandler, fieldsInResult);
             session.endAutoTransaction();

@@ -1,0 +1,96 @@
+/*
+   Copyright (c) 2013, 2021, Oracle and/or its affiliates.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License, version 2.0, for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+*/
+
+/** Transactions are either automatic or explicit. If automatic,
+  * (autocommit) every operation is performed as part of a new
+  * transaction that is automatically committed.
+  */
+
+/** Begin a transaction.
+ * IMMEDIATE
+ *
+ * This function returns a promise.  On success, the promise will be fulfilled.  
+ * The optional callback receives only an error value.  Any extra arguments 
+ * passed after the callback function will be returned to the callback verbatim
+ * following the error.
+ * 
+ * @param callback
+ */
+begin([callback], [...] );
+
+/** Commit a transaction.
+ *  ASYNC
+ *
+ * This function returns a promise.  On success, the promise will be fulfilled.  
+ * The optional callback receives only an error value.  Any extra arguments 
+ * passed after the callback function will be returned to the callback verbatim
+ * following the error.
+ * 
+ * @param callback 
+ */
+commit([callback], [...] );
+
+
+/** Roll back a transaction. 
+ * ASYNC
+ *
+ * This function returns a promise.  On success, the promise will be fulfilled.
+ * The optional callback receives only an error value.  Any extra arguments 
+ * passed after the callback function will be returned to the callback verbatim
+ * following the error.
+ *
+ * @param callback 
+ */
+rollback([callback], [...] );
+
+
+/** Is there a transaction currently active?
+ * IMMEDIATE
+ *
+ * @return true if a transaction is active; or false if not
+ */
+boolean isActive();
+
+
+/** Mark this transaction as rollback only.
+ * IMMEDIATE
+ *
+ * After this method is called in explicit mode,
+ * commit() will roll back the transaction, reject the commit promise,
+ *   and return an error in the callback.
+ * rollback() will roll back the transaction, fulfill the rollback promise,
+ *   and return success in the callback.
+ * If a transaction is not active, or is already marked for rollback, the method is ignored.
+ *
+ */
+setRollbackOnly();
+
+
+/** Has this transaction been marked for rollback only?
+ * IMMEDIATE
+ *
+ * @return true if the transaction has been started and marked for rollback only; or false if not
+ *
+ */
+boolean getRollbackOnly();

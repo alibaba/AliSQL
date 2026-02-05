@@ -1,28 +1,36 @@
 /*
-   Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2011, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-#include "ndb_local_connection.h"
-
 #ifndef MYSQL_SERVER
 #define MYSQL_SERVER
 #endif
 
+#include "my_global.h"
+#include "ndb_local_connection.h"
 #include "sql_class.h"
 #include "sql_prepare.h"
+#include "log.h"
 
 Ndb_local_connection::Ndb_local_connection(THD* thd_arg):
   m_thd(thd_arg)
@@ -108,7 +116,7 @@ Ndb_local_connection::execute_query(MYSQL_LEX_STRING sql_text,
     if (m_push_warnings)
     {
       // Append the error which caused the error to thd's warning list
-      push_warning(m_thd, Sql_condition::WARN_LEVEL_WARN,
+      push_warning(m_thd, Sql_condition::SL_WARNING,
                    last_errno, last_errmsg);
     }
     else
@@ -122,7 +130,7 @@ Ndb_local_connection::execute_query(MYSQL_LEX_STRING sql_text,
     DBUG_RETURN(true);
   }
 
-  // Qeury returned ok, thd should have no error
+  // Query returned ok, thd should have no error
   assert(!m_thd->is_error());
 
   DBUG_RETURN(false); // Success
@@ -142,12 +150,9 @@ Ndb_local_connection::execute_query_iso(MYSQL_LEX_STRING sql_text,
   /* Don't allow queries to affect THD's status variables */
   struct system_status_var save_thd_status_var= m_thd->status_var;
 
-  /* Save transaction state */
-  THD_TRANS save_thd_transaction_all= m_thd->transaction.all;
-  THD_TRANS save_thd_transaction_stmt= m_thd->transaction.stmt;
-
   /* Check modified_non_trans_table is false(check if actually needed) */
-  assert(!m_thd->transaction.stmt.has_modified_non_trans_table());
+  assert(!m_thd->get_transaction()->has_modified_non_trans_table(
+    Transaction_ctx::STMT));
 
 #if 0
   /*
@@ -175,8 +180,6 @@ Ndb_local_connection::execute_query_iso(MYSQL_LEX_STRING sql_text,
 #if 0
   m_thd->variables.pseudo_thread_id = save_thd_thread_id;
 #endif
-  m_thd->transaction.all= save_thd_transaction_all;
-  m_thd->transaction.stmt= save_thd_transaction_stmt;
   m_thd->status_var= save_thd_status_var;
 
   return result;
@@ -192,11 +195,11 @@ Ndb_local_connection::truncate_table(const char* db, size_t db_length,
   DBUG_PRINT("enter", ("db: '%s', table: '%s'", db, table));
 
   // Create the SQL string
-  String sql_text(db_length + table_length + 100);
+  String sql_text((uint32)(db_length + table_length + 100));
   sql_text.append(STRING_WITH_LEN("TRUNCATE TABLE "));
-  sql_text.append(db, db_length);
+  sql_text.append(db, (uint32)db_length);
   sql_text.append(STRING_WITH_LEN("."));
-  sql_text.append(table, table_length);
+  sql_text.append(table, (uint32)table_length);
 
   // Setup list of errors to ignore
   uint ignore_mysql_errors[2] = {0, 0};
@@ -217,11 +220,11 @@ Ndb_local_connection::flush_table(const char* db, size_t db_length,
   DBUG_PRINT("enter", ("db: '%s', table: '%s'", db, table));
 
   // Create the SQL string
-  String sql_text(db_length + table_length + 100);
+  String sql_text((uint32)(db_length + table_length + 100));
   sql_text.append(STRING_WITH_LEN("FLUSH TABLES "));
-  sql_text.append(db, db_length);
+  sql_text.append(db, (uint32)db_length);
   sql_text.append(STRING_WITH_LEN("."));
-  sql_text.append(table, table_length);
+  sql_text.append(table, (uint32)table_length);
 
   DBUG_RETURN(execute_query_iso(sql_text.lex_string(),
                                 NULL,
@@ -239,11 +242,11 @@ Ndb_local_connection::delete_rows(const char* db, size_t db_length,
   DBUG_PRINT("enter", ("db: '%s', table: '%s'", db, table));
 
   // Create the SQL string
-  String sql_text(db_length + table_length + 100);
+  String sql_text((uint32)(db_length + table_length + 100));
   sql_text.append(STRING_WITH_LEN("DELETE FROM "));
-  sql_text.append(db, db_length);
+  sql_text.append(db, (uint32)db_length);
   sql_text.append(STRING_WITH_LEN("."));
-  sql_text.append(table, table_length);
+  sql_text.append(table, (uint32)table_length);
   sql_text.append(" WHERE ");
 
   va_list args;
@@ -376,9 +379,9 @@ Ndb_local_connection::create_sys_table(const char* db, size_t db_length,
 
   if (create_if_not_exists)
     sql_text.append(STRING_WITH_LEN("IF NOT EXISTS "));
-  sql_text.append(db, db_length);
+  sql_text.append(db, (uint32)db_length);
   sql_text.append(STRING_WITH_LEN("."));
-  sql_text.append(table, table_length);
+  sql_text.append(table, (uint32)table_length);
 
   sql_text.append(STRING_WITH_LEN(" ( "));
   sql_text.append(create_definitions);

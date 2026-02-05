@@ -1,13 +1,25 @@
-/* Copyright (c) 2003, 2013, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2003, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -17,11 +29,11 @@
 #include <my_sys.h>            /* Needed for MY_ERRNO_ERANGE */
 #include <m_string.h>
 
-#define MAX_NEGATIVE_NUMBER	((ulonglong) LL(0x8000000000000000))
+#define MAX_NEGATIVE_NUMBER	((ulonglong) 0x8000000000000000LL)
 #define INIT_CNT  9
-#define LFACTOR   ULL(1000000000)
-#define LFACTOR1  ULL(10000000000)
-#define LFACTOR2  ULL(100000000000)
+#define LFACTOR   1000000000ULL
+#define LFACTOR1  10000000000ULL
+#define LFACTOR2  100000000000ULL
 
 static unsigned long lfactor[9]=
 {
@@ -62,7 +74,7 @@ static unsigned long lfactor[9]=
     ERANGE	If the the value of the converted number exceeded the
 	        maximum negative/unsigned long long integer.
 		In this case the return value is ~0 if value was
-		positive and LONGLONG_MIN if value was negative.
+		positive and LLONG_MIN if value was negative.
     EDOM	If the string didn't contain any digits. In this case
     		the return value is 0.
 
@@ -122,9 +134,9 @@ longlong my_strtoll10(const char *nptr, char **endptr, int *error)
       if (++s == end)
 	goto no_conv;
     }
-    cutoff=  ULONGLONG_MAX / LFACTOR2;
-    cutoff2= ULONGLONG_MAX % LFACTOR2 / 100;
-    cutoff3=  ULONGLONG_MAX % 100;
+    cutoff=  ULLONG_MAX / LFACTOR2;
+    cutoff2= ULLONG_MAX % LFACTOR2 / 100;
+    cutoff3=  ULLONG_MAX % 100;
   }
 
   /* Handle case where we have a lot of pre-zero */
@@ -201,7 +213,7 @@ longlong my_strtoll10(const char *nptr, char **endptr, int *error)
 
 overflow:					/* *endptr is set here */
   *error= MY_ERRNO_ERANGE;
-  return negative ? LONGLONG_MIN : (longlong) ULONGLONG_MAX;
+  return negative ? LLONG_MIN : (longlong) ULLONG_MAX;
 
 end_i:
   *endptr= (char*) s;

@@ -1,13 +1,25 @@
-/* Copyright (c) 2000, 2016, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of C Driver for MySQL (Connector/C), is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -56,6 +68,7 @@
 */
 
 #include "mysys_priv.h"
+#include "my_sys.h"
 #include <m_string.h>
 #include <my_tree.h>
 #include "my_base.h"
@@ -79,7 +92,7 @@ static void rb_delete_fixup(TREE *tree,TREE_ELEMENT ***parent);
 
 	/* The actuall code for handling binary trees */
 
-#ifndef DBUG_OFF
+#ifndef NDEBUG
 static int test_rb_tree(TREE_ELEMENT *element);
 #endif
 
@@ -127,7 +140,8 @@ void init_tree(TREE *tree, size_t default_alloc_size, ulong memory_limit,
   }
   if (!(tree->with_delete=with_delete))
   {
-    init_alloc_root(&tree->mem_root, default_alloc_size, 0);
+    init_alloc_root(key_memory_TREE,
+                    &tree->mem_root, default_alloc_size, 0);
     tree->mem_root.min_malloc=(sizeof(TREE_ELEMENT)+tree->size_of_element);
   }
   DBUG_VOID_RETURN;
@@ -233,7 +247,8 @@ TREE_ELEMENT *tree_insert(TREE *tree, void *key, uint key_size,
 
     key_size+=tree->size_of_element;
     if (tree->with_delete)
-      element=(TREE_ELEMENT *) my_malloc(alloc_size, MYF(MY_WME));
+      element=(TREE_ELEMENT *) my_malloc(key_memory_TREE,
+                                         alloc_size, MYF(MY_WME));
     else
       element=(TREE_ELEMENT *) alloc_root(&tree->mem_root,alloc_size);
     if (!element)
@@ -253,7 +268,7 @@ TREE_ELEMENT *tree_insert(TREE *tree, void *key, uint key_size,
     }
     else
       memcpy((uchar*) element+tree->offset_to_key,key,(size_t) key_size);
-    element->count=1;			/* May give warning in purify */
+    element->count=1;
     tree->elements_in_tree++;
     rb_insert(tree,parent,element);	/* rebalance tree */
   }
@@ -728,7 +743,7 @@ static void rb_delete_fixup(TREE *tree, TREE_ELEMENT ***parent)
   x->colour=BLACK;
 }
 
-#ifndef DBUG_OFF
+#ifndef NDEBUG
 
 	/* Test that the proporties for a red-black tree holds */
 

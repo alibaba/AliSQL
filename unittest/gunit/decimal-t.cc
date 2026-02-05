@@ -1,13 +1,20 @@
-/* Copyright (c) 2011, 2013, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2011, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -214,7 +221,7 @@ void do_test_d2f(const char *s, int ex)
 void do_test_d2b2d(const char *str, int p, int s, const char *orig, int ex)
 {
   char s1[100];
-  char s2[100];
+  char s2[100 * 2];
   uchar buf[100];
   char *end;
   int res, i, size=decimal_bin_size(p, s);
@@ -247,7 +254,7 @@ void do_test_f2d(double from, int ex)
 void do_test_ull2d(ulonglong from, const char *orig, int ex)
 {
   char s[100];
-  char s1[100];
+  char s1[100 * 2];
   int res;
 
   res=ulonglong2decimal(from, &a);
@@ -259,7 +266,7 @@ void do_test_ull2d(ulonglong from, const char *orig, int ex)
 void do_test_ll2d(longlong from, const char *orig, int ex)
 {
   char s[100];
-  char s1[100];
+  char s1[100 * 2];
   int res;
 
   res=longlong2decimal(from, &a);
@@ -271,7 +278,7 @@ void do_test_ll2d(longlong from, const char *orig, int ex)
 void do_test_d2ull(const char *s, const char *orig, int ex)
 {
   char s1[100], *end;
-  char s2[100];
+  char s2[100 * 2];
   ulonglong x;
   int res;
 
@@ -291,7 +298,7 @@ void do_test_d2ull(const char *s, const char *orig, int ex)
 void do_test_d2ll(const char *s, const char *orig, int ex)
 {
   char s1[100], *end;
-  char s2[100];
+  char s2[100 * 2];
   longlong x;
   int res;
 
@@ -543,9 +550,9 @@ TEST_F(DecimalTest, Double2Decimal)
 
 TEST_F(DecimalTest, Ulonglong2Decimal)
 {
-  test_ull2d(ULL(12345), "12345", 0);
-  test_ull2d(ULL(0), "0", 0);
-  test_ull2d(ULL(18446744073709551615), "18446744073709551615", 0);
+  test_ull2d(12345ULL, "12345", 0);
+  test_ull2d(0ULL, "0", 0);
+  test_ull2d(18446744073709551615ULL, "18446744073709551615", 0);
 }
 
 
@@ -564,10 +571,10 @@ TEST_F(DecimalTest, Decimal2Ulonglong)
 
 TEST_F(DecimalTest, Longlong2Decimal)
 {
-  test_ll2d(LL(-12345), "-12345", 0);
-  test_ll2d(LL(-1), "-1", 0);
-  test_ll2d(LL(-9223372036854775807), "-9223372036854775807", 0);
-  test_ll2d(ULL(9223372036854775808), "-9223372036854775808", 0);
+  test_ll2d(-12345LL, "-12345", 0);
+  test_ll2d(-1LL, "-1", 0);
+  test_ll2d(-9223372036854775807LL, "-9223372036854775807", 0);
+  test_ll2d(9223372036854775808ULL, "-9223372036854775808", 0);
 }
 
 

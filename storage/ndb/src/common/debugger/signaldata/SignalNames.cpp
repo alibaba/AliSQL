@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -28,7 +35,7 @@ const GsnName SignalNames [] = {
   ,{ GSN_DIHNDBTAMPER,           "DIHNDBTAMPER" }
   ,{ GSN_KEYINFO,                "KEYINFO" }
   ,{ GSN_KEYINFO20,              "KEYINFO20" }
-  ,{ GSN_KEYINFO20_R,              "KEYINFO20_R" }
+  ,{ GSN_KEYINFO20_R,            "KEYINFO20_R" }
   ,{ GSN_NODE_FAILREP,           "NODE_FAILREP" }
   ,{ GSN_READCONF,               "READCONF" }
   ,{ GSN_SCAN_NEXTREQ,           "SCAN_NEXTREQ" }
@@ -138,13 +145,11 @@ const GsnName SignalNames [] = {
   ,{ GSN_COPY_FRAGREQ,           "COPY_FRAGREQ" }
   ,{ GSN_COPY_GCICONF,           "COPY_GCICONF" }
   ,{ GSN_COPY_GCIREQ,            "COPY_GCIREQ" }
-  ,{ GSN_COPY_STATECONF,         "COPY_STATECONF" }
-  ,{ GSN_COPY_STATEREQ,          "COPY_STATEREQ" }
   ,{ GSN_COPY_TABCONF,           "COPY_TABCONF" }
   ,{ GSN_COPY_TABREQ,            "COPY_TABREQ" }
-  ,{ GSN_CREATE_FRAGCONF,        "CREATE_FRAGCONF" }
-  ,{ GSN_CREATE_FRAGREF,         "CREATE_FRAGREF" }
-  ,{ GSN_CREATE_FRAGREQ,         "CREATE_FRAGREQ" }
+  ,{ GSN_UPDATE_FRAG_STATECONF,  "UPDATE_FRAG_STATECONF" }
+  ,{ GSN_UPDATE_FRAG_STATEREF,   "UPDATE_FRAG_STATEREF" }
+  ,{ GSN_UPDATE_FRAG_STATEREQ,   "UPDATE_FRAG_STATEREQ" }
   ,{ GSN_DEBUG_SIG,              "DEBUG_SIG" }
   ,{ GSN_DIH_SCAN_TAB_REQ,       "DIH_SCAN_TAB_REQ" }
   ,{ GSN_DIH_SCAN_TAB_REF,       "DIH_SCAN_TAB_REF" }
@@ -259,9 +264,8 @@ const GsnName SignalNames [] = {
   ,{ GSN_NEXT_SCANREF,           "NEXT_SCANREF" }
   ,{ GSN_NEXT_SCANREQ,           "NEXT_SCANREQ" }
   ,{ GSN_NF_COMPLETEREP,         "NF_COMPLETEREP" }
-  ,{ GSN_OPEN_COMCONF,           "OPEN_COMCONF" }
-  ,{ GSN_OPEN_COMREF,            "OPEN_COMREF" }
-  ,{ GSN_OPEN_COMREQ,            "OPEN_COMREQ" }
+  ,{ GSN_EXPAND_CLNT,            "EXPAND_CLNT" }
+  ,{ GSN_OPEN_COMORD,            "OPEN_COMORD" }
   ,{ GSN_PACKED_SIGNAL,          "PACKED_SIGNAL" }
   ,{ GSN_PREP_FAILCONF,          "PREP_FAILCONF" }
   ,{ GSN_PREP_FAILREF,           "PREP_FAILREF" }
@@ -345,8 +349,6 @@ const GsnName SignalNames [] = {
   ,{ GSN_UPDATE_TOCONF,          "UPDATE_TOCONF" }
   ,{ GSN_UPDATE_TOREF,           "UPDATE_TOREF" }
   ,{ GSN_UPDATE_TOREQ,           "UPDATE_TOREQ" }
-  ,{ GSN_TUP_ALLOCREQ,           "TUP_ALLOCREQ" }
-  ,{ GSN_LQH_ALLOCREQ,           "LQH_ALLOCREQ" }
   ,{ GSN_TUP_DEALLOCREQ,         "TUP_DEALLOCREQ" }
   ,{ GSN_TUP_WRITELOG_REQ,       "TUP_WRITELOG_REQ" }
   ,{ GSN_LQH_WRITELOG_REQ,       "LQH_WRITELOG_REQ" }
@@ -438,6 +440,7 @@ const GsnName SignalNames [] = {
   ,{ GSN_DROP_TRIG_CONF,         "DROP_TRIG_CONF" }
   ,{ GSN_DROP_TRIG_REF,          "DROP_TRIG_REF" }
   ,{ GSN_FIRE_TRIG_ORD,          "FIRE_TRIG_ORD" }
+  ,{ GSN_FIRE_TRIG_ORD_L,        "FIRE_TRIG_ORD_L" }
   ,{ GSN_TRIG_ATTRINFO,          "TRIG_ATTRINFO" }
 
   ,{ GSN_CREATE_INDX_REQ,        "CREATE_INDX_REQ" }
@@ -630,6 +633,11 @@ const GsnName SignalNames [] = {
   ,{ GSN_LCP_PREPARE_REF,  "LCP_PREPARE_REF" }
   ,{ GSN_LCP_PREPARE_CONF, "LCP_PREPARE_CONF" }
 
+  ,{ GSN_CHECK_NODE_RESTARTREQ,  "CHECK_NODE_RESTARTREQ" }
+  ,{ GSN_CHECK_NODE_RESTARTCONF, "CHECK_NODE_RESTARTCONF" }
+
+  ,{ GSN_GET_CPU_USAGE_REQ, "GET_CPU_USAGE_REQ" }
+
   /* DICT LOCK */
   ,{ GSN_DICT_LOCK_REQ,          "DICT_LOCK_REQ" }
   ,{ GSN_DICT_LOCK_CONF,         "DICT_LOCK_CONF" }
@@ -775,5 +783,46 @@ const GsnName SignalNames [] = {
   ,{ GSN_GET_CONFIG_REQ, "GET_CONFIG_REQ" }
   ,{ GSN_GET_CONFIG_REF, "GET_CONFIG_REF" }
   ,{ GSN_GET_CONFIG_CONF, "GET_CONFIG_CONF" }
+
+  ,{ GSN_ALLOC_NODEID_REQ, "ALLOC_NODEID_REQ" }
+  ,{ GSN_ALLOC_NODEID_CONF, "ALLOC_NODEID_CONF" }
+  ,{ GSN_ALLOC_NODEID_REF, "ALLOC_NODEID_REF" }
+
+  ,{ GSN_LCP_STATUS_REQ, "LCP_STATUS_REQ" }
+  ,{ GSN_LCP_STATUS_CONF, "LCP_STATUS_CONF" }
+  ,{ GSN_LCP_STATUS_REF, "LCP_STATUS_REF" }
+
+  ,{ GSN_CREATE_FK_REQ, "CREATE_FK_REQ" }
+  ,{ GSN_CREATE_FK_REF, "CREATE_FK_REF" }
+  ,{ GSN_CREATE_FK_CONF, "CREATE_FK_CONF" }
+  ,{ GSN_DROP_FK_REQ, "DROP_FK_REQ" }
+  ,{ GSN_DROP_FK_REF, "DROP_FK_REF" }
+  ,{ GSN_DROP_FK_CONF, "DROP_FK_CONF" }
+  ,{ GSN_CREATE_FK_IMPL_REQ, "CREATE_FK_IMPL_REQ" }
+  ,{ GSN_CREATE_FK_IMPL_REF, "CREATE_FK_IMPL_REF" }
+  ,{ GSN_CREATE_FK_IMPL_CONF, "CREATE_FK_IMPL_CONF" }
+  ,{ GSN_DROP_FK_IMPL_REQ, "DROP_FK_IMPL_REQ" }
+  ,{ GSN_DROP_FK_IMPL_REF, "DROP_FK_IMPL_REF" }
+  ,{ GSN_DROP_FK_IMPL_CONF, "DROP_FK_IMPL_CONF" }
+  ,{ GSN_BUILD_FK_REQ, "BUILD_FK_REQ" }
+  ,{ GSN_BUILD_FK_REF, "BUILD_FK_REF" }
+  ,{ GSN_BUILD_FK_CONF, "BUILD_FK_CONF" }
+  ,{ GSN_BUILD_FK_IMPL_REQ, "BUILD_FK_IMPL_REQ" }
+  ,{ GSN_BUILD_FK_IMPL_REF, "BUILD_FK_IMPL_REF" }
+  ,{ GSN_BUILD_FK_IMPL_CONF, "BUILD_FK_IMPL_CONF" }
+  ,{ GSN_NODE_STARTED_REP, "NODE_STARTED_REP" }
+  ,{ GSN_PAUSE_LCP_REQ, "PAUSE_LCP_REQ" }
+  ,{ GSN_PAUSE_LCP_CONF, "PAUSE_LCP_CONF" }
+  ,{ GSN_FLUSH_LCP_REP_REQ, "FLUSH_LCP_REP_REQ" }
+  ,{ GSN_FLUSH_LCP_REP_CONF, "FLUSH_LCP_REP_CONF" }
+  ,{ GSN_ALLOC_NODEID_REP, "ALLOC_NODEID_REP" }
+  ,{ GSN_INCL_NODE_HB_PROTOCOL_REP, "INCL_NODE_HB_PROTOCOL_REP" }
+  ,{ GSN_NDBCNTR_START_WAIT_REP, "NDBCNTR_START_WAIT_REP" }
+  ,{ GSN_NDBCNTR_STARTED_REP, "NDBCNTR_STARTED_REP" }
+  ,{ GSN_SUMA_HANDOVER_COMPLETE_REP, "SUMA_HANDOVER_COMPLETE_REP" }
+  ,{ GSN_END_TOREP, "END_TOREP" }
+  ,{ GSN_LOCAL_RECOVERY_COMP_REP, "LOCAL_RECOVERY_COMP_REP" }
+  ,{ GSN_CANCEL_SUBSCRIPTION_REQ, "CANCEL_SUBSCRIPTION_REQ" }
+  ,{ GSN_ISOLATE_ORD, "ISOLATE_ORD" }
 };
 const unsigned short NO_OF_SIGNAL_NAMES = sizeof(SignalNames)/sizeof(GsnName);

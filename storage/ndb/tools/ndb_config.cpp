@@ -1,14 +1,21 @@
 /*
-   Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2005, 2021, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -63,10 +70,6 @@
 
 #include <ndb_global.h>
 #include <ndb_opts.h>
-
-#include <my_sys.h>
-#include <my_getopt.h>
-#include <mysql_version.h>
 
 #include <NdbOut.hpp>
 #include <mgmapi.h>
@@ -211,7 +214,7 @@ int
 main(int argc, char** argv){
   NDB_INIT(argv[0]);
   ndb_opt_set_usage_funcs(short_usage_sub, usage);
-  load_defaults("my",load_default_groups,&argc,&argv);
+  ndb_load_defaults(NULL,load_default_groups,&argc,&argv);
   int ho_error;
   if ((ho_error=handle_options(&argc, &argv, my_long_options,
 			       ndb_std_get_one_option)))
@@ -323,17 +326,17 @@ parse_query(Vector<Apply*>& select, int &argc, char**& argv)
       const char * str= list[i].c_str();
       if(g_section == CFG_SECTION_NODE)
       {
-	if(strcasecmp(str, "id") == 0 || strcasecmp(str, "nodeid") == 0)
+	if(native_strcasecmp(str, "id") == 0 || native_strcasecmp(str, "nodeid") == 0)
 	{
 	  select.push_back(new Apply(CFG_NODE_ID));
 	  continue;
 	}
-	else if(strncasecmp(str, "host", 4) == 0)
+	else if(native_strncasecmp(str, "host", 4) == 0)
 	{
 	  select.push_back(new Apply(CFG_NODE_HOST));
 	  continue;
 	}
-	else if(strcasecmp(str, "type") == 0)
+	else if(native_strcasecmp(str, "type") == 0)
 	{
 	  select.push_back(new NodeTypeApply());
 	  continue;
@@ -341,7 +344,7 @@ parse_query(Vector<Apply*>& select, int &argc, char**& argv)
       }
       else if (g_section == CFG_SECTION_CONNECTION)
       {
-	if(strcasecmp(str, "type") == 0)
+	if(native_strcasecmp(str, "type") == 0)
 	{
 	  select.push_back(new ConnectionTypeApply());
 	  continue;
@@ -366,7 +369,7 @@ parse_query(Vector<Apply*>& select, int &argc, char**& argv)
              ||
 	     (g_section == CFG_SECTION_SYSTEM))
 	  {
-	    if(strcasecmp(ConfigInfo::m_ParamInfo[p]._fname, str) == 0)
+	    if(native_strcasecmp(ConfigInfo::m_ParamInfo[p]._fname, str) == 0)
 	    {
 	      select.push_back(new Apply(ConfigInfo::m_ParamInfo[p]._paramId));
 	      found = true;
@@ -456,7 +459,7 @@ Match::eval(const Iter& iter)
   } 
   else if(iter.get(m_key, &val64) == 0)
   {
-    if(strtoll(m_value.c_str(), (char **)NULL, 10) != (long long)val64)
+    if(my_strtoll(m_value.c_str(), (char **)NULL, 10) != (long long)val64)
       return 0;
   }
   else if(iter.get(m_key, &valc) == 0)

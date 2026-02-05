@@ -1,13 +1,20 @@
-/* Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2012, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -86,6 +93,9 @@ public:
     @return Error status.
   */
   virtual bool execute(THD *thd, uint *nextp) = 0;
+#ifdef HAVE_PSI_INTERFACE
+  virtual PSI_statement_info* get_psi_info() = 0;
+#endif
 
   uint get_ip() const
   { return m_ip; }
@@ -101,10 +111,22 @@ public:
   sp_pcontext *get_parsing_ctx() const
   { return m_parsing_ctx; }
 
+protected:
+  /**
+    Clear diagnostics area.
+    @param thd         Thread context
+  */
+  void clear_da(THD *thd) const
+  {
+    thd->get_stmt_da()->reset_diagnostics_area();
+    thd->get_stmt_da()->reset_condition_info(thd);
+  }
+
   ///////////////////////////////////////////////////////////////////////////
   // The following operations are used solely for SP-code-optimizer.
   ///////////////////////////////////////////////////////////////////////////
 
+public:
   /**
     Mark this instruction as reachable during optimization and return the
     index to the next instruction. Jump instruction will add their
@@ -275,7 +297,15 @@ public:
   /////////////////////////////////////////////////////////////////////////
 
   virtual bool execute(THD *thd, uint *nextp)
-  { return validate_lex_and_execute_core(thd, nextp, true); }
+  {
+    /*
+      SP instructions with expressions should clear DA before execution.
+      Note that sp_instr_stmt will override execute(), but it clears DA
+      during normal mysql_execute_command().
+    */
+    clear_da(thd);
+    return validate_lex_and_execute_core(thd, nextp, true);
+  }
 
 protected:
   /////////////////////////////////////////////////////////////////////////
@@ -457,12 +487,22 @@ private:
 
   /// Specify if the stored LEX-object is up-to-date.
   bool m_valid;
+
+#ifdef HAVE_PSI_INTERFACE
+public:
+  virtual PSI_statement_info* get_psi_info()
+  {
+    return & psi_info;
+  }
+
+  static PSI_statement_info psi_info;
+#endif
 };
 
 ///////////////////////////////////////////////////////////////////////////
 
 /**
-  sp_instr_set represents SET-statememnts, which deal with SP-variables.
+  sp_instr_set represents SET-statements, which deal with SP-variables.
 */
 class sp_instr_set : public sp_lex_instr
 {
@@ -499,9 +539,9 @@ public:
 
   virtual bool on_after_expr_parsing(THD *thd)
   {
-    DBUG_ASSERT(thd->lex->select_lex.item_list.elements == 1);
+    assert(thd->lex->select_lex->item_list.elements == 1);
 
-    m_value_item= thd->lex->select_lex.item_list.head();
+    m_value_item= thd->lex->select_lex->item_list.head();
 
     return false;
   }
@@ -518,6 +558,15 @@ private:
 
   /// SQL-query corresponding to the value expression.
   LEX_STRING m_value_query;
+
+#ifdef HAVE_PSI_INTERFACE
+public:
+  static PSI_statement_info psi_info;
+  virtual PSI_statement_info* get_psi_info()
+  {
+    return & psi_info;
+  }
+#endif
 };
 
 ///////////////////////////////////////////////////////////////////////////
@@ -579,6 +628,16 @@ private:
 
   /// SQL-query corresponding to the value expression.
   LEX_STRING m_value_query;
+
+#ifdef HAVE_PSI_INTERFACE
+public:
+  virtual PSI_statement_info* get_psi_info()
+  {
+    return & psi_info;
+  }
+
+  static PSI_statement_info psi_info;
+#endif
 };
 
 ///////////////////////////////////////////////////////////////////////////
@@ -633,9 +692,9 @@ public:
 
   virtual bool on_after_expr_parsing(THD *thd)
   {
-    DBUG_ASSERT(thd->lex->select_lex.item_list.elements == 1);
+    assert(thd->lex->select_lex->item_list.elements == 1);
 
-    m_expr_item= thd->lex->select_lex.item_list.head();
+    m_expr_item= thd->lex->select_lex->item_list.head();
 
     return false;
   }
@@ -652,6 +711,16 @@ private:
 
   /// RETURN-field type code.
   enum enum_field_types m_return_field_type;
+
+#ifdef HAVE_PSI_INTERFACE
+public:
+  virtual PSI_statement_info* get_psi_info()
+  {
+    return & psi_info;
+  }
+
+  static PSI_statement_info psi_info;
+#endif
 };
 
 ///////////////////////////////////////////////////////////////////////////
@@ -717,7 +786,7 @@ public:
   virtual void backpatch(uint dest)
   {
     /* Calling backpatch twice is a logic flaw in jump resolution. */
-    DBUG_ASSERT(m_dest == 0);
+    assert(m_dest == 0);
     m_dest= dest;
   }
 
@@ -727,6 +796,16 @@ protected:
 
   // The following attribute is used by SP-optimizer.
   sp_instr *m_optdest;
+
+#ifdef HAVE_PSI_INTERFACE
+public:
+  virtual PSI_statement_info* get_psi_info()
+  {
+    return & psi_info;
+  }
+
+  static PSI_statement_info psi_info;
+#endif
 };
 
 ///////////////////////////////////////////////////////////////////////////
@@ -806,7 +885,7 @@ public:
   virtual void backpatch(uint dest)
   {
     /* Calling backpatch twice is a logic flaw in jump resolution. */
-    DBUG_ASSERT(m_dest == 0);
+    assert(m_dest == 0);
     m_dest= dest;
   }
 
@@ -868,12 +947,22 @@ public:
 
   virtual bool on_after_expr_parsing(THD *thd)
   {
-    DBUG_ASSERT(thd->lex->select_lex.item_list.elements == 1);
+    assert(thd->lex->select_lex->item_list.elements == 1);
 
-    m_expr_item= thd->lex->select_lex.item_list.head();
+    m_expr_item= thd->lex->select_lex->item_list.head();
 
     return false;
   }
+
+#ifdef HAVE_PSI_INTERFACE
+public:
+  virtual PSI_statement_info* get_psi_info()
+  {
+    return & psi_info;
+  }
+
+  static PSI_statement_info psi_info;
+#endif
 };
 
 ///////////////////////////////////////////////////////////////////////////
@@ -945,9 +1034,9 @@ public:
 
   virtual bool on_after_expr_parsing(THD *thd)
   {
-    DBUG_ASSERT(thd->lex->select_lex.item_list.elements == 1);
+    assert(thd->lex->select_lex->item_list.elements == 1);
 
-    m_expr_item= thd->lex->select_lex.item_list.head();
+    m_expr_item= thd->lex->select_lex->item_list.head();
 
     return false;
   }
@@ -955,6 +1044,16 @@ public:
 private:
   /// Identifier (index) of the CASE-expression in the runtime context.
   uint m_case_expr_id;
+
+#ifdef HAVE_PSI_INTERFACE
+public:
+  virtual PSI_statement_info* get_psi_info()
+  {
+    return & psi_info;
+  }
+
+  static PSI_statement_info psi_info;
+#endif
 };
 
 ///////////////////////////////////////////////////////////////////////////
@@ -1038,6 +1137,16 @@ private:
     expression.
   */
   Item *m_eq_item;
+
+#ifdef HAVE_PSI_INTERFACE
+public:
+  virtual PSI_statement_info* get_psi_info()
+  {
+    return & psi_info;
+  }
+
+  static PSI_statement_info psi_info;
+#endif
 };
 
 ///////////////////////////////////////////////////////////////////////////
@@ -1055,7 +1164,7 @@ public:
     m_opt_hpop(0),
     m_frame(ctx->current_var_count())
   {
-    DBUG_ASSERT(m_handler->condition_values.elements == 0);
+    assert(m_handler->condition_values.elements == 0);
   }
 
   virtual ~sp_instr_hpush_jump()
@@ -1094,7 +1203,7 @@ public:
 
   virtual void backpatch(uint dest)
   {
-    DBUG_ASSERT(!m_dest || !m_opt_hpop);
+    assert(!m_dest || !m_opt_hpop);
     if (!m_dest)
       m_dest= dest;
     else
@@ -1111,6 +1220,16 @@ private:
   // This attribute is needed for SHOW PROCEDURE CODE only (i.e. it's needed in
   // debug version only). It's used in print().
   uint m_frame;
+
+#ifdef HAVE_PSI_INTERFACE
+public:
+  virtual PSI_statement_info* get_psi_info()
+  {
+    return & psi_info;
+  }
+
+  static PSI_statement_info psi_info;
+#endif
 };
 
 ///////////////////////////////////////////////////////////////////////////
@@ -1134,6 +1253,16 @@ public:
   /////////////////////////////////////////////////////////////////////////
 
   virtual bool execute(THD *thd, uint *nextp);
+
+#ifdef HAVE_PSI_INTERFACE
+public:
+  virtual PSI_statement_info* get_psi_info()
+  {
+    return & psi_info;
+  }
+
+  static PSI_statement_info psi_info;
+#endif
 };
 
 ///////////////////////////////////////////////////////////////////////////
@@ -1168,6 +1297,16 @@ private:
   // This attribute is needed for SHOW PROCEDURE CODE only (i.e. it's needed in
   // debug version only). It's used in print().
   uint m_frame;
+
+#ifdef HAVE_PSI_INTERFACE
+public:
+  virtual PSI_statement_info* get_psi_info()
+  {
+    return & psi_info;
+  }
+
+  static PSI_statement_info psi_info;
+#endif
 };
 
 ///////////////////////////////////////////////////////////////////////////
@@ -1265,6 +1404,16 @@ private:
 
   /// Used to identify the cursor in the sp_rcontext.
   int m_cursor_idx;
+
+#ifdef HAVE_PSI_INTERFACE
+public:
+  virtual PSI_statement_info* get_psi_info()
+  {
+    return & psi_info;
+  }
+
+  static PSI_statement_info psi_info;
+#endif
 };
 
 ///////////////////////////////////////////////////////////////////////////
@@ -1295,6 +1444,16 @@ public:
 
 private:
   uint m_count;
+
+#ifdef HAVE_PSI_INTERFACE
+public:
+  virtual PSI_statement_info* get_psi_info()
+  {
+    return & psi_info;
+  }
+
+  static PSI_statement_info psi_info;
+#endif
 };
 
 ///////////////////////////////////////////////////////////////////////////
@@ -1326,6 +1485,16 @@ public:
 private:
   /// Used to identify the cursor in the sp_rcontext.
   int m_cursor_idx;
+
+#ifdef HAVE_PSI_INTERFACE
+public:
+  virtual PSI_statement_info* get_psi_info()
+  {
+    return & psi_info;
+  }
+
+  static PSI_statement_info psi_info;
+#endif
 };
 
 ///////////////////////////////////////////////////////////////////////////
@@ -1358,6 +1527,16 @@ public:
 private:
   /// Used to identify the cursor in the sp_rcontext.
   int m_cursor_idx;
+
+#ifdef HAVE_PSI_INTERFACE
+public:
+  virtual PSI_statement_info* get_psi_info()
+  {
+    return & psi_info;
+  }
+
+  static PSI_statement_info psi_info;
+#endif
 };
 
 ///////////////////////////////////////////////////////////////////////////
@@ -1396,6 +1575,16 @@ private:
 
   /// Used to identify the cursor in the sp_rcontext.
   int m_cursor_idx;
+
+#ifdef HAVE_PSI_INTERFACE
+public:
+  virtual PSI_statement_info* get_psi_info()
+  {
+    return & psi_info;
+  }
+
+  static PSI_statement_info psi_info;
+#endif
 };
 
 ///////////////////////////////////////////////////////////////////////////
@@ -1440,6 +1629,16 @@ public:
 private:
   /// The error code, which should be raised by this instruction.
   int m_errcode;
+
+#ifdef HAVE_PSI_INTERFACE
+public:
+  virtual PSI_statement_info* get_psi_info()
+  {
+    return & psi_info;
+  }
+
+  static PSI_statement_info psi_info;
+#endif
 };
 
 ///////////////////////////////////////////////////////////////////////////

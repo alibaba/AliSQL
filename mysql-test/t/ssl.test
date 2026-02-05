@@ -1,3 +1,8 @@
+# The include statement below is a temp one for tests that are yet to
+#be ported to run with InnoDB,
+#but needs to be kept for tests that would need MyISAM in future.
+--source include/force_myisam_default.inc
+
 #Want to skip this test from daily Valgrind execution
 --source include/no_valgrind_without_big.inc
 # Turn on ssl between the client and server
@@ -11,6 +16,7 @@
 connect (ssl_con,localhost,root,,,,,SSL);
 
 # Check ssl turned on
+--replace_regex $ALLOWED_CIPHERS_REGEX
 SHOW STATUS LIKE 'Ssl_cipher';
 
 # Check ssl expiration
@@ -21,6 +27,7 @@ SHOW STATUS LIKE 'Ssl_server_not_after';
 -- source include/common-tests.inc
 
 # Check ssl turned on
+--replace_regex $ALLOWED_CIPHERS_REGEX
 SHOW STATUS LIKE 'Ssl_cipher';
 
 connection default;

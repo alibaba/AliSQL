@@ -13,26 +13,32 @@ INSERT INTO t1 VALUES (NULL);
 COMMIT;
 ==== FULL FILE ====
 include/diff_tables.inc [master:t1, slave:t1]
-==== --include-gtid ====
+==== --include-gtids ====
 INSERT INTO t1 VALUES (NULL) /* 4 */;
 INSERT INTO t1 VALUES (NULL);
 INSERT INTO t1 VALUES (NULL);
 include/diff_tables.inc [master:t1, slave:t1]
-==== --skip-gtid + --exclude-gtid  ====
+==== --skip-gtids + --exclude-gtids  ====
 INSERT INTO t1 VALUES (NULL) /* 7 */;
 INSERT INTO t1 VALUES (NULL);
 include/diff_tables.inc [master:t1, slave:t1]
-==== --exclude-gtid ====
+==== --exclude-gtids ====
 INSERT INTO t1 VALUES (NULL) /* 9 */;
 include/diff_tables.inc [master:t1, slave:t1]
-==== --skip-gtid ====
+==== --skip-gtids ====
 FLUSH LOGS;
 INSERT INTO t1 VALUES (NULL) /* 10 */;
 include/diff_tables.inc [master:t1, slave:t1]
 ==== --read-from-remote-master ====
 FLUSH LOGS;
-==== --read-from-remote-master with --exclude-gtid ====
-==== --read-from-remote-master with --include-gtid ====
+==== --read-from-remote-master with --exclude-gtids ====
+==== --read-from-remote-master with --include-gtids ====
+==== Error cases ====
+ERROR: The option read-from-remote-server cannot be used when read-from-remote-master is defined and is not equal to BINLOG-DUMP-NON-GTIDS
+ERROR: The --raw flag requires one of --read-from-remote-master or --read-from-remote-server
+ERROR: You cannot use both of --exclude-gtids and --raw together with one of --read-from-remote-server or --read-from-remote-master=BINLOG-DUMP-NON-GTID.
+ERROR: You cannot use both of --exclude-gtids and --raw together with one of --read-from-remote-server or --read-from-remote-master=BINLOG-DUMP-NON-GTID.
+ERROR: You cannot use --include-gtids and --raw together.
 FLUSH LOGS;
 DROP TABLE t1;
 CHANGE MASTER TO MASTER_AUTO_POSITION=0;

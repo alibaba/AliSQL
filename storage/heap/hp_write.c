@@ -1,14 +1,20 @@
-/* Copyright (c) 2000-2002, 2004-2007 MySQL AB, 2009 Sun Microsystems, Inc.
-   Use is subject to license terms.
+/* Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -17,7 +23,7 @@
 /* Write a record to heap-databas */
 
 #include "heapdef.h"
-#ifdef __WIN__
+#ifdef _WIN32
 #include <fcntl.h>
 #endif
 
@@ -36,14 +42,15 @@ int heap_write(HP_INFO *info, const uchar *record)
   uchar *pos;
   HP_SHARE *share=info->s;
   DBUG_ENTER("heap_write");
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   if (info->mode & O_RDONLY)
   {
-    DBUG_RETURN(my_errno=EACCES);
+    set_my_errno(EACCES);
+    DBUG_RETURN(EACCES);
   }
 #endif
   if (!(pos=next_free_record_pos(share)))
-    DBUG_RETURN(my_errno);
+    DBUG_RETURN(my_errno());
   share->changed=1;
 
   for (keydef = share->keydef, end = keydef + share->keys; keydef < end;
@@ -60,7 +67,7 @@ int heap_write(HP_INFO *info, const uchar *record)
   info->current_ptr=pos;
   info->current_hash_ptr=0;
   info->update|=HA_STATE_AKTIV;
-#if !defined(DBUG_OFF) && defined(EXTRA_HEAP_DEBUG)
+#if !defined(NDEBUG) && defined(EXTRA_HEAP_DEBUG)
   DBUG_EXECUTE("check_heap",heap_check_heap(info, 0););
 #endif
   if (share->auto_key)
@@ -68,7 +75,7 @@ int heap_write(HP_INFO *info, const uchar *record)
   DBUG_RETURN(0);
 
 err:
-  if (my_errno == HA_ERR_FOUND_DUPP_KEY)
+  if (my_errno() == HA_ERR_FOUND_DUPP_KEY)
     DBUG_PRINT("info",("Duplicate key: %d", (int) (keydef - share->keydef)));
   info->errkey= (int) (keydef - share->keydef);
   /*
@@ -77,7 +84,7 @@ err:
     either.  Otherwise for HASH index on HA_ERR_FOUND_DUPP_KEY the key
     was inserted and we have to delete it.
   */
-  if (keydef->algorithm == HA_KEY_ALG_BTREE || my_errno == ENOMEM)
+  if (keydef->algorithm == HA_KEY_ALG_BTREE || my_errno() == ENOMEM)
   {
     keydef--;
   }
@@ -93,7 +100,7 @@ err:
   share->del_link=pos;
   pos[share->reclength]=0;			/* Record deleted */
 
-  DBUG_RETURN(my_errno);
+  DBUG_RETURN(my_errno());
 } /* heap_write */
 
 /* 
@@ -122,7 +129,7 @@ int hp_rb_write_key(HP_INFO *info, HP_KEYDEF *keyinfo, const uchar *record,
   if (!tree_insert(&keyinfo->rb_tree, (void*)info->recbuf,
 		   custom_arg.key_length, &custom_arg))
   {
-    my_errno= HA_ERR_FOUND_DUPP_KEY;
+    set_my_errno(HA_ERR_FOUND_DUPP_KEY);
     return 1;
   }
   info->s->index_length+= (keyinfo->rb_tree.allocated-old_allocated);
@@ -151,7 +158,7 @@ static uchar *next_free_record_pos(HP_SHARE *info)
     if ((info->records > info->max_records && info->max_records) ||
         (info->data_length + info->index_length >= info->max_table_size))
     {
-      my_errno=HA_ERR_RECORD_FILE_FULL;
+      set_my_errno(HA_ERR_RECORD_FILE_FULL);
       DBUG_RETURN(NULL);
     }
     if (hp_get_new_block(&info->block,&length))
@@ -163,6 +170,24 @@ static uchar *next_free_record_pos(HP_SHARE *info)
                              block_pos * info->block.recbuffer)));
   DBUG_RETURN((uchar*) info->block.level_info[0].last_blocks+
 	      block_pos*info->block.recbuffer);
+}
+
+
+/**
+  Populate HASH_INFO structure.
+  
+  @param key           Pointer to a HASH_INFO key to be populated
+  @param next_key      HASH_INFO next_key value
+  @param ptr_to_rec    HASH_INFO ptr_to_rec value
+  @param hash          HASH_INFO hash value
+*/
+
+static inline void set_hash_key(HASH_INFO *key, HASH_INFO *next_key,
+                                uchar *ptr_to_rec, ulong hash)
+{
+  key->next_key= next_key;
+  key->ptr_to_rec= ptr_to_rec;
+  key->hash= hash;
 }
 
 
@@ -197,8 +222,9 @@ int hp_write_key(HP_INFO *info, HP_KEYDEF *keyinfo,
   HP_SHARE *share = info->s;
   int flag;
   ulong halfbuff,hashnr,first_index;
-  uchar *UNINIT_VAR(ptr_to_rec),*UNINIT_VAR(ptr_to_rec2);
-  HASH_INFO *empty,*UNINIT_VAR(gpos),*UNINIT_VAR(gpos2),*pos;
+  uchar *ptr_to_rec= NULL, *ptr_to_rec2= NULL;
+  ulong hash1= 0, hash2= 0;
+  HASH_INFO *empty, *gpos= NULL, *gpos2= NULL, *pos;
   DBUG_ENTER("hp_write_key");
 
   flag=0;
@@ -227,7 +253,7 @@ int hp_write_key(HP_INFO *info, HP_KEYDEF *keyinfo,
   {
     do
     {
-      hashnr = hp_rec_hashnr(keyinfo, pos->ptr_to_rec);
+      hashnr= pos->hash;
       if (flag == 0)
       {
         /* 
@@ -279,13 +305,13 @@ int hp_write_key(HP_INFO *info, HP_KEYDEF *keyinfo,
 	  if (!(flag & LOWUSED))
 	  {
 	    /* Change link of previous lower-list key */
-	    gpos->ptr_to_rec=ptr_to_rec;
-	    gpos->next_key=pos;
+            set_hash_key(gpos, pos, ptr_to_rec, hash1);
 	    flag= (flag & HIGHFIND) | (LOWFIND | LOWUSED);
 	  }
 	  gpos=pos;
 	  ptr_to_rec=pos->ptr_to_rec;
 	}
+	hash1= pos->hash;
       }
       else
       {
@@ -303,13 +329,13 @@ int hp_write_key(HP_INFO *info, HP_KEYDEF *keyinfo,
 	  if (!(flag & HIGHUSED))
 	  {
 	    /* Change link of previous upper-list key and save */
-	    gpos2->ptr_to_rec=ptr_to_rec2;
-	    gpos2->next_key=pos;
+	    set_hash_key(gpos2, pos, ptr_to_rec2, hash2);
 	    flag= (flag & LOWFIND) | (HIGHFIND | HIGHUSED);
 	  }
 	  gpos2=pos;
 	  ptr_to_rec2=pos->ptr_to_rec;
 	}
+	hash2= pos->hash;
       }
     }
     while ((pos=pos->next_key));
@@ -325,42 +351,36 @@ int hp_write_key(HP_INFO *info, HP_KEYDEF *keyinfo,
 
     if ((flag & (LOWFIND | LOWUSED)) == LOWFIND)
     {
-      gpos->ptr_to_rec=ptr_to_rec;
-      gpos->next_key=0;
+      set_hash_key(gpos, NULL, ptr_to_rec, hash1);
     }
     if ((flag & (HIGHFIND | HIGHUSED)) == HIGHFIND)
     {
-      gpos2->ptr_to_rec=ptr_to_rec2;
-      gpos2->next_key=0;
+      set_hash_key(gpos2, NULL, ptr_to_rec2, hash2);
     }
   }
   /* Check if we are at the empty position */
-
-  pos=hp_find_hash(&keyinfo->block, hp_mask(hp_rec_hashnr(keyinfo, record),
-					 share->blength, share->records + 1));
+  hash1= hp_rec_hashnr(keyinfo, record);
+  pos= hp_find_hash(&keyinfo->block, hp_mask(hash1, share->blength,
+                                             share->records + 1));
   if (pos == empty)
   {
-    pos->ptr_to_rec=recpos;
-    pos->next_key=0;
+    set_hash_key(pos, NULL, recpos, hash1);
     keyinfo->hash_buckets++;
   }
   else
   {
     /* Check if more records in same hash-nr family */
     empty[0]=pos[0];
-    gpos=hp_find_hash(&keyinfo->block,
-		      hp_mask(hp_rec_hashnr(keyinfo, pos->ptr_to_rec),
-			      share->blength, share->records + 1));
+    gpos= hp_find_hash(&keyinfo->block, hp_mask(pos->hash, share->blength,
+                                                share->records + 1));
     if (pos == gpos)
     {
-      pos->ptr_to_rec=recpos;
-      pos->next_key=empty;
+      set_hash_key(pos, empty, recpos, hash1);
     }
     else
     {
+      set_hash_key(pos, NULL, recpos, hash1);
       keyinfo->hash_buckets++;
-      pos->ptr_to_rec=recpos;
-      pos->next_key=0;
       hp_movelink(pos, gpos, empty);
     }
 
@@ -374,7 +394,8 @@ int hp_write_key(HP_INFO *info, HP_KEYDEF *keyinfo,
       {
 	if (! hp_rec_key_cmp(keyinfo, record, pos->ptr_to_rec, 1))
 	{
-	  DBUG_RETURN(my_errno=HA_ERR_FOUND_DUPP_KEY);
+          set_my_errno(HA_ERR_FOUND_DUPP_KEY);
+	  DBUG_RETURN(HA_ERR_FOUND_DUPP_KEY);
 	}
       } while ((pos=pos->next_key));
     }

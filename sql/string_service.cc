@@ -1,13 +1,20 @@
-/* Copyright (c) 2012, 2013, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2012, 2023, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; version 2 of the License.
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
 
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU General Public License, version 2.0, for more details.
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
@@ -22,7 +29,10 @@
 
 #include <my_sys.h>
 #include "string_service.h"
-#include "unireg.h"
+#include "mysql/service_mysql_string.h"
+/* key_memory_string_iterator */
+#include "mysqld.h"
+PSI_memory_key key_memory_string_iterator;
 
 /*  
   This service function converts the mysql_string to the character set
@@ -51,7 +61,7 @@ extern "C"
 void mysql_string_free(mysql_string_handle string_handle)
 {
   String *str= (String *) string_handle;
-  str->free();
+  str->mem_free();
   delete [] str;
 }
 
@@ -71,7 +81,8 @@ mysql_string_iterator_handle mysql_string_get_iterator(mysql_string_handle
                                                        string_handle)
 {
   String *str= (String *) string_handle;
-  string_iterator *iterator= (string_iterator *) my_malloc(sizeof
+  string_iterator *iterator= (string_iterator *) my_malloc(key_memory_string_iterator,
+                                                           sizeof
                                            (struct st_string_iterator), MYF(0));
   iterator->iterator_str= str;
   iterator->iterator_ptr= str->ptr();
@@ -83,18 +94,21 @@ mysql_string_iterator_handle mysql_string_get_iterator(mysql_string_handle
 extern "C"
 int mysql_string_iterator_next(mysql_string_iterator_handle iterator_handle)
 {
-  int char_len, char_type;
+  int char_len, char_type, tmp_len;
   string_iterator *iterator= (string_iterator *) iterator_handle;
   String *str= iterator->iterator_str;
   const CHARSET_INFO *cs= str->charset();
   char *end= (char*) str->ptr() + str->length();
-  if (iterator->iterator_ptr == (const char*) end)
+  if (iterator->iterator_ptr >= (const char*) end)
     return (0);
   char_len= (cs->cset->ctype(cs, &char_type, (uchar*) iterator->iterator_ptr,
                              (uchar*) end));
   iterator->ctype= char_type;
-  iterator->iterator_ptr+= (char_len > 0 ? char_len : (char_len < 0
-                                                       ? -char_len : 1));
+  tmp_len= (char_len > 0 ? char_len : (char_len < 0 ? -char_len : 1));
+  if(iterator->iterator_ptr+tmp_len > end)
+    return (0);
+  else
+    iterator->iterator_ptr+= tmp_len;
   return (1);
 }
 
@@ -148,7 +162,7 @@ mysql_string_handle mysql_string_to_lowercase(mysql_string_handle string_handle)
   }
   else
   {
-    uint len= str->length() * cs->casedn_multiply;
+    size_t len= str->length() * cs->casedn_multiply;
     res->set_charset(cs);
     res->alloc(len);
     len= cs->cset->casedn(cs, (char*) str->ptr(), str->length(), (char *) res->ptr(), len);

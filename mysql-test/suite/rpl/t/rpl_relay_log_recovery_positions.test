@@ -37,9 +37,9 @@ INSERT INTO t1 VALUES (1);
 # point in time (read all the binary log, applied just the
 # create table).
 
---let $begin_of_insert_trx_pos_in_rl= query_get_value(SHOW RELAYLOG EVENTS in '$relay_log', Pos, 5)
---let $create_tbl_stmt_trx_pos_in_bl= query_get_value(SHOW RELAYLOG EVENTS in '$relay_log', End_log_pos, 4)
---let $end_of_insert_trx_log_pos_in_rl= query_get_value(SHOW RELAYLOG EVENTS in '$relay_log', End_log_pos, 7)
+--let $begin_of_insert_trx_pos_in_rl= query_get_value(SHOW RELAYLOG EVENTS in '$relay_log', Pos, 8)
+--let $create_tbl_stmt_trx_pos_in_bl= query_get_value(SHOW RELAYLOG EVENTS in '$relay_log', End_log_pos, 7)
+--let $end_of_insert_trx_log_pos_in_rl= query_get_value(SHOW RELAYLOG EVENTS in '$relay_log', End_log_pos, 11)
 
 --let $exec_master_log_pos= query_get_value(SHOW SLAVE STATUS, Exec_Master_Log_Pos, 1)
 --let $read_master_log_pos= query_get_value(SHOW SLAVE STATUS, Read_Master_Log_Pos, 1)
@@ -59,7 +59,7 @@ INSERT INTO t1 VALUES (1);
 
 #
 # Restart the server with relay-log-recovery set - this will reset the positions
---let $rpl_server_parameters= --relay-log-recovery=1 --skip-slave-start --log_error=$slave_error_log
+--let $rpl_server_parameters= --relay-log-recovery=1 --skip-slave-start --log_error=$slave_error_log --no-console
 --let $rpl_omit_print_server_parameters= 1
 --echo Omitting server parameters, since there is a path in one of them.
 --source include/rpl_restart_server.inc
@@ -71,7 +71,7 @@ INSERT INTO t1 VALUES (1);
 # Assert that the entry in the log contains the old relay log positions as well
 --let $assert_text= Assert that the expected entry is in the error log
 --let $assert_file= $slave_error_log
---let $assert_select= Recovery from master pos $exec_master_log_pos and file $binlog_file. Previous relay log pos and relay log file had been set to $relay_log_pos, .*$relay_log respectively.
+--let $assert_select= Recovery from master pos $exec_master_log_pos and file $binlog_file for channel ''. Previous relay log pos and relay log file had been set to $relay_log_pos, .*$relay_log respectively.
 --let $assert_count= 1
 --source include/assert_grep.inc
 

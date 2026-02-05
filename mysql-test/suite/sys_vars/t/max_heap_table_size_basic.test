@@ -119,6 +119,9 @@ SELECT @@global.max_heap_table_size;
 --Error ER_WRONG_TYPE_FOR_VAR
 SET @@global.max_heap_table_size = test;
 SELECT @@global.max_heap_table_size;
+--Error ER_WRONG_TYPE_FOR_VAR
+SET @@global.max_heap_table_size = ' ';
+SELECT @@global.max_heap_table_size;
 
 SET @@session.max_heap_table_size = -1;
 SELECT @@session.max_heap_table_size;
@@ -134,6 +137,9 @@ SELECT @@session.max_heap_table_size;
 --Error ER_WRONG_TYPE_FOR_VAR
 SET @@session.max_heap_table_size = test;
 SELECT @@session.max_heap_table_size;
+--Error ER_WRONG_TYPE_FOR_VAR
+SET @@session.max_heap_table_size = ' ';
+SELECT @@session.max_heap_table_size;
 
 
 --echo '#------------------FN_DYNVARS_077_06-----------------------#'
@@ -142,18 +148,22 @@ SELECT @@session.max_heap_table_size;
 ####################################################################
 
 
+--disable_warnings
 SELECT @@global.max_heap_table_size = VARIABLE_VALUE 
 FROM INFORMATION_SCHEMA.GLOBAL_VARIABLES 
 WHERE VARIABLE_NAME='max_heap_table_size';
+--enable_warnings
 
 --echo '#------------------FN_DYNVARS_077_07-----------------------#'
 ####################################################################
 #  Check if the value in SESSION Table matches value in variable   #
 ####################################################################
 
+--disable_warnings
 SELECT @@session.max_heap_table_size = VARIABLE_VALUE 
 FROM INFORMATION_SCHEMA.SESSION_VARIABLES 
 WHERE VARIABLE_NAME='max_heap_table_size';
+--enable_warnings
 
 
 --echo '#------------------FN_DYNVARS_077_08-----------------------#'
