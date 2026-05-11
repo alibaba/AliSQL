@@ -52,7 +52,14 @@ Columns::Columns() {
                          "col.default_value_utf8");
   m_target_def.add_field(FIELD_IS_NULLABLE, "IS_NULLABLE",
                          "IF (col.is_nullable = 1, 'YES','NO')");
-  /* Ignore the comment especially for vector columns. */
+  /*
+    VECTOR columns are stored as '<!>99999 vector(N) <!/> varbinary(4N)' in
+    the data dictionary for backward compatibility with downstream applications
+    that do not support the VECTOR type. The versioned comment is invisible to
+    older MySQL versions, so they only see a plain varbinary column.
+    Strip the comment prefix (everything up to and including '* /') to expose
+    the underlying storage type (e.g. 'varbinary') as DATA_TYPE.
+  */
   m_target_def.add_field(FIELD_DATA_TYPE, "DATA_TYPE",
                          "SUBSTRING_INDEX(SUBSTRING_INDEX(SUBSTRING_INDEX(col."
                          "column_type_utf8, '*/ ', -1), '(', 1),' ', 1)");

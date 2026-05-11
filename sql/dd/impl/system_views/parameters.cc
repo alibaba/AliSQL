@@ -48,9 +48,17 @@ Parameters::Parameters() {
   m_target_def.add_field(FIELD_PARAMETER_NAME, "PARAMETER_NAME",
                          "IF (rtn.type = 'FUNCTION' AND prm.ordinal_position = "
                          "1, NULL, prm.name)");
+  /*
+    VECTOR routine parameters are stored with a versioned comment prefix
+    (e.g. '<!>99999 vector(N) <!/> varbinary(4N)') in the data dictionary
+    for backward compatibility with downstream applications that do not
+    support the VECTOR type. Strip the comment prefix to expose the
+    underlying storage type (e.g. 'varbinary') as DATA_TYPE.
+  */
   m_target_def.add_field(
       FIELD_DATA_TYPE, "DATA_TYPE",
-      "SUBSTRING_INDEX(SUBSTRING_INDEX(prm.data_type_utf8, '(', 1), ' ', 1)");
+      "SUBSTRING_INDEX(SUBSTRING_INDEX(SUBSTRING_INDEX("
+      "prm.data_type_utf8, '*/ ', -1), '(', 1), ' ', 1)");
   m_target_def.add_field(
       FIELD_CHARACTER_MAXIMUM_LENGTH, "CHARACTER_MAXIMUM_LENGTH",
       "INTERNAL_DD_CHAR_LENGTH(prm.data_type, prm.char_length, col.name, 0)");

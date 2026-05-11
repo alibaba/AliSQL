@@ -41,10 +41,18 @@ Routines::Routines() {
                          "sch.name" + m_target_def.fs_name_collation());
   m_target_def.add_field(FIELD_ROUTINE_NAME, "ROUTINE_NAME", "rtn.name");
   m_target_def.add_field(FIELD_ROUTINE_TYPE, "ROUTINE_TYPE", "rtn.type");
+  /*
+    VECTOR function return types are stored with a versioned comment prefix
+    (e.g. '<!>99999 vector(N) <!/> varbinary(4N)') in the data dictionary
+    for backward compatibility with downstream applications that do not
+    support the VECTOR type. Strip the comment prefix to expose the
+    underlying storage type (e.g. 'varbinary') as DATA_TYPE.
+  */
   m_target_def.add_field(FIELD_DATA_TYPE, "DATA_TYPE",
                          "IF(rtn.type = 'PROCEDURE', '', "
-                         "   SUBSTRING_INDEX(SUBSTRING_INDEX("
-                         "     rtn.result_data_type_utf8, '(', 1), ' ', 1))");
+                         "   SUBSTRING_INDEX(SUBSTRING_INDEX(SUBSTRING_INDEX("
+                         "     rtn.result_data_type_utf8, '*/ ', -1),"
+                         "     '(', 1), ' ', 1))");
   m_target_def.add_field(FIELD_CHARACTER_MAXIMUM_LENGTH,
                          "CHARACTER_MAXIMUM_LENGTH",
                          "INTERNAL_DD_CHAR_LENGTH(rtn.result_data_type,"

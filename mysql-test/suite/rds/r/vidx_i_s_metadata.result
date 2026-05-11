@@ -1,0 +1,86 @@
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+########################################################################
+# Setup
+########################################################################
+CREATE DATABASE IF NOT EXISTS vidx_is_test;
+USE vidx_is_test;
+CREATE TABLE t_vec (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(64)
+);
+CREATE PROCEDURE p_vec_param(IN v1 VECTOR(64), IN v2 VECTOR(64))
+BEGIN
+SELECT VEC_DISTANCE_EUCLIDEAN(v1, v2);
+END$$
+CREATE FUNCTION f_vec_return(in_str TEXT) RETURNS VECTOR(64)
+DETERMINISTIC
+BEGIN
+RETURN VEC_FROMTEXT(in_str);
+END$$
+########################################################################
+# PART 1. INFORMATION_SCHEMA.COLUMNS - DATA_TYPE should be 'varbinary'
+########################################################################
+SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, COLUMN_TYPE
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA = 'vidx_is_test' AND TABLE_NAME = 't_vec'
+    AND COLUMN_NAME = 'v';
+TABLE_NAME	t_vec
+COLUMN_NAME	v
+DATA_TYPE	varbinary
+COLUMN_TYPE	/*!99999 vector(64) */ varbinary(256)
+########################################################################
+# PART 2. INFORMATION_SCHEMA.PARAMETERS - DATA_TYPE should be 'varbinary'
+########################################################################
+# Procedure parameters
+SELECT SPECIFIC_NAME, PARAMETER_NAME, DATA_TYPE, DTD_IDENTIFIER
+FROM INFORMATION_SCHEMA.PARAMETERS
+WHERE SPECIFIC_SCHEMA = 'vidx_is_test' AND SPECIFIC_NAME = 'p_vec_param'
+  ORDER BY ORDINAL_POSITION;
+SPECIFIC_NAME	p_vec_param
+PARAMETER_NAME	v1
+DATA_TYPE	varbinary
+DTD_IDENTIFIER	/*!99999 vector(64) */ varbinary(256)
+SPECIFIC_NAME	p_vec_param
+PARAMETER_NAME	v2
+DATA_TYPE	varbinary
+DTD_IDENTIFIER	/*!99999 vector(64) */ varbinary(256)
+# Function return value + parameters
+SELECT SPECIFIC_NAME, PARAMETER_NAME, DATA_TYPE, DTD_IDENTIFIER
+FROM INFORMATION_SCHEMA.PARAMETERS
+WHERE SPECIFIC_SCHEMA = 'vidx_is_test' AND SPECIFIC_NAME = 'f_vec_return'
+  ORDER BY ORDINAL_POSITION;
+SPECIFIC_NAME	f_vec_return
+PARAMETER_NAME	NULL
+DATA_TYPE	varbinary
+DTD_IDENTIFIER	/*!99999 vector(64) */ varbinary(256)
+SPECIFIC_NAME	f_vec_return
+PARAMETER_NAME	in_str
+DATA_TYPE	text
+DTD_IDENTIFIER	text
+########################################################################
+# PART 3. INFORMATION_SCHEMA.ROUTINES - DATA_TYPE should be 'varbinary'
+########################################################################
+# Function return type
+SELECT ROUTINE_NAME, ROUTINE_TYPE, DATA_TYPE, DTD_IDENTIFIER
+FROM INFORMATION_SCHEMA.ROUTINES
+WHERE ROUTINE_SCHEMA = 'vidx_is_test' AND ROUTINE_NAME = 'f_vec_return';
+ROUTINE_NAME	f_vec_return
+ROUTINE_TYPE	FUNCTION
+DATA_TYPE	varbinary
+DTD_IDENTIFIER	/*!99999 vector(64) */ varbinary(256)
+# Procedure has empty DATA_TYPE (standard behavior)
+SELECT ROUTINE_NAME, ROUTINE_TYPE, DATA_TYPE
+FROM INFORMATION_SCHEMA.ROUTINES
+WHERE ROUTINE_SCHEMA = 'vidx_is_test' AND ROUTINE_NAME = 'p_vec_param';
+ROUTINE_NAME	p_vec_param
+ROUTINE_TYPE	PROCEDURE
+DATA_TYPE
+########################################################################
+# Cleanup
+########################################################################
+DROP TABLE t_vec;
+DROP PROCEDURE p_vec_param;
+DROP FUNCTION f_vec_return;
+DROP DATABASE vidx_is_test;
+SET GLOBAL vidx_disabled = ON;

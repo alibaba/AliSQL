@@ -240,6 +240,16 @@ terminology_use_previous
 tls_ciphersuites
 tls_ciphersuites
 use_secondary_engine
+vidx_default_distance
+vidx_default_distance
+vidx_disabled
+vidx_disabled
+vidx_hnsw_cache_size
+vidx_hnsw_cache_size
+vidx_hnsw_default_m
+vidx_hnsw_default_m
+vidx_hnsw_ef_search
+vidx_hnsw_ef_search
 xa_detach_on_prepare
 xa_detach_on_prepare
 drop table t1;

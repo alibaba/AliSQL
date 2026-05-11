@@ -51,6 +51,7 @@
 #include "mysql/components/services/log_shared.h"
 #include "mysql/plugin.h"
 #include "sql/dd/cache/dictionary_client.h"  // dd::cache::Dictionary_client
+#include "sql/dd/dd_minor_upgrade.h"         // dd::Minor_upgrade_ctx
 #include "sql/dd/dd_schema.h"                // dd::Schema_MDL_locker
 #include "sql/dd/dd_table.h"                 // dd::get_sql_type_by_field_info
 #include "sql/dd/dd_utility.h"               // check_if_server_ddse_readonly
@@ -470,6 +471,12 @@ bool create_system_views(THD *thd, bool is_non_dd_based) {
           d->get_actual_I_S_version(thd));
     error = d->set_I_S_version(thd, d->get_target_I_S_version());
     dd::bootstrap::DD_bootstrap_ctx::instance().set_I_S_upgrade_done();
+
+    if (!error) {
+      dd::Minor_upgrade_ctx *upgrade_ctx = dd::Minor_upgrade_ctx::instance();
+      error = upgrade_ctx->set_extra_I_S_version(
+          thd, upgrade_ctx->get_target_extra_I_S_version());
+    }
   }
 
   // Restore the original character set.
@@ -504,11 +511,16 @@ bool update_server_I_S_metadata(THD *thd) {
   // Stop if I_S version is same and no DD upgrade was done.
   uint actual_version = d->get_actual_I_S_version(thd);
 
+  // Extra I_S version check
+  dd::Minor_upgrade_ctx *upgrade_ctx = dd::Minor_upgrade_ctx::instance();
+  uint extra_version = upgrade_ctx->get_actual_extra_I_S_version(thd);
+
   // Testing to make sure we update plugins when version changes.
   DBUG_EXECUTE_IF("test_i_s_metadata_version",
                   { actual_version = UNKNOWN_PLUGIN_VERSION; });
 
   if (d->get_target_I_S_version() == actual_version &&
+      upgrade_ctx->get_target_extra_I_S_version() == extra_version &&
       !dd::bootstrap::DD_bootstrap_ctx::instance().dd_upgrade_done())
     return false;
 

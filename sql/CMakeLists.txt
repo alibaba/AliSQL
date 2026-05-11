@@ -119,6 +119,7 @@ ADD_SUBDIRECTORY(protobuf)
 SET(DD_SOURCES
   dd/collection.cc
   dd/dd_event.cc
+  dd/dd_minor_upgrade.cc
   dd/dd_resource_group.cc
   dd/dd_routine.cc
   dd/dd_schema.cc
