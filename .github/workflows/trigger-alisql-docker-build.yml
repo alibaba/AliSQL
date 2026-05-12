@@ -7,7 +7,9 @@ on:
 jobs:
   trigger:
     runs-on: ubuntu-latest
-    if: startsWith(github.event.release.tag_name, 'AliSQL-8.0.')
+    if: |
+      startsWith(github.event.release.tag_name, 'AliSQL-8.0.') ||
+      startsWith(github.event.release.tag_name, 'AliSQL-5.7.')
     steps:
       - name: Push tag to alisql-docker
         env:
