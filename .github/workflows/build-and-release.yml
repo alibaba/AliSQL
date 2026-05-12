@@ -1,0 +1,175 @@
+name: build-and-release
+
+on:
+  push:
+    tags:
+      - 'AliSQL-8.0.*'
+      - 'AliSQL-5.7.*'
+
+permissions:
+  contents: write
+
+jobs:
+  parse:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.p.outputs.version }}
+      major:   ${{ steps.p.outputs.major }}
+      minor:   ${{ steps.p.outputs.minor }}
+      patch:   ${{ steps.p.outputs.patch }}
+      extra:   ${{ steps.p.outputs.extra }}
+    steps:
+      - id: p
+        run: |
+          set -eu
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#AliSQL-}"
+          MAJOR="${VERSION%%.*}"
+          REST="${VERSION#*.}"
+          MINOR="${REST%%.*}"
+          REST="${REST#*.}"
+          PATCH="${REST%%-*}"
+          EXTRA="${REST#*-}"
+          {
+            echo "version=$VERSION"
+            echo "major=$MAJOR"
+            echo "minor=$MINOR"
+            echo "patch=$PATCH"
+            echo "extra=$EXTRA"
+          } >> "$GITHUB_OUTPUT"
+          echo "Parsed: version=$VERSION major=$MAJOR minor=$MINOR patch=$PATCH extra=$EXTRA"
+
+  build:
+    needs: parse
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+            cmake_arch: x86_64
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+            cmake_arch: aarch64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Build inside oraclelinux:7
+        env:
+          MAJOR:      ${{ needs.parse.outputs.major }}
+          MINOR:      ${{ needs.parse.outputs.minor }}
+          PATCH:      ${{ needs.parse.outputs.patch }}
+          EXTRA:      ${{ needs.parse.outputs.extra }}
+          CMAKE_ARCH: ${{ matrix.cmake_arch }}
+        run: |
+          set -eux
+          mkdir -p "${GITHUB_WORKSPACE}/out"
+          docker run --rm -i \
+            -v "${GITHUB_WORKSPACE}:/AliSQL" \
+            -v "${GITHUB_WORKSPACE}/out:/out" \
+            -e MAJOR -e MINOR -e PATCH -e EXTRA -e CMAKE_ARCH \
+            oraclelinux:7 \
+            bash -ex <<'INNER'
+
+          # ---- Toolchain repo (devtoolset-10) ----
+          cat >/etc/yum.repos.d/ol7-scl.repo <<'REPO'
+          [ol7_software_collections]
+          name=Oracle Linux 7 Software Collections ($basearch)
+          baseurl=https://yum.oracle.com/repo/OracleLinux/OL7/SoftwareCollections/$basearch/
+          gpgcheck=1
+          enabled=1
+          gpgkey=https://yum.oracle.com/RPM-GPG-KEY-oracle-ol7
+          REPO
+
+          yum clean all
+          yum makecache
+          yum install -y git wget \
+            devtoolset-10-gcc devtoolset-10-gcc-c++ devtoolset-10-binutils \
+            openssl openssl-devel ncurses-devel libaio-devel perl-IPC-Cmd bison
+
+          # ---- CMake ----
+          cd /opt
+          wget -q "https://github.com/Kitware/CMake/releases/download/v3.28.6/cmake-3.28.6-linux-${CMAKE_ARCH}.tar.gz"
+          tar -xzf "cmake-3.28.6-linux-${CMAKE_ARCH}.tar.gz"
+          export PATH="/opt/cmake-3.28.6-linux-${CMAKE_ARCH}/bin:$PATH"
+          cmake --version
+
+          # ---- Inject version from tag ----
+          # 8.0 branch uses MYSQL_VERSION; 5.7 branch uses VERSION; same internal format.
+          cd /AliSQL
+          VERSION_FILE=""
+          for f in MYSQL_VERSION VERSION; do
+            [ -f "$f" ] && VERSION_FILE="$f" && break
+          done
+          if [ -z "$VERSION_FILE" ]; then
+            echo "ERROR: neither MYSQL_VERSION nor VERSION found in source root" >&2
+            exit 1
+          fi
+          sed -i \
+            -e "s/^MYSQL_VERSION_MAJOR=.*/MYSQL_VERSION_MAJOR=${MAJOR}/" \
+            -e "s/^MYSQL_VERSION_MINOR=.*/MYSQL_VERSION_MINOR=${MINOR}/" \
+            -e "s/^MYSQL_VERSION_PATCH=.*/MYSQL_VERSION_PATCH=${PATCH}/" \
+            -e "s/^MYSQL_VERSION_EXTRA=.*/MYSQL_VERSION_EXTRA=${EXTRA}/" \
+            "$VERSION_FILE"
+          echo "--- ${VERSION_FILE} after injection ---"
+          cat "$VERSION_FILE"
+
+          # ---- Build & install ----
+          source scl_source enable devtoolset-10
+          sh build.sh -t release -d /opt/alisql
+          make install
+
+          # ---- Package ----
+          cd /opt
+          VER="${MAJOR}.${MINOR}.${PATCH}-${EXTRA}"
+          GLIBC="glibc$(ldd --version | awk 'NR==1{print $NF}')"
+          ARCH="$(uname -m)"
+          PKG="alisql-${VER}-linux-${GLIBC}-${ARCH}.tar.xz"
+          TOPDIR="${PKG%.tar.xz}"
+          XZ_OPT='-T0 -9' tar -cJf "/out/${PKG}" \
+            --transform="s,^alisql,${TOPDIR}," \
+            --exclude='alisql/mysql-test' \
+            --exclude='alisql/run' \
+            --exclude='alisql/var' \
+            --exclude='alisql/LICENSE-test' \
+            --exclude='alisql/LICENSE.router' \
+            --exclude='alisql/README-test' \
+            --exclude='alisql/README.router' \
+            --exclude='alisql/mysqlrouter-log-rotate' \
+            alisql/
+          ls -lh "/out/${PKG}"
+          INNER
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: alisql-${{ matrix.arch }}
+          path: ${{ github.workspace }}/out/alisql-*.tar.xz
+          retention-days: 7
+
+  release:
+    needs: [parse, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -lh artifacts/
+
+      - name: Create release with tarballs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG:      ${{ github.ref_name }}
+          VERSION:  ${{ needs.parse.outputs.version }}
+        run: |
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$TAG" \
+            --notes "Auto-built AliSQL ${VERSION} (oraclelinux:7, glibc 2.17). x86_64 and aarch64 binaries attached." \
+            artifacts/*.tar.xz
