@@ -1,0 +1,29 @@
+name: trigger-alisql-docker-build
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    if: startsWith(github.event.release.tag_name, 'AliSQL-8.0.')
+    steps:
+      - name: Push tag to alisql-docker
+        env:
+          PAT: ${{ secrets.DOCKER_REPO_PAT }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -eux
+          git clone --depth 1 "https://x-access-token:${PAT}@github.com/p1p1bear/alisql-docker.git" work
+          cd work
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git ls-remote --tags origin "refs/tags/${TAG}" | grep -q "refs/tags/${TAG}$"; then
+            echo "Tag ${TAG} already exists on alisql-docker, skipping."
+            exit 0
+          fi
+
+          git tag "${TAG}"
+          git push origin "${TAG}"
