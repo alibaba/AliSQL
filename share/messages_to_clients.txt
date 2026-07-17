@@ -9991,7 +9991,7 @@ reserved-error-section 5000 5999
 start-error-number 7500
 
 ER_NATIVE_PROC_PARAMETER_MISMATCH
-   eng "Native procedure %s the %dth parameter mismatch"
+   eng "The %dth parameter didn't match for native procedure %s"
 
 ER_DUCKDB_CLIENT
   eng "[DuckDB] %s."
@@ -10064,6 +10064,42 @@ ER_VECTOR_INDEX_USAGE
 
 ER_VECTOR_INDEX_FAILED
   eng "%s vector index `%s` in `%s`.`%s` (aux_tab: %s) failed: %s"
+
+ER_DUCKDB_DONT_SUPPORT_BATCH_MULTI_TRX
+  eng "[DuckDB] Batch Multi Trx is not supported when replica_parallel_workers > 0"
+
+ER_DUCKDB_CONVERT_THREAD_EXIT_DUE_TO_SHUTDOWN
+  eng "[DuckDB] DuckDB convert thread exit due to shutdown."
+
+ER_BINLOG_IN_REDO_NOT_SUPPORTED
+  eng "persist_binlog_to_redo is not supported for more than one engines."
+
+ER_AS_OF_EXPR_NOT_CONSTANT
+  eng "Snapshot (as of) item must be a 'const for execution' expression"
+
+ER_AS_OF_BAD_TIMESTAMP_TYPE
+  eng "Snapshot (as of) 'timestamp' must be of type timestamp"
+
+ER_AS_OF_CONFLICT_LOCK_CLAUSE
+  eng "Snapshot (as of) expression not allowed for '%s', cause it is with LOCK clause"
+
+ER_AS_OF_NOT_INNODB_TABLE
+  eng "Snapshot (as of) expression not allowed for '%s', cause it is not a innodb base table"
+
+ER_AS_OF_NOT_SELECT
+  eng "Snapshot (as of) expression can only be appear in select from list tables"
+
+ER_SNAPSHOT_MISMATCH
+  eng "The actual snapshot is: %s"
+
+ER_SNAPSHOT_OUT_OF_RANGE
+  eng "The snapshot to find is out of range"
+
+ER_FLASHBACK_PK_INVISIBLE
+  eng "The definition of the table required by the flashback query has changed"
+
+ER_FLASHBACK_INTERNAL_ERROR
+  eng "Flashback query encountered an internal error"
 
 #
 #  End of RDS error message.

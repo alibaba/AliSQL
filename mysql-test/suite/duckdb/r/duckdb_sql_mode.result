@@ -30,6 +30,48 @@ col1
 1
 2
 2
+SELECT * FROM t1 GROUP BY col1;
+id	col1
+1	1
+2	2
+SELECT * FROM t2 GROUP BY col1;
+id	col1
+1	1
+2	2
+SELECT id + max(id) FROM t1 GROUP BY col1;
+id + max(id)
+2
+5
+SELECT id + max(id) FROM t2 GROUP BY col1;
+id + max(id)
+2
+5
+SELECT id + id, max(id) FROM t1 GROUP BY col1;
+id + id	max(id)
+2	1
+4	3
+SELECT id + id, max(id) FROM t2 GROUP BY col1;
+id + id	max(id)
+2	1
+4	3
+SELECT id, col1 FROM t1 GROUP BY col1 HAVING id > 1;
+id	col1
+2	2
+SELECT id, col1 FROM t2 GROUP BY col1 HAVING id > 1;
+id	col1
+2	2
+SELECT id, col1 FROM t1 GROUP BY col1 HAVING ANY_VALUE(id) > 1;
+id	col1
+2	2
+SELECT id, col1 FROM t2 GROUP BY col1 HAVING ANY_VALUE(id) > 1;
+id	col1
+2	2
+SELECT id, col1 FROM t1 GROUP BY col1 HAVING MAX(id) > 1;
+id	col1
+2	2
+SELECT id, col1 FROM t2 GROUP BY col1 HAVING MAX(id) > 1;
+id	col1
+2	2
 SET sql_mode='ONLY_FULL_GROUP_BY';
 SELECT id, sum(id) FROM t1;
 ERROR 42000: In aggregated query without GROUP BY, expression #1 of SELECT list contains nonaggregated column 'test.t1.id'; this is incompatible with sql_mode=only_full_group_by

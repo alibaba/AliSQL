@@ -99,7 +99,8 @@ class ha_duckdb : public handler, public Partition_handler {
     // TODO: supprt HA_NO_AUTO_INCREMENT through duckdb sequence.
     return (HA_BINLOG_STMT_CAPABLE | HA_BINLOG_ROW_CAPABLE |
             HA_NO_AUTO_INCREMENT | HA_NULL_IN_KEY | HA_CAN_INDEX_BLOBS |
-            HA_SUPPORTS_DEFAULT_EXPRESSION | HA_DESCENDING_INDEX);
+            HA_SUPPORTS_DEFAULT_EXPRESSION | HA_DESCENDING_INDEX |
+            HA_GENERATED_COLUMNS);
   }
 
   /** @brief

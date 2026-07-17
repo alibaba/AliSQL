@@ -1,0 +1,159 @@
+################################################################################
+# [Feature] Persist Binlog Into Redo
+#
+# The binlog events of a committing transaction are written into InnoDB's redo
+# log. If the server crashes after the events reached the redo log but before
+# they reached the binlog file, they must be recovered back into the binlog
+# file at the next startup.
+#
+# This test verifies the crash recovery of the binlog file from the redo log on
+# a single server (no replication involved):
+#   - all the binlog events of the last transaction are lost
+#   - only a part of the binlog file is lost
+#   - the binlog file is truncated in the middle of an event
+#   - the server survives a crash before anything is logged
+################################################################################
+--source include/have_debug.inc
+--source include/have_debug_sync.inc
+--source include/have_log_bin.inc
+--source include/have_binlog_format_row.inc
+--source include/have_persist_binlog_to_redo.inc
+
+CALL mtr.add_suppression("Found invalid server redo log type");
+CALL mtr.add_suppression("Failed to recover binlog from redo log");
+
+--let $datadir = `SELECT @@datadir`
+
+CREATE TABLE t1(c1 INT PRIMARY KEY, c2 VARCHAR(100)) ENGINE=InnoDB;
+INSERT INTO t1 VALUES(1, 'one');
+
+--echo #
+--echo # Case: the whole tail of the binlog file is lost
+--echo ################################################
+--echo #
+# innodb_checkpoint_disabled keeps the binlog redo records alive, so that the
+# redo recovery really reads them back.
+SET GLOBAL innodb_checkpoint_disabled = ON;
+
+--let $binlog_file = query_get_value(SHOW MASTER STATUS, File, 1)
+--copy_file $datadir/$binlog_file $datadir/binlog_for_recovery
+
+INSERT INTO t1 VALUES(2, 'two');
+INSERT INTO t1 VALUES(3, 'three');
+
+--source include/expect_crash.inc
+SET debug = "d,crash_commit_after_sync_to_redo";
+--error 2013
+INSERT INTO t1 VALUES(4, 'four');
+
+# Roll the binlog file back to the state before the three inserts above: their
+# events now only exist inside the redo log.
+--move_file $datadir/binlog_for_recovery $datadir/$binlog_file
+
+--source include/start_mysqld.inc
+
+--let $assert_text = all four rows survived the crash
+--let $assert_cond = COUNT(*) = 4 FROM t1
+--source include/assert.inc
+
+--let $assert_text = the binlog was recovered from the redo log
+--let $assert_file = $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_select = Start to recover binlog from redo log
+--let $assert_count = 1
+--source include/assert_grep.inc
+
+--let $assert_text = the binlog recovery finished
+--let $assert_file = $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_select = Finished recovering binlog from redo log
+--let $assert_count = 1
+--source include/assert_grep.inc
+
+--echo #
+--echo # Case: only some of the binlog events are lost
+--echo ##############################################
+--echo #
+SET GLOBAL innodb_checkpoint_disabled = ON;
+TRUNCATE t1;
+INSERT INTO t1 VALUES(11, 'eleven');
+INSERT INTO t1 VALUES(12, 'twelve');
+
+--let $binlog_file = query_get_value(SHOW MASTER STATUS, File, 1)
+--copy_file $datadir/$binlog_file $datadir/binlog_for_recovery
+
+INSERT INTO t1 VALUES(13, 'thirteen');
+
+--source include/expect_crash.inc
+SET debug = "d,crash_commit_after_sync_to_redo";
+--error 2013
+INSERT INTO t1 VALUES(14, 'fourteen');
+
+--move_file $datadir/binlog_for_recovery $datadir/$binlog_file
+--source include/start_mysqld.inc
+
+--let $assert_text = the four rows are there after a partial binlog loss
+--let $assert_cond = COUNT(*) = 4 FROM t1
+--source include/assert.inc
+
+--echo #
+--echo # Case: the binlog file is truncated in the middle of an event
+--echo #############################################################
+--echo #
+SET GLOBAL innodb_checkpoint_disabled = ON;
+TRUNCATE t1;
+INSERT INTO t1 VALUES(21, 'twentyone');
+
+--let $binlog_file = query_get_value(SHOW MASTER STATUS, File, 1)
+--let $master_pos = query_get_value(SHOW MASTER STATUS, Position, 1)
+--let $truncate_pos = `SELECT $master_pos - 50`
+
+--source include/expect_crash.inc
+SET debug = "d,crash_commit_after_sync_to_redo";
+--error 2013
+INSERT INTO t1 VALUES(22, 'twentytwo');
+
+--exec truncate -s $truncate_pos $datadir/$binlog_file
+
+--source include/start_mysqld.inc
+
+--let $assert_text = both rows are there after the binlog was cut inside an event
+--let $assert_cond = COUNT(*) = 2 FROM t1
+--source include/assert.inc
+
+--echo #
+--echo # Case: the recovered binlog file is a valid binlog
+--echo ##################################################
+--echo #
+# The server can still rotate, read and purge the recovered binlog files, and
+# new transactions keep working.
+FLUSH BINARY LOGS;
+INSERT INTO t1 VALUES(23, 'twentythree');
+SELECT * FROM t1 ORDER BY c1;
+
+--echo #
+--echo # Case: a crash before anything reaches the redo log loses nothing
+--echo #       that was already committed
+--echo ################################################################
+--echo #
+SET GLOBAL innodb_checkpoint_disabled = ON;
+INSERT INTO t1 VALUES(31, 'thirtyone');
+
+--source include/expect_crash.inc
+SET debug = "d,crash_commit_before_log";
+--error 2013
+INSERT INTO t1 VALUES(32, 'thirtytwo');
+
+--source include/start_mysqld.inc
+
+--let $assert_text = the committed row survived, the crashed one did not
+--let $assert_cond = COUNT(*) = 1 FROM t1 WHERE c1 = 31
+--source include/assert.inc
+
+--let $assert_text = the transaction killed before logging is not committed
+--let $assert_cond = COUNT(*) = 0 FROM t1 WHERE c1 = 32
+--source include/assert.inc
+
+--echo #
+--echo # Cleanup
+--echo #########
+--echo #
+DROP TABLE t1;

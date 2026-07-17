@@ -260,7 +260,12 @@ enum mlog_id_t {
   MLOG_LIST_START_DELETE = 76,
 
   /** biggest value (used in assertions) */
-  MLOG_BIGGEST_TYPE = MLOG_LIST_START_DELETE
+  MLOG_BIGGEST_TYPE = MLOG_LIST_START_DELETE,
+
+  /** Server data written into redo log (Persist Binlog Into Redo). To avoid
+      conflicts to MySQL redo types, it uses a number close to the maximum
+      value. Type takes 7bits, thus the maximum is 127 */
+  MLOG_SERVER_DATA = 120
 };
 
 /** @} */

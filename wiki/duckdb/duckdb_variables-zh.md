@@ -2,6 +2,95 @@
 
 [ [DuckDB Engine Variables in AliSQL](./duckdb_variables-en.md) | [AliSQL DuckDB 引擎参数](./duckdb_variables-zh.md) ]
 
+> 本文记录自建 AliSQL 源码分支的参数。阿里云 RDS MySQL DuckDB 分析实例具有产品专属的适用条件和托管配置，RDS 实例请参见官方[中文文档](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/duckdb-analysis-instance)或[英文文档](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/duckdb-analysis-instance)。
+
+## AliSQL 8.0.44 DuckDB 增强新增参数
+
+| 参数 | 作用域 | 默认值 | 作用 |
+|------|--------|--------|------|
+| `duckdb_sql_normalization` | GLOBAL, SESSION | `OFF` | 将更多 MySQL SQL 转写为 DuckDB 兼容形式 |
+| `duckdb_max_threads_per_query` | GLOBAL, SESSION | `1000000` | 限制单个用户查询的线程数 |
+| `duckdb_max_threads_per_query_rpl` | GLOBAL | `1000000` | 限制单个复制查询的线程数 |
+| `duckdb_psmt_cursor_send_extra_eof` | GLOBAL, SESSION | `ON` | 兼容旧版 JDBC Cursor 的 EOF 行为 |
+| `duckdb_prefer_high_precision` | GLOBAL, SESSION | `OFF` | 优先使用 DuckDB 高精度计算路径 |
+| `duckdb_convert_tables_with_generated_columns` | GLOBAL | `ON` | 允许转换包含生成列的表 |
+| `duckdb_copy_data_between_tables_use_ins_sel` | GLOBAL, SESSION | `OFF` | DuckDB 表间 Copy DDL 使用 `INSERT ... SELECT` |
+| `ignore_index_hint_error` | GLOBAL | `OFF` | 将不存在的索引 Hint 从错误降级为警告 |
+
+本节参数均支持动态修改。标为 `GLOBAL, SESSION` 的参数同时具有全局默认值和连接级取值：`SET GLOBAL` 影响后续新建连接，`SET SESSION` 只影响当前连接。
+
+### `duckdb_sql_normalization`
+
+- **参数范围**: 全局、会话参数
+- **修改形式**: 动态修改
+- **参数类型**: 布尔类型
+- **默认值**: `OFF`
+- **取值范围**: `ON` \| `OFF`
+- **含义**: 在查询发送给 DuckDB 前，转写受支持的 MySQL 语法和函数，包括跨库名称处理及 Prepared Statement reprepare。建议针对实际工作负载完成兼容性验证后按会话开启。
+
+### `duckdb_max_threads_per_query`
+
+- **参数范围**: 全局、会话参数
+- **修改形式**: 动态修改
+- **参数类型**: 无符号整型
+- **默认值**: `1000000`
+- **取值范围**: `1` ~ `4611686018427387904`
+- **含义**: 单个用户查询可使用的 DuckDB Worker 线程上限。可将其设置为低于 `duckdb_threads` 的合理值，避免单个查询占满线程池。
+
+### `duckdb_max_threads_per_query_rpl`
+
+- **参数范围**: 全局参数
+- **修改形式**: 动态修改
+- **参数类型**: 无符号整型
+- **默认值**: `1000000`
+- **取值范围**: `1` ~ `4611686018427387904`
+- **含义**: 单个复制查询可使用的 DuckDB Worker 线程上限。
+
+### `duckdb_psmt_cursor_send_extra_eof`
+
+- **参数范围**: 全局、会话参数
+- **修改形式**: 动态修改
+- **参数类型**: 布尔类型
+- **默认值**: `ON`
+- **取值范围**: `ON` \| `OFF`
+- **含义**: Prepared Statement 以 Cursor 方式执行并返回空结果集时，额外发送 EOF 包。MySQL Connector/J 9.5.0 之前的版本应保持开启。
+
+### `duckdb_prefer_high_precision`
+
+- **参数范围**: 全局、会话参数
+- **修改形式**: 动态修改
+- **参数类型**: 布尔类型
+- **默认值**: `OFF`
+- **取值范围**: `ON` \| `OFF`
+- **含义**: 在 DuckDB 支持的场景中优先使用高精度计算路径，可能以部分性能换取更高数值精度。
+
+### `duckdb_convert_tables_with_generated_columns`
+
+- **参数范围**: 全局参数
+- **修改形式**: 动态修改
+- **参数类型**: 布尔类型
+- **默认值**: `ON`
+- **取值范围**: `ON` \| `OFF`
+- **含义**: 是否允许将包含生成列的表转换为 DuckDB 存储引擎。关闭后，此类转换会在复制数据前失败。
+
+### `duckdb_copy_data_between_tables_use_ins_sel`
+
+- **参数范围**: 全局、会话参数
+- **修改形式**: 动态修改
+- **参数类型**: 布尔类型
+- **默认值**: `OFF`
+- **取值范围**: `ON` \| `OFF`
+- **含义**: Copy DDL 在两个 DuckDB 表之间复制数据时，使用 DuckDB `INSERT ... SELECT` 路径替代服务层逐行传输。开启前应验证工作负载使用的表定义和数据类型。
+
+### `ignore_index_hint_error`
+
+- **参数范围**: 全局参数
+- **修改形式**: 动态修改
+- **参数类型**: 布尔类型
+- **默认值**: `OFF`
+- **取值范围**: `ON` \| `OFF`
+- **含义**: 允许 Index Hint 引用不存在的索引，服务端输出警告而不是拒绝语句。该参数影响整个服务，不仅限于 DuckDB 表。
+
 ### `duckdb_mode`
 - **参数范围**: 全局参数
 - **修改形式**: 静态修改（需重启生效）
@@ -71,7 +160,7 @@
 - **含义**: 任务调度器是否在重新调度前部分处理任务，有助于提高多个并发查询之间的公平性。
 
 ### `duckdb_merge_join_threshold`
-- **参数范围**: 会话参数
+- **参数范围**: 全局、会话参数
 - **修改形式**: 动态修改
 - **参数类型**: 整型（行数）
 - **默认值**: 4611686018427387904
@@ -92,15 +181,15 @@
 - **参数类型**: 布尔类型
 - **默认值**: OFF
 - **取值范围**: ON \| OFF
-- **含义**: 在启动阶段将 InnoDB 表为换到 DuckDB 引擎的的过程中，是否忽略转换过程中的错误继续执行。该参数为只读参数，只能在实例启动前配置。
+- **含义**: 在启动阶段将 InnoDB 表转换到 DuckDB 引擎的过程中，是否忽略转换错误并继续执行。开启后实例可能在仅转换部分用户表的情况下完成启动，必须检查每个失败并核对最终引擎分布。该参数为只读参数，只能在实例启动前配置。
 
 ### `duckdb_convert_all_at_startup_threads`
 - **参数范围**: 全局参数
-- **修改形式**: 静态修改
+- **修改形式**: 动态修改（供下一次启动转换使用）
 - **参数类型**: 整型
 - **默认值**: 4
 - **取值范围**: 1 ~ 64
-- **含义**: 指定在启动时用于表转换的线程数量，用于加速批量迁移过程。该参数为只读参数，只能在实例启动前配置。
+- **含义**: 指定启动转换使用的线程数量，用于加速批量迁移。启动后修改不会影响已经执行的转换；如需在下次启动转换时生效，应写入 `my.cnf` 或持久化该值。
 
 ### `duckdb_convert_all_skip_mtr_db`
 - **参数范围**: 全局参数
@@ -111,7 +200,7 @@
 - **含义**: 在启动时转换表的过程中，是否跳过名为 `mtr` 的数据库。此参数一般情况下只用于辅助通过测试用例。该参数为只读参数，只能在实例启动前配置。
 
 ### `duckdb_force_no_collation`
-- **参数范围**: 会话参数
+- **参数范围**: 全局、会话参数
 - **修改形式**: 动态修改
 - **参数类型**: 布尔类型
 - **默认值**: OFF
@@ -127,7 +216,7 @@
 - **含义**: 当事务仅包含插入操作时，是否向 Binlog 中设置 `insert_only` 标志，以优化复制性能。
 
 ### `duckdb_explain_output`
-- **参数范围**: 会话参数
+- **参数范围**: 全局、会话参数
 - **修改形式**: 动态修改
 - **参数类型**: 枚举类型
 - **默认值**: PHYSICAL_ONLY
@@ -140,7 +229,7 @@
 - **参数类型**: 布尔类型
 - **默认值**: OFF
 - **取值范围**: ON \| OFF
-- **含义**: 是否允许将 relay log 中的多个事务合并为一个批次提交，以提高吞吐量。该参数仅在备节点生效。
+- **含义**: 是否允许将 relay log 中的多个事务合并为一个批次提交，以提高吞吐量。该参数仅在备节点生效；修改时复制必须处于停止状态，并且启动复制前必须设置 `replica_parallel_workers=0`。
 
 ### `duckdb_multi_trx_timeout`
 - **参数范围**: 全局参数
@@ -183,7 +272,7 @@
 - **含义**: 当 `duckdb_commit_multi_trx_due_to_rotate` 启用时，每接收多少个 binlog rotate 事件后提交一次。0 表示从不，1 表示每次都提交。该参数仅在备节点生效。
 
 ### `duckdb_copy_ddl_threads`
-- **参数范围**: 会话参数
+- **参数范围**: 全局、会话参数
 - **修改形式**: 动态修改
 - **参数类型**: 整型
 - **默认值**: 4
@@ -201,15 +290,15 @@
 
 ### `duckdb_use_double_for_decimal`
 - **参数范围**: 全局参数
-- **修改形式**: 静态修改
+- **修改形式**: 动态修改
 - **参数类型**: 布尔类型
 - **默认值**: ON
 - **取值范围**: ON \| OFF
-- **含义**: DuckDB 引擎不支持精度高于 38 的 DECIMAL 类型。该参数用于控制对于精度高于 38 的 DECIMAL 类型，是否使用 DOUBLE 替代。该参数为只读参数，只能在实例启动前配置。
+- **含义**: DuckDB 引擎不支持精度高于 38 的 DECIMAL 类型。该参数用于控制对于精度高于 38 的 DECIMAL 类型，是否使用 DOUBLE 替代。参数支持动态修改，但实例创建表后再改变取值，可能导致不同表使用不一致的物理列类型。
 > 说明：该参数影响列的实际类型，实例创建后不应更改。
 
 ### `duckdb_disabled_optimizers`
-- **参数范围**: 会话参数
+- **参数范围**: 全局、会话参数
 - **修改形式**: 动态修改
 - **参数类型**: 枚举类型
 - **默认值**: 0（空集合）
@@ -224,7 +313,7 @@
 - **含义**: 禁用 DuckDB 引擎中指定的优化器规则。
 
 ### `duckdb_data_import_mode`
-- **参数范围**: 会话参数
+- **参数范围**: 全局、会话参数
 - **修改形式**: 动态修改
 - **参数类型**: 布尔类型
 - **默认值**: OFF
@@ -236,7 +325,7 @@
 > 3. 此参数为 ON 时，修改的表要求必须具备主键。
 > 4. 此参数为 ON 时，将无法执行 update 操作，请将 update 操作转换为 delete + insert 操作。
 > 5. 此参数为 ON 时，不满足条件的 DML 操作将会报错。
-> 6. 只有参数`duckdb_dml_in_batch`开始，此参数才会生效。
+> 6. 只有参数 `duckdb_dml_in_batch` 开启时，此参数才会生效。
 
 ### `duckdb_idempotent_data_import_enabled`
 - **参数范围**: 全局参数
@@ -290,9 +379,17 @@
 - **含义**: 是否启用批处理模式来加速 INSERT/UPDATE/DELETE 等 DML 操作。开启后，多个变更操作会被合并为批次提交，提高吞吐量并减少事务开销。
 > 说明：
 > 1. 开启此参数后，DuckDB 节点作为从节点且当主节点的 binlog 格式为 row 时，DuckDB 引擎会自动完成所有 DML 操作的攒批。
-> 2. 开启此参数后，DuckDB 主节点上的插入操作可以攒批，删除操作能否攒批依赖参数`duckdb_data_import_mode`的开关及其限制，更新操作无法攒批。
+> 2. 开启此参数后，DuckDB 主节点上的插入操作可以攒批，删除操作能否攒批依赖参数 `duckdb_data_import_mode` 的开关及其限制，更新操作无法攒批。
 
-### `update_modified_column_only`
+### `duckdb_batch_max_row_count`
+- **参数范围**: 全局参数
+- **修改形式**: 动态修改
+- **参数类型**: 无符号整型（行数）
+- **默认值**: 0（不限制批次行数）
+- **取值范围**: 0 ~ ULLONG_MAX
+- **含义**: 单个 DuckDB DML 批次允许包含的最大行数，用于拆分超大批次并降低峰值内存占用。0 表示不按行数限制。
+
+### `duckdb_update_modified_column_only`
 - **参数范围**: 全局参数
 - **修改形式**: 动态修改
 - **参数类型**: 布尔类型

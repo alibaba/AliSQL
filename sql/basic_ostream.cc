@@ -35,14 +35,15 @@ bool IO_CACHE_ostream::open(
 #ifdef HAVE_PSI_INTERFACE
     PSI_file_key log_file_key [[maybe_unused]],
 #endif
-    const char *file_name, myf flags) {
+    const char *file_name, myf flags, size_t cache_size) {
   File file = -1;
 
   if ((file = mysql_file_open(log_file_key, file_name, O_CREAT | O_WRONLY,
                               MYF(MY_WME))) < 0)
     return true;
 
-  if (init_io_cache(&m_io_cache, file, IO_SIZE, WRITE_CACHE, 0, false, flags)) {
+  if (init_io_cache(&m_io_cache, file, cache_size, WRITE_CACHE, 0, false,
+                    flags)) {
     mysql_file_close(file, MYF(0));
     return true;
   }

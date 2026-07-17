@@ -39,9 +39,9 @@ AliSQL brings enterprise-grade capabilities to MySQL, combining the reliability 
 <tr>
 <td width="33%" align="center">
 
-### 200x Faster Analytics
+### 200x+ Speedups in Reference Tests
 
-DuckDB columnar engine delivers **200x speedup** on analytical queries compared to InnoDB
+The included [TPC-H SF100 reference results](./wiki/duckdb/duckdb-en.md#performance-benchmarks) show more than **200x speedups** over InnoDB on multiple queries
 
 </td>
 <td width="33%" align="center">
@@ -53,9 +53,9 @@ Built-in HNSW algorithm supporting up to **16,383 dimensions** for AI/ML workloa
 </td>
 <td width="33%" align="center">
 
-### 100% MySQL Compatible
+### MySQL-Compatible Interfaces
 
-Use your existing MySQL tools, drivers, and SQL — zero learning curve
+Keep using familiar MySQL tools, drivers, and SQL while adopting AliSQL extensions
 
 </td>
 </tr>
@@ -67,9 +67,11 @@ Use your existing MySQL tools, drivers, and SQL — zero learning curve
 |---------|-------------|--------|
 | **DuckDB Storage Engine** | Columnar OLAP engine with automatic compression, perfect for analytics workloads | Available |
 | **Vector Index (VIDX)** | Native vector storage & ANN search with HNSW, supports COSINE & EUCLIDEAN distance | Available |
+| **Native Flashback** | Query historical InnoDB data with `AS OF TIMESTAMP` and retained undo snapshots | Available |
+| **Large TX Optimization** | Binlog Cache Free Flush is implemented, but its optimized path is inactive in the standard DuckDB-enabled build | Inactive in standard build |
+| **Binlog Durability** | Persist Binlog Into Redo V2 reduces synchronous binlog I/O while retaining crash recovery | Available |
 | **DDL Optimization** | Instant DDL, parallel B+tree construction, non-blocking locks | Planned |
 | **RTO Optimization** | Accelerated crash recovery for faster instance startup | Planned |
-| **Replication Boost** | Binlog Parallel Flush, Binlog in Redo, large transaction optimization | Planned |
 
 ## Quick Start
 
@@ -97,8 +99,8 @@ make install
 # Initialize data directory
 ~/alisql/bin/mysqld --initialize-insecure --datadir=~/alisql/data
 
-# Start the server
-~/alisql/bin/mysqld --datadir=~/alisql/data
+# Start the server with DuckDB enabled for the example below
+~/alisql/bin/mysqld --datadir=~/alisql/data --duckdb_mode=ON
 ```
 
 ## Usage Examples
@@ -114,7 +116,7 @@ CREATE TABLE sales_analytics (
     quantity INT
 ) ENGINE=DuckDB;
 
--- Run complex analytics (200x faster than InnoDB!)
+-- Run an analytical aggregation through DuckDB
 SELECT
     DATE_FORMAT(sale_date, '%Y-%m') as month,
     SUM(revenue) as total_revenue,
@@ -127,19 +129,29 @@ ORDER BY total_revenue DESC;
 ### Vector Search for AI Applications
 
 ```sql
--- Create a table with vector column
+-- Vector features are disabled by default and vector indexes require RC.
+SET GLOBAL vidx_disabled = OFF;
+SET SESSION transaction_isolation = 'READ-COMMITTED';
+
+-- Create a table with a vector column
 CREATE TABLE embeddings (
     id INT PRIMARY KEY,
     content TEXT,
-    embedding VECTOR(768)  -- 768-dimensional vectors
+    embedding VECTOR(3)
 ) ENGINE=InnoDB;
 
+INSERT INTO embeddings VALUES
+    (1, 'first document', VEC_FROMTEXT('[0.1,0.2,0.3]')),
+    (2, 'second document', VEC_FROMTEXT('[0.2,0.1,0.4]'));
+
 -- Create HNSW index for fast ANN search
-CREATE VECTOR INDEX idx_embedding ON embeddings(embedding);
+CREATE VECTOR INDEX idx_embedding ON embeddings(embedding) DISTANCE=COSINE;
 
 -- Find similar items using cosine distance
 SELECT id, content,
-       COSINE_DISTANCE(embedding, '[0.1, 0.2, ...]') as distance
+       VEC_DISTANCE_COSINE(
+           embedding, VEC_FROMTEXT('[0.1,0.2,0.3]')
+       ) AS distance
 FROM embeddings
 ORDER BY distance
 LIMIT 10;
@@ -150,7 +162,7 @@ LIMIT 10;
 | Option | Description | Default |
 |--------|-------------|---------|
 | `-t release\|debug` | Build type | `debug` |
-| `-d <dir>` | Installation directory | `/usr/local/alisql` |
+| `-d <dir>` | Installation directory | `/usr/local/alisql` when writable; otherwise `$HOME/alisql` |
 | `-g asan\|tsan` | Enable sanitizer (memory/thread) | disabled |
 | `-c` | Enable code coverage (gcov) | disabled |
 
@@ -160,14 +172,15 @@ LIMIT 10;
 
 ```
 Q4 2025  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-         [x] DuckDB Storage Engine  [x] Vector Index (VIDX)   [x] Open Source
+         [x] DuckDB Storage Engine  [x] Vector Index (VIDX)   [x] 8.0.44 Release
 
 2026     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-         [ ] DDL Optimization       [ ] RTO Optimization      [ ] Replication Boost
-             - Instant DDL              - Fast Crash Recovery     - Binlog Parallel Flush
-             - Parallel B+tree          - Minimize RTO            - Binlog in Redo
-             - Non-blocking Locks                                 - Large TX Optimization
+         [x] Native Flashback       [x] Transaction & Binlog   [ ] DDL / RTO
+             - AS OF TIMESTAMP          - Binlog in Redo V2       - Instant DDL
+             - Undo snapshots           - Free Flush*              - Fast Crash Recovery
 ```
+
+`*` The Free Flush implementation is present, but its optimized path is inactive in the standard DuckDB-enabled build.
 
 ## Documentation
 
@@ -175,6 +188,9 @@ Q4 2025  ━━━━━━━━━━━━━━━━━━━━━━━�
 |----------|-------------|
 | [DuckDB Integration Guide](./wiki/duckdb/duckdb-en.md) | Complete guide for DuckDB storage engine |
 | [Vector Index Guide](./wiki/vidx/vidx_readme.md) | Native vector storage and ANN search |
+| [Native Flashback Guide](./wiki/native-flashback/native-flashback-en.md) | Historical InnoDB queries and recovery |
+| [Binlog in Redo Guide](./wiki/binlog-in-redo/binlog-in-redo-en.md) | Redo-backed binlog persistence and fallback rules |
+| [Binlog Cache Free Flush Guide](./wiki/binlog-cache-free-flush/binlog-cache-free-flush-en.md) | Large-transaction optimization and current availability |
 | [Release Notes](./wiki/changes-in-alisql-8.0.44.md) | What's new in AliSQL 8.0.44 |
 | [Setup DuckDB Node](./wiki/duckdb/how-to-setup-duckdb-node-en.md) | Quick setup guide for analytics |
 
@@ -183,9 +199,23 @@ Q4 2025  ━━━━━━━━━━━━━━━━━━━━━━━�
 - [DuckDB Official Docs](https://duckdb.org/docs/stable/)
 - [Detailed Article (Chinese)](https://mp.weixin.qq.com/s/_YmlV3vPc9CksumXvXWBEw)
 
+## Alibaba Cloud RDS MySQL
+
+For managed production deployments, Alibaba Cloud RDS MySQL productizes selected AliSQL capabilities with service-managed kernel rollout, topology, synchronization, backup, monitoring, and support. RDS product requirements and parameter defaults can differ from this source branch; use the official product documentation for RDS instances.
+
+| Capability | RDS MySQL product documentation |
+|------------|---------------------------------|
+| DuckDB analytical instances | [English](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/duckdb-analysis-instance) / [中文](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/duckdb-analysis-instance) |
+| Vector storage | [English](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/vector-storage-1) / [中文](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/vector-storage-1) |
+| Native Flashback | [English](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/native-flashback) / [中文](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/native-flashback) |
+| Binlog Cache Free Flush | [English](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/binlog-cache-free-flush) / [中文](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/binlog-cache-free-flush) |
+| Binlog in Redo | [English](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/binlog-in-redo) / [中文](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/binlog-in-redo) |
+
+Each local feature guide documents the boundary between this source branch and its corresponding RDS commercial capability.
+
 ## Contributing
 
-AliSQL became open source in December 2025 and is actively maintained by Alibaba Cloud Database Team.
+AliSQL has been open source since August 2016 and is actively maintained by Alibaba Cloud Database Team. The current 8.0.44 feature release continues that open-source line.
 
 We welcome contributions of all kinds!
 
@@ -247,7 +277,7 @@ For bug reports & feature requests
 
 Managed DuckDB analytical instances
 
-[Learn More](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/duckdb-based-analytical-instance/)
+[Learn More](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/duckdb-analysis-instance)
 
 </td>
 </tr>

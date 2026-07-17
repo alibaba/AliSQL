@@ -1,0 +1,37 @@
+################################################################################
+# [Feature] Persist Binlog Into Redo
+#
+# RESET MASTER does a forced checkpoint. The binlog records which were written
+# into the redo log before RESET MASTER must never be replayed, otherwise the
+# freshly created binlog file would be corrupted by stale events.
+################################################################################
+--source include/have_debug.inc
+--source include/have_log_bin.inc
+--source include/have_binlog_format_row.inc
+--source include/have_persist_binlog_to_redo.inc
+
+SET GLOBAL persist_binlog_to_redo = ON;
+CREATE TABLE t1(c1 INT) ENGINE=InnoDB;
+
+FLUSH BINARY LOGS;
+
+INSERT INTO t1 VALUES(1);
+
+RESET MASTER;
+
+--source include/expect_crash.inc
+SET debug = "d,crash_commit_before_log";
+--error 2013
+INSERT INTO t1 VALUES(2);
+
+--source include/start_mysqld.inc
+
+--echo # Only the row committed before RESET MASTER is present. The binlog
+--echo # records written into redo before RESET MASTER were not replayed.
+SELECT * FROM t1;
+
+# The server was restarted after the crash, so persist_binlog_to_redo is back
+# to its startup value (OFF, it is not set in the -master.opt file).
+SET GLOBAL persist_binlog_to_redo = default;
+
+DROP TABLE t1;

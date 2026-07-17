@@ -2712,6 +2712,8 @@ class Owned_gtids {
   lock implies that everything except SID-specific data is locked.
 */
 class Gtid_state {
+  friend class Binlog_ext;
+
  public:
   /**
     Constructs a new Gtid_state object.

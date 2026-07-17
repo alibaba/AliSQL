@@ -29,6 +29,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 extern bool duckdb_require_primary_key;
 extern bool force_innodb_to_duckdb;
+extern bool ignore_index_hint_error;
 
 /**
   @brief Check if need to change original storage engine to InnoDB

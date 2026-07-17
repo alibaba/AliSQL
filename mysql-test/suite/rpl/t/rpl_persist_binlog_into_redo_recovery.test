@@ -1,0 +1,20 @@
+################################################################################
+# [Feature] Persist binlog into redo
+#
+# Binlog events of transactions are write into both binlog and redo log when
+# commit. Thus we can relax the fsync operation on binlog. Since the lost binlog
+# can be recovered from redo log.
+#
+# This test verify the lost binlog events are recovered correctly when the
+# server restarts. Binlog checksum is CRC32.
+################################################################################
+--source include/have_debug.inc
+--source include/have_debug_sync.inc
+--source include/have_binlog_format_row.inc
+--source include/master-slave.inc
+
+SET GLOBAL binlog_checksum = "CRC32";
+--source extra/rpl_tests/persist_binlog_into_redo_recovery.test
+
+SET GLOBAL binlog_checksum = DEFAULT;
+--source include/rpl_end.inc

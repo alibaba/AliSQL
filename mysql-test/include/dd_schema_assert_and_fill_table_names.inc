@@ -11,7 +11,8 @@ SET debug = '+d,skip_dd_table_access_check';
 --echo ########################################################################
 let $number_of_hidden_dd_tables = 32;
 let $assert_cond = "[SELECT COUNT(*) from mysql.tables
-                       WHERE schema_id = 1 AND hidden = \'System\']"
+                       WHERE schema_id = 1 AND hidden = \'System\'
+                       AND name <> \'innodb_flashback_snapshot\']"
                     = $number_of_hidden_dd_tables;
 --let $assert_text = There are 32 hidden DD/DDSE tables.
 --source include/assert.inc
@@ -88,6 +89,7 @@ let $assert_cond = "[SELECT (SELECT COUNT(*) FROM $dd_table_names) +
 let $assert_cond = "[SELECT COUNT(*) FROM mysql.tables
                        WHERE schema_id = 1
                        AND hidden = \'System\'
+                       AND name <> \'innodb_flashback_snapshot\'
                        AND name NOT IN (SELECT name FROM $dd_table_names)
                        AND name NOT IN (SELECT name FROM $ddse_table_names)]"
                     = 0;

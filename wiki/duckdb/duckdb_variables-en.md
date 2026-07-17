@@ -1,6 +1,111 @@
 # DuckDB Engine Variables in AliSQL
 [ [AliSQL DuckDB 引擎参数](./duckdb_variables-zh.md) | [DuckDB Engine Variables in AliSQL](./duckdb_variables-en.md) ]
 
+> This page documents the self-managed AliSQL source branch. Alibaba Cloud RDS MySQL DuckDB analytical instances have product-specific eligibility and managed settings; see the official [English](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/duckdb-analysis-instance) or [Chinese](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/duckdb-analysis-instance) documentation for RDS instances.
+
+## Variables Added with the AliSQL 8.0.44 DuckDB Enhancements
+
+| Variable | Scope | Default | Purpose |
+|----------|-------|---------|---------|
+| `duckdb_sql_normalization` | Global, Session | `OFF` | Rewrite additional MySQL SQL constructs for DuckDB |
+| `duckdb_max_threads_per_query` | Global, Session | `1000000` | Limit threads used by one user query |
+| `duckdb_max_threads_per_query_rpl` | Global | `1000000` | Limit threads used by one replication query |
+| `duckdb_psmt_cursor_send_extra_eof` | Global, Session | `ON` | Preserve EOF behavior for older JDBC cursor clients |
+| `duckdb_prefer_high_precision` | Global, Session | `OFF` | Prefer high-precision DuckDB calculation paths |
+| `duckdb_convert_tables_with_generated_columns` | Global | `ON` | Allow generated-column table conversion |
+| `duckdb_copy_data_between_tables_use_ins_sel` | Global, Session | `OFF` | Use `INSERT ... SELECT` for DuckDB-to-DuckDB Copy DDL |
+| `ignore_index_hint_error` | Global | `OFF` | Downgrade missing index hints from errors to warnings |
+
+All variables in this section are dynamic. Variables marked `Global, Session` have a global default and a per-connection value: `SET GLOBAL` affects new sessions, while `SET SESSION` affects only the current session.
+
+## `duckdb_sql_normalization`
+
+- **Scope**: Global, Session
+- **Change type**: Dynamic
+- **Data type**: Boolean
+- **Default**: `OFF`
+- **Valid values**: `ON` \| `OFF`
+- **Description**: Rewrites supported MySQL syntax and functions before sending a query to DuckDB. The normalization path includes cross-database name handling and prepared-statement reprepare support. Enable it per workload after compatibility testing.
+
+---
+
+## `duckdb_max_threads_per_query`
+
+- **Scope**: Global, Session
+- **Change type**: Dynamic
+- **Data type**: Unsigned integer
+- **Default**: `1000000`
+- **Valid range**: `1` ~ `4611686018427387904`
+- **Description**: Maximum number of DuckDB worker threads available to a single user query. Set a practical value lower than `duckdb_threads` to prevent one query from consuming the entire worker pool.
+
+---
+
+## `duckdb_max_threads_per_query_rpl`
+
+- **Scope**: Global
+- **Change type**: Dynamic
+- **Data type**: Unsigned integer
+- **Default**: `1000000`
+- **Valid range**: `1` ~ `4611686018427387904`
+- **Description**: Maximum number of DuckDB worker threads available to a single replication query.
+
+---
+
+## `duckdb_psmt_cursor_send_extra_eof`
+
+- **Scope**: Global, Session
+- **Change type**: Dynamic
+- **Data type**: Boolean
+- **Default**: `ON`
+- **Valid values**: `ON` \| `OFF`
+- **Description**: Sends an additional EOF packet when a prepared statement executed with a cursor returns an empty result set. Keep this enabled for MySQL Connector/J versions earlier than 9.5.0.
+
+---
+
+## `duckdb_prefer_high_precision`
+
+- **Scope**: Global, Session
+- **Change type**: Dynamic
+- **Data type**: Boolean
+- **Default**: `OFF`
+- **Valid values**: `ON` \| `OFF`
+- **Description**: Requests high-precision calculation paths from DuckDB where supported. This can trade performance for numerical precision.
+
+---
+
+## `duckdb_convert_tables_with_generated_columns`
+
+- **Scope**: Global
+- **Change type**: Dynamic
+- **Data type**: Boolean
+- **Default**: `ON`
+- **Valid values**: `ON` \| `OFF`
+- **Description**: Allows tables containing generated columns to be converted to the DuckDB storage engine. When disabled, such conversions fail before data copy.
+
+---
+
+## `duckdb_copy_data_between_tables_use_ins_sel`
+
+- **Scope**: Global, Session
+- **Change type**: Dynamic
+- **Data type**: Boolean
+- **Default**: `OFF`
+- **Valid values**: `ON` \| `OFF`
+- **Description**: Uses a DuckDB `INSERT ... SELECT` path instead of server row-by-row transfer when Copy DDL copies data between two DuckDB tables. Enable it after validating the table definition and data types used by the workload.
+
+---
+
+## `ignore_index_hint_error`
+
+- **Scope**: Global
+- **Change type**: Dynamic
+- **Data type**: Boolean
+- **Default**: `OFF`
+- **Valid values**: `ON` \| `OFF`
+- **Description**: Allows an index hint to reference an index that does not exist. The server emits a warning instead of rejecting the statement. This is a server-wide compatibility option and is not limited to DuckDB tables.
+
+---
+
 ## `duckdb_mode`
 - **Scope**: Global  
 - **Change type**: Static (restart required)  
@@ -91,7 +196,7 @@
 ---
 
 ## `duckdb_merge_join_threshold`
-- **Scope**: Session  
+- **Scope**: Global, Session
 - **Change type**: Dynamic  
 - **Data type**: Integer (rows)  
 - **Default**: `4611686018427387904`  
@@ -116,17 +221,17 @@
 - **Data type**: Boolean  
 - **Default**: `OFF`  
 - **Valid values**: `ON` \| `OFF`  
-- **Description**: During startup conversion from InnoDB to DuckDB, whether to ignore conversion errors and continue. This variable is read-only and can only be configured before startup.
+- **Description**: During startup conversion from InnoDB to DuckDB, whether to ignore conversion errors and continue. When enabled, startup can complete with only part of the user tables converted, so inspect every failure and verify the final engine map. This variable is read-only and can only be configured before startup.
 
 ---
 
 ## `duckdb_convert_all_at_startup_threads`
 - **Scope**: Global  
-- **Change type**: Static  
+- **Change type**: Dynamic (used by the next startup conversion)
 - **Data type**: Integer  
 - **Default**: `4`  
 - **Valid range**: `1` ~ `64`  
-- **Description**: Number of threads used to convert tables at startup to accelerate bulk migration. This variable is read-only and can only be configured before startup.
+- **Description**: Number of threads used to convert tables at startup to accelerate bulk migration. Changing it after startup does not affect a conversion that has already run; configure it in `my.cnf` or persist the value for the next startup conversion.
 
 ---
 
@@ -141,7 +246,7 @@
 ---
 
 ## `duckdb_force_no_collation`
-- **Scope**: Session  
+- **Scope**: Global, Session
 - **Change type**: Dynamic  
 - **Data type**: Boolean  
 - **Default**: `OFF`  
@@ -161,7 +266,7 @@
 ---
 
 ## `duckdb_explain_output`
-- **Scope**: Session  
+- **Scope**: Global, Session
 - **Change type**: Dynamic  
 - **Data type**: Enum  
 - **Default**: `PHYSICAL_ONLY`  
@@ -176,7 +281,7 @@
 - **Data type**: Boolean  
 - **Default**: `OFF`  
 - **Valid values**: `ON` \| `OFF`  
-- **Description**: Whether to merge multiple transactions from the relay log into a single batch commit to improve throughput. Effective only on replicas.
+- **Description**: Whether to merge multiple transactions from the relay log into a single batch commit to improve throughput. Effective only on replicas. The replica must be stopped when this variable is changed, and `replica_parallel_workers` must be `0` before replication starts.
 
 ---
 
@@ -231,7 +336,7 @@
 ---
 
 ## `duckdb_copy_ddl_threads`
-- **Scope**: Session  
+- **Scope**: Global, Session
 - **Change type**: Dynamic  
 - **Data type**: Integer  
 - **Default**: `4`  
@@ -253,18 +358,18 @@
 
 ## `duckdb_use_double_for_decimal`
 - **Scope**: Global  
-- **Change type**: Static  
+- **Change type**: Dynamic
 - **Data type**: Boolean  
 - **Default**: `ON`  
 - **Valid values**: `ON` \| `OFF`  
-- **Description**: DuckDB does not support DECIMAL precision > 38. This variable controls whether to use DOUBLE instead for DECIMAL with precision > 38. This variable is read-only and can only be set before startup.
+- **Description**: DuckDB does not support DECIMAL precision > 38. This variable controls whether to use DOUBLE instead for DECIMAL with precision > 38. It is dynamically assignable, but changing it after tables have been created can make physical column types inconsistent across tables.
 
 > Note: This affects the actual column type and should not be changed after the instance is created.
 
 ---
 
 ## `duckdb_disabled_optimizers`
-- **Scope**: Session  
+- **Scope**: Global, Session
 - **Change type**: Dynamic  
 - **Data type**: Enum set  
 - **Default**: `0` (empty set)  
@@ -281,7 +386,7 @@
 ---
 
 ## `duckdb_data_import_mode`
-- **Scope**: Session  
+- **Scope**: Global, Session
 - **Change type**: Dynamic  
 - **Data type**: Boolean  
 - **Default**: `OFF`  
@@ -366,7 +471,17 @@
 
 ---
 
-## `update_modified_column_only`
+## `duckdb_batch_max_row_count`
+- **Scope**: Global
+- **Change type**: Dynamic
+- **Data type**: Unsigned integer (rows)
+- **Default**: `0` (no row-count limit)
+- **Valid range**: `0` ~ `ULLONG_MAX`
+- **Description**: Maximum number of rows in one DuckDB DML batch. Use it to split very large batches and reduce peak memory usage; `0` disables the row-count limit.
+
+---
+
+## `duckdb_update_modified_column_only`
 - **Scope**: Global  
 - **Change type**: Dynamic  
 - **Data type**: Boolean  

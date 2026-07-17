@@ -1,0 +1,99 @@
+set @old_innodb_rds_flashback_enabled = @@global.innodb_rds_flashback_enabled;
+set global innodb_rds_flashback_enabled = 0;
+create table tt (a int);
+create table pp (a int);
+create view vv as select * from pp;
+select * from tt as of timestamp now() as alias;
+a
+select * from tt as of timestamp now() alias;
+a
+select * from tt as of timestamp now();
+a
+select * from tt as of timestamp date_sub(now(), interval 1 minute);
+a
+select * from tt as of timestamp date_sub(current_timestamp, interval 5 second);
+a
+select * from (select * from tt as of timestamp now()) ff;
+a
+select * from (
+select * from tt as of timestamp date_sub(now(), interval 1 minute) as alias
+union all
+select * from tt as of timestamp now()
+) ff;
+a
+with ff as (select * from tt as of timestamp now()) select * from ff;
+a
+with ff as (select * from tt as of timestamp now()) update pp set a = 0 where a = (select max(a) from ff);
+select * from pp where a = (select max(a) from tt as of timestamp now() as alias);
+a
+select * from tt group by a having a < (select sum(a) from pp as of timestamp now() as alias);
+a
+update tt set a = 0 where a < (select sum(a) from pp as of timestamp now() as alias);
+select ll.* from tt as of timestamp now() ll join pp as of timestamp now() as vv on vv.a = ll.a;
+a
+select * from tt as of timestamp (select date_add(current_timestamp, interval 1 day));
+a
+select * from tt as of timestamp date_add(current_timestamp, interval 1 day);
+a
+select * from tt as of timestamp now();
+a
+select * from tt as of timestamp '2020-01-01 01:01:01';
+a
+select * from tt as of timestamp (1 < 2);
+ERROR HY000: Snapshot (as of) 'timestamp' must be of type timestamp
+delete from pp;
+insert into pp values(1);
+prepare ps from 'select * from tt as of timestamp ?';
+ERROR HY000: Snapshot (as of) 'timestamp' must be of type timestamp
+prepare ps from 'select * from tt as of timestamp (select now() from pp where 1=?)';
+set @var=1;
+execute ps using @var;
+a
+set @var=0;
+execute ps using @var;
+ERROR HY000: Snapshot (as of) 'timestamp' must be of type timestamp
+drop prepare ps;
+delete from pp;
+CREATE PROCEDURE execute_dml()
+BEGIN
+DECLARE var INT;
+select count(*) from tt as of timestamp now() into var;
+END|
+call execute_dml();
+call execute_dml();
+call execute_dml();
+DROP PROCEDURE execute_dml;
+create temporary table tmp(a int);
+select * from tmp as of timestamp now();
+ERROR HY000: Snapshot (as of) expression not allowed for 'tmp', cause it is not a innodb base table
+drop table tmp;
+select * from tt as of timestamp now() as alias for update;
+ERROR HY000: Snapshot (as of) expression not allowed for 'alias', cause it is with LOCK clause
+select * from tt as of timestamp now() as alias LOCK IN SHARE MODE;
+ERROR HY000: Snapshot (as of) expression not allowed for 'alias', cause it is with LOCK clause
+select * from vv as of timestamp now();
+ERROR HY000: Snapshot (as of) expression not allowed for 'vv', cause it is not a innodb base table
+lock tables vv read;
+select * from vv as of timestamp now();
+ERROR HY000: Snapshot (as of) expression not allowed for 'vv', cause it is not a innodb base table
+unlock tables;
+update tt as of timestamp now() as alias set a = 0;
+ERROR HY000: Snapshot (as of) expression can only be appear in select from list tables
+delete from tt as of timestamp now() as alias;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'of timestamp now() as alias' at line 1
+insert into tt as of timestamp now() values (1);
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'as of timestamp now() values (1)' at line 1
+create table no_ok as of timestamp now() alias (a int);
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'of timestamp now() alias (a int)' at line 1
+alter table tt as of timestamp now() add column b int;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'as of timestamp now() add column b int' at line 1
+lock table tt as of timestamp now();
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'of timestamp now()' at line 1
+handler tt as of timestamp now() open;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'as of timestamp now() open' at line 1
+replace into tt as of timestamp now() valuse (1);
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'as of timestamp now() valuse (1)' at line 1
+drop view vv;
+drop table tt;
+drop table pp;
+set global innodb_rds_flashback_enabled = @old_innodb_rds_flashback_enabled;

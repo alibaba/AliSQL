@@ -11,7 +11,7 @@ SELECT tables1.name, mysql.tablespaces.name INTO OUTFILE '<OUTFILE1>' FROM
 (SELECT * FROM mysql.tables WHERE schema_id IN
 (SELECT id FROM mysql.schemata WHERE name='mysql')) AS tables1 LEFT JOIN
 mysql.tablespaces ON tables1.tablespace_id = tablespaces.id
-WHERE tables1.name NOT IN ('ndb_binlog_index') ORDER BY tables1.name;
+WHERE tables1.name NOT IN ('ndb_binlog_index', 'innodb_flashback_snapshot') ORDER BY tables1.name;
 catalogs	mysql
 character_sets	mysql
 check_constraints	mysql
@@ -83,7 +83,7 @@ view_routine_usage	mysql
 view_table_usage	mysql
 SELECT name INTO OUTFILE '<OUTFILE2>' FROM mysql.tables WHERE
 tablespace_id IN (SELECT id FROM mysql.tablespaces WHERE name='mysql') AND
-name NOT IN ('ndb_binlog_index')
+name NOT IN ('ndb_binlog_index', 'innodb_flashback_snapshot')
 ORDER BY name ASC;
 catalogs
 character_sets
@@ -202,10 +202,10 @@ SELECT tables1.name, mysql.tablespaces.name INTO OUTFILE '<OUTFILE3>' FROM
 (SELECT * FROM mysql.tables WHERE schema_id IN
 (SELECT id FROM mysql.schemata WHERE name='mysql')) AS tables1 LEFT JOIN
 mysql.tablespaces ON tables1.tablespace_id = tablespaces.id
-WHERE tables1.name NOT IN ('ndb_binlog_index') ORDER BY tables1.name;
+WHERE tables1.name NOT IN ('ndb_binlog_index', 'innodb_flashback_snapshot') ORDER BY tables1.name;
 SELECT name INTO OUTFILE '<OUTFILE4>' FROM mysql.tables WHERE
 tablespace_id IN (SELECT id FROM mysql.tablespaces WHERE name='mysql') AND
-name NOT IN ('ndb_binlog_index')
+name NOT IN ('ndb_binlog_index', 'innodb_flashback_snapshot')
 ORDER BY name ASC;
 # Difference between files from in-place upgrade and new data directory.
 # Stop the server

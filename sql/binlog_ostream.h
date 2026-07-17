@@ -122,7 +122,7 @@ class IO_CACHE_binlog_cache_storage : public Truncatable_ostream {
      @retval false  Success
      @retval true  Error
   */
-  bool begin(unsigned char **buffer, my_off_t *length);
+  bool begin(unsigned char **buffer, my_off_t *length, my_off_t offset = 0);
   /**
      Returns next piece of data. buffer is controlled by binlog cache
      implementation, so caller should not release it. If the function sets
@@ -137,6 +137,10 @@ class IO_CACHE_binlog_cache_storage : public Truncatable_ostream {
   my_off_t length() const;
   bool flush() override { return false; }
   bool sync() override { return false; }
+
+  IO_CACHE *get_io_cache() { return &m_io_cache; }
+
+  my_off_t get_max_cache_size() { return m_max_cache_size; }
 
  private:
   IO_CACHE m_io_cache;
@@ -167,6 +171,180 @@ class IO_CACHE_binlog_cache_storage : public Truncatable_ostream {
 };
 
 /**
+  It provides a mechanism to reform the binlog cache tmp file for binlog cache
+  free flush. Reformation include:
+    1. Use KEEP FILE instead of UNLINK FILE as tmp file.
+    2. Reserve space in front of the binlog cache tmp file.
+    3. Provide read/write with reserved space.
+
+  * m_file_reserved_size
+    It records the file reserved size of tmp file, will be set to zero if free
+    flush disabled or this cache is not trx cache.
+
+    m_file_reserved_size will be set before the first event write to cache, in
+    get_file_reserved_size() -> init_file_reserved_size().
+
+    If m_file_reserved_size == 0 after init, tmp file will use UNLINK FILE, no
+    space will be reserved in front of the tmp file.
+
+    If m_file_reserved_size > 0 after init, tmp file will use KEEP FILE,
+    reserved space size will be recorded in IO_CACHE in pos_in_file. When memory
+    cache full, tmp file will be created if not exist, and seeked to pos_in_file
+    before write.
+
+    m_file_reserved_size will be reset to zero in reset().
+
+  * m_enabled
+    It records whether this cache is enabled for free flush, it will be set in
+    init_file_reserved_size().
+
+    When free flush switched on or off, the tmp file of this cache will be close
+    and unlink(if needed) according to this flag in init_file_reserved_size().
+
+  * m_trx_flag
+    It records whether this cache is trx cache.
+*/
+class RDS_binlog_cache_storage : public Truncatable_ostream {
+ public:
+  RDS_binlog_cache_storage();
+  RDS_binlog_cache_storage &operator=(const RDS_binlog_cache_storage &) =
+      delete;
+  RDS_binlog_cache_storage(const RDS_binlog_cache_storage &) = delete;
+  ~RDS_binlog_cache_storage() override;
+
+  /**
+     Opens the binlog cache.
+
+     @param[in] dir  Where the temporary file will be created
+     @param[in] prefix  Prefix of the temporary file name
+     @param[in] cache_size  Size of the memory buffer.
+     @param[in] max_cache_size  Maximum size of the memory buffer
+     @param[in] trx_flag_arg Whether this cache is a trx cache.
+
+     @retval false  Success
+     @retval true  Error
+  */
+  bool open(const char *dir, const char *prefix, my_off_t cache_size,
+            my_off_t max_cache_size, bool trx_flag_arg);
+  void close();
+
+  bool truncate(my_off_t offset) override {
+    return m_file.truncate(offset + m_file_reserved_size);
+  }
+  /**
+     Reset status and drop all data. It looks like a cache never was used after
+     reset.
+  */
+  bool reset() {
+    m_file_reserved_size = 0;
+    return m_file.reset();
+  }
+
+  bool write(const unsigned char *buffer, my_off_t length) override;
+  /* purecov: inspected */
+  /* binlog cache doesn't need seek operation. Setting true to return error */
+  bool seek(my_off_t offset [[maybe_unused]]) override { return true; }
+
+  /**
+     Returns the file name if a temporary file is opened, otherwise nullptr is
+     returned.
+  */
+  const char *tmp_file_name() const { return m_file.tmp_file_name(); }
+  /**
+     Returns the count of calling temporary file's write()
+  */
+  size_t disk_writes() const { return m_file.disk_writes(); }
+
+  /**
+     Initializes binlog cache for reading and returns the data at the begin.
+     buffer is controlled by binlog cache implementation, so caller should
+     not release it. If the function sets *length to 0 and no error happens,
+     it has reached the end of the cache.
+
+     @param[out] buffer  It points to buffer where data is read.
+     @param[out] length  Length of the data in the buffer.
+     @retval false  Success
+     @retval true  Error
+  */
+  bool begin(unsigned char **buffer, my_off_t *length) {
+    /* Cache not empty is checked in write_cache() before call this function. */
+    assert(m_file.length() != 0);
+    return m_file.begin(buffer, length, m_file_reserved_size);
+  }
+
+  /**
+     Returns next piece of data. buffer is controlled by binlog cache
+     implementation, so caller should not release it. If the function sets
+     *length to 0 and no error happens, it has reached the end of the cache.
+
+     @param[out] buffer  It points to buffer where data is read.
+     @param[out] length  Length of the data in the buffer.
+     @retval false  Success
+     @retval true  Error
+  */
+  bool next(unsigned char **buffer, my_off_t *length) {
+    return m_file.next(buffer, length);
+  }
+
+  my_off_t length() const { return m_file.length() - m_file_reserved_size; }
+  bool flush() override { return false; }
+  bool sync() override { return false; }
+
+  /** Close and detach the cache tmp file. */
+  void detach_temp_file();
+
+  /**
+   Return reserved size of the cache tmp file, return zero if free flush is
+   disabled.
+  */
+  my_off_t get_file_reserved_size();
+
+  /** Return the end pos of binlog cache, include reserved space if exist. */
+  my_off_t get_file_end_pos() const { return m_file.length(); }
+
+  /** flush the cahce to temp file, and sync the temp file to disk. */
+  bool flush_and_sync();
+
+  /**
+    Returns true if binlog cache encryption is enabled.
+  */
+  bool is_encryption_enabled() {
+    return (m_file.get_io_cache()->m_encryptor != nullptr ||
+            m_file.get_io_cache()->m_decryptor != nullptr);
+  }
+
+ private:
+  /**
+    Generate the file name for the cache tmp file.
+
+    @param[out] name The name for the cache tmp file.
+  */
+  void generate_tmp_file_name(char *name);
+
+  /**
+    Initialize the m_file_reserved_size and the cache tmp file.
+  */
+  void init_file_reserved_size();
+
+  /* Whether this cache is a trx cache. */
+  bool m_trx_flag = false;
+
+  /*
+    Whether last time this cache is enabled for free flush in
+    init_file_reserved_size().
+  */
+  bool m_enabled = false;
+
+  /*
+    The offset of reverse space in front of the cache tmp file, reserved for
+    binlog header and events. It will be set to zero if free flush is disabled.
+  */
+  my_off_t m_file_reserved_size = 0;
+
+  IO_CACHE_binlog_cache_storage m_file;
+};
+
+/**
    Byte container that provides a storage for serializing session
    binlog events. This way of arranging the classes separates storage layer
    and binlog layer, hides the implementation detail of low level storage.
@@ -175,7 +353,7 @@ class Binlog_cache_storage : public Basic_ostream {
  public:
   ~Binlog_cache_storage() override;
 
-  bool open(my_off_t cache_size, my_off_t max_cache_size);
+  bool open(my_off_t cache_size, my_off_t max_cache_size, bool trx_flag_arg);
   void close();
 
   bool write(const unsigned char *buffer, my_off_t length) override {
@@ -233,9 +411,11 @@ class Binlog_cache_storage : public Basic_ostream {
   */
   bool is_empty() const { return length() == 0; }
 
+  RDS_binlog_cache_storage *get_rds_cache_storage() { return &m_file; }
+
  private:
   Truncatable_ostream *m_pipeline_head = nullptr;
-  IO_CACHE_binlog_cache_storage m_file;
+  RDS_binlog_cache_storage m_file;
 };
 
 /**

@@ -19,7 +19,7 @@ SELECT t1_innodb.col1 =  t2_innodb.col1 FROM t1_innodb, t2_innodb;
 t1_innodb.col1 =  t2_innodb.col1
 0
 SELECT t1_duckdb.col1 =  t2_duckdb.col1 FROM t1_duckdb, t2_duckdb;
-ERROR HY000: [DuckDB] Conversion Error: Malformed JSON at byte 3 of input: unexpected content after document.  Input: "\x22{\x22test\x22: [1, 1.2, \x22json\x22, true]...".
+ERROR HY000: [DuckDB] Conversion Error: Malformed JSON at byte 3 of input: unexpected content after document.  Input: ""{"test": [1, 1.2, "json", true]}"".
 
 2. JSON_ARRAY_APPEND()
 
@@ -95,6 +95,18 @@ JSON_CONTAINS('{"a": [1], "b": 2, "c": {"d": 4, "e":[1, 2, 3]}}', '1', '$.a')
 SELECT JSON_CONTAINS('{"a": [1], "b": 2, "c": {"d": 4, "e":[1, 2, 3]}}', '1', '$.a') FROM t1_duckdb;
 JSON_CONTAINS('{"a": [1], "b": 2, "c": {"d": 4, "e":[1, 2, 3]}}', '1', '$.a')
 1
+SELECT JSON_CONTAINS('[]', '1') FROM t1_innodb;
+JSON_CONTAINS('[]', '1')
+0
+SELECT JSON_CONTAINS('[]', '1') FROM t1_duckdb;
+JSON_CONTAINS('[]', '1')
+0
+SELECT JSON_CONTAINS('[]', '[1, 2]') FROM t1_innodb;
+JSON_CONTAINS('[]', '[1, 2]')
+0
+SELECT JSON_CONTAINS('[]', '[1, 2]') FROM t1_duckdb;
+JSON_CONTAINS('[]', '[1, 2]')
+0
 
 5. JSON_CONTAINS_PATH()
 
@@ -439,6 +451,12 @@ JSON_UNQUOTE('{"a": 1}')
 SELECT JSON_UNQUOTE('{"a": 1}') FROM t1_duckdb;
 JSON_UNQUOTE('{"a": 1}')
 {"a": 1}
+CREATE TABLE t1 (id INT PRIMARY KEY, col1 VARCHAR(20)) ENGINE=DuckDB;
+INSERT INTO t1 VALUES (1, 'aaa'), (2, 'bbb'), (3, 'ccc');
+SELECT JSON_UNQUOTE(col1) FROM t1 WHERE id = 1;
+JSON_UNQUOTE(col1)
+aaa
+DROP TABLE t1;
 
 29. JSON_VALID()
 

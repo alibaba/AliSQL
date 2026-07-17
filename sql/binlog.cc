@@ -418,7 +418,9 @@ class MYSQL_BIN_LOG::Binlog_ofile : public Basic_ostream {
 #endif
 
     std::unique_ptr<IO_CACHE_ostream> file_ostream(new IO_CACHE_ostream);
-    if (file_ostream->open(log_file_key, binlog_name, flags)) return true;
+    // set a 512K cache to reduce system call of write().
+    if (file_ostream->open(log_file_key, binlog_name, flags, 512 * 1024))
+      return true;
 
     m_pipeline_head = std::move(file_ostream);
 
@@ -549,6 +551,12 @@ class MYSQL_BIN_LOG::Binlog_ofile : public Basic_ostream {
 
     if (m_pipeline_head->truncate(offset)) return true;
     m_position = offset;
+    return false;
+  }
+
+  bool seek(my_off_t offset) {
+    if (m_pipeline_head->seek(offset)) return true;
+    if (m_position < offset) m_position = offset;
     return false;
   }
 
@@ -711,7 +719,7 @@ class binlog_cache_data {
   }
 
   bool open(my_off_t cache_size, my_off_t max_cache_size) {
-    return m_cache.open(cache_size, max_cache_size);
+    return m_cache.open(cache_size, max_cache_size, flags.transactional);
   }
 
   Binlog_cache_storage *get_cache() { return &m_cache; }
@@ -719,6 +727,8 @@ class binlog_cache_data {
   int finalize(THD *thd, Log_event *end_event, XID_STATE *xs);
   int flush(THD *thd, my_off_t *bytes, bool *wrote_xid,
             bool parallelization_barrier);
+  int flush(THD *thd, my_off_t *bytes, Binlog_event_writer *writer,
+            ulonglong ts);
   int write_event(Log_event *event);
   void set_event_counter(size_t event_counter) {
     m_event_counter = event_counter;
@@ -1445,6 +1455,7 @@ class Binlog_event_writer : public Basic_ostream {
   uchar header[LOG_EVENT_HEADER_LEN];
   my_off_t header_len = 0;
   uint32 event_len = 0;
+  Basic_ostream *m_ostream;
 
  public:
   /**
@@ -1461,6 +1472,23 @@ class Binlog_event_writer : public Basic_ostream {
         initial_checksum(my_checksum(0L, nullptr, 0)),
         checksum(initial_checksum),
         end_log_pos(binlog_file->position()) {
+    // Simulate checksum error
+    if (DBUG_EVALUATE_IF("fault_injection_crc_value", 1, 0)) checksum--;
+    m_ostream = m_binlog_file;
+  }
+
+  /**
+    Initialize a writer for a Basic_ostream. With this constructor,
+    it can write events to anywhere other than current binlog file.
+  */
+  Binlog_event_writer(Basic_ostream *ostream, uint32_t end_log_pos)
+      : m_binlog_file(nullptr),
+        have_checksum(binlog_checksum_options !=
+                      binary_log::BINLOG_CHECKSUM_ALG_OFF),
+        initial_checksum(my_checksum(0L, nullptr, 0)),
+        checksum(initial_checksum),
+        end_log_pos(end_log_pos),
+        m_ostream(ostream) {
     // Simulate checksum error
     if (DBUG_EVALUATE_IF("fault_injection_crc_value", 1, 0)) checksum--;
   }
@@ -1500,7 +1528,7 @@ class Binlog_event_writer : public Basic_ostream {
 
         if (header_len == LOG_EVENT_HEADER_LEN) {
           update_header();
-          if (m_binlog_file->write(header, header_len)) return true;
+          if (m_ostream->write(header, header_len)) return true;
 
           event_len -= header_len;
           header_len = 0;
@@ -1508,7 +1536,7 @@ class Binlog_event_writer : public Basic_ostream {
       } else {
         my_off_t write_bytes = std::min<uint64>(length, event_len);
 
-        if (m_binlog_file->write(buffer, write_bytes)) return true;
+        if (m_ostream->write(buffer, write_bytes)) return true;
 
         // update the checksum
         if (have_checksum)
@@ -1523,8 +1551,7 @@ class Binlog_event_writer : public Basic_ostream {
           uchar checksum_buf[BINLOG_CHECKSUM_LEN];
 
           int4store(checksum_buf, checksum);
-          if (m_binlog_file->write(checksum_buf, BINLOG_CHECKSUM_LEN))
-            return true;
+          if (m_ostream->write(checksum_buf, BINLOG_CHECKSUM_LEN)) return true;
           checksum = initial_checksum;
         }
       }
@@ -1587,6 +1614,17 @@ int binlog_cache_data::write_event(Log_event *ev) {
   if (ev != nullptr) {
     DBUG_EXECUTE_IF("simulate_disk_full_at_flush_pending",
                     { DBUG_SET("+d,simulate_file_write_error"); });
+
+    /*
+      In binlog cache free flush, some space will be reserved in the front of
+      binlog cache tmp file to contain FD, prev GTID and GTID events.
+
+      In this case, the end_pos of other events should also be filled with the
+      end position of tmp file, including the reserved_size of file.
+    */
+    if (m_cache.get_rds_cache_storage()->get_file_reserved_size() > 0)
+      ev->common_header->log_pos =
+          m_cache.get_rds_cache_storage()->get_file_end_pos();
 
     if (binary_event_serialize(ev, &m_cache)) {
       DBUG_EXECUTE_IF("simulate_disk_full_at_flush_pending", {
@@ -1709,7 +1747,8 @@ bool MYSQL_BIN_LOG::assign_automatic_gtids_to_flush_group(THD *first_seen) {
 */
 bool MYSQL_BIN_LOG::write_transaction(THD *thd, binlog_cache_data *cache_data,
                                       Binlog_event_writer *writer,
-                                      bool parallelization_barrier) {
+                                      bool parallelization_barrier,
+                                      ulonglong immediate_commit_ts_arg) {
   DBUG_TRACE;
 
   /*
@@ -1742,8 +1781,13 @@ bool MYSQL_BIN_LOG::write_transaction(THD *thd, binlog_cache_data *cache_data,
     we assume that the commit timestamp of the transaction is the time of
     executing this code (the time of writing the Gtid_log_event to the binary
     log).
+
+    For binlog cache free flush, the timestamp is computed before the reserved
+    space size is calculated and passed in via immediate_commit_ts_arg, so that
+    the Gtid_log_event size matches the reserved space exactly.
   */
-  ulonglong immediate_commit_timestamp = my_micro_time();
+  ulonglong immediate_commit_timestamp =
+      immediate_commit_ts_arg ? immediate_commit_ts_arg : my_micro_time();
 
   /*
     When the original_commit_timestamp session variable is set to a value
@@ -1852,11 +1896,13 @@ bool MYSQL_BIN_LOG::write_transaction(THD *thd, binlog_cache_data *cache_data,
                               gtid_event.write(writer));
   if (ret) goto end;
 
-  /*
-    finally write the transaction data, if it was not compressed
-    and written as part of the gtid event already
-  */
-  ret = mysql_bin_log.write_cache(thd, cache_data, writer);
+  if (!binlog_cache_free_flush.is_free_flushing()) {
+    /*
+      finally write the transaction data, if it was not compressed
+      and written as part of the gtid event already
+    */
+    ret = mysql_bin_log.write_cache(thd, cache_data, writer);
+  }
 
   if (!ret) {
     // update stats if monitoring is active
@@ -2348,6 +2394,7 @@ int binlog_cache_data::finalize(THD *thd, Log_event *end_event) {
   DBUG_TRACE;
   if (!is_binlog_empty()) {
     assert(!flags.finalized);
+    DBUG_EXECUTE_IF("do_not_write_xid", end_event = nullptr;);
     if (int error = flush_pending_event(thd)) return error;
     if (int error = write_event(end_event)) return error;
     if (int error = this->compress(thd)) return error;
@@ -2524,6 +2571,42 @@ int binlog_cache_data::flush(THD *thd, my_off_t *bytes_written, bool *wrote_xid,
   }
   assert(!flags.finalized);
   return error;
+}
+
+/**
+  Flush binlog cache data to binary log buffer. It is dedicated for
+  Binlog_ext::commit.
+
+  @param[in]  thd            THD object of the session
+  @param[in]  bytes_written  bytes of data written
+  @param[in]  writer         Binlog_event_writer object for writing
+  @param[in]  ts             immediate commit timestamp
+*/
+int binlog_cache_data::flush(THD *thd, my_off_t *bytes_written,
+                             Binlog_event_writer *writer, ulonglong ts) {
+  DBUG_TRACE;
+  DBUG_PRINT("debug", ("flags.finalized: %s", YESNO(flags.finalized)));
+
+  if (flags.finalized) {
+    my_off_t bytes_in_cache = m_cache.length();
+
+    DBUG_EXECUTE_IF("simulate_binlog_flush_error", {
+      if (rand() % 3 == 0) {
+        thd->commit_error = THD::CE_FLUSH_ERROR;
+      }
+    };);
+
+    /* The GTID ownership process might set the commit_error */
+    if (thd->commit_error == THD::CE_NONE) {
+      if (mysql_bin_log.write_transaction(thd, this, writer, false, ts)) {
+        thd->commit_error = THD::CE_FLUSH_ERROR;
+      }
+    }
+    reset();
+    if (bytes_written) *bytes_written = bytes_in_cache;
+  }
+  assert(!flags.finalized);
+  return thd->commit_error != THD::CE_NONE;
 }
 
 /**
@@ -3699,6 +3782,8 @@ MYSQL_BIN_LOG::~MYSQL_BIN_LOG() { delete m_binlog_file; }
 void MYSQL_BIN_LOG::cleanup() {
   DBUG_TRACE;
   if (inited) {
+    if (!is_relay_log) mysql_bin_log_ext.cleanup();
+
     inited = false;
     close(LOG_CLOSE_INDEX | LOG_CLOSE_STOP_EVENT, true /*need_lock_log=true*/,
           true /*need_lock_index=true*/);
@@ -3717,8 +3802,10 @@ void MYSQL_BIN_LOG::cleanup() {
     }
   }
 
+  mysql_bin_log_ext.file_sync_lock();
   delete m_binlog_file;
   m_binlog_file = nullptr;
+  mysql_bin_log_ext.file_sync_unlock();
 }
 
 void MYSQL_BIN_LOG::init_pthread_objects() {
@@ -3743,6 +3830,8 @@ void MYSQL_BIN_LOG::init_pthread_objects() {
         m_key_LOCK_after_commit_queue, m_key_LOCK_done,
         m_key_LOCK_wait_for_group_turn, m_key_COND_done, m_key_COND_flush_queue,
         m_key_COND_wait_for_group_turn);
+
+    mysql_bin_log_ext.init_pthread_objects();
   }
 }
 
@@ -3979,7 +4068,12 @@ bool MYSQL_BIN_LOG::open(PSI_file_key log_file_key, const char *log_name,
   */
   if (!is_relay_log) mysql_mutex_lock(&LOCK_sync);
 
-  ret = m_binlog_file->open(log_file_key, log_file_name, flags);
+  if (!is_relay_log && binlog_cache_free_flush.is_free_flushing()) {
+    // Open binlog cache tmp file instead of new binlog file in free flush mode.
+    const char *file_name = binlog_cache_free_flush.get_tmp_file_name();
+    ret = m_binlog_file->open(log_file_key, file_name, flags, true /* exist */);
+  } else
+    ret = m_binlog_file->open(log_file_key, log_file_name, flags);
 
   if (!ret && !is_relay_log) ret = mysql_bin_log_ext.open_binlog_file();
 
@@ -5100,6 +5194,11 @@ bool MYSQL_BIN_LOG::open_binlog(
     write_file_name_to_index_file = true;
   }
 
+  if (!is_relay_log && binlog_cache_free_flush.is_free_flushing()) {
+    // Binlog index will be written later in rename_temp_to_binlog().
+    write_file_name_to_index_file = false;
+  }
+
   /*
     don't set LOG_EVENT_BINLOG_IN_USE_F for the relay log
   */
@@ -5237,6 +5336,10 @@ bool MYSQL_BIN_LOG::open_binlog(
   }
   if (m_binlog_file->flush_and_sync()) goto err;
 
+  /* Update reserved_size after each rotation. */
+  if (!is_relay_log)
+    binlog_cache_free_flush.update_reserved_size(m_binlog_file->position());
+
   if (write_file_name_to_index_file) {
     DBUG_EXECUTE_IF("crash_create_critical_before_update_index",
                     DBUG_SUICIDE(););
@@ -5272,7 +5375,8 @@ bool MYSQL_BIN_LOG::open_binlog(
 
   close_purge_index_file();
 
-  update_binlog_end_pos();
+  if (is_relay_log || !binlog_cache_free_flush.is_free_flushing())
+    update_binlog_end_pos();
 
   /*
     For startup, writting Previous_gtid_log_event is skipped, so
@@ -5813,7 +5917,7 @@ bool MYSQL_BIN_LOG::reset_logs(THD *thd, bool delete_only) {
   }
   thd->clear_log_reset();
 
-  ha_reset_logs(thd);
+  if (is_relay_log) ha_reset_logs(thd);
 
   /*
     We need to get both locks to be sure that no one is trying to
@@ -5821,6 +5925,8 @@ bool MYSQL_BIN_LOG::reset_logs(THD *thd, bool delete_only) {
   */
   mysql_mutex_lock(&LOCK_log);
   mysql_mutex_lock(&LOCK_index);
+
+  if (!is_relay_log) mysql_bin_log_ext.switch_to_sync_mode(thd);
 
   if (is_relay_log)
     sid_lock = previous_gtid_set_relaylog->get_sid_map()->get_sid_lock();
@@ -6715,6 +6821,8 @@ int MYSQL_BIN_LOG::new_file_impl(
    */
   wait_for_prep_xids();
 
+  if (!is_relay_log) mysql_bin_log_ext.switch_to_sync_mode(current_thd);
+
   mysql_mutex_lock(&LOCK_index);
 
   mysql_mutex_assert_owner(&LOCK_log);
@@ -6847,6 +6955,22 @@ int MYSQL_BIN_LOG::new_file_impl(
   file_to_open = index_file_name;
   error = open_index_file(index_file_name, nullptr,
                           false /*need_lock_index=false*/);
+
+  if (!error && !is_relay_log && binlog_cache_free_flush.is_free_flushing()) {
+    // Need to disable checksum for binlog file generated by free flush.
+    if (binlog_checksum_options != binary_log::BINLOG_CHECKSUM_ALG_OFF) {
+      checksum_alg_reset = binlog_checksum_options;
+      binlog_checksum_options = binary_log::BINLOG_CHECKSUM_ALG_OFF;
+    }
+
+    /*
+      Save new name, use current log_file_name as new_name to avoid active
+      binlog change.
+    */
+    binlog_cache_free_flush.save_new_file_name(new_name_ptr);
+    memcpy(new_name_ptr, log_file_name, FN_REFLEN);
+  }
+
   if (!error) {
     /* reopen the binary log file. */
     file_to_open = new_name_ptr;
@@ -7697,8 +7821,6 @@ bool MYSQL_BIN_LOG::write_cache(THD *thd, binlog_cache_data *cache_data,
   DBUG_TRACE;
 
   Binlog_cache_storage *const cache = cache_data->get_cache();
-
-  mysql_mutex_assert_owner(&LOCK_log);
 
   assert(is_open());
   if (likely(is_open()))  // Should always be true
@@ -8971,6 +9093,14 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
     return mysql_bin_log_ext.duckdb_commit(thd);
   }
 
+  if (binlog_cache_free_flush.check(thd)) {
+    if (binlog_cache_free_flush.commit(thd))
+      return thd->commit_error == THD::CE_COMMIT_ERROR;
+  }
+
+  if (mysql_bin_log_ext.should_persist_to_redo(thd))
+    return mysql_bin_log_ext.commit(thd);
+
   /*
     Stage #1: flushing transactions to binary log
 
@@ -8986,6 +9116,8 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
                           thd->commit_error));
     return finish_commit(thd);
   }
+
+  mysql_bin_log_ext.switch_to_sync_mode(thd);
 
   THD *wait_queue = nullptr, *final_queue = nullptr;
   mysql_mutex_t *leave_mutex_before_commit_stage = nullptr;
@@ -9466,7 +9598,7 @@ bool THD::binlog_configure_trx_cache_size(ulong new_size) {
   // Close and reopen with new value
   Binlog_cache_storage *const cache = cache_mngr->get_trx_cache();
   cache->close();
-  return cache->open(new_size, max_binlog_cache_size);
+  return cache->open(new_size, max_binlog_cache_size, true /* trx cache */);
 }
 
 /**

@@ -27,6 +27,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "server_ext.h"
 #include "scope_guard.h"
 #include "sql/duckdb/duckdb_table.h"
+#include "sql/mysqld.h"
+#include "sql/sql_class.h"
 #include "sql/sql_thd_internal_api.h"
 
 namespace dd {
@@ -50,6 +52,29 @@ static bool is_system_schema(const dd::String_type &schema) {
           (duckdb_convert_all_skip_mtr_db && (schema.compare("mtr") == 0)));
 }
 
+#ifndef NDEBUG
+static uint duckdb_convert_sleep_counter = 0;
+#endif
+
+static bool check_if_shutdown() {
+#ifndef NDEBUG
+  char buf[64];
+  snprintf(buf, sizeof buf, "duckdb_convert_sleep_%u",
+           duckdb_convert_sleep_counter++);
+  DBUG_EXECUTE_IF(buf, {
+    fprintf(stderr, "%s\n", buf);
+    my_sleep(6000000);
+  });
+#endif
+
+  if (get_server_state() == SERVER_SHUTTING_DOWN) {
+    my_error(ER_DUCKDB_CONVERT_THREAD_EXIT_DUE_TO_SHUTDOWN, MYF(0));
+    return true;
+  }
+
+  return false;
+}
+
 /** Convert tables to DuckDB in parallel. */
 class Convert_all_to_duckdb {
  public:
@@ -63,31 +88,30 @@ class Convert_all_to_duckdb {
         m_ignore_error(ignore_error) {}
 
   /**
-    Execute convert all to duckdb.
     @return false ON SUCCESS, otherwise ON FAILURE
   */
-  bool execute(bool convert_all_tables) {
+  bool execute() {
     /* Create schemas. */
     std::thread create_schemas_thread(
         &Convert_all_to_duckdb::create_duckdb_schemas_thread, this);
     create_schemas_thread.join();
+    if (is_error()) return true;
 
-    if (convert_all_tables) {
-      /* Drop foreign key. */
-      std::thread drop_fks_thread(
-          &Convert_all_to_duckdb::drop_foreign_keys_thread, this);
-      drop_fks_thread.join();
+    /* Drop foreign key. */
+    std::thread drop_fks_thread(
+        &Convert_all_to_duckdb::drop_foreign_keys_thread, this);
+    drop_fks_thread.join();
+    if (is_error()) return true;
 
-      /* Alter tables. */
-      std::vector<std::thread> threads;
-      for (uint i = 0; i < m_n_threads; i++) {
-        threads.emplace_back(
-            std::thread(&Convert_all_to_duckdb::alter_table_thread, this));
-      }
+    /* Alter tables. */
+    std::vector<std::thread> threads;
+    for (uint i = 0; i < m_n_threads; i++) {
+      threads.emplace_back(
+          std::thread(&Convert_all_to_duckdb::alter_table_thread, this));
+    }
 
-      for (auto &t : threads) {
-        t.join();
-      }
+    for (auto &t : threads) {
+      t.join();
     }
 
     return is_error();
@@ -164,7 +188,7 @@ class Convert_all_to_duckdb {
     @return true if error happens, otherwise false.
   */
   bool is_error() {
-    if (m_ignore_error) {
+    if (m_ignore_error && get_server_state() != SERVER_SHUTTING_DOWN) {
       return false;
     }
 
@@ -177,10 +201,15 @@ class Convert_all_to_duckdb {
   void create_duckdb_schemas_thread() {
     my_thread_init();
     assert(current_thd == nullptr);
-    THD *thd = create_internal_thd();
+    THD *thd = create_thd(false, false, false, PSI_NOT_INSTRUMENTED, 0);
+    thd->security_context()->skip_grants();
     assert(current_thd == thd);
 
     for (auto &schema : *m_schemas) {
+      if (check_if_shutdown()) {
+        m_error = true;
+        break;
+      }
       if (is_system_schema(schema)) continue;
       char *db_str = strdup_root(thd->mem_root, schema.c_str());
       /* Only DuckDB schema will be created currently. */
@@ -189,7 +218,7 @@ class Convert_all_to_duckdb {
     /* Commit transaction to ensure the schemas are created. */
     dd::end_transaction(thd, false);
 
-    destroy_internal_thd(thd);
+    destroy_thd(thd);
     assert(current_thd == nullptr);
     my_thread_end();
   }
@@ -200,7 +229,8 @@ class Convert_all_to_duckdb {
   void drop_foreign_keys_thread() {
     my_thread_init();
     assert(current_thd == nullptr);
-    THD *thd = create_internal_thd();
+    THD *thd = create_thd(false, false, false, PSI_NOT_INSTRUMENTED, 0);
+    thd->security_context()->skip_grants();
     assert(current_thd == thd);
 
     {
@@ -209,6 +239,10 @@ class Convert_all_to_duckdb {
       Disable_sql_log_bin_guard disable_sql_log_bin(thd);
 
       for (auto &pair : *m_foreign_keys) {
+        if (check_if_shutdown()) {
+          m_error = true;
+          break;
+        }
         for (auto &fk : pair.second) {
           Ed_connection con(thd);
           LEX_STRING str;
@@ -223,7 +257,7 @@ class Convert_all_to_duckdb {
       }
     }
 
-    destroy_internal_thd(thd);
+    destroy_thd(thd);
     assert(current_thd == nullptr);
     my_thread_end();
   }
@@ -242,6 +276,12 @@ class Convert_all_to_duckdb {
            table_name.c_str());
     String_type query = "ALTER TABLE " + table_name + " ENGINE = DuckDB";
     lex_string_strmake(thd->mem_root, &str, query.c_str(), query.size());
+
+    if (check_if_shutdown()) {
+      m_error = true;
+      return;
+    }
+
     bool ret = con.execute_direct(str);
 
     bool expected = m_error.load();
@@ -257,7 +297,8 @@ class Convert_all_to_duckdb {
   void alter_table_thread() {
     my_thread_init();
     assert(current_thd == nullptr);
-    THD *thd = create_internal_thd();
+    THD *thd = create_thd(false, false, false, PSI_NOT_INSTRUMENTED, 0);
+    thd->security_context()->skip_grants();
     assert(current_thd == thd);
 
     /*
@@ -265,7 +306,6 @@ class Convert_all_to_duckdb {
       the same name during DDL.
     */
     {
-      thd->set_new_thread_id();
       plugin_thdvar_init(thd, true);
 
       Disable_autocommit_guard autocommit_guard(thd);
@@ -280,7 +320,7 @@ class Convert_all_to_duckdb {
 
       plugin_thdvar_cleanup(thd, true);
     }
-    destroy_internal_thd(thd);
+    destroy_thd(thd);
     assert(current_thd == nullptr);
     my_thread_end();
   }
@@ -316,6 +356,10 @@ static bool get_schema_tables(THD *thd, const char *schema,
   const char *schema_name = sch->name().c_str();
   /* For RDS, lower_case_table_names will not be 2. */
   for (auto it = tables->begin(); it != tables->end(); /* no op */) {
+    if (check_if_shutdown()) {
+      return true;
+    }
+
     const char *table_name = it->c_str();
     MDL_request table_request;
     MDL_REQUEST_INIT(&table_request, MDL_key::TABLE, schema_name, table_name,
@@ -393,10 +437,10 @@ enum_convert_stage convert_stage = enum_convert_stage::CONVERT_EMPTY;
   CONVERT_FAILED.
 */
 static void alter_all_schemas() {
-  THD *thd = create_internal_thd();
-  thd->set_new_thread_id();
+  THD *thd = create_thd(false, false, false, PSI_NOT_INSTRUMENTED, 0);
+  thd->security_context()->skip_grants();
   current_thd = thd;
-  auto destroy_thd = create_scope_guard([&]() { destroy_internal_thd(thd); });
+  auto destroy_thd_guard = create_scope_guard([&]() { destroy_thd(thd); });
 
   convert_stage = enum_convert_stage::CONVERT_INIT;
   DBUG_EXECUTE_IF("sleep_before_alter_all_schemas", my_sleep(6000000););
@@ -431,6 +475,11 @@ static void alter_all_schemas() {
       continue;
     }
 
+    if (check_if_shutdown()) {
+      convert_stage = enum_convert_stage::CONVERT_CHECK_FAILED;
+      goto end;
+    }
+
     if (duckdb_convert_all_at_startup) {
       /* If error happens in get_schema_tables, we should not ignore the error. */
       LogErr(INFORMATION_LEVEL, ER_CHECKING_DB_BEFORE_CONVERT_DUCKDB,
@@ -447,7 +496,7 @@ static void alter_all_schemas() {
     convert_stage = enum_convert_stage::CONVERT_CONVERTING;
     Convert_all_to_duckdb executor(&schemas, &schema_to_tables, &table_to_fks, n_threads,
                                    ignore_error);
-    if (executor.execute(duckdb_convert_all_at_startup)) {
+    if (executor.execute()) {
       convert_stage = enum_convert_stage::CONVERT_CONVERT_FAILED;
     } else {
       convert_stage = enum_convert_stage::CONVERT_FINISHED;
@@ -485,8 +534,7 @@ static void *convert_thread(void *MY_ATTRIBUTE((unused))) {
 void create_duckdb_convertor_thread() {
   my_thread_attr_t duckdb_attr;
   my_thread_attr_init(&duckdb_attr);
-  /* Set detach. */
-  my_thread_attr_setdetachstate(&duckdb_attr, MY_THREAD_CREATE_DETACHED);
+  my_thread_attr_setdetachstate(&duckdb_attr, MY_THREAD_CREATE_JOINABLE);
   pthread_attr_setscope(&duckdb_attr, PTHREAD_SCOPE_SYSTEM);
 
 #ifdef HAVE_PSI_INTERFACE
@@ -504,6 +552,10 @@ void create_duckdb_convertor_thread() {
   }
 
   my_thread_attr_destroy(&duckdb_attr);
+}
+
+void stop_duckdb_convertor_thread() {
+  my_thread_join(&duckdb_convertor_thread_id, nullptr);
 }
 
 int show_convert_stage(THD *, SHOW_VAR *var, char *buff) {

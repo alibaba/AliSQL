@@ -63,6 +63,7 @@ include/rpl_diff.inc
 include/assert_grep.inc [Check DML SQL is not executed]
 include/assert_grep.inc [Check there are 2 commits due to DDL]
 include/assert_grep.inc [Check there are 0 commit due to non-Row]
+include/assert_grep.inc [Check there are 2 commits of Multi-Trx Batch]
 ###########################################################################
 # 6. Test Cleanup
 ###########################################################################

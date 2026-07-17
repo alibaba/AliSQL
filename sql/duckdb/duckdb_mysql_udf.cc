@@ -97,19 +97,22 @@ void mysql_json_unquote(duckdb::DataChunk &input,
     }
   } else {
     result.SetVectorType(duckdb::VectorType::FLAT_VECTOR);
+    duckdb::UnifiedVectorFormat vdata;
+		input_arg.ToUnifiedFormat(input.size(), vdata);
+
+    auto data =
+          duckdb::UnifiedVectorFormat::GetData<duckdb::string_t>(vdata);
 
     auto result_data = duckdb::FlatVector::GetData<duckdb::string_t>(result);
-    auto data = duckdb::FlatVector::GetData<duckdb::string_t>(input.data[0]);
-    auto &validity = duckdb::FlatVector::Validity(input.data[0]);
-
-    duckdb::FlatVector::SetValidity(result, validity);
     auto &result_validity = duckdb::FlatVector::Validity(result);
 
     for (idx_t i = 0; i < input.size(); i++) {
-      if (!validity.RowIsValid(i)) {
+      auto idx = vdata.sel->get_index(i);
+      if (!vdata.validity.RowIsValid(idx)) {
+        result_validity.SetInvalid(i);
         continue;
       }
-      Item_duckdb_string item_json(data[i]);
+      Item_duckdb_string item_json(data[idx]);
       Item_func_json_unquote json_unquote(POS(), &item_json);
       json_unquote.fixed = true;
       json_unquote.m_caller_is_duckdb = true;

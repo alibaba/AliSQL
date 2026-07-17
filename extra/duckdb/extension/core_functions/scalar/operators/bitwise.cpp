@@ -4,7 +4,6 @@
 #include "duckdb/common/types/bit.hpp"
 
 namespace duckdb {
-
 template <class OP>
 static scalar_function_t GetScalarIntegerUnaryFunction(const LogicalType &type) {
 	scalar_function_t function;
@@ -88,6 +87,8 @@ static scalar_function_t GetScalarIntegerBinaryFunction(const LogicalType &type)
 //===--------------------------------------------------------------------===//
 // & [bitwise_and]
 //===--------------------------------------------------------------------===//
+namespace {
+
 struct BitwiseANDOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA left, TB right) {
@@ -95,7 +96,7 @@ struct BitwiseANDOperator {
 	}
 };
 
-static void BitwiseANDOperation(DataChunk &args, ExpressionState &state, Vector &result) {
+void BitwiseANDOperation(DataChunk &args, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<string_t, string_t, string_t>(
 	    args.data[0], args.data[1], result, args.size(), [&](string_t rhs, string_t lhs) {
 		    string_t target = StringVector::EmptyString(result, rhs.GetSize());
@@ -104,6 +105,8 @@ static void BitwiseANDOperation(DataChunk &args, ExpressionState &state, Vector 
 		    return target;
 	    });
 }
+
+} // namespace
 
 ScalarFunctionSet BitwiseAndFun::GetFunctions() {
 	ScalarFunctionSet functions;
@@ -126,6 +129,8 @@ ScalarFunctionSet BitwiseAndFun::GetFunctions() {
 //===--------------------------------------------------------------------===//
 // | [bitwise_or]
 //===--------------------------------------------------------------------===//
+namespace {
+
 struct BitwiseOROperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA left, TB right) {
@@ -133,7 +138,7 @@ struct BitwiseOROperator {
 	}
 };
 
-static void BitwiseOROperation(DataChunk &args, ExpressionState &state, Vector &result) {
+void BitwiseOROperation(DataChunk &args, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<string_t, string_t, string_t>(
 	    args.data[0], args.data[1], result, args.size(), [&](string_t rhs, string_t lhs) {
 		    string_t target = StringVector::EmptyString(result, rhs.GetSize());
@@ -142,6 +147,8 @@ static void BitwiseOROperation(DataChunk &args, ExpressionState &state, Vector &
 		    return target;
 	    });
 }
+
+} // namespace
 
 ScalarFunctionSet BitwiseOrFun::GetFunctions() {
 	ScalarFunctionSet functions;
@@ -164,6 +171,8 @@ ScalarFunctionSet BitwiseOrFun::GetFunctions() {
 //===--------------------------------------------------------------------===//
 // # [bitwise_xor]
 //===--------------------------------------------------------------------===//
+namespace {
+
 struct BitwiseXOROperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA left, TB right) {
@@ -171,7 +180,7 @@ struct BitwiseXOROperator {
 	}
 };
 
-static void BitwiseXOROperation(DataChunk &args, ExpressionState &state, Vector &result) {
+void BitwiseXOROperation(DataChunk &args, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<string_t, string_t, string_t>(
 	    args.data[0], args.data[1], result, args.size(), [&](string_t rhs, string_t lhs) {
 		    string_t target = StringVector::EmptyString(result, rhs.GetSize());
@@ -180,6 +189,8 @@ static void BitwiseXOROperation(DataChunk &args, ExpressionState &state, Vector 
 		    return target;
 	    });
 }
+
+} // namespace
 
 ScalarFunctionSet BitwiseXorFun::GetFunctions() {
 	ScalarFunctionSet functions;
@@ -202,6 +213,8 @@ ScalarFunctionSet BitwiseXorFun::GetFunctions() {
 //===--------------------------------------------------------------------===//
 // ~ [bitwise_not]
 //===--------------------------------------------------------------------===//
+namespace {
+
 struct BitwiseNotOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
@@ -209,7 +222,7 @@ struct BitwiseNotOperator {
 	}
 };
 
-static void BitwiseNOTOperation(DataChunk &args, ExpressionState &state, Vector &result) {
+void BitwiseNOTOperation(DataChunk &args, ExpressionState &state, Vector &result) {
 	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input) {
 		string_t target = StringVector::EmptyString(result, input.GetSize());
 
@@ -217,6 +230,8 @@ static void BitwiseNOTOperation(DataChunk &args, ExpressionState &state, Vector 
 		return target;
 	});
 }
+
+} // namespace
 
 ScalarFunctionSet BitwiseNotFun::GetFunctions() {
 	ScalarFunctionSet functions;
@@ -238,6 +253,8 @@ ScalarFunctionSet BitwiseNotFun::GetFunctions() {
 //===--------------------------------------------------------------------===//
 // << [bitwise_left_shift]
 //===--------------------------------------------------------------------===//
+namespace {
+
 struct BitwiseShiftLeftOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA input, TB shift) {
@@ -255,7 +272,7 @@ struct BitwiseShiftLeftOperator {
 	}
 };
 
-static void BitwiseShiftLeftOperation(DataChunk &args, ExpressionState &state, Vector &result) {
+void BitwiseShiftLeftOperation(DataChunk &args, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<string_t, int32_t, string_t>(
 	    args.data[0], args.data[1], result, args.size(), [&](string_t input, int32_t shift) {
 		    auto max_shift = UnsafeNumericCast<int32_t>(Bit::BitLength(input));
@@ -275,6 +292,7 @@ static void BitwiseShiftLeftOperation(DataChunk &args, ExpressionState &state, V
 		    return target;
 	    });
 }
+} // namespace
 
 ScalarFunctionSet LeftShiftFun::GetFunctions() {
 	ScalarFunctionSet functions;
@@ -298,6 +316,8 @@ ScalarFunctionSet LeftShiftFun::GetFunctions() {
 //===--------------------------------------------------------------------===//
 // >> [bitwise_right_shift]
 //===--------------------------------------------------------------------===//
+namespace {
+
 template <class T>
 bool RightShiftInRange(T shift) {
 	return shift >= 0 && shift < T(sizeof(T) * 8);
@@ -310,7 +330,7 @@ struct BitwiseShiftRightOperator {
 	}
 };
 
-static void BitwiseShiftRightOperation(DataChunk &args, ExpressionState &state, Vector &result) {
+void BitwiseShiftRightOperation(DataChunk &args, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<string_t, int32_t, string_t>(
 	    args.data[0], args.data[1], result, args.size(), [&](string_t input, int32_t shift) {
 		    auto max_shift = UnsafeNumericCast<int32_t>(Bit::BitLength(input));
@@ -326,6 +346,8 @@ static void BitwiseShiftRightOperation(DataChunk &args, ExpressionState &state, 
 		    return target;
 	    });
 }
+
+} // namespace
 
 ScalarFunctionSet RightShiftFun::GetFunctions() {
 	ScalarFunctionSet functions;

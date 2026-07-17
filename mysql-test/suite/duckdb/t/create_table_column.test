@@ -496,6 +496,23 @@ set global duckdb_use_double_for_decimal=default;
 --source suite/duckdb/include/check_field_correctness.inc
 
 --echo #
+--echo # column with charset latin1
+--echo #
+--let $create_sql = CREATE TABLE t_latin1 (a varchar(32) CHARACTER SET latin1, b varchar(32) CHARACTER SET latin1, c varchar(32) CHARACTER SET latin1, d char(32) CHARACTER SET latin1, e text CHARACTER SET latin1)
+--let $table_name = t_latin1
+--let $insert_sql = insert into t_latin1(a, b, c, d) values ('latin1', 'lAtin1', 'lÀtin1', 'lÀTin1');
+--let $select_sql = select a, b, c, d, e from t_latin1;
+--let $die_on_error=1
+--source suite/duckdb/include/check_field_correctness.inc
+
+--let $create_sql = CREATE TABLE t_latin1 (e text CHARACTER SET latin1)
+--let $table_name = t_latin1
+--let $insert_sql = insert into t_latin1(e) values ('lÀTin1');
+--let $select_sql = select e from t_latin1;
+--let $die_on_error=1
+--source suite/duckdb/include/check_field_correctness.inc
+
+--echo #
 --echo # column with utf8mb4 and emoji
 --echo #
 --let $create_sql = CREATE TABLE t_mb4_emoji (a varchar(32) CHARSET utf8mb4,  b char(32) CHARSET utf8mb4,  c text(32) CHARSET utf8mb4,  d varchar(32) CHARSET utf8mb4)

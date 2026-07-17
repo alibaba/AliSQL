@@ -111,6 +111,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "dict0crea.h"
 #include "dict0dd.h"
 #include "dict0dict.h"
+#include "dict0flashback.h"
 #include "dict0load.h"
 #include "dict0stats.h"
 #include "dict0stats_bg.h"
@@ -123,6 +124,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "fts0priv.h"
 #include "fts0types.h"
 #include "ha_innodb.h"
+#include "ha_innodb_ext.h"
 #include "ha_innopart.h"
 #include "ha_prototypes.h"
 #include "handler0alter.h"  //alter_stats_rebuild()
@@ -701,6 +703,7 @@ static PSI_mutex_info all_innodb_mutexes[] = {
     PSI_MUTEX_KEY(buf_pool_zip_hash_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(buf_pool_zip_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(clone_snapshot_mutex, 0, 0, PSI_DOCUMENT_ME),
+    PSI_MUTEX_KEY(flashback_list_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(clone_sys_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(clone_task_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(ddl_autoinc_mutex, 0, 0, PSI_DOCUMENT_ME),
@@ -866,6 +869,8 @@ static PSI_thread_info all_innodb_threads[] = {
     PSI_THREAD_KEY(srv_monitor_thread, "ib_srv_mon", PSI_FLAG_SINGLETON, 0,
                    PSI_DOCUMENT_ME),
     PSI_THREAD_KEY(srv_purge_thread, "ib_srv_purge", PSI_FLAG_SINGLETON, 0,
+                   PSI_DOCUMENT_ME),
+    PSI_THREAD_KEY(scn_history_thread, "ib_scn", PSI_FLAG_SINGLETON, 0,
                    PSI_DOCUMENT_ME),
     PSI_THREAD_KEY(srv_worker_thread, "ib_srv_wkr", 0, 0, PSI_DOCUMENT_ME),
     PSI_THREAD_KEY(trx_recovery_rollback_thread, "ib_tx_recov", 0, 0,
@@ -2120,6 +2125,18 @@ int convert_error_code_to_mysql(dberr_t error, uint32_t flags, THD *thd) {
     case DB_CANT_CREATE_GEOMETRY_OBJECT:
       my_error(ER_CANT_CREATE_GEOMETRY_OBJECT, MYF(0));
       return (HA_ERR_NULL_IN_SPATIAL);
+
+    case DB_SNAPSHOT_OUT_OF_RANGE:
+      my_error(ER_SNAPSHOT_OUT_OF_RANGE, MYF(0));
+      return (HA_SNAPSHOT_OUT_OF_RANGE);
+
+    case DB_FLASHBACK_PK_INVISIBLE:
+      my_error(ER_FLASHBACK_PK_INVISIBLE, MYF(0));
+      return (HA_FLASHBACK_PK_INVISIBLE);
+
+    case DB_FLASHBACK_INTERNAL_ERROR:
+      my_error(ER_FLASHBACK_INTERNAL_ERROR, MYF(0));
+      return (HA_FLASHBACK_INTERNAL_ERROR);
 
     case DB_ERROR:
     default:
@@ -4089,6 +4106,10 @@ static bool innobase_dict_recover(dict_recovery_mode_t dict_recovery_mode,
                                 DICT_ERR_IGNORE_NONE);
       dict_sys->ddl_log = dd_table_open_on_name(
           thd, nullptr, "mysql/innodb_ddl_log", false, DICT_ERR_IGNORE_NONE);
+      dict_sys->scn_hist =
+          dd_table_open_on_name(thd, nullptr, SCN_HISTORY_TABLE_FULL_NAME,
+                                false, DICT_ERR_IGNORE_NONE);
+      if (dict_sys->scn_hist != nullptr) im::register_innodb_flashback_service();
       log_ddl = ut::new_withkey<Log_DDL>(UT_NEW_THIS_FILE_PSI_KEY);
   }
 
@@ -5143,6 +5164,8 @@ static int innodb_init(void *p) {
 
   handlerton *innobase_hton = (handlerton *)p;
   innodb_hton_ptr = innobase_hton;
+
+  innobase_init_ext(innobase_hton);
 
   innobase_hton->state = SHOW_OPTION_YES;
   innobase_hton->db_type = DB_TYPE_INNODB;
@@ -13051,10 +13074,14 @@ static bool innobase_ddse_dict_init(
   def->add_index(1, "index_k_thread_id", "KEY(thread_id)");
   /* Options and tablespace are set at the SQL layer. */
 
+  dd::Object_table *innodb_flashback_snapshot =
+      im::create_innodb_scn_hist_table();
+
   tables->push_back(innodb_dynamic_metadata);
   tables->push_back(innodb_table_stats);
   tables->push_back(innodb_index_stats);
   tables->push_back(innodb_ddl_log);
+  tables->push_back(innodb_flashback_snapshot);
 
   LogErr(SYSTEM_LEVEL, ER_IB_MSG_INNODB_END_INITIALIZE);
 
@@ -15041,12 +15068,27 @@ bool ha_innobase::get_se_private_data(dd::Table *dd_table, bool reset) {
     // Also need to reset the set of DD table ids.
     dict_sys_t::s_dd_table_ids.clear();
   }
-#ifdef UNIV_DEBUG
-  const uint n_indexes_old = n_indexes;
-#endif
-
   DBUG_TRACE;
   assert(dd_table != nullptr);
+  assert(n_tables < innodb_dd_table_size);
+
+  for (uint target = n_tables; target < innodb_dd_table_size; ++target) {
+    if (dd_table->name() != innodb_dd_table[target].name) continue;
+
+    while (n_tables < target) {
+      for (uint i = 0; i < innodb_dd_table[n_tables].n_indexes; ++i) {
+        if (fsp_is_inode_page(n_pages)) {
+          ++n_pages;
+          ut_ad(!fsp_is_inode_page(n_pages));
+        }
+        ++n_pages;
+      }
+      n_indexes += innodb_dd_table[n_tables].n_indexes;
+      ++n_tables;
+    }
+    break;
+  }
+
   assert(n_tables < innodb_dd_table_size);
 
   if ((*(const_cast<const dd::Table *>(dd_table))->columns().begin())
@@ -15059,11 +15101,13 @@ bool ha_innobase::get_se_private_data(dd::Table *dd_table, bool reset) {
     /* These tables must not be partitioned. */
     assert(dd_table->partitions()->empty());
   }
-
-  const innodb_dd_table_t &data = innodb_dd_table[n_tables];
 #endif
 
+  const innodb_dd_table_t &data = innodb_dd_table[n_tables];
   assert(dd_table->name() == data.name);
+#ifdef UNIV_DEBUG
+  const uint n_indexes_old = n_indexes;
+#endif
 
   dd_table->set_se_private_id(++n_tables);
   dd_table->set_tablespace_id(dict_sys_t::s_dd_dict_space_id);
@@ -18440,6 +18484,12 @@ clue about the method. */
 int ha_innobase::end_stmt() {
   if (m_prebuilt->blob_heap) {
     row_mysql_prebuilt_free_blob_heap(m_prebuilt);
+  }
+
+  if (m_prebuilt->m_mysql_table != nullptr &&
+      m_prebuilt->m_mysql_table->snapshot.valid()) {
+    DEBUG_SYNC_C("before_release_snapshot_readview");
+    im::release_snapshot_readview(&m_prebuilt->m_mysql_table->snapshot);
   }
 
   m_prebuilt->end_stmt();
@@ -22872,6 +22922,53 @@ static MYSQL_SYSVAR_BOOL(undo_log_truncate, srv_undo_log_truncate,
                          "Enable or Disable Truncate of UNDO tablespace.",
                          nullptr, nullptr, true);
 
+static MYSQL_SYSVAR_BOOL(
+    rds_flashback_task_enabled, im::srv_scn_history_task_enabled,
+    PLUGIN_VAR_OPCMDARG, "Whether to generate Native Flashback snapshots.",
+    nullptr, nullptr, false);
+
+static MYSQL_SYSVAR_BOOL(
+    rds_flashback_task_stop_all, im::srv_scn_history_task_stop_all,
+    PLUGIN_VAR_OPCMDARG, "Whether to stop all Native Flashback snapshot tasks.",
+    nullptr, nullptr, false);
+
+static MYSQL_SYSVAR_ULONG(
+    rds_flashback_interval, im::srv_scn_history_interval, PLUGIN_VAR_OPCMDARG,
+    "Generate a Native Flashback snapshot record at this interval in seconds.",
+    nullptr, nullptr, 1, 1, 86400, 0);
+
+static MYSQL_SYSVAR_BOOL(
+    rds_flashback_enabled, im::srv_scn_valid_enabled, PLUGIN_VAR_OPCMDARG,
+    "Whether to enable Native Flashback snapshot queries.", nullptr, nullptr,
+    true);
+
+static MYSQL_SYSVAR_ULONG(
+    rds_flashback_allow_gap, im::srv_scn_valid_volume, PLUGIN_VAR_OPCMDARG,
+    "Maximum gap in minutes between requested timestamp and matched Native Flashback snapshot.",
+    nullptr, nullptr, 30, 0, UINT32_MAX, 0);
+
+static MYSQL_SYSVAR_BOOL(
+    rds_flashback_print_warning, im::srv_scn_print_warning,
+    PLUGIN_VAR_OPCMDARG,
+    "Whether to print a warning when Native Flashback uses a non-exact snapshot.",
+    nullptr, nullptr, true);
+
+static MYSQL_SYSVAR_ULONG(
+    undo_retention, im::srv_scn_history_keep_seconds, PLUGIN_VAR_OPCMDARG,
+    "How many seconds undo records are retained for Native Flashback.",
+    nullptr, nullptr, 0, 0, UINT32_MAX, 0);
+
+static MYSQL_SYSVAR_ULONG(
+    undo_space_supremum_size, im::undo_space_supremum_size,
+    PLUGIN_VAR_OPCMDARG,
+    "Maximum undo tablespace size in MiB used for Native Flashback retention.",
+    nullptr, nullptr, 10 * 1024, 0, UINT32_MAX, 0);
+
+static MYSQL_SYSVAR_ULONG(
+    undo_space_reserved_size, im::undo_space_reserve_size, PLUGIN_VAR_OPCMDARG,
+    "Reserved undo tablespace size in MiB for Native Flashback retention.",
+    nullptr, nullptr, 0, 0, UINT32_MAX, 0);
+
 /*  This is the number of rollback segments per undo tablespace.
 This applies to the temporary tablespace, the system tablespace,
 and all undo tablespaces. */
@@ -23377,6 +23474,15 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(max_undo_log_size),
     MYSQL_SYSVAR(purge_rseg_truncate_frequency),
     MYSQL_SYSVAR(undo_log_truncate),
+    MYSQL_SYSVAR(rds_flashback_task_enabled),
+    MYSQL_SYSVAR(rds_flashback_task_stop_all),
+    MYSQL_SYSVAR(rds_flashback_interval),
+    MYSQL_SYSVAR(rds_flashback_enabled),
+    MYSQL_SYSVAR(rds_flashback_allow_gap),
+    MYSQL_SYSVAR(rds_flashback_print_warning),
+    MYSQL_SYSVAR(undo_retention),
+    MYSQL_SYSVAR(undo_space_supremum_size),
+    MYSQL_SYSVAR(undo_space_reserved_size),
     MYSQL_SYSVAR(undo_log_encrypt),
     MYSQL_SYSVAR(rollback_segments),
     MYSQL_SYSVAR(undo_directory),

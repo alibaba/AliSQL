@@ -30,23 +30,14 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/create_field.h"    // Create_field
 #include "sql/dd/types/table.h"  // dd::Table
 #include "sql/duckdb/duckdb_charset_collation.h"
-#include "sql/duckdb/duckdb_table.h"
 #include "sql/duckdb/duckdb_config.h"  // use_double_for_decimal
+#include "sql/duckdb/duckdb_table.h"
 #include "sql/item.h"  // Item
+#include "sql/mysqld.h"
 #include "sql/sql_gipk.h"
 #include "sql/sql_table.h"  // primary_key_name
 
-/** Get hex BIT default value from DD.
-  @param[in]  col   DD::column object
 
-  @return hex default value of BIT type.
- */
-std::string get_bit_default_value(const dd::Column *col) {
-  dd::String_type def_val = col->default_value();
-  std::string res = toHex(def_val.c_str(), def_val.length());
-  res = "(" + res + ")";
-  return res;
-}
 
 /** Check if the type of column is changed.
 @param[in]  new_field   new created field from Alter_info
@@ -106,38 +97,70 @@ inline static bool contains_space(const char *str) {
   return s.find(' ') != std::string::npos;
 }
 
-/** Get default expression for duckdb.
-  @param[in]  thd                   thread handler
-  @param[in]  default_val_expr      the default value expression
-  @return default expression */
-inline static std::string get_default_expr_for_duckdb(
-    THD *thd, Value_generator *default_val_expr) {
-  std::string default_value;
-
-  default_value += "(";
-
+/** Get expression for duckdb.
+  @param[in]  thd       thread handler
+  @param[in]  expr      the expression
+  @return expression */
+inline static std::string get_expr_for_duckdb(THD *thd, Value_generator *expr) {
   char buffer[128];
   String s(buffer, sizeof(buffer), system_charset_info);
-  default_val_expr->print_expr(thd, &s);
-  std::string def_value(s.ptr(), s.length());
+  expr->print_expr(thd, &s, true);
+  std::string expr_str(s.ptr(), s.length());
+  expr_str = "(" + expr_str + ")";
+  return expr_str;
+}
 
-  Item *expr_item = default_val_expr->expr_item;
-  /*
-    For varchar, charset name will be added before the value, remove the
-    prefix here.
-  */
-  if (expr_item->data_type() == MYSQL_TYPE_VARCHAR) {
-    std::string prefix = "_";
-    prefix += default_val_expr->expr_item->collation.collation->csname;
+/** Get default value for the specified field.
+  @param[in]  field     field
+  @param[in]  dd_table   dd table object
+  @return default value string */
+inline static std::string get_default_value(Field *field,
+                                            const dd::Table *dd_table) {
+  std::string default_value;
+  const dd::Column *col_obj = dd_table->get_column(field->field_name);
+  assert(col_obj != nullptr);
+  if (!col_obj->has_no_default()) {
+    if (!col_obj->default_option().empty() &&
+        col_obj->default_option().compare(0, 17, "CURRENT_TIMESTAMP") == 0) {
+      default_value = col_obj->default_option().c_str();
+    } else if (field->m_default_val_expr != nullptr) {
+      default_value =
+          get_expr_for_duckdb(current_thd, field->m_default_val_expr);
+    } else if (!col_obj->is_default_value_null()) {
+      std::string duckdb_type =
+          FieldConvertor(field, dd_table).convert_type(field);
+      if (duckdb_type == "BLOB" || duckdb_type == "BITSTRING") {
+        /*
+          For BINARY/VARBINARY/BIT types, default_value_utf8() is unreliable
+          because it is generated using strlen() which truncates at \0 bytes.
+          Read from the raw binary default_value() instead.
 
-    if (def_value.size() >= prefix.size() &&
-        def_value.compare(0, prefix.size(), prefix) == 0)
-      def_value = def_value.substr(prefix.size());
+          For VARBINARY (MYSQL_TYPE_VARCHAR without charset), default_value()
+          includes a length prefix (1 or 2 bytes depending on max field_length)
+          in MySQL's internal record format. We must skip this prefix and only
+          convert the actual data portion.
+        */
+        dd::String_type bin_val = col_obj->default_value();
+        const char *data = bin_val.c_str();
+        size_t data_len = bin_val.length();
+
+        if (field->type() == MYSQL_TYPE_VARCHAR) {
+          auto *varfield = down_cast<const Field_varstring *>(field);
+          uint32 length_bytes = varfield->get_length_bytes();
+          /* Read the actual data length from the prefix. */
+          uint32 actual_len =
+              length_bytes == 1 ? static_cast<uint8>(data[0]) : uint2korr(data);
+          data += length_bytes;
+          data_len = actual_len;
+        }
+
+        default_value = toHex(data, data_len);
+      } else {
+        std::string def_val = col_obj->default_value_utf8().c_str();
+        default_value = "'" + def_val + "'";
+      }
+    }
   }
-
-  default_value += def_value;
-  default_value += ")";
-
   return default_value;
 }
 
@@ -158,15 +181,19 @@ bool FieldConvertor::check() {
   if (m_field->has_charset()) {
     const CHARSET_INFO *cs = m_field->charset();
     if (strcmp(cs->csname, "utf8") && strcmp(cs->csname, "utf8mb3") &&
-        strcmp(cs->csname, "utf8mb4") && strcmp(cs->csname, "ascii")) {
+        strcmp(cs->csname, "utf8mb4") && strcmp(cs->csname, "ascii") &&
+        strcmp(cs->csname, "latin1")) {
       return myduck::report_duckdb_table_struct_error(
-          "DuckDB only supports utf8, utf8mb4 and ascii character sets");
+          "DuckDB only supports utf8, utf8mb4, ascii, and latin1 character "
+          "sets");
     }
   }
 
-  /* No support for generated column. */
-  /* 'Specified storage engine' is not supported for generated columns. */
-  assert(!m_field->is_gcol());
+  if (!duckdb_convert_tables_with_generated_columns && m_field->is_gcol()) {
+    return myduck::report_duckdb_table_struct_error(
+        "DuckDB is not supported for generated columns when "
+        "duckdb_convert_tables_with_generated_columns is OFF");
+  }
 
   return false;
 }
@@ -183,26 +210,21 @@ std::string FieldConvertor::translate() {
 
   result << convert_type(m_field);
 
-  if (field->is_flag_set(NOT_NULL_FLAG)) result << " NOT NULL";
+  if (field->is_gcol()) {
+    /*
+      DuckDB only supports virtual generated columns. So we handle stored
+      generated columns as virtual one.
+    */
+    std::string gcol_expr = get_expr_for_duckdb(current_thd, field->gcol_info);
+    result << " GENERATED ALWAYS AS " + gcol_expr << " VIRTUAL";
+  }
+  /* Constraints on generated columns are not supported yet. */
+  if (field->is_flag_set(NOT_NULL_FLAG) && !field->is_gcol())
+    result << " NOT NULL";
 
   /* Get default value from DD. */
-  const dd::Column *col_obj = m_dd_table->get_column(m_field->field_name);
-  assert(col_obj != nullptr);
-  if (!col_obj->has_no_default()) {
-    std::string default_value;
-    if (field->m_default_val_expr != nullptr) {
-      default_value =
-          get_default_expr_for_duckdb(current_thd, field->m_default_val_expr);
-    } else if (!col_obj->is_default_value_null()) {
-      std::string def_val = col_obj->default_value_utf8().c_str();
-      if (field->type() == MYSQL_TYPE_BIT) {
-        default_value = get_bit_default_value(col_obj);
-      } else {
-        default_value = "'" + def_val + "'";
-      }
-    }
-    if (!default_value.empty()) result << " DEFAULT " << default_value;
-  }
+  std::string default_value = get_default_value(field, m_dd_table);
+  if (!default_value.empty()) result << " DEFAULT " << default_value;
 
   assert(!(field->auto_flags & Field::NEXT_NUMBER));
 
@@ -296,7 +318,7 @@ std::string FieldConvertor::convert_type(const Field *field) {
       ret = "integer";
       break;
     case MYSQL_TYPE_BIT:
-      ret = "blob";
+      ret = "bitstring";
       break;
     case MYSQL_TYPE_GEOMETRY:
       ret = "blob";
@@ -323,7 +345,8 @@ std::string FieldConvertor::convert_type(const Field *field) {
       break;
   }
 
-  if (ret == "varchar" && field->has_charset()) {
+  /* Collations are not supported on generated columns. */
+  if (ret == "varchar" && field->has_charset() && !field->is_gcol()) {
     std::string warn_msg;
     std::string co = myduck::get_duckdb_collation(field->charset(), warn_msg);
     ret.append(" COLLATE ").append(co);
@@ -622,7 +645,14 @@ void AddColumnConvertor::prepare_columns() {
 
 bool AddColumnConvertor::check() {
   for (auto &pair : m_columns_to_add) {
-    if (FieldConvertor(pair.second, m_new_dd_table).check()) {
+    Field *field = pair.second;
+
+    if (field->is_gcol()) {
+      return myduck::report_duckdb_table_struct_error(
+          "Adding generated columns after table creation is not supported");
+    }
+
+    if (FieldConvertor(field, m_new_dd_table).check()) {
       return true;
     }
   }
@@ -645,28 +675,8 @@ std::string AddColumnConvertor::translate() {
                        (new_field->m_default_val_expr != nullptr);
 
     /* Set default value. */
-    std::string default_value = "NULL";
-    if (new_field->auto_flags & Field::DEFAULT_NOW) {
-      default_value = "CURRENT_TIMESTAMP";
-    } else if (new_field->constant_default != nullptr) {
-      String str;
-      String *def = new_field->constant_default->val_str(&str);
-
-      if (def != nullptr &&
-          (my_strcasecmp(system_charset_info, def->ptr(), "NULL") != 0)) {
-        std::string def_val = std::string(def->ptr(), def->length());
-        if (new_field->sql_type == MYSQL_TYPE_BIT) {
-          const dd::Column *col_obj =
-              m_new_dd_table->get_column(new_field->field_name);
-          default_value = get_bit_default_value(col_obj);
-        } else {
-          default_value = "'" + def_val + "'";
-        }
-      }
-    } else if (new_field->m_default_val_expr != nullptr) {
-      default_value = get_default_expr_for_duckdb(
-          current_thd, new_field->m_default_val_expr);
-    }
+    std::string default_value = get_default_value(field, m_new_dd_table);
+    default_value = default_value.empty() ? "NULL" : default_value;
 
     append_stmt_column_add(result, m_schema_name, m_table_name,
                            new_field->field_name, type, has_default,
@@ -755,28 +765,10 @@ std::string ChangeColumnDefaultConvertor::translate() {
   /* Set default value. */
   for (auto &pair : m_columns_to_set_default) {
     Create_field *new_field = pair.first;
+    Field *field = pair.second;
 
-    std::string default_value = "NULL";
-    if (new_field->auto_flags & Field::DEFAULT_NOW) {
-      default_value = "CURRENT_TIMESTAMP";
-    } else if (new_field->constant_default != nullptr) {
-      String str;
-      String *def = new_field->constant_default->val_str(&str);
-      if (def != nullptr &&
-          (my_strcasecmp(system_charset_info, def->ptr(), "NULL") != 0)) {
-        std::string def_val = std::string(def->ptr(), def->length());
-        if (new_field->sql_type == MYSQL_TYPE_BIT) {
-          const dd::Column *col_obj =
-              m_new_dd_table->get_column(new_field->field_name);
-          default_value = get_bit_default_value(col_obj);
-        } else {
-          default_value = "'" + def_val + "'";
-        }
-      }
-    } else if (new_field->m_default_val_expr != nullptr) {
-      default_value = get_default_expr_for_duckdb(
-          current_thd, new_field->m_default_val_expr);
-    }
+    std::string default_value = get_default_value(field, m_new_dd_table);
+    default_value = default_value.empty() ? "NULL" : default_value;
 
     append_stmt_column_set_default(result, m_schema_name, m_table_name,
                                    new_field->field_name, default_value);
@@ -829,6 +821,12 @@ void ChangeColumnConvertor::prepare_columns() {
 bool ChangeColumnConvertor::check() {
   for (auto &pair : m_columns) {
     Field *new_field = pair.second;
+
+    if (new_field->is_gcol()) {
+      return myduck::report_duckdb_table_struct_error(
+          "Modifying generated columns is not supported");
+    }
+
     if (FieldConvertor(new_field, m_new_dd_table).check()) {
       return true;
     }
@@ -873,6 +871,13 @@ std::string ChangeColumnConvertor::translate() {
   /* Change default value. All columns should be processed. */
   for (auto &pair : m_columns) {
     Create_field *new_field = pair.first;
+    Field *field = pair.second;
+
+    /* Skip default value set/drop for generated column. */
+    if (new_field->field && new_field->field->is_gcol()) {
+      continue;
+    }
+
     bool drop_default = ((new_field->flags & NO_DEFAULT_VALUE_FLAG) != 0);
 
     /* Drop default value. */
@@ -882,27 +887,9 @@ std::string ChangeColumnConvertor::translate() {
     }
 
     /* Set default value. */
-    std::string default_value = "NULL";
-    if (new_field->auto_flags & Field::DEFAULT_NOW) {
-      default_value = "CURRENT_TIMESTAMP";
-    } else if (new_field->constant_default != nullptr) {
-      String str;
-      String *def = new_field->constant_default->val_str(&str);
-      if (def != nullptr &&
-          (my_strcasecmp(system_charset_info, def->ptr(), "NULL") != 0)) {
-        std::string def_val = std::string(def->ptr(), def->length());
-        if (new_field->sql_type == MYSQL_TYPE_BIT) {
-          const dd::Column *col_obj =
-              m_new_dd_table->get_column(new_field->field_name);
-          default_value = get_bit_default_value(col_obj);
-        } else {
-          default_value = "'" + def_val + "'";
-        }
-      }
-    } else if (new_field->m_default_val_expr != nullptr) {
-      default_value = get_default_expr_for_duckdb(
-          current_thd, new_field->m_default_val_expr);
-    }
+    std::string default_value = get_default_value(field, m_new_dd_table);
+    default_value = default_value.empty() ? "NULL" : default_value;
+
     append_stmt_column_set_default(result, m_schema_name, m_table_name,
                                    new_field->field_name, default_value);
   }

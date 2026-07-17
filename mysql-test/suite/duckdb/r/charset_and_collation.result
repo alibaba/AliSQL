@@ -151,9 +151,7 @@ ai	ci	ai_ci
 SET NAMES 'latin1' COLLATE 'latin1_general_ci';
 SELECT 'a'='á' AS ai, 'a'='A' AS ci, 'A'='á' AS ai_ci FROM t_duckdb;
 ai	ci	ai_ci
-0	0	0
-Warnings:
-Warning	7508	[DuckDB] Exception when setting duckdb session variables. Variable 'collation_connection' is set to latin1_general_ci BINARY Collation is used for literal string in DuckDB. Recommend using collations of 'utf8mb3', 'utf8mb4' or 'ascii'.
+0	1	0
 SELECT 'a'='á' AS ai, 'a'='A' AS ci, 'A'='á' AS ai_ci FROM t_innodb;
 ai	ci	ai_ci
 0	1	0
@@ -656,29 +654,126 @@ SELECT c FROM t_innodb where c = 'A';
 c
 DROP TABLE t_duckdb, t_innodb;
 SET NAMES utf8mb4;
+# 3.4 define collation for table with latin1
+set names latin1;
+CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) COLLATE latin1_general_ci) engine=duckdb CHARSET=latin1 COLLATE=latin1_general_ci;
+CREATE TABLE t_innodb (id INT PRIMARY KEY, a varchar(32) COLLATE latin1_general_ci) engine=innodb CHARSET=latin1 COLLATE=latin1_general_ci;
+INSERT INTO t_duckdb VALUES (1, 'a');
+INSERT INTO t_innodb VALUES (1, 'a');
+SELECT a FROM t_duckdb where a = 'a';
+a
+a
+SELECT a FROM t_innodb where a = 'a';
+a
+a
+SELECT a FROM t_duckdb where a = 'A';
+a
+a
+SELECT a FROM t_innodb where a = 'A';
+a
+a
+CALL dbms_duckdb.query("DELETE FROM test.t_duckdb");
+RESULT
+Count	
+BIGINT	
+[ Rows: 1]
+1
+
+
+DELETE FROM t_innodb;
+ALTER TABLE t_duckdb ADD COLUMN b varchar(32) COLLATE latin1_general_ci,
+ADD COLUMN c varchar(32) COLLATE latin1_bin,
+ADD COLUMN d varchar(32) COLLATE latin1_general_cs;
+ALTER TABLE t_innodb ADD COLUMN b varchar(32) COLLATE latin1_general_ci,
+ADD COLUMN c varchar(32) COLLATE latin1_bin,
+ADD COLUMN d varchar(32) COLLATE latin1_general_cs;
+INSERT INTO t_duckdb VALUES (1, 'a', 'a', 'a', 'a');
+INSERT INTO t_innodb VALUES (1, 'a', 'a', 'a', 'a');
+SELECT a FROM t_duckdb where a = 'a';
+a
+a
+SELECT a FROM t_innodb where a = 'a';
+a
+a
+SELECT a FROM t_duckdb where a = 'A';
+a
+a
+SELECT a FROM t_innodb where a = 'A';
+a
+a
+SELECT a FROM t_duckdb where a = 'á';
+a
+SELECT a FROM t_innodb where a = 'á';
+a
+SELECT b FROM t_duckdb where b = 'a';
+b
+a
+SELECT b FROM t_innodb where b = 'a';
+b
+a
+SELECT b FROM t_duckdb where b = 'A';
+b
+a
+SELECT b FROM t_innodb where b = 'A';
+b
+a
+SELECT b FROM t_duckdb where b = 'á';
+b
+SELECT b FROM t_innodb where b = 'á';
+b
+SELECT c FROM t_duckdb where c = 'a';
+c
+a
+SELECT c FROM t_innodb where c = 'a';
+c
+a
+SELECT c FROM t_duckdb where c = 'A';
+c
+SELECT c FROM t_innodb where c = 'A';
+c
+SELECT c FROM t_duckdb where c = 'á';
+c
+SELECT c FROM t_innodb where c = 'á';
+c
+SELECT d FROM t_duckdb where d = 'a';
+d
+a
+SELECT d FROM t_innodb where d = 'a';
+d
+a
+SELECT d FROM t_duckdb where d = 'A';
+d
+SELECT d FROM t_innodb where d = 'A';
+d
+SELECT d FROM t_duckdb where d = 'á';
+d
+SELECT d FROM t_innodb where d = 'á';
+d
+DROP TABLE t_duckdb, t_innodb;
+SET NAMES utf8mb4;
 #
-# Test 4. NON-UTF8 CHARSET
+# Test 4. Not-Supported CHARSET
 #
 # 4.1 CREATE TABLE
-CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32)) engine=duckdb CHARSET=latin1;
-ERROR HY000: [DuckDB] DuckDB table structure is invalid. Reason: DuckDB only supports utf8, utf8mb4 and ascii character sets.
-CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) CHARSET latin1) engine=duckdb CHARSET=utf8mb4;
-ERROR HY000: [DuckDB] DuckDB table structure is invalid. Reason: DuckDB only supports utf8, utf8mb4 and ascii character sets.
-CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) COLLATE latin1_general_ci) engine=duckdb CHARSET=utf8mb4;
-ERROR HY000: [DuckDB] DuckDB table structure is invalid. Reason: DuckDB only supports utf8, utf8mb4 and ascii character sets.
+CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32)) engine=duckdb CHARSET=gbk;
+ERROR HY000: [DuckDB] DuckDB table structure is invalid. Reason: DuckDB only supports utf8, utf8mb4, ascii, and latin1 character sets.
+CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) CHARSET gbk) engine=duckdb CHARSET=utf8mb4;
+ERROR HY000: [DuckDB] DuckDB table structure is invalid. Reason: DuckDB only supports utf8, utf8mb4, ascii, and latin1 character sets.
+CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) COLLATE gbk_chinese_ci) engine=duckdb CHARSET=utf8mb4;
+ERROR HY000: [DuckDB] DuckDB table structure is invalid. Reason: DuckDB only supports utf8, utf8mb4, ascii, and latin1 character sets.
 # 4.2 ALTER TABLE
-CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) CHARSET utf8mb3, b varchar(32) CHARSET utf8mb4) engine=duckdb CHARSET=latin1;
+CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) CHARSET utf8mb3, b varchar(32) CHARSET utf8mb4) engine=duckdb CHARSET=gbk;
 Warnings:
 Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 ALTER TABLE t_duckdb ADD COLUMN c varchar(32);
-ERROR HY000: [DuckDB] DuckDB table structure is invalid. Reason: DuckDB only supports utf8, utf8mb4 and ascii character sets.
+ERROR HY000: [DuckDB] DuckDB table structure is invalid. Reason: DuckDB only supports utf8, utf8mb4, ascii, and latin1 character sets.
 ALTER TABLE t_duckdb ADD COLUMN c varchar(32) CHARSET utf8mb3, ADD COLUMN d varchar(32) CHARSET utf8mb4;
 Warnings:
 Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
 ALTER TABLE t_duckdb MODIFY COLUMN a varchar(32);
-ERROR HY000: [DuckDB] DuckDB table structure is invalid. Reason: DuckDB only supports utf8, utf8mb4 and ascii character sets.
-ALTER TABLE t_duckdb MODIFY COLUMN b varchar(32) CHARSET latin1;
-ERROR HY000: [DuckDB] DuckDB table structure is invalid. Reason: DuckDB only supports utf8, utf8mb4 and ascii character sets.
+ERROR HY000: [DuckDB] DuckDB table structure is invalid. Reason: DuckDB only supports utf8, utf8mb4, ascii, and latin1 character sets.
+ALTER TABLE t_duckdb MODIFY COLUMN b varchar(32) CHARSET gbk;
+ERROR HY000: [DuckDB] DuckDB table structure is invalid. Reason: DuckDB only supports utf8, utf8mb4, ascii, and latin1 character sets.
 #
 # Test 5. UTF8MB4 with Emoji
 #

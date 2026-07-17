@@ -331,9 +331,15 @@ DELETE FROM t_hash PARTITION(p0) WHERE id = 4;
 ERROR HY000: [DuckDB] Parser Error: syntax error at or near "PARTITION"
 
 LINE 1: DELETE FROM t_hash PARTITION(p0) WHERE id = 4
+                           ^
+
+LINE 1: DELETE FROM t_hash PARTITION(p0) WHERE id = 4
                            ^.
 UPDATE t_hash PARTITION (p0) SET id = 16 WHERE id = 4;
 ERROR HY000: [DuckDB] Parser Error: syntax error at or near "PARTITION"
+
+LINE 1: UPDATE t_hash PARTITION (p0) SET id = 16 WHERE id = 4
+                      ^
 
 LINE 1: UPDATE t_hash PARTITION (p0) SET id = 16 WHERE id = 4
                       ^.
@@ -361,9 +367,15 @@ DELETE FROM t_hash PARTITION(p0) WHERE id = 4;
 ERROR HY000: [DuckDB] Parser Error: syntax error at or near "PARTITION"
 
 LINE 1: DELETE FROM t_hash PARTITION(p0) WHERE id = 4
+                           ^
+
+LINE 1: DELETE FROM t_hash PARTITION(p0) WHERE id = 4
                            ^.
 UPDATE t_hash PARTITION (p0) SET id = 16 WHERE id = 4;
 ERROR HY000: [DuckDB] Parser Error: syntax error at or near "PARTITION"
+
+LINE 1: UPDATE t_hash PARTITION (p0) SET id = 16 WHERE id = 4
+                      ^
 
 LINE 1: UPDATE t_hash PARTITION (p0) SET id = 16 WHERE id = 4
                       ^.

@@ -28,17 +28,27 @@ struct CountStarFun {
 struct CountFun {
 	static constexpr const char *Name = "count";
 	static constexpr const char *Parameters = "arg";
-	static constexpr const char *Description = "Returns the number of non-null values in arg.";
+	static constexpr const char *Description = "Returns the number of non-NULL values in arg.";
 	static constexpr const char *Example = "count(A)";
 	static constexpr const char *Categories = "";
 
 	static AggregateFunctionSet GetFunctions();
 };
 
+struct MultiCountFun {
+	static constexpr const char *Name = "multi_count";
+	static constexpr const char *Parameters = "arg1,arg2";
+	static constexpr const char *Description = "Returns the number of non-null values in arg.";
+	static constexpr const char *Example = "multi_count(A, B)";
+	static constexpr const char *Categories = "";
+
+	static AggregateFunction GetFunction();
+};
+
 struct FirstFun {
 	static constexpr const char *Name = "first";
 	static constexpr const char *Parameters = "arg";
-	static constexpr const char *Description = "Returns the first value (null or non-null) from arg. This function is affected by ordering.";
+	static constexpr const char *Description = "Returns the first value (NULL or non-NULL) from arg. This function is affected by ordering.";
 	static constexpr const char *Example = "first(A)";
 	static constexpr const char *Categories = "";
 
@@ -64,7 +74,7 @@ struct LastFun {
 struct AnyValueFun {
 	static constexpr const char *Name = "any_value";
 	static constexpr const char *Parameters = "arg";
-	static constexpr const char *Description = "Returns the first non-null value from arg. This function is affected by ordering.";
+	static constexpr const char *Description = "Returns the first non-NULL value from arg. This function is affected by ordering.";
 	static constexpr const char *Example = "";
 	static constexpr const char *Categories = "";
 

@@ -1,6 +1,7 @@
 #include "duckdb/storage/buffer/block_handle.hpp"
 
 #include "duckdb/common/file_buffer.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/block.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
@@ -13,7 +14,7 @@ BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, Mem
     : block_manager(block_manager), readers(0), block_id(block_id_p), tag(tag), buffer_type(FileBufferType::BLOCK),
       buffer(nullptr), eviction_seq_num(0), destroy_buffer_upon(DestroyBufferUpon::BLOCK),
       memory_charge(tag, block_manager.buffer_manager.GetBufferPool()), unswizzled(nullptr),
-      eviction_queue_idx(DConstants::INVALID_INDEX) {
+      eviction_queue_idx(DConstants::INVALID_INDEX), written_temporary_block(false) {
 	eviction_seq_num = 0;
 	state = BlockState::BLOCK_UNLOADED;
 	memory_usage = block_manager.GetBlockAllocSize();
@@ -25,7 +26,7 @@ BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, Mem
     : block_manager(block_manager), readers(0), block_id(block_id_p), tag(tag), buffer_type(buffer_p->GetBufferType()),
       eviction_seq_num(0), destroy_buffer_upon(destroy_buffer_upon_p),
       memory_charge(tag, block_manager.buffer_manager.GetBufferPool()), unswizzled(nullptr),
-      eviction_queue_idx(DConstants::INVALID_INDEX) {
+      eviction_queue_idx(DConstants::INVALID_INDEX), written_temporary_block(false) {
 	buffer = std::move(buffer_p);
 	state = BlockState::BLOCK_LOADED;
 	memory_usage = block_size;
@@ -59,7 +60,8 @@ BlockHandle::~BlockHandle() { // NOLINT: allow internal exceptions
 
 unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuffer> reusable_buffer,
                                 block_id_t block_id) {
-	if (reusable_buffer) {
+
+	if (reusable_buffer && reusable_buffer->GetHeaderSize() == block_manager.GetBlockHeaderSize()) {
 		// re-usable buffer: re-use it
 		if (reusable_buffer->GetBufferType() == FileBufferType::BLOCK) {
 			// we can reuse the buffer entirely
@@ -135,7 +137,7 @@ BufferHandle BlockHandle::LoadFromBuffer(BlockLock &l, data_ptr_t data, unique_p
 	return BufferHandle(shared_from_this(), buffer.get());
 }
 
-BufferHandle BlockHandle::Load(unique_ptr<FileBuffer> reusable_buffer) {
+BufferHandle BlockHandle::Load(QueryContext context, unique_ptr<FileBuffer> reusable_buffer) {
 	if (state == BlockState::BLOCK_LOADED) {
 		// already loaded
 		D_ASSERT(buffer);
@@ -145,11 +147,12 @@ BufferHandle BlockHandle::Load(unique_ptr<FileBuffer> reusable_buffer) {
 
 	if (block_id < MAXIMUM_BLOCK) {
 		auto block = AllocateBlock(block_manager, std::move(reusable_buffer), block_id);
-		block_manager.Read(*block);
+		block_manager.Read(context, *block);
 		buffer = std::move(block);
 	} else {
 		if (MustWriteToTemporaryFile()) {
-			buffer = block_manager.buffer_manager.ReadTemporaryBuffer(tag, *this, std::move(reusable_buffer));
+			buffer = block_manager.buffer_manager.ReadTemporaryBuffer(QueryContext(), tag, *this,
+			                                                          std::move(reusable_buffer));
 		} else {
 			return BufferHandle(); // Destroyed upon unpin/evict, so there is no temp buffer to read
 		}
@@ -171,7 +174,7 @@ unique_ptr<FileBuffer> BlockHandle::UnloadAndTakeBlock(BlockLock &lock) {
 
 	if (block_id >= MAXIMUM_BLOCK && MustWriteToTemporaryFile()) {
 		// temporary block that cannot be destroyed upon evict/unpin: write to temporary file
-		block_manager.buffer_manager.WriteTemporaryBuffer(tag, block_id, *buffer);
+		block_manager.buffer_manager.WriteTemporaryBuffer(tag, block_id, *buffer, this);
 	}
 	memory_charge.Resize(0);
 	state = BlockState::BLOCK_UNLOADED;

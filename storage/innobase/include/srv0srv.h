@@ -217,6 +217,9 @@ struct Srv_threads {
   /** Purge coordinator (also being a worker) */
   IB_thread m_purge_coordinator;
 
+  /** Flashback snapshot history thread. */
+  IB_thread m_scn_hist;
+
   /** Number of purge workers and size of array below. */
   size_t m_purge_workers_n;
 
@@ -816,6 +819,7 @@ extern mysql_pfs_key_t srv_lock_timeout_thread_key;
 extern mysql_pfs_key_t srv_master_thread_key;
 extern mysql_pfs_key_t srv_monitor_thread_key;
 extern mysql_pfs_key_t srv_purge_thread_key;
+extern mysql_pfs_key_t scn_history_thread_key;
 extern mysql_pfs_key_t srv_worker_thread_key;
 extern mysql_pfs_key_t trx_recovery_rollback_thread_key;
 extern mysql_pfs_key_t srv_ts_alter_encrypt_thread_key;

@@ -694,6 +694,7 @@ MySQL clients support the protocol:
 
 #include "my_config.h"
 
+#include "sql/duckdb/duckdb_config.h"
 #include "sql/duckdb/duckdb_manager.h"
 
 #include "errmsg.h"  // init_client_errs
@@ -981,6 +982,7 @@ MySQL clients support the protocol:
 #include "sql/duckdb/duckdb_manager.h"
 #include "sql/dd/impl/upgrade/server_ext.h"
 #include "sql/binlog_ext.h"
+#include "sql/server_redo_log.h"
 
 using std::max;
 using std::min;
@@ -1392,6 +1394,7 @@ bool duckdb_convert_all_at_startup_ignore_error = false;
 uint duckdb_convert_all_at_startup_threads = 0;
 bool duckdb_convert_all_skip_mtr_db = false;
 std::atomic<bool> on_duckdb_convert_progress = false;
+bool duckdb_convert_tables_with_generated_columns = true;
 
 ulonglong global_conn_mem_limit = 0;
 ulonglong global_conn_mem_counter = 0;
@@ -2620,6 +2623,10 @@ static void clean_up(bool print_message) {
 
   if (set_server_shutting_down()) return;
 
+  if (!opt_initialize && duckdb_convert_all_at_startup) {
+    dd::upgrade::myduck::stop_duckdb_convertor_thread();
+  }
+
   ha_pre_dd_shutdown();
   dd::shutdown();
 
@@ -2641,6 +2648,7 @@ static void clean_up(bool print_message) {
 
   injector::free_instance();
   mysql_bin_log.cleanup();
+  server_redo_log::deinit();
 
   udf_load_service.deinit();
   delete rpl_source_io_monitor;
@@ -6376,6 +6384,9 @@ static int init_server_components() {
                             default_binlogfile_name, "");
     }
 
+    if (!opt_initialize && !is_help_or_validate_option() && opt_bin_log)
+      binlog_cache_free_flush.init_binlog_cache_dir();
+
     log_bin_index =
         rpl_make_log_name(key_memory_MYSQL_BIN_LOG_index, opt_binlog_index_name,
                           log_bin_basename, ".index");
@@ -6557,6 +6568,16 @@ static int init_server_components() {
     LogErr(ERROR_LEVEL, ER_CANT_INITIALIZE_EARLY_PLUGINS);
     unireg_abort(1);
   }
+
+  /*
+    Initialize the server redo log framework and register the binlog redo
+    applier before InnoDB redo recovery runs, so that binlog events persisted
+    into redo can be recovered back into the binlog file. binlog_redo_recovery
+    must outlive plugin_register_builtin_and_init_core_se() (InnoDB recovery),
+    and its destructor finalizes the recovery.
+  */
+  server_redo_log::init();
+  Binlog_redo_recovery binlog_redo_recovery;
 
   /* Load builtin plugins, initialize MyISAM, CSV and InnoDB */
   if (plugin_register_builtin_and_init_core_se(&remaining_argc,
@@ -7922,7 +7943,8 @@ int mysqld_main(int argc, char **argv)
 
   // Initialize DuckDB early if needed for crash recovery
   // This ensures WAL replay happens at startup rather than on first request
-  if (myduck::DuckdbManager::InitializeIfNeeded())
+  if (!is_help_or_validate_option() &&
+      myduck::DuckdbManager::InitializeIfNeeded())
     unireg_abort(MYSQLD_ABORT_EXIT);
 
   if (init_server_components()) unireg_abort(MYSQLD_ABORT_EXIT);
@@ -8218,7 +8240,7 @@ int mysqld_main(int argc, char **argv)
   initialize_information_schema_acl();
 
   if (opt_bin_log) {
-    mysql_bin_log_ext.init();
+    mysql_bin_log_ext.init(!opt_initialize && !is_help_or_validate_option());
   }
 
   (void)RUN_HOOK(server_state, after_recovery, (nullptr));
@@ -8310,7 +8332,7 @@ int mysqld_main(int argc, char **argv)
   set_super_read_only_post_init();
 
   /** Alter all tables to duckdb. */
-  if (!opt_initialize && myduck::global_mode == myduck::enum_modes::DUCKDB_ON) {
+  if (!opt_initialize && myduck::global_mode_on()) {
     dd::upgrade::myduck::create_duckdb_convertor_thread();
   }
 

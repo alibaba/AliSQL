@@ -1243,6 +1243,8 @@ class Item_func_date_format final : public Item_str_func {
   bool resolve_type(THD *thd) override;
   uint format_length(const String *format);
   bool eq(const Item *item, bool binary_cmp) const override;
+  void print(const THD *thd, String *str,
+             enum_query_type query_type) const override;
 };
 
 class Item_func_from_unixtime final : public Item_datetime_func {
@@ -1283,6 +1285,8 @@ class Item_func_convert_tz final : public Item_datetime_func {
   bool resolve_type(THD *) override;
   bool get_date(MYSQL_TIME *res, my_time_flags_t fuzzy_date) override;
   void cleanup() override;
+  void print(const THD *thd, String *str,
+             enum_query_type query_type) const override;
 };
 
 class Item_func_sec_to_time final : public Item_time_func {
@@ -1665,6 +1669,14 @@ class Item_func_last_day final : public Item_date_func {
   bool resolve_type(THD *thd) override {
     if (param_type_is_default(thd, 0, 1, MYSQL_TYPE_DATETIME)) return true;
     return Item_date_func::resolve_type(thd);
+  }
+  void print(const THD *thd, String *str,
+             enum_query_type query_type) const override {
+    if (query_type & QT_DUCKDB_REWRITE) {
+      Item_func::print(thd, str, query_type);
+    } else {
+      Item_temporal_func::print(thd, str, query_type);
+    }
   }
 };
 

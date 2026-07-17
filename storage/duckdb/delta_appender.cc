@@ -27,27 +27,34 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "delta_appender.h"
 #include <mysql/components/services/log_builtins.h>
 #include "ddl_convertor.h"
+#include "duckdb/main/physical_appender.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "sql/duckdb/duckdb_charset_collation.h"
+#include "sql/duckdb/duckdb_config.h"  // use_double_for_decimal
 #include "sql/duckdb/duckdb_context.h"
 #include "sql/duckdb/duckdb_manager.h"
 #include "sql/duckdb/duckdb_timezone.h"  // days_at_timestart
-#include "sql/duckdb/duckdb_config.h"  // use_double_for_decimal
 #include "sql/field.h"                   // field
 #include "sql/tztime.h"                  // my_tz_UTC
 #include "sql/my_decimal.h"
+#include "sql/sql_class.h"                  // my_tz_UTC
 
-DeltaAppender *DeltaAppenders::get_appender(std::string &db, std::string &tb,
-                                            bool insert_only, TABLE *table) {
+ulonglong batch_max_row_count = 0;
+
+DeltaAppender *DeltaAppenders::get_appender(THD *thd, std::string &db, std::string &tb,
+                                            bool insert_only,
+                                            bool idempotent_flag,
+                                            TABLE *table) {
   auto key = std::make_pair(db, tb);
   auto it = m_append_infos.find(key);
 
   if (it != m_append_infos.end()) {
     return it->second.get();
   } else {
-    auto appender =
-        std::make_unique<DeltaAppender>(m_con, db, tb, !insert_only);
+    auto appender = std::make_unique<DeltaAppender>(thd, db, tb, !insert_only,
+                                                    idempotent_flag);
 
     try {
       if (appender->Initialize(table)) {
@@ -76,11 +83,11 @@ void DeltaAppenders::delete_appender(std::string &db, std::string &tb) {
   }
 }
 
-bool DeltaAppenders::flush_all(bool idempotent_flag, std::string &error_msg) {
+bool DeltaAppenders::flush_all(std::string &error_msg) {
   try {
     for (auto &pair : m_append_infos) {
       auto appender = pair.second.get();
-      if (appender->flush(idempotent_flag)) return true;
+      if (appender->flush()) return true;
     }
   } catch (std::exception &ex) {
     duckdb::ErrorData error(ex);
@@ -96,6 +103,8 @@ bool DeltaAppenders::flush_all(bool idempotent_flag, std::string &error_msg) {
 void DeltaAppenders::reset_all() { m_append_infos.clear(); }
 
 bool DeltaAppenders::rollback_trx(ulonglong trx_no) {
+  DBUG_EXECUTE_IF("simulate_duckdb_rollback_partial_trx_failed", return true;);
+
   for (auto &pair : m_append_infos) {
     auto appender = pair.second.get();
     if (appender->rollback(trx_no)) return true;
@@ -114,6 +123,9 @@ int DeltaAppender::append_row_insert(TABLE *table, ulonglong trx_no,
 
     for (uint i = 0; i < table->s->fields; i++) {
       Field *field = table->field[i];
+      if (!m_use_tmp_table && field->is_gcol()) {
+        continue;
+      }
       int ret = append_mysql_field(field, blob_type_map);
       if (ret) return HA_DUCKDB_APPEND_ERROR;
     }
@@ -130,6 +142,11 @@ int DeltaAppender::append_row_insert(TABLE *table, ulonglong trx_no,
     LogErr(INFORMATION_LEVEL, ER_DUCKDB, error.RawMessage().c_str());
     my_error(ER_DUCKDB_APPENDER_ERROR, MYF(0), error.RawMessage().c_str());
     return HA_DUCKDB_APPEND_ERROR;
+  }
+
+  if (m_use_tmp_table && batch_max_row_count &&
+      m_row_count >= batch_max_row_count) {
+    return flush_partial_batch();
   }
 
   return 0;
@@ -155,6 +172,9 @@ int DeltaAppender::append_row_delete(TABLE *table, ulonglong trx_no,
 
     for (uint i = 0; i < table->s->fields; i++) {
       Field *field = table->field[i];
+      if (!m_use_tmp_table && field->is_gcol()) {
+        continue;
+      }
 
       if (bitmap_is_set(&m_pk_bitmap, field->field_index())) {
         int ret = 0;
@@ -189,17 +209,23 @@ int DeltaAppender::append_row_delete(TABLE *table, ulonglong trx_no,
     return HA_DUCKDB_APPEND_ERROR;
   }
 
+  if (m_use_tmp_table && batch_max_row_count &&
+      m_row_count >= batch_max_row_count) {
+    return flush_partial_batch();
+  }
+
   return 0;
 }
 
 bool DeltaAppender::Initialize(TABLE *table) {
+  auto &con = m_thd->get_duckdb_context()->get_connection();
   if (m_use_tmp_table) {
     m_tmp_table_name = buf_table_name(m_schema_name, m_table_name);
 
     std::stringstream ss;
+    ss << "USE `" << m_schema_name << "`;";
     ss << "CREATE TEMPORARY TABLE IF NOT EXISTS main.`" << m_tmp_table_name
-       << "` AS FROM `" << m_schema_name << "`.`" << m_table_name
-       << "` LIMIT 0;";
+       << "` AS FROM `" << m_table_name << "` LIMIT 0;";
 
     ss << "ALTER TABLE main.`" << m_tmp_table_name
        << "` ADD COLUMN `#alibaba_rds_delete_flag` BOOL;";
@@ -208,13 +234,13 @@ bool DeltaAppender::Initialize(TABLE *table) {
     ss << "ALTER TABLE main.`" << m_tmp_table_name
        << "` ADD COLUMN `#alibaba_rds_trx_no` INT;";
 
-    auto ret = myduck::duckdb_query(*m_con, ss.str());
+    auto ret = myduck::duckdb_query(m_thd, ss.str());
     if (ret->HasError()) {
       return true;
     }
     std::string schema_name("main");
-    m_appender = std::make_unique<duckdb::Appender>(
-        *m_con, schema_name, m_tmp_table_name, duckdb::AppenderType::PHYSICAL);
+    m_appender = std::make_unique<duckdb::PhysicalAppender>(
+        con, schema_name, m_tmp_table_name, duckdb::AppenderType::PHYSICAL);
 
     // get pklist and pk_bitmap
     KEY *key_info = table->key_info;
@@ -230,15 +256,21 @@ bool DeltaAppender::Initialize(TABLE *table) {
     }
 
     // get column list
+    bool is_first_field = true;
     for (uint i = 0; i < table->s->fields; i++) {
-      if (i) m_col_list += ", ";
+      if (table->field[i]->is_gcol()) {
+        m_has_gcols = true;
+        continue;
+      }
+      if (!is_first_field) m_col_list += ", ";
       m_col_list += "`";
       m_col_list += table->field[i]->field_name;
       m_col_list += "`";
+      is_first_field = false;
     }
   } else {
-    m_appender = std::make_unique<duckdb::Appender>(
-        *m_con, m_schema_name, m_table_name, duckdb::AppenderType::PHYSICAL);
+    m_appender = std::make_unique<duckdb::PhysicalAppender>(
+        con, m_schema_name, m_table_name, duckdb::AppenderType::PHYSICAL);
   }
 
   return false;
@@ -259,30 +291,31 @@ static void appendSelectQuery(std::stringstream &ss,
 void DeltaAppender::generateQuery(std::stringstream &ss, bool delete_flag) {
   ss.str("");
   ss << "USE `" << m_schema_name << "`;";
-
   if (!delete_flag) {
-    std::string prefix = "INSERT INTO `";
-    ss << prefix << m_schema_name << "`.`" << m_table_name << "` ";
+    ss << "INSERT INTO `" << m_table_name << "` ";
+    if (m_has_gcols) {
+      ss << "(" << m_col_list << ") ";
+    }
     appendSelectQuery(ss, m_col_list, m_pk_list, m_tmp_table_name, delete_flag);
     ss << ";";
   } else {
-    ss << "DELETE FROM `" << m_schema_name << "`.`" << m_table_name
-       << "` WHERE (" << m_pk_list << ") IN (";
+    ss << "DELETE FROM `" << m_table_name << "` WHERE ("
+       << m_pk_list << ") IN (";
     appendSelectQuery(ss, m_pk_list, m_pk_list, m_tmp_table_name, delete_flag);
     ss << ");";
   }
 }
 
-bool DeltaAppender::flush(bool idempotent_flag) {
+bool DeltaAppender::flush() {
   m_appender->Flush();
 
   if (m_use_tmp_table) {
     std::stringstream ss;
 
     /* Delete */
-    if (m_has_delete || idempotent_flag) {
+    if (m_has_delete || m_idempotent_flag) {
       generateQuery(ss, true);
-      auto ret = myduck::duckdb_query(*m_con, ss.str());
+      auto ret = myduck::duckdb_query(m_thd, ss.str());
       if (ret->HasError()) {
         return true;
       }
@@ -291,21 +324,39 @@ bool DeltaAppender::flush(bool idempotent_flag) {
     /* Insert */
     if (m_has_insert) {
       generateQuery(ss, false);
-      auto ret = myduck::duckdb_query(*m_con, ss.str());
+      auto ret = myduck::duckdb_query(m_thd, ss.str());
       if (ret->HasError()) {
         return true;
       }
     }
-
-    ss.str("");
-    ss << "DROP TABLE main.`" << m_tmp_table_name << "`";
-    auto ret = myduck::duckdb_query(*m_con, ss.str());
-    if (ret->HasError()) {
-      return true;
-    }
   }
 
   return false;
+}
+
+int DeltaAppender::flush_partial_batch() {
+  if (flush()) {
+    LogErr(INFORMATION_LEVEL, ER_DUCKDB, "flush_partial_batch flush failed");
+    my_error(ER_DUCKDB_APPENDER_ERROR, MYF(0),
+             "flush_partial_batch flush failed");
+    return HA_DUCKDB_APPEND_ERROR;
+  }
+
+  std::stringstream ss;
+  ss << "TRUNCATE main.`" << m_tmp_table_name << "`;";
+  if (myduck::duckdb_query(m_thd, ss.str())->HasError()) {
+    LogErr(INFORMATION_LEVEL, ER_DUCKDB, "flush_partial_batch truncate failed");
+    my_error(ER_DUCKDB_APPENDER_ERROR, MYF(0),
+             "flush_partial_batch truncate failed");
+    return HA_DUCKDB_APPEND_ERROR;
+  }
+
+  m_row_count = 0;
+  m_has_insert = false;
+  m_has_delete = false;
+  m_has_update = false;
+
+  return 0;
 }
 
 bool DeltaAppender::rollback(ulonglong trx_no) {
@@ -316,7 +367,7 @@ bool DeltaAppender::rollback(ulonglong trx_no) {
     ss << "DELETE FROM main.`" << m_tmp_table_name
        << "` WHERE `#alibaba_rds_trx_no` = " << trx_no;
 
-    auto ret = myduck::duckdb_query(*m_con, ss.str());
+    auto ret = myduck::duckdb_query(m_thd, ss.str());
     if (ret->HasError()) {
       return true;
     }
@@ -330,7 +381,7 @@ void DeltaAppender::cleanup() {
     bitmap_free(&m_pk_bitmap);
     std::stringstream ss;
     ss << "DROP TABLE IF EXISTS main.`" << m_tmp_table_name << "`;";
-    myduck::duckdb_query(*m_con, ss.str());
+    myduck::duckdb_query(m_thd, ss.str());
   }
 }
 
@@ -563,7 +614,8 @@ int DeltaAppender::append_mysql_field(const Field *field,
       if (blob_type_map != nullptr) {
         is_blob = bitmap_is_set(blob_type_map, field->field_index());
       } else {
-        is_blob = (FieldConvertor::convert_type(field) == "BLOB");
+        is_blob = (FieldConvertor::convert_type(field) == "BLOB" ||
+                   FieldConvertor::convert_type(field) == "BITSTRING");
       }
 
       if (is_blob) {
@@ -573,8 +625,29 @@ int DeltaAppender::append_mysql_field(const Field *field,
         appender->Append(value);
       } else {
         assert(field->has_charset());
-        appender->Append<duckdb::string_t>(
-            duckdb::string_t(tmp.ptr(), tmp.length()));
+        /* DuckDB store latin1 column's data as utf8mb4. */
+        if (strcmp(field->charset()->csname, "latin1") == 0) {
+          const CHARSET_INFO *utf8mb4_cs =
+              myduck::get_utf8mb4_charset_for_latin1(field->charset());
+          char utf8mb4_buf[512];
+          String utf8mb4_str(utf8mb4_buf, sizeof(utf8mb4_buf), utf8mb4_cs);
+          uint conversion_errors = 0;
+
+          if (utf8mb4_str.copy(tmp.ptr(), tmp.length(), field->charset(),
+                               &my_charset_utf8mb4_0900_bin,
+                               &conversion_errors)) {
+            /* The conversion has no reason to fail */
+            assert(false);
+            appender->Append<duckdb::string_t>(
+                duckdb::string_t(tmp.ptr(), tmp.length()));
+          } else {
+            appender->Append<duckdb::string_t>(
+                duckdb::string_t(utf8mb4_str.ptr(), utf8mb4_str.length()));
+          }
+        } else {
+          appender->Append<duckdb::string_t>(
+              duckdb::string_t(tmp.ptr(), tmp.length()));
+        }
       }
       break;
     }

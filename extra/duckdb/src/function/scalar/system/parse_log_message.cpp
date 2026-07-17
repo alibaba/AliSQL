@@ -12,6 +12,8 @@
 
 namespace duckdb {
 
+namespace {
+
 struct ParseLogMessageData : FunctionData {
 	explicit ParseLogMessageData(const LogType &log_type_p) : log_type(log_type_p) {
 	}
@@ -59,7 +61,7 @@ unique_ptr<FunctionData> ParseLogMessageBind(ClientContext &context, ScalarFunct
 	return make_uniq<ParseLogMessageData>(*lookup);
 }
 
-static void ParseLogMessageFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void ParseLogMessageFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	const auto &info = func_expr.bind_info->Cast<ParseLogMessageData>();
 
@@ -72,9 +74,13 @@ static void ParseLogMessageFunction(DataChunk &args, ExpressionState &state, Vec
 	}
 }
 
+} // namespace
+
 ScalarFunction ParseLogMessage::GetFunction() {
-	return ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::ANY, ParseLogMessageFunction,
-	                      ParseLogMessageBind, nullptr, nullptr, nullptr, LogicalType(LogicalTypeId::INVALID));
+	auto fun = ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::ANY, ParseLogMessageFunction,
+	                          ParseLogMessageBind, nullptr, nullptr, nullptr, LogicalType(LogicalTypeId::INVALID));
+	fun.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
+	return fun;
 }
 
 } // namespace duckdb

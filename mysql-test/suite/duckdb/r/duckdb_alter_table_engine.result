@@ -34,11 +34,11 @@ blob_table	CREATE TABLE `blob_table` (
 ) ENGINE=DUCKDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 SELECT id, tiny_blob_field, medium_blob_field, long_blob_field, blob_field, hex(bit_field) FROM blob_table;
 id	tiny_blob_field	medium_blob_field	long_blob_field	blob_field	hex(bit_field)
-1	tinyblob_data	mediumblob_data	longblob_data	blob_data	0000000000000001
-2	tinyblob_data2	mediumblob_data2	longblob_data2	blob_data2	0000000000000002
-3	NULL	NULL	longblob_data3	NULL	0000000000000002
+1	tinyblob_data	mediumblob_data	longblob_data	blob_data	1
+2	tinyblob_data2	mediumblob_data2	longblob_data2	blob_data2	2
+3	NULL	NULL	longblob_data3	NULL	2
 4	tinyblob_data4	mediumblob_data4	NULL	blob_data2	NULL
-5	tinyblob_data5	mediumblob_data5	longblob_data5	blob_data5	0000000000000003
+5	tinyblob_data5	mediumblob_data5	longblob_data5	blob_data5	3
 CHECKSUM TABLE blob_table;
 Table	Checksum
 alter_engine_test.blob_table	2649844247

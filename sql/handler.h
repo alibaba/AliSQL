@@ -65,6 +65,7 @@
 #include "sql/dd/string_type.h"
 #include "sql/dd/types/object_table.h"  // dd::Object_table
 #include "sql/discrete_interval.h"      // Discrete_interval
+#include "sql/handler_ext.h"            // handlerton_ext
 #include "sql/key.h"
 #include "sql/sql_const.h"       // SHOW_COMP_OPTION
 #include "sql/sql_list.h"        // SQL_I_List
@@ -2624,6 +2625,8 @@ struct Page_track_t {
   savepoint_*, prepare, recover, and *_by_xid pointers can be 0.
 */
 struct handlerton {
+  handlerton_ext ext;
+
   /**
     Historical marker for if the engine is available or not.
   */
@@ -7229,8 +7232,7 @@ void ha_create_database(char *db);
 int ha_create_table(THD *thd, const char *path, const char *db,
                     const char *table_name, HA_CREATE_INFO *create_info,
                     bool update_create_info, bool is_temp_table,
-                    dd::Table *table_def, KEY *last_key = nullptr,
-                    bool recycled = false);
+                    dd::Table *table_def, KEY *last_key = nullptr);
 
 int ha_delete_table(THD *thd, handlerton *db_type, const char *path,
                     const char *db, const char *alias,

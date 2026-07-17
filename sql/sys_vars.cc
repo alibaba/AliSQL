@@ -4166,7 +4166,7 @@ static bool check_not_null_not_empty(sys_var *self, THD *thd, set_var *var) {
   return false;
 }
 
-static bool check_slave_stopped(sys_var *self, THD *thd, set_var *var) {
+bool check_slave_stopped(sys_var *self, THD *thd, set_var *var) {
   bool result = false;
   Master_info *mi = nullptr;
 

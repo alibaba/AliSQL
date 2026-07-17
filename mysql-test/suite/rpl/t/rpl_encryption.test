@@ -63,6 +63,10 @@ CALL mtr.add_suppression('Cannot get file password for encrypted replication log
 CALL mtr.add_suppression('Could not parse relay log event entry');
 CALL mtr.add_suppression('Failed to fetch key from keyring');
 
+--disable_query_log
+CALL mtr.add_suppression('Could not read the last binlog file');
+--enable_query_log
+
 # Setup test case variables
 --let $keyring_master= $MYSQL_TMP_DIR/keyring_master
 --let $keyring_slave= $MYSQL_TMP_DIR/keyring_slave

@@ -28,9 +28,11 @@
 #include <vector>
 
 #include "libbinlogevents/include/binlog_event.h"
+#include "mutex_lock.h"
 #include "my_inttypes.h"
 #include "my_sqlcommand.h"
 #include "sql/binlog.h"
+#include "sql/binlog_ext.h"
 #include "sql/current_thd.h"
 #include "sql/mysqld.h"
 #include "sql/rpl_context.h"
@@ -265,6 +267,8 @@ void Writeset_trx_dependency_tracker::get_dependency(THD *thd,
       !write_set_ctx->was_write_set_limit_reached();
   bool exceeds_capacity = false;
 
+  MUTEX_LOCK(guard, mysql_bin_log_ext.get_writeset_history_lock());
+
   if (can_use_writesets) {
     /*
      Check if adding this transaction exceeds the capacity of the writeset
@@ -316,6 +320,7 @@ void Writeset_trx_dependency_tracker::get_dependency(THD *thd,
 }
 
 void Writeset_trx_dependency_tracker::rotate(int64 start) {
+  MUTEX_LOCK(guard, mysql_bin_log_ext.get_writeset_history_lock());
   m_writeset_history_start = start;
   m_writeset_history.clear();
 }

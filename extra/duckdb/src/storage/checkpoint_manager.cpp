@@ -31,16 +31,18 @@
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
 void ReorderTableEntries(catalog_entry_vector_t &tables);
 
-SingleFileCheckpointWriter::SingleFileCheckpointWriter(optional_ptr<ClientContext> client_context_p,
-                                                       AttachedDatabase &db, BlockManager &block_manager,
-                                                       CheckpointType checkpoint_type)
-    : CheckpointWriter(db), client_context(client_context_p),
-      partial_block_manager(block_manager, PartialBlockType::FULL_CHECKPOINT), checkpoint_type(checkpoint_type) {
+SingleFileCheckpointWriter::SingleFileCheckpointWriter(QueryContext context, AttachedDatabase &db,
+                                                       BlockManager &block_manager, CheckpointType checkpoint_type)
+    : CheckpointWriter(db), context(context.GetClientContext()),
+      partial_block_manager(context, block_manager, PartialBlockType::FULL_CHECKPOINT),
+      checkpoint_type(checkpoint_type) {
 }
 
 BlockManager &SingleFileCheckpointWriter::GetBlockManager() {
@@ -129,7 +131,6 @@ static catalog_entry_vector_t GetCatalogEntries(vector<reference<SchemaCatalogEn
 }
 
 void SingleFileCheckpointWriter::CreateCheckpoint() {
-	auto &config = DBConfig::Get(db);
 	auto &storage_manager = db.GetStorageManager().Cast<SingleFileStorageManager>();
 	if (storage_manager.InMemory()) {
 		return;
@@ -201,8 +202,8 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 		wal->WriteCheckpoint(meta_block);
 		wal->Flush();
 	}
-
-	if (config.options.checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_HEADER) {
+	auto debug_checkpoint_abort = DBConfig::GetSetting<DebugCheckpointAbortSetting>(db.GetDatabase());
+	if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_HEADER) {
 		throw FatalException("Checkpoint aborted before header write because of PRAGMA checkpoint_abort flag");
 	}
 
@@ -211,37 +212,39 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	header.meta_block = meta_block.block_pointer;
 	header.block_alloc_size = block_manager.GetBlockAllocSize();
 	header.vector_size = STANDARD_VECTOR_SIZE;
-	block_manager.WriteHeader(header);
+	block_manager.WriteHeader(context, header);
 
-#ifdef DUCKDB_BLOCK_VERIFICATION
-	// extend verify_block_usage_count
-	auto metadata_info = storage_manager.GetMetadataInfo();
-	for (auto &info : metadata_info) {
-		verify_block_usage_count[info.block_id]++;
-	}
-	for (auto &entry_ref : catalog_entries) {
-		auto &entry = entry_ref.get();
-		if (entry.type == CatalogType::TABLE_ENTRY) {
-			auto &table = entry.Cast<DuckTableEntry>();
-			auto &storage = table.GetStorage();
-			auto segment_info = storage.GetColumnSegmentInfo();
-			for (auto &segment : segment_info) {
-				verify_block_usage_count[segment.block_id]++;
-				if (StringUtil::Contains(segment.segment_info, "Overflow String Block Ids: ")) {
-					auto overflow_blocks = StringUtil::Replace(segment.segment_info, "Overflow String Block Ids: ", "");
-					auto splits = StringUtil::Split(overflow_blocks, ", ");
-					for (auto &split : splits) {
-						auto overflow_block_id = std::stoll(split);
-						verify_block_usage_count[overflow_block_id]++;
+	auto debug_verify_blocks = DBConfig::GetSetting<DebugVerifyBlocksSetting>(db.GetDatabase());
+	if (debug_verify_blocks) {
+		// extend verify_block_usage_count
+		auto metadata_info = storage_manager.GetMetadataInfo();
+		for (auto &info : metadata_info) {
+			verify_block_usage_count[info.block_id]++;
+		}
+		for (auto &entry_ref : catalog_entries) {
+			auto &entry = entry_ref.get();
+			if (entry.type == CatalogType::TABLE_ENTRY) {
+				auto &table = entry.Cast<DuckTableEntry>();
+				auto &storage = table.GetStorage();
+				auto segment_info = storage.GetColumnSegmentInfo();
+				for (auto &segment : segment_info) {
+					verify_block_usage_count[segment.block_id]++;
+					if (StringUtil::Contains(segment.segment_info, "Overflow String Block Ids: ")) {
+						auto overflow_blocks =
+						    StringUtil::Replace(segment.segment_info, "Overflow String Block Ids: ", "");
+						auto splits = StringUtil::Split(overflow_blocks, ", ");
+						for (auto &split : splits) {
+							auto overflow_block_id = std::stoll(split);
+							verify_block_usage_count[overflow_block_id]++;
+						}
 					}
 				}
 			}
 		}
+		block_manager.VerifyBlocks(verify_block_usage_count);
 	}
-	block_manager.VerifyBlocks(verify_block_usage_count);
-#endif
 
-	if (config.options.checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_TRUNCATE) {
+	if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_BEFORE_TRUNCATE) {
 		throw FatalException("Checkpoint aborted before truncate because of PRAGMA checkpoint_abort flag");
 	}
 
@@ -593,11 +596,13 @@ void CheckpointReader::ReadTableData(CatalogTransaction transaction, Deserialize
 	auto &binary_deserializer = dynamic_cast<BinaryDeserializer &>(deserializer);
 	auto &reader = dynamic_cast<MetadataReader &>(binary_deserializer.GetStream());
 
-	MetadataReader table_data_reader(reader.GetMetadataManager(), table_pointer);
-	TableDataReader data_reader(table_data_reader, bound_info);
+	vector<MetaBlockPointer> read_pointers;
+	MetadataReader table_data_reader(reader.GetMetadataManager(), table_pointer, read_pointers);
+	TableDataReader data_reader(table_data_reader, bound_info, table_pointer);
 	data_reader.ReadTableData();
 
 	bound_info.data->total_rows = total_rows;
+	bound_info.data->read_metadata_pointers = read_pointers;
 }
 
 } // namespace duckdb

@@ -1,0 +1,4 @@
+--binlog_cache_free_flush=ON
+--binlog_cache_free_flush_limit_size=10485760
+--binlog_cache_size=4096
+--debug="+d,total_ha_2pc_equals_2"

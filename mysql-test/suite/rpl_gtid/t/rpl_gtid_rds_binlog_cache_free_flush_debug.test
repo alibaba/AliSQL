@@ -1,0 +1,248 @@
+# Test Binlog cache Free Flush in debug mode.
+--source include/have_binlog_format_row.inc
+--source include/master-slave.inc
+--source include/have_debug.inc
+--let $MYSQLD_DATADIR= `select @@datadir`
+--let $gtid_event= Gtid
+if (!$gtid_mode_on)
+{
+  --let $gtid_event= Anonymous_Gtid
+}
+
+--echo #
+--echo # 1. Make test data.
+--echo ########################################################
+--echo #
+--source include/rpl_connection_master.inc
+CREATE DATABASE rpl_test;
+CREATE TABLE rpl_test.t1 (s LONGTEXT);
+CREATE TABLE rpl_test.t2 (s LONGTEXT);
+
+--disable_query_log
+--let $i=0
+while ($i < 2)
+{
+  --eval INSERT INTO rpl_test.t1 values(repeat("1", 5242880))
+  --inc $i
+}
+--enable_query_log
+
+CALL mtr.add_suppression("Binary logging not possible.");
+CALL mtr.add_suppression("Attempting backtrace. You can use the following information to find out");
+CALL mtr.add_suppression("Binlog cache free flush failed because failed to flush gtid event");
+CALL mtr.add_suppression("Binlog cache free flush failed because failed to rename temp file.");
+CALL mtr.add_suppression("Binlog cache free flush message: check reserve space for front events is not enough");
+FLUSH BINARY LOGS;
+
+--echo #
+--echo # 2. Test rename fail will crash the server.
+--echo ########################################################
+--echo #
+--source include/rpl_connection_master.inc
+SET DEBUG = "+d,simulate_binlog_cache_free_flush_rename_fail";
+
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+--source include/expect_crash.inc
+--error ER_BINLOG_LOGGING_IMPOSSIBLE
+COMMIT;
+
+--let $rpl_server_number= 1
+--source include/rpl_start_server.inc
+
+--echo # Check no binlog cache temp file exist.
+--list_files $MYSQLD_DATADIR/#alisql_binlog_cache_temp_file
+
+--echo # Check binlog and data. Expect 3 binlog files.
+--source include/rpl_connection_master.inc
+--replace_column 2 # 3 #
+SHOW BINARY LOGS;
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--source include/rpl_sync.inc
+--source include/rpl_connection_slave.inc
+--replace_column 2 # 3 #
+SHOW BINARY LOGS;
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--echo #
+--echo # 3. Test reserved space not enough will go back to original logic.
+--echo ########################################################
+--echo #
+--source include/rpl_connection_master.inc
+SET debug = "+d,simulate_small_rds_binlog_cache_reserved_space";
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+SET debug = "-d,simulate_small_rds_binlog_cache_reserved_space";
+
+--echo # Check binlog and data. Expect 3 binlog files, and no ignorable event in binlog.
+--replace_column 2 # 3 #
+SHOW BINARY LOGS;
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--let $event_sequence= $gtid_event # !Begin # !Insert # Write_rows # !Commit
+--let $binlog_file = query_get_value(SHOW BINARY LOGS, Log_name, 3)
+--source include/assert_binlog_events.inc
+
+--source include/rpl_sync.inc
+--source include/rpl_connection_slave.inc
+--replace_column 2 # 3 #
+SHOW BINARY LOGS;
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--let $event_sequence= Ignorable # $gtid_event # !Begin # !Insert # Write_rows # !Commit
+--let $binlog_file = query_get_value(SHOW BINARY LOGS, Log_name, 2)
+--source include/assert_binlog_events.inc
+
+--echo #
+--echo # 4. Test binlog cache free flush crash safe.
+--echo # 4.1. Test crash after create purge index file for old binlog file.
+--echo ########################################################
+--echo #
+--source include/rpl_connection_master.inc
+--source include/expect_crash.inc
+SET debug = "+d,crash_create_non_critical_before_update_index";
+--error 2013
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+# Restart the server.
+--let $rpl_server_number= 1
+--source include/rpl_start_server.inc
+
+--echo # Check binlog and data. Expect 4 binlog files.
+--replace_column 2 # 3 #
+SHOW BINARY LOGS;
+
+--source include/rpl_sync.inc
+--source include/rpl_connection_slave.inc
+--replace_column 2 # 3 #
+SHOW BINARY LOGS;
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--echo #
+--echo # 4.2 Test crash before rename temp file to binlog file.
+--echo ########################################################
+--echo #
+--source include/rpl_connection_master.inc
+--source include/expect_crash.inc
+SET debug = "+d,crash_before_rename_file";
+--error 2013
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+--echo # Check binlog cache temp file is remained.
+--replace_regex /ML.*/ML.####/
+--list_files $MYSQLD_DATADIR/#alisql_binlog_cache_temp_file
+
+# Restart the server.
+--let $rpl_server_number= 1
+--source include/rpl_start_server.inc
+
+--echo # Check binlog cache temp file dir is empty.
+--list_files $MYSQLD_DATADIR/#alisql_binlog_cache_temp_file
+
+--echo # Check binlog and data. Expect 5 binlog files.
+--replace_column 2 # 3 #
+SHOW BINARY LOGS;
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--source include/rpl_sync.inc
+--source include/rpl_connection_slave.inc
+--replace_column 2 # 3 #
+SHOW BINARY LOGS;
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--echo #
+--echo # 4.3 Test crash after persist temp file before add index file.
+--echo ########################################################
+--echo #
+--source include/rpl_connection_master.inc
+--source include/expect_crash.inc
+SET debug = "+d,crash_after_rename_file";
+--error 2013
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+# Restart the server.
+--let $rpl_server_number= 1
+--source include/rpl_start_server.inc
+
+--echo # Check binlog and data. Expect 6 binlog files.
+--replace_column 2 # 3 #
+SHOW BINARY LOGS;
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--source include/rpl_sync.inc
+--source include/rpl_connection_slave.inc
+--replace_column 2 # 3 #
+SHOW BINARY LOGS;
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--echo #
+--echo # 4.4 Test crash after add binlog index file.
+--echo ########################################################
+--echo #
+--source include/rpl_connection_master.inc
+--source include/expect_crash.inc
+SET debug = "+d,crash_after_free_flush_add_index_file";
+--error 2013
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+# Restart the server.
+--let $rpl_server_number= 1
+--source include/rpl_start_server.inc
+
+--echo # Check binlog and data. Expect 8 binlog files and ignorable event exist in the 7th binlog.
+--replace_column 2 # 3 #
+SHOW BINARY LOGS;
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--let $event_sequence= Ignorable # $gtid_event # !Begin # !Insert # Write_rows # !Commit
+--let $binlog_file = query_get_value(SHOW BINARY LOGS, Log_name, 7)
+--source include/assert_binlog_events.inc
+
+--source include/rpl_sync.inc
+--source include/rpl_connection_slave.inc
+--replace_column 2 # 3 #
+SHOW BINARY LOGS;
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--let $event_sequence= Ignorable # $gtid_event # !Begin # !Insert # Write_rows # !Commit
+--let $binlog_file = query_get_value(SHOW BINARY LOGS, Log_name, 4)
+--source include/assert_binlog_events.inc
+
+--echo #
+--echo # 4. Valid free flush binlog transaction compression.
+--echo ########################################################
+--echo #
+--source include/rpl_connection_master.inc
+SET binlog_transaction_compression_level_zstd = 1;
+SET binlog_transaction_compression = ON;
+SET debug = "+d,free_flush_skip_limit_size_check";
+
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+--echo # Check binlog and data. Expect 10 binlog files and ignorable event exist in the 9th binlog.
+--replace_column 2 # 3 #
+SHOW BINARY LOGS;
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--let $keep_transaction_payload_events= 1
+--let $binlog_file = query_get_value(SHOW BINARY LOGS, Log_name, 9)
+--source include/show_binlog_events.inc
+
+--source include/rpl_sync.inc
+--source include/rpl_connection_slave.inc
+--replace_column 2 # 3 #
+SHOW BINARY LOGS;
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--let $event_sequence= Ignorable # $gtid_event # !Begin # !Insert # Write_rows # !Commit
+--let $binlog_file = query_get_value(SHOW BINARY LOGS, Log_name, 6)
+--source include/assert_binlog_events.inc
+
+--echo #
+--echo # 5. Cleanup.
+--echo ########################################################
+--echo #
+--source include/rpl_connection_master.inc
+DROP DATABASE rpl_test;
+--source include/sync_slave_sql_with_master.inc
+--source include/rpl_end.inc

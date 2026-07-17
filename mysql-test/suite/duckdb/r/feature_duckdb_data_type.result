@@ -54,11 +54,11 @@ insert into t1 values (1, 1, 1, 1.01, 1.001, 1.0001, B'111111111', 1, 1, 1),
 (2147483647, 255, 18446744073709551615, 3.402823466E+38, 1.7976931348623157E+308, 999999.9999, B'1111111111', 255, 65535, 8388607);
 select id, col1, col2, col3, col4, col5, hex(col6), col7, col8, col9 from mytest.t1;
 id	col1	col2	col3	col4	col5	hex(col6)	col7	col8	col9
-1	1	1	1.01	1.001	1.0001	01FF	1	1	1
-2	2	2	2.02	2.002	2.0002	0000	1	1	1
-3	3	3	3.03	3.003	3.0003	0066	1	1	1
--2147483648	0	0	0	0	0.0000	0000	0	0	0
-2147483647	255	18446744073709551615	3.40282e38	1.7976931348623157e308	999999.9999	03FF	255	65535	8388607
+1	1	1	1.01	1.001	1.0001	1FF	1	1	1
+2	2	2	2.02	2.002	2.0002	0	1	1	1
+3	3	3	3.03	3.003	3.0003	66	1	1	1
+-2147483648	0	0	0	0	0.0000	0	0	0	0
+2147483647	255	18446744073709551615	3.40282e38	1.7976931348623157e308	999999.9999	3FF	255	65535	8388607
 drop table t1;
 
 decimal precision test, decimal precision more than 38 is not supported.
@@ -159,4 +159,42 @@ length(col1)	length(col2)	octet_length(col3)	octet_length(col4)	octet_length(col
 4	4	4	4	4	4	4	4	4	4	4	4	26	2	8
 100	100	4	100	255	65535	16777215	60000000	255	65535	16777215	60000000	2	2	2
 drop table t1;
+
+Tables storing BIT fields as BLOB type can correctly perform DML.
+CREATE TABLE t1 (
+id int PRIMARY KEY,
+col1 BIT(10) DEFAULT b'101'
+) ENGINE=DUCKDB;
+CALL dbms_duckdb.query('DROP TABLE mytest.t1;');
+RESULT
+Success	
+BOOLEAN	
+[ Rows: 0]
+
+
+CALL dbms_duckdb.query("CREATE TABLE mytest.t1 (id INT, col1 BLOB DEFAULT ('\x00\x05::BLOB'));");
+RESULT
+Count	
+BIGINT	
+[ Rows: 0]
+
+
+INSERT INTO t1 VALUES (1, B'011001'), (2, B'1111011001'), (3, B'0'), (4, B'1');
+INSERT INTO t1 (id) VALUES (5);
+id	col1	hex(col1)
+1	0x0019	0019
+2	0x03D9	03D9
+3	0x0000	0000
+4	0x0001	0001
+5	0x0005	0005
+UPDATE t1 SET col1 = B'0011111111' WHERE id = 1;
+id	col1	hex(col1)
+1	0x00FF	00FF
+DELETE FROM t1 WHERE col1 = B'0011111111';
+id	col1	hex(col1)
+2	0x03D9	03D9
+3	0x0000	0000
+4	0x0001	0001
+5	0x0005	0005
+DROP TABLE t1;
 drop database mytest;

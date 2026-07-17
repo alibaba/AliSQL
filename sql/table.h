@@ -62,6 +62,7 @@
 #include "sql/sql_plist.h"
 #include "sql/sql_plugin_ref.h"
 #include "sql/sql_sort.h"  // Sort_result
+#include "sql/table_ext.h"
 #include "thr_lock.h"
 #include "typelib.h"
 
@@ -1610,6 +1611,8 @@ struct TABLE {
   /* Table's triggers, 0 if there are no of them */
   Table_trigger_dispatcher *triggers{nullptr};
   Table_ref *pos_in_table_list{nullptr}; /* Element referring to this table */
+  /** Evaluated AS OF TIMESTAMP information for this statement. */
+  im::Snapshot_info_t snapshot;
   /* Position in thd->locked_table_list under LOCK TABLES */
   Table_ref *pos_in_locked_tables{nullptr};
   ORDER *group{nullptr};
@@ -3949,6 +3952,10 @@ class Table_ref {
   void set_derived_column_names(const Create_col_name_list *d) {
     m_derived_column_names = d;
   }
+  bool has_snapshot() const { return m_snapshot_ts != nullptr; }
+  Item *snapshot_expr() const { return m_snapshot_ts; }
+  Item *&mutable_snapshot_expr() { return m_snapshot_ts; }
+  void set_snapshot_expr(Item *ts) { m_snapshot_ts = ts; }
 
  private:
   /*
@@ -4001,6 +4008,12 @@ class Table_ref {
   MY_BITMAP read_set_saved;
   MY_BITMAP write_set_saved;
   MY_BITMAP read_set_internal_saved;
+
+  /**
+    Parsed AS OF TIMESTAMP expression for this table reference.
+    The expression is evaluated after the TABLE instance is opened.
+  */
+  Item *m_snapshot_ts{nullptr};
 };
 
 /*

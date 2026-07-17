@@ -69,6 +69,8 @@
 #include "template_utils.h"
 #include "typelib.h"
 
+#include "sql/parse_tree_items.h"
+
 using std::max;
 using std::min;
 
@@ -2339,6 +2341,49 @@ null_date:
   return nullptr;
 }
 
+void Item_func_date_format::print(const THD *thd, String *str,
+                                  enum_query_type query_type) const {
+  if ((query_type & QT_DUCKDB_REWRITE) &&
+      (args[0]->data_type() == MYSQL_TYPE_VARCHAR ||
+       args[0]->data_type() == MYSQL_TYPE_VAR_STRING ||
+       args[0]->data_type() == MYSQL_TYPE_STRING)) {
+    MYSQL_TIME l_time;
+    if (!is_time_format) {
+      if (dynamic_cast<PTI_text_literal_text_string *>(args[0]) &&
+          args[0]->get_date(&l_time, TIME_FUZZY_DATE)) {
+        str->append('(');
+        str->append(STRING_WITH_LEN("NULL"));
+        str->append(')');
+        return;
+      } else {
+        str->append(func_name());
+        str->append(STRING_WITH_LEN("(CAST("));
+        args[0]->print(thd, str, query_type);
+        str->append(STRING_WITH_LEN(" AS TIMESTAMP), "));
+        print_args(thd, str, 1, query_type);
+        str->append(')');
+      }
+    } else {
+      if (dynamic_cast<PTI_text_literal_text_string *>(args[0]) &&
+          args[0]->get_time(&l_time)) {
+        str->append('(');
+        str->append(STRING_WITH_LEN("NULL"));
+        str->append(')');
+        return;
+      } else {
+        str->append(func_name());
+        str->append(STRING_WITH_LEN("(CAST("));
+        args[0]->print(thd, str, query_type);
+        str->append(STRING_WITH_LEN(" AS TIME), "));
+        print_args(thd, str, 1, query_type);
+        str->append(')');
+      }
+    }
+  } else {
+    Item_func::print(thd, str, query_type);
+  }
+}
+
 bool Item_func_from_unixtime::resolve_type(THD *thd) {
   if (param_type_is_default(thd, 0, 1, MYSQL_TYPE_NEWDECIMAL)) return true;
   set_data_type_datetime(min(args[0]->decimals, uint8{DATETIME_MAX_DECIMALS}));
@@ -2450,6 +2495,15 @@ void Item_func_convert_tz::cleanup() {
   from_tz_cached = false;
   to_tz_cached = false;
   Item_datetime_func::cleanup();
+}
+
+void Item_func_convert_tz::print(const THD *thd, String *str,
+                                 enum_query_type query_type) const {
+  if (query_type & QT_DUCKDB_REWRITE) {
+    Item_func::print(thd, str, query_type);
+  } else {
+    Item_datetime_func::print(thd, str, query_type);
+  }
 }
 
 bool Item_date_add_interval::resolve_type(THD *thd) {
@@ -2674,12 +2728,56 @@ const char *interval_names[] = {"year",
 void Item_date_add_interval::print(const THD *thd, String *str,
                                    enum_query_type query_type) const {
   str->append('(');
-  args[0]->print(thd, str, query_type);
+  bool cast_result_to_date = false;
+  if (query_type & QT_DUCKDB_REWRITE) {
+    if (dynamic_cast<PTI_text_literal_text_string *>(args[0])) {
+      MYSQL_TIME ltime;
+      const enum_field_types assumed_type =
+      m_interval_type <= INTERVAL_DAY || m_interval_type == INTERVAL_YEAR_MONTH
+          ? MYSQL_TYPE_DATE
+          : MYSQL_TYPE_DATETIME;
+      if (args[0]->get_date(&ltime, TIME_NO_ZERO_DATE)) {
+        str->append(STRING_WITH_LEN("NULL"));
+        str->append(')');
+        return;
+      } else {
+        if (ltime.time_type == MYSQL_TIMESTAMP_DATE &&
+            assumed_type != MYSQL_TYPE_DATETIME) {
+          /** In MySQL, if the parameter type of args[0] is string, the return
+           * value type is also string. However, in DuckDB, the return value
+           * type is timestamp. When timestamp is parsed as string, there will
+           * be an extra time part. Therefore, we convert the type back to date
+           * here. */
+          cast_result_to_date = true;
+          str->append(STRING_WITH_LEN("CAST((DATE "));
+        } else {
+          str->append(STRING_WITH_LEN("TIMESTAMP "));
+        }
+        args[0]->print(thd, str, query_type);
+      }
+    } else if (args[0]->data_type() == MYSQL_TYPE_TIME &&
+               data_type() == MYSQL_TYPE_DATETIME) {
+      str->append(STRING_WITH_LEN("CAST("));
+      args[0]->print(thd, str, query_type);
+      str->append(STRING_WITH_LEN(" AS TIMESTAMP)"));
+    } else {
+      args[0]->print(thd, str, query_type);
+    }
+  } else {
+    args[0]->print(thd, str, query_type);
+  }
   str->append(m_subtract ? " - interval " : " + interval ");
+  if (query_type & QT_DUCKDB_REWRITE) {
+    str->append('(');
+  }
   args[1]->print(thd, str, query_type);
+  if (query_type & QT_DUCKDB_REWRITE) {
+    str->append(')');
+  }
   str->append(' ');
   str->append(interval_names[m_interval_type]);
   str->append(')');
+  if (cast_result_to_date) str->append(STRING_WITH_LEN(" AS DATE))"));
 }
 
 void Item_extract::print(const THD *thd, String *str,
@@ -2687,6 +2785,20 @@ void Item_extract::print(const THD *thd, String *str,
   str->append(STRING_WITH_LEN("extract("));
   str->append(interval_names[int_type]);
   str->append(STRING_WITH_LEN(" from "));
+  if ((query_type & QT_DUCKDB_REWRITE) &&
+      (args[0]->data_type() == MYSQL_TYPE_VARCHAR ||
+       args[0]->data_type() == MYSQL_TYPE_VAR_STRING ||
+       args[0]->data_type() == MYSQL_TYPE_STRING)) {
+    str->append(STRING_WITH_LEN("(CAST("));
+    args[0]->print(thd, str, query_type);
+    if (date_value) {
+      str->append(STRING_WITH_LEN(" AS TIMESTAMP))"));
+    } else {
+      str->append(STRING_WITH_LEN(" AS TIME))"));
+    }
+    str->append(')');
+    return;
+  }
   args[0]->print(thd, str, query_type);
   str->append(')');
 }
@@ -2879,7 +2991,7 @@ void Item_typecast_datetime::print(const THD *thd, String *str,
   args[0]->print(thd, str, query_type);
   str->append(STRING_WITH_LEN(" as "));
   str->append(cast_type());
-  if (decimals) str->append_parenthesized(decimals);
+  if (decimals && !(query_type & QT_DUCKDB_REWRITE)) str->append_parenthesized(decimals);
   str->append(')');
 }
 
@@ -2917,7 +3029,8 @@ void Item_typecast_time::print(const THD *thd, String *str,
   args[0]->print(thd, str, query_type);
   str->append(STRING_WITH_LEN(" as "));
   str->append(cast_type());
-  if (decimals) str->append_parenthesized(decimals);
+  if (decimals && !(query_type & QT_DUCKDB_REWRITE))
+    str->append_parenthesized(decimals);
   str->append(')');
 }
 
@@ -3124,12 +3237,29 @@ void Item_func_add_time::print(const THD *thd, String *str,
                                enum_query_type query_type) const {
   if (m_datetime) {
     assert(m_sign > 0);
-    str->append(STRING_WITH_LEN("timestamp("));
+    if (query_type & QT_DUCKDB_REWRITE) {
+      str->append(STRING_WITH_LEN("addtime("));
+    } else {
+      str->append(STRING_WITH_LEN("timestamp("));
+    }
   } else {
     if (m_sign > 0)
       str->append(STRING_WITH_LEN("addtime("));
     else
       str->append(STRING_WITH_LEN("subtime("));
+  }
+  if (query_type & QT_DUCKDB_REWRITE) {
+    if (dynamic_cast<PTI_text_literal_text_string*>(args[0])) {
+      MYSQL_TIME l_time1;
+      if (!args[0]->get_time(&l_time1)) {
+        bool is_time = (l_time1.time_type == MYSQL_TIMESTAMP_TIME);
+        if (is_time) {
+          str->append(STRING_WITH_LEN("TIME "));
+        } else {
+          str->append(STRING_WITH_LEN("TIMESTAMP "));
+        }
+      }
+    }
   }
   args[0]->print(thd, str, query_type);
   str->append(',');
@@ -3422,10 +3552,26 @@ void Item_func_timestamp_diff::print(const THD *thd, String *str,
       break;
   }
 
-  for (uint i = 0; i < 2; i++) {
-    str->append(',');
-    args[i]->print(thd, str, query_type);
+  if (query_type & QT_DUCKDB_REWRITE) {
+    for (uint i = 0; i < 2; i++) {
+      str->append(',');
+      if (args[i]->data_type() == MYSQL_TYPE_VARCHAR ||
+          args[i]->data_type() == MYSQL_TYPE_VAR_STRING ||
+          args[i]->data_type() == MYSQL_TYPE_STRING) {
+        str->append(STRING_WITH_LEN("CAST("));
+        args[i]->print(thd, str, query_type);
+        str->append(STRING_WITH_LEN(" AS TIMESTAMP)"));
+      } else {
+        args[i]->print(thd, str, query_type);
+      }
+    }
+  } else {
+    for (uint i = 0; i < 2; i++) {
+      str->append(',');
+      args[i]->print(thd, str, query_type);
+    }
   }
+
   str->append(')');
 }
 

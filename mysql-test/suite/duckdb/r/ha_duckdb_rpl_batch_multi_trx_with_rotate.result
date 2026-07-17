@@ -103,28 +103,55 @@ START REPLICA;
 include/rpl_sync.inc
 include/rpl_diff.inc
 ###########################################################################
-# 3. Test Rotate Event will implicit commit the current batch
+# 4. Test Rotate Event will implicit commit the current batch
 ###########################################################################
 [connection slave]
 SET @old_duckdb_multi_trx_timeout = @@GLOBAL.duckdb_multi_trx_timeout;
 SET GLOBAL duckdb_multi_trx_timeout = 1000000;
 Warnings:
 Warning	1292	Truncated incorrect duckdb_multi_trx_timeout value: '1000000'
-# 3.1 Execute one Transaction on Master, and then Rotate the Binlog
+# 4.1 Execute one Transaction on Master, and then Rotate the Binlog
 [connection master]
 INSERT INTO t1 (id, c0, c1) VALUES (4, 'zzzzz', '123456');
 FLUSH LOGS;
-# 3.2 Check the result
+# 4.2 Check the result
 include/rpl_sync.inc
 include/rpl_diff.inc
 [connection slave]
 SET GLOBAL duckdb_multi_trx_timeout = @old_duckdb_multi_trx_timeout;
 ###########################################################################
-# 4. Test transactions are not replayed by executing SQL
+# 5. Test IO Thread reconnect before the Trx2's XID Event queued, and then
+#    SQL Thread failed to rollback the partial Trx.
+###########################################################################
+[connection slave]
+STOP REPLICA;
+[connection master]
+# 5.1 Execute two Transactions on Master
+UPDATE t1 SET c0='sssssss' WHERE id=3;
+INSERT INTO t1 (id, c0, c1) VALUES (6, 'ggggg', 'DDDD');
+# 5.2 Make IO Thread stop before the Trx2's XID Event queued
+[connection slave]
+CALL mtr.add_suppression("MY-013122");
+SET GLOBAL debug="+d,stop_when_queue_2nd_xid_event";
+START REPLICA IO_THREAD;
+include/wait_for_slave_io_to_stop.inc
+SET GLOBAL debug="-d,stop_when_queue_2nd_xid_event";
+# 5.3 Make SQL Thread failed to rollback the partial Trx
+SET GLOBAL debug="+d,simulate_duckdb_rollback_partial_trx_failed";
+START REPLICA;
+include/wait_for_slave_sql_error.inc [errno=7511]
+# 5.4 Restart SQL Thread
+SET GLOBAL debug="-d,simulate_duckdb_rollback_partial_trx_failed";
+START REPLICA SQL_THREAD;
+# 5.5 Check the result
+include/rpl_sync.inc
+include/rpl_diff.inc
+###########################################################################
+# 6. Test transactions are not replayed by executing SQL
 ###########################################################################
 include/assert_grep.inc [Check DML SQL is not executed]
 ###########################################################################
-# 5. Test Cleanup
+# Cleanup
 ###########################################################################
 [connection master]
 DROP TABLE t1;

@@ -567,3 +567,295 @@ SELECT FROM_BASE64(TO_BASE64('数据库')), CAST(FROM_BASE64(TO_BASE64('数据�
 FROM_BASE64(TO_BASE64('数据库'))	CAST(FROM_BASE64(TO_BASE64('数据库')) AS CHAR) LIKE '%据%'
 数据库	1
 DROP TABLE t1;
+CREATE TABLE t1 (id INT PRIMARY KEY, col1 VARCHAR(10));
+INSERT INTO t1 VALUES (1, '1'), (2, '0'), (3, 'yes'), (4, 'no'), (5, 'true'), (6, 'false'), (7, '0.1'), (8, '0.0'), (9, '2.0');
+SELECT 1 = true, col1 = true FROM t1;
+1 = true	col1 = true
+1	1
+1	0
+1	0
+1	0
+1	0
+1	0
+1	0
+1	0
+1	0
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'yes'
+Warning	1292	Truncated incorrect DOUBLE value: 'true'
+Warning	1292	Truncated incorrect DOUBLE value: 'false'
+ALTER TABLE t1 ENGINE=DuckDB;
+SELECT 1 = true, col1 = true FROM t1;
+1 = true	col1 = true
+1	1
+1	0
+1	0
+1	0
+1	0
+1	0
+1	0
+1	0
+1	0
+DROP TABLE t1;
+CREATE TABLE t1 (id INT PRIMARY KEY, col1 int);
+INSERT INTO t1 VALUES (1, 2), (2, 1);
+SELECT * FROM t1 ORDER BY 'abc', '', 1.1, 2;
+id	col1
+2	1
+1	2
+ALTER TABLE t1 ENGINE=DuckDB;
+SELECT * FROM t1 ORDER BY 'abc', '', 1.1, 2;
+id	col1
+2	1
+1	2
+DROP TABLE t1;
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+col1 DATE,
+col2 TIMESTAMP,
+col3 DATETIME,
+col4 TIME,
+col5 TIMESTAMP(6),
+col6 TIME(6)
+);
+CREATE TABLE t_int (
+id INT PRIMARY KEY,
+lower BIGINT,
+higher BIGINT,
+equal BIGINT
+);
+CREATE TABLE t_decimal (
+id INT PRIMARY KEY,
+lower DECIMAL(38, 10),
+higher DECIMAL(38, 10),
+equal DECIMAL(38, 10)
+);
+CREATE TABLE t_double (
+id INT PRIMARY KEY,
+lower DOUBLE,
+higher DOUBLE,
+equal DOUBLE
+);
+INSERT INTO t1 VALUES (1, '2020-01-01', '2020-01-01 12:00:00', '2020-01-01 12:00:00', '12:00:00', '2020-01-01 12:00:00.123456', '12:00:00.123456');
+INSERT INTO t_int
+VALUES (1, 20200100, 20200102, 20200101),
+(2, 20200101119999, 20200101120001, 20200101120000),
+(3, 20200101119999, 20200101120001, 20200101120000),
+(4, 119999, 120001, 120000);
+INSERT INTO t_decimal
+VALUES (1, 20200100, 20200102, 20200101),
+(2, 20200101119999, 20200101120001, 20200101120000),
+(3, 20200101119999, 20200101120001, 20200101120000),
+(4, 119999, 120001, 120000),
+(5, 20200101120000.123455, 20200101120000.123457, 20200101120000.123456),
+(6, 120000.123455, 120000.123457, 120000.123456);
+INSERT INTO t_double
+VALUES (1, 20200100, 20200102, 20200101),
+(2, 20200101119999, 20200101120001, 20200101120000),
+(3, 20200101119999, 20200101120001, 20200101120000),
+(4, 119999, 120001, 120000),
+(5, 20200101120000.123455, 20200101120000.123457, 20200101120000.123456),
+(6, 120000.123455, 120000.123457, 120000.123456);
+SELECT col1 > lower, col1 < higher, col1 BETWEEN lower AND higher
+, col1 = equal, col2 > lower
+, col2 < higher, col2 BETWEEN lower AND higher
+, col2 = equal,  col2 > lower
+, col2 < higher, col2 BETWEEN lower AND higher
+, col2 = equal,  col3 > lower
+, col3 < higher, col3 BETWEEN lower AND higher
+, col3 = equal, col4 > lower
+, col4 < higher, col4 BETWEEN lower AND higher
+, col4 = equal,  col5 > lower
+, col5 < higher, col5 BETWEEN lower AND higher
+, col5 = equal,  col6 > lower
+, col6 < higher, col6 BETWEEN lower AND higher
+, col6 = equal
+FROM t1, t_int;
+col1 > lower	col1 < higher	col1 BETWEEN lower AND higher	col1 = equal	col2 > lower	col2 < higher	col2 BETWEEN lower AND higher	col2 = equal	col2 > lower	col2 < higher	col2 BETWEEN lower AND higher	col2 = equal	col3 > lower	col3 < higher	col3 BETWEEN lower AND higher	col3 = equal	col4 > lower	col4 < higher	col4 BETWEEN lower AND higher	col4 = equal	col5 > lower	col5 < higher	col5 BETWEEN lower AND higher	col5 = equal	col6 > lower	col6 < higher	col6 BETWEEN lower AND higher	col6 = equal
+1	1	1	1	1	0	0	0	1	0	0	0	1	0	0	0	0	1	0	0	1	0	0	0	0	1	0	0
+0	1	0	0	1	1	1	1	1	1	1	1	1	1	1	1	0	1	0	0	1	1	1	0	0	1	0	0
+0	1	0	0	1	1	1	1	1	1	1	1	1	1	1	1	0	1	0	0	1	1	1	0	0	1	0	0
+1	0	0	0	1	0	0	0	1	0	0	0	1	0	0	0	1	1	1	1	1	0	0	0	1	1	1	0
+SELECT col1 > lower, col1 < higher, col1 BETWEEN lower AND higher
+, col1 = equal, col2 > lower
+, col2 < higher, col2 BETWEEN lower AND higher
+, col2 = equal,  col2 > lower
+, col2 < higher, col2 BETWEEN lower AND higher
+, col2 = equal,  col3 > lower
+, col3 < higher, col3 BETWEEN lower AND higher
+, col3 = equal, col4 > lower
+, col4 < higher, col4 BETWEEN lower AND higher
+, col4 = equal,  col5 > lower
+, col5 < higher, col5 BETWEEN lower AND higher
+, col5 = equal,  col6 > lower
+, col6 < higher, col6 BETWEEN lower AND higher
+, col6 = equal
+FROM t1, t_decimal;
+col1 > lower	col1 < higher	col1 BETWEEN lower AND higher	col1 = equal	col2 > lower	col2 < higher	col2 BETWEEN lower AND higher	col2 = equal	col2 > lower	col2 < higher	col2 BETWEEN lower AND higher	col2 = equal	col3 > lower	col3 < higher	col3 BETWEEN lower AND higher	col3 = equal	col4 > lower	col4 < higher	col4 BETWEEN lower AND higher	col4 = equal	col5 > lower	col5 < higher	col5 BETWEEN lower AND higher	col5 = equal	col6 > lower	col6 < higher	col6 BETWEEN lower AND higher	col6 = equal
+1	1	1	1	1	0	0	0	1	0	0	0	1	0	0	0	0	1	0	0	1	0	0	0	0	1	0	0
+0	1	0	0	1	1	1	1	1	1	1	1	1	1	1	1	0	1	0	0	1	1	1	0	0	1	0	0
+0	1	0	0	1	1	1	1	1	1	1	1	1	1	1	1	0	1	0	0	1	1	1	0	0	1	0	0
+1	0	0	0	1	0	0	0	1	0	0	0	1	0	0	0	1	1	1	1	1	0	0	0	1	1	1	0
+0	1	0	0	0	1	0	0	0	1	0	0	0	1	0	0	0	1	0	0	0	0	1	1	0	1	0	0
+1	0	0	0	1	0	0	0	1	0	0	0	1	0	0	0	0	1	0	0	1	0	0	0	1	1	1	1
+SELECT col1 > lower, col1 < higher, col1 BETWEEN lower AND higher
+, col1 = equal, col2 > lower
+, col2 < higher, col2 BETWEEN lower AND higher
+, col2 = equal,  col2 > lower
+, col2 < higher, col2 BETWEEN lower AND higher
+, col2 = equal,  col3 > lower
+, col3 < higher, col3 BETWEEN lower AND higher
+, col3 = equal, col4 > lower
+, col4 < higher, col4 BETWEEN lower AND higher
+, col4 = equal,  col5 > lower
+, col5 < higher, col5 BETWEEN lower AND higher
+, col5 = equal,  col6 > lower
+, col6 < higher, col6 BETWEEN lower AND higher
+, col6 = equal
+FROM t1, t_double;
+col1 > lower	col1 < higher	col1 BETWEEN lower AND higher	col1 = equal	col2 > lower	col2 < higher	col2 BETWEEN lower AND higher	col2 = equal	col2 > lower	col2 < higher	col2 BETWEEN lower AND higher	col2 = equal	col3 > lower	col3 < higher	col3 BETWEEN lower AND higher	col3 = equal	col4 > lower	col4 < higher	col4 BETWEEN lower AND higher	col4 = equal	col5 > lower	col5 < higher	col5 BETWEEN lower AND higher	col5 = equal	col6 > lower	col6 < higher	col6 BETWEEN lower AND higher	col6 = equal
+1	1	1	1	1	0	0	0	1	0	0	0	1	0	0	0	0	1	0	0	1	0	0	0	0	1	0	0
+0	1	0	0	1	1	1	1	1	1	1	1	1	1	1	1	0	1	0	0	1	1	1	0	0	1	0	0
+0	1	0	0	1	1	1	1	1	1	1	1	1	1	1	1	0	1	0	0	1	1	1	0	0	1	0	0
+1	0	0	0	1	0	0	0	1	0	0	0	1	0	0	0	1	1	1	1	1	0	0	0	1	1	1	0
+0	1	0	0	0	1	0	0	0	1	0	0	0	1	0	0	0	1	0	0	0	0	1	1	0	1	0	0
+1	0	0	0	1	0	0	0	1	0	0	0	1	0	0	0	0	1	0	0	1	0	0	0	1	1	1	1
+ALTER TABLE t1 ENGINE=DuckDB;
+ALTER TABLE t_int ENGINE=DuckDB;
+ALTER TABLE t_decimal ENGINE=DuckDB;
+ALTER TABLE t_double ENGINE=DuckDB;
+SELECT col1 > lower, col1 < higher, col1 BETWEEN lower AND higher
+, col1 = equal, col2 > lower
+, col2 < higher, col2 BETWEEN lower AND higher
+, col2 = equal,  col2 > lower
+, col2 < higher, col2 BETWEEN lower AND higher
+, col2 = equal,  col3 > lower
+, col3 < higher, col3 BETWEEN lower AND higher
+, col3 = equal, col4 > lower
+, col4 < higher, col4 BETWEEN lower AND higher
+, col4 = equal,  col5 > lower
+, col5 < higher, col5 BETWEEN lower AND higher
+, col5 = equal,  col6 > lower
+, col6 < higher, col6 BETWEEN lower AND higher
+, col6 = equal
+FROM t1, t_int;
+col1 > lower	col1 < higher	col1 BETWEEN lower AND higher	col1 = equal	col2 > lower	col2 < higher	col2 BETWEEN lower AND higher	col2 = equal	col2 > lower	col2 < higher	col2 BETWEEN lower AND higher	col2 = equal	col3 > lower	col3 < higher	col3 BETWEEN lower AND higher	col3 = equal	col4 > lower	col4 < higher	col4 BETWEEN lower AND higher	col4 = equal	col5 > lower	col5 < higher	col5 BETWEEN lower AND higher	col5 = equal	col6 > lower	col6 < higher	col6 BETWEEN lower AND higher	col6 = equal
+1	1	1	1	1	0	0	0	1	0	0	0	1	0	0	0	0	1	0	0	1	0	0	0	0	1	0	0
+0	1	0	0	1	1	1	1	1	1	1	1	1	1	1	1	0	1	0	0	1	1	1	0	0	1	0	0
+0	1	0	0	1	1	1	1	1	1	1	1	1	1	1	1	0	1	0	0	1	1	1	0	0	1	0	0
+1	0	0	0	1	0	0	0	1	0	0	0	1	0	0	0	1	1	1	1	1	0	0	0	1	1	1	0
+SELECT col1 > lower, col1 < higher, col1 BETWEEN lower AND higher
+, col1 = equal, col2 > lower
+, col2 < higher, col2 BETWEEN lower AND higher
+, col2 = equal,  col2 > lower
+, col2 < higher, col2 BETWEEN lower AND higher
+, col2 = equal,  col3 > lower
+, col3 < higher, col3 BETWEEN lower AND higher
+, col3 = equal, col4 > lower
+, col4 < higher, col4 BETWEEN lower AND higher
+, col4 = equal,  col5 > lower
+, col5 < higher, col5 BETWEEN lower AND higher
+, col5 = equal,  col6 > lower
+, col6 < higher, col6 BETWEEN lower AND higher
+, col6 = equal
+FROM t1, t_decimal;
+col1 > lower	col1 < higher	col1 BETWEEN lower AND higher	col1 = equal	col2 > lower	col2 < higher	col2 BETWEEN lower AND higher	col2 = equal	col2 > lower	col2 < higher	col2 BETWEEN lower AND higher	col2 = equal	col3 > lower	col3 < higher	col3 BETWEEN lower AND higher	col3 = equal	col4 > lower	col4 < higher	col4 BETWEEN lower AND higher	col4 = equal	col5 > lower	col5 < higher	col5 BETWEEN lower AND higher	col5 = equal	col6 > lower	col6 < higher	col6 BETWEEN lower AND higher	col6 = equal
+1	1	1	1	1	0	0	0	1	0	0	0	1	0	0	0	0	1	0	0	1	0	0	0	0	1	0	0
+0	1	0	0	1	1	1	1	1	1	1	1	1	1	1	1	0	1	0	0	1	1	1	0	0	1	0	0
+0	1	0	0	1	1	1	1	1	1	1	1	1	1	1	1	0	1	0	0	1	1	1	0	0	1	0	0
+1	0	0	0	1	0	0	0	1	0	0	0	1	0	0	0	1	1	1	1	1	0	0	0	1	1	1	0
+0	1	0	0	0	1	0	0	0	1	0	0	0	1	0	0	0	1	0	0	0	0	1	1	0	1	0	0
+1	0	0	0	1	0	0	0	1	0	0	0	1	0	0	0	0	1	0	0	1	0	0	0	1	1	1	1
+SELECT col1 > lower, col1 < higher, col1 BETWEEN lower AND higher
+, col1 = equal, col2 > lower
+, col2 < higher, col2 BETWEEN lower AND higher
+, col2 = equal,  col2 > lower
+, col2 < higher, col2 BETWEEN lower AND higher
+, col2 = equal,  col3 > lower
+, col3 < higher, col3 BETWEEN lower AND higher
+, col3 = equal, col4 > lower
+, col4 < higher, col4 BETWEEN lower AND higher
+, col4 = equal,  col5 > lower
+, col5 < higher, col5 BETWEEN lower AND higher
+, col5 = equal,  col6 > lower
+, col6 < higher, col6 BETWEEN lower AND higher
+, col6 = equal
+FROM t1, t_double;
+col1 > lower	col1 < higher	col1 BETWEEN lower AND higher	col1 = equal	col2 > lower	col2 < higher	col2 BETWEEN lower AND higher	col2 = equal	col2 > lower	col2 < higher	col2 BETWEEN lower AND higher	col2 = equal	col3 > lower	col3 < higher	col3 BETWEEN lower AND higher	col3 = equal	col4 > lower	col4 < higher	col4 BETWEEN lower AND higher	col4 = equal	col5 > lower	col5 < higher	col5 BETWEEN lower AND higher	col5 = equal	col6 > lower	col6 < higher	col6 BETWEEN lower AND higher	col6 = equal
+1	1	1	1	1	0	0	0	1	0	0	0	1	0	0	0	0	1	0	0	1	0	0	0	0	1	0	0
+0	1	0	0	1	1	1	1	1	1	1	1	1	1	1	1	0	1	0	0	1	1	1	0	0	1	0	0
+0	1	0	0	1	1	1	1	1	1	1	1	1	1	1	1	0	1	0	0	1	1	1	0	0	1	0	0
+1	0	0	0	1	0	0	0	1	0	0	0	1	0	0	0	1	1	1	1	1	0	0	0	1	1	1	0
+0	1	0	0	0	1	0	0	0	1	0	0	0	1	0	0	0	1	0	0	0	0	1	1	0	1	0	0
+1	0	0	0	1	0	0	0	1	0	0	0	1	0	0	0	0	1	0	0	1	0	0	0	1	1	1	1
+DROP TABLE t1;
+DROP TABLE t_int;
+DROP TABLE t_decimal;
+DROP TABLE t_double;
+CREATE TABLE t1 (id INT PRIMARY KEY, col1 VARCHAR(10)) ENGINE=DuckDB;
+INSERT INTO t1 VALUES (1, '-'), (2, '--'), (3, '-a'), (4, '-1');
+SELECT CAST(col1 AS DOUBLE) FROM t1;
+CAST(col1 AS DOUBLE)
+0
+0
+0
+-1
+SELECT SUM(col1) FROM t1;
+SUM(col1)
+-1
+DROP TABLE t1;
+CREATE TABLE t1 (id INT PRIMARY KEY, col1 DECIMAL(18, 2), col2 INT) ENGINE=DuckDB;
+INSERT INTO t1 VALUES (1, 9999999999999999.99, 99999999);
+SELECT col1 * col1 FROM t1;
+ERROR HY000: [DuckDB] Out of Range Error: Overflow in multiplication of DECIMAL(18) (999999999999999999 * 999999999999999999). You might want to add an explicit cast to a bigger decimal..
+SELECT col2 * 1.00000000001 FROM t1;
+ERROR HY000: [DuckDB] Out of Range Error: Overflow in multiplication of DECIMAL(18) (99999999 * 100000000001). You might want to add an explicit cast to a bigger decimal..
+SELECT col1 + col2 FROM t1;
+ERROR HY000: [DuckDB] Out of Range Error: Overflow in addition of DECIMAL(18) (999999999999999999 + 9999999900). You might want to add an explicit cast to a bigger decimal..
+SET duckdb_prefer_high_precision = true;
+SELECT col1 * col1, col2 * 1.00000000001, col1 + col2 FROM t1;
+col1 * col1	col2 * 1.00000000001	col1 + col2
+99999999999999999800000000000000.0001	99999999.00099999999	10000000099999998.99
+DROP TABLE t1;
+CREATE TABLE t1 (id INT PRIMARY KEY, col1 BIT(64) DEFAULT b'111111110000000011111111') ENGINE=DuckDB;
+INSERT INTO t1 VALUES (1, x'00'), (2, x'01'), (3, b'1111111111'), (4, x'00FF00FF00FF00FF');
+INSERT INTO t1 (id) VALUES (5);
+col1	LENGTH(col1)
+0x0000000000000000	8
+0x0000000000000001	8
+0x00000000000003FF	8
+0x00FF00FF00FF00FF	8
+0x0000000000FF00FF	8
+col1
+0x0000000000000001
+col1
+0x0000000000000000
+col1
+0x0000000000000001
+0x00000000000003FF
+0x00FF00FF00FF00FF
+0x0000000000FF00FF
+col1
+0x0000000000000000
+col1
+0x0000000000000001
+SELECT col1 + 1, col1 * 2 FROM t1;
+col1 + 1	col1 * 2
+1	0
+2	2
+1024	2046
+71777214294589696	143554428589179390
+16711936	33423870
+SELECT id, col1 = 1, col1 > 1, col1 < 1 FROM t1;
+id	col1 = 1	col1 > 1	col1 < 1
+1	0	0	1
+2	1	0	0
+3	0	1	0
+4	0	1	0
+5	0	1	0
+DROP TABLE t1;
+CREATE TABLE t1 (id INT PRIMARY KEY, col1 VARCHAR(10), col2 BLOB) ENGINE=DuckDB;
+INSERT INTO t1 VALUES (1, 'abc', 0xFFFF);
+CONCAT(col1, col2)
+0x616263FFFF
+DROP TABLE t1;

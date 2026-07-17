@@ -39,13 +39,28 @@ BindResult ExpressionBinder::BindExpression(BetweenExpression &expr, idx_t depth
 	}
 	if (!BoundComparisonExpression::TryBindComparison(context, input_type, upper_sql_type, input_type,
 	                                                  expr.GetExpressionType())) {
-		throw BinderException(expr,
-		                      "Cannot mix values of type %s and %s in BETWEEN clause - an explicit cast is required",
-		                      input_type.ToString(), upper_sql_type.ToString());
+		// In MySQL, Comparing type A and type B might result in a unified conversion to type C.
+		LogicalType input_type_temp;
+		if (!BoundComparisonExpression::TryBindComparison(context, input_sql_type, upper_sql_type, input_type_temp,
+		                                                  expr.GetExpressionType()) ||
+		    input_type.id() != input_type_temp.id()) {
+			throw BinderException(
+			    expr, "Cannot mix values of type %s and %s in BETWEEN clause - an explicit cast is required",
+			    input_type.ToString(), upper_sql_type.ToString());
+		}
 	}
 	// add casts (if necessary)
+	if (input_sql_type.id() == LogicalTypeId::BLOB_LITERAL && input_type.id() == LogicalTypeId::HUGEINT) {
+		input = BoundCastExpression::AddCastToType(context, std::move(input), LogicalType(LogicalTypeId::BIT));
+	}
 	input = BoundCastExpression::AddCastToType(context, std::move(input), input_type);
+	if (lower_sql_type.id() == LogicalTypeId::BLOB_LITERAL && input_type.id() == LogicalTypeId::HUGEINT) {
+		lower = BoundCastExpression::AddCastToType(context, std::move(lower), LogicalType(LogicalTypeId::BIT));
+	}
 	lower = BoundCastExpression::AddCastToType(context, std::move(lower), input_type);
+	if (upper_sql_type.id() == LogicalTypeId::BLOB_LITERAL && input_type.id() == LogicalTypeId::HUGEINT) {
+		upper = BoundCastExpression::AddCastToType(context, std::move(upper), LogicalType(LogicalTypeId::BIT));
+	}
 	upper = BoundCastExpression::AddCastToType(context, std::move(upper), input_type);
 	// handle collation
 	PushCollation(context, input, input_type);

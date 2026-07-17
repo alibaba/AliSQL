@@ -14,6 +14,7 @@ binlog-format = mixed
 gtid-mode=on
 enforce-gtid-consistency
 log-slave-updates
+slave_parallel_workers=0
 duckdb_multi_trx_in_batch=on
 duckdb_mode=ON
 
@@ -23,6 +24,7 @@ binlog-format = mixed
 gtid-mode=on
 enforce-gtid-consistency
 log-slave-updates
+slave_parallel_workers=0
 duckdb_multi_trx_in_batch=on
 duckdb_mode=ON
 

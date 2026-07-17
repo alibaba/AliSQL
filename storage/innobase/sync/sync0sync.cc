@@ -63,6 +63,7 @@ mysql_pfs_key_t buf_pool_free_list_mutex_key;
 mysql_pfs_key_t buf_pool_zip_free_mutex_key;
 mysql_pfs_key_t buf_pool_zip_hash_mutex_key;
 mysql_pfs_key_t buf_pool_zip_mutex_key;
+mysql_pfs_key_t flashback_list_mutex_key;
 mysql_pfs_key_t ddl_autoinc_mutex_key;
 mysql_pfs_key_t dict_foreign_err_mutex_key;
 mysql_pfs_key_t dict_persist_dirty_tables_mutex_key;

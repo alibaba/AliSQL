@@ -81,7 +81,10 @@ struct FVector {
   float abs2, scale;
   int16_t dims[4];
 
-  uchar *data() const { return (uchar *)(&scale); }
+  uchar *data() { return reinterpret_cast<uchar *>(&scale); }
+  const uchar *data() const {
+    return reinterpret_cast<const uchar *>(&scale);
+  }
 
   static size_t data_size(size_t n) { return data_header + n * 2; }
 
@@ -91,7 +94,8 @@ struct FVector {
 
   static const FVector *create(distance_kind metric, void *mem, const void *src,
                                size_t src_len) {
-    float scale = 0, *v = (float *)src;
+    float scale = 0;
+    const float *v = static_cast<const float *>(src);
     size_t vec_len = src_len / sizeof(float);
     for (size_t i = 0; i < vec_len; i++)
       scale = std::max(scale, std::abs(get_float(v + i)));
@@ -130,8 +134,8 @@ struct FVector {
       v8f v;
       __m256 i;
     } tmp;
-    __m256i *p1 = (__m256i *)v1;
-    __m256i *p2 = (__m256i *)v2;
+    const __m256i *p1 = reinterpret_cast<const __m256i *>(v1);
+    const __m256i *p2 = reinterpret_cast<const __m256i *>(v2);
     v8f d = {0};
     for (size_t i = 0; i < (len + AVX2_dims - 1) / AVX2_dims; p1++, p2++, i++) {
       tmp.i = _mm256_cvtepi32_ps(_mm256_madd_epi16(*p1, *p2));
@@ -164,8 +168,8 @@ struct FVector {
 
   AVX512_IMPLEMENTATION
   static float dot_product(const int16_t *v1, const int16_t *v2, size_t len) {
-    __m512i *p1 = (__m512i *)v1;
-    __m512i *p2 = (__m512i *)v2;
+    const __m512i *p1 = reinterpret_cast<const __m512i *>(v1);
+    const __m512i *p2 = reinterpret_cast<const __m512i *>(v2);
     __m512 d = _mm512_setzero_ps();
     for (size_t i = 0; i < (len + AVX512_dims - 1) / AVX512_dims;
          p1++, p2++, i++)
@@ -325,8 +329,10 @@ class FVectorNode {
   int save(TABLE *graph);
   size_t tref_len() const;
   size_t gref_len() const;
-  uchar *gref() const;
-  uchar *tref() const;
+  uchar *gref();
+  const uchar *gref() const;
+  uchar *tref();
+  const uchar *tref() const;
   void push_neighbor(size_t layer, FVectorNode *v);
 
   static const uchar *get_key(const void *elem, size_t *key_len, my_bool);
@@ -1109,8 +1115,12 @@ void FVectorNode::push_neighbor(size_t layer, FVectorNode *other) {
 
 size_t FVectorNode::tref_len() const { return ctx->tref_len; }
 size_t FVectorNode::gref_len() const { return ctx->gref_len; }
-uchar *FVectorNode::gref() const { return (uchar *)(this + 1); }
-uchar *FVectorNode::tref() const { return gref() + gref_len(); }
+uchar *FVectorNode::gref() { return reinterpret_cast<uchar *>(this + 1); }
+const uchar *FVectorNode::gref() const {
+  return reinterpret_cast<const uchar *>(this + 1);
+}
+uchar *FVectorNode::tref() { return gref() + gref_len(); }
+const uchar *FVectorNode::tref() const { return gref() + gref_len(); }
 
 const uchar *FVectorNode::get_key(const void *elem, size_t *key_len, my_bool) {
   *key_len = static_cast<const FVectorNode *>(elem)->gref_len();

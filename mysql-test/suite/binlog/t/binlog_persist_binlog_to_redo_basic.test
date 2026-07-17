@@ -1,0 +1,268 @@
+################################################################################
+# [Feature] Persist Binlog Into Redo
+#
+# Binlog events of a transaction are written into InnoDB's redo log as well as
+# the binlog file when it commits. Thus the binlog fsync can be relaxed, since
+# the binlog events lost by a crash can be recovered from the redo log.
+#
+# This test covers the user interface and the basic correctness of the feature
+# when it is enabled:
+#   - system variables: defaults, dynamic/read-only, value ranges
+#   - the persist-into-redo commit path is really taken
+#   - DML/DDL/transaction/rollback correctness
+#   - transactions bigger than persist_binlog_to_redo_size_limit fall back to
+#     the ordinary binlog group commit
+#   - binlog rotation, RESET MASTER and GTID consistency
+################################################################################
+--source include/have_debug.inc
+--source include/have_debug_sync.inc
+--source include/have_log_bin.inc
+--source include/have_binlog_format_row.inc
+--source include/have_persist_binlog_to_redo.inc
+
+--echo #
+--echo # Case: default values of the system variables
+--echo ##############################################
+--echo #
+# persist_binlog_to_redo is turned on by the -master.opt file.
+SET @saved_persist_binlog_to_redo = @@GLOBAL.persist_binlog_to_redo;
+SELECT @@GLOBAL.persist_binlog_to_redo;
+SELECT @@GLOBAL.persist_binlog_to_redo_size_limit;
+SELECT @@GLOBAL.binlog_buffer_size;
+SELECT @@GLOBAL.wait_binlog_flush;
+SELECT @@GLOBAL.binlog_group_delay;
+SELECT @@GLOBAL.binlog_group_delay_running_threads;
+SELECT @@GLOBAL.sync_binlog_interval;
+
+--echo #
+--echo # Case: the variables are global only and have no session scope
+--echo ##############################################################
+--echo #
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SELECT @@SESSION.persist_binlog_to_redo;
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SELECT @@SESSION.binlog_buffer_size;
+
+--echo #
+--echo # Case: binlog_buffer_size is read only
+--echo ######################################
+--echo #
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SET GLOBAL binlog_buffer_size = 41943040;
+
+--echo #
+--echo # Case: persist_binlog_to_redo can be changed dynamically
+--echo #       (only a single 2PC storage engine is enabled)
+--echo #######################################################
+--echo #
+SET GLOBAL persist_binlog_to_redo = OFF;
+SELECT @@GLOBAL.persist_binlog_to_redo;
+SET GLOBAL persist_binlog_to_redo = ON;
+SELECT @@GLOBAL.persist_binlog_to_redo;
+
+--echo #
+--echo # Case: values out of range are clamped, invalid values are rejected
+--echo ##################################################################
+--echo #
+SET @saved_size_limit = @@GLOBAL.persist_binlog_to_redo_size_limit;
+SET @saved_group_delay = @@GLOBAL.binlog_group_delay;
+SET @saved_delay_threads = @@GLOBAL.binlog_group_delay_running_threads;
+SET @saved_sync_interval = @@GLOBAL.sync_binlog_interval;
+
+# persist_binlog_to_redo_size_limit: [0, 10M]
+--disable_warnings
+SET GLOBAL persist_binlog_to_redo_size_limit = 20971520;
+--enable_warnings
+SELECT @@GLOBAL.persist_binlog_to_redo_size_limit;
+SET GLOBAL persist_binlog_to_redo_size_limit = 0;
+SELECT @@GLOBAL.persist_binlog_to_redo_size_limit;
+
+# binlog_group_delay: [0, 1000000000]
+--disable_warnings
+SET GLOBAL binlog_group_delay = 2000000000;
+--enable_warnings
+SELECT @@GLOBAL.binlog_group_delay;
+
+# binlog_group_delay_running_threads: [0, 100000]
+--disable_warnings
+SET GLOBAL binlog_group_delay_running_threads = 200000;
+--enable_warnings
+SELECT @@GLOBAL.binlog_group_delay_running_threads;
+
+# sync_binlog_interval: [1, 100000000]
+--disable_warnings
+SET GLOBAL sync_binlog_interval = 0;
+--enable_warnings
+SELECT @@GLOBAL.sync_binlog_interval;
+
+--error ER_WRONG_VALUE_FOR_VAR
+SET GLOBAL persist_binlog_to_redo = 'invalid';
+
+SET GLOBAL persist_binlog_to_redo_size_limit = @saved_size_limit;
+SET GLOBAL binlog_group_delay = @saved_group_delay;
+SET GLOBAL binlog_group_delay_running_threads = @saved_delay_threads;
+SET GLOBAL sync_binlog_interval = @saved_sync_interval;
+
+--echo #
+--echo # Case: the persist-into-redo commit path is really taken
+--echo ########################################################
+--echo #
+# after_write_to_redo is only reached by Binlog_ext::commit(), i.e. by the
+# asynchronous persist-into-redo commit path. If the transaction went through
+# the ordinary binlog group commit instead, the signal would never be emitted
+# and the WAIT_FOR below would time out and fail the test.
+CREATE TABLE t1(c1 INT PRIMARY KEY, c2 VARCHAR(100)) ENGINE=InnoDB;
+
+SET debug_sync = "after_write_to_redo SIGNAL written_to_redo";
+INSERT INTO t1 VALUES(1, 'one');
+SET debug_sync = "now WAIT_FOR written_to_redo";
+SET debug_sync = "RESET";
+
+--echo #
+--echo # Case: with the feature off, the redo commit path is NOT taken
+--echo #############################################################
+--echo #
+# crash_commit_after_sync_to_redo only fires inside the persist path. With the
+# feature turned off the statement must commit without crashing the server.
+SET GLOBAL persist_binlog_to_redo = OFF;
+SET debug = "+d,crash_commit_after_sync_to_redo";
+INSERT INTO t1 VALUES(2, 'two');
+SET debug = "-d,crash_commit_after_sync_to_redo";
+SET GLOBAL persist_binlog_to_redo = ON;
+
+--let $assert_text = the server did not crash and both rows are present
+--let $assert_cond = COUNT(*) = 2 FROM t1
+--source include/assert.inc
+
+--echo #
+--echo # Case: DML correctness with the feature enabled
+--echo ###############################################
+--echo #
+INSERT INTO t1 VALUES(3, 'three'), (4, 'four'), (5, 'five');
+UPDATE t1 SET c2 = 'TWO' WHERE c1 = 2;
+DELETE FROM t1 WHERE c1 = 5;
+SELECT * FROM t1 ORDER BY c1;
+
+--echo #
+--echo # Case: explicit transactions, rollback and savepoints
+--echo #####################################################
+--echo #
+BEGIN;
+INSERT INTO t1 VALUES(10, 'ten');
+INSERT INTO t1 VALUES(11, 'eleven');
+COMMIT;
+
+BEGIN;
+INSERT INTO t1 VALUES(12, 'twelve');
+ROLLBACK;
+
+BEGIN;
+INSERT INTO t1 VALUES(13, 'thirteen');
+SAVEPOINT sp1;
+INSERT INTO t1 VALUES(14, 'fourteen');
+ROLLBACK TO SAVEPOINT sp1;
+COMMIT;
+
+--let $assert_text = rolled back rows are not committed
+--let $assert_cond = COUNT(*) = 0 FROM t1 WHERE c1 IN (12, 14)
+--source include/assert.inc
+
+--let $assert_text = committed rows are present
+--let $assert_cond = COUNT(*) = 3 FROM t1 WHERE c1 IN (10, 11, 13)
+--source include/assert.inc
+
+--echo #
+--echo # Case: a transaction bigger than persist_binlog_to_redo_size_limit
+--echo #       falls back to the ordinary binlog group commit
+--echo #################################################################
+--echo #
+CREATE TABLE t2(c1 INT PRIMARY KEY, c2 LONGTEXT) ENGINE=InnoDB;
+SET GLOBAL persist_binlog_to_redo_size_limit = 4096;
+
+# This transaction is far bigger than the limit, so it must not use the redo
+# path: the crash point of the redo path must not fire.
+SET debug = "+d,crash_commit_after_sync_to_redo";
+INSERT INTO t2 VALUES(1, repeat('a', 100000));
+SET debug = "-d,crash_commit_after_sync_to_redo";
+
+--let $assert_text = the big transaction committed through BGC without crashing
+--let $assert_cond = COUNT(*) = 1 FROM t2
+--source include/assert.inc
+
+# A small transaction still uses the redo path.
+SET debug_sync = "after_write_to_redo SIGNAL small_written";
+INSERT INTO t2 VALUES(2, 'small');
+SET debug_sync = "now WAIT_FOR small_written";
+SET debug_sync = "RESET";
+
+SET GLOBAL persist_binlog_to_redo_size_limit = @saved_size_limit;
+
+--echo #
+--echo # Case: wait_binlog_flush = OFF
+--echo ##############################
+--echo #
+SET @saved_wait_binlog_flush = @@GLOBAL.wait_binlog_flush;
+SET GLOBAL wait_binlog_flush = OFF;
+INSERT INTO t1 VALUES(20, 'twenty');
+INSERT INTO t1 VALUES(21, 'twentyone');
+SET GLOBAL wait_binlog_flush = @saved_wait_binlog_flush;
+
+# Without waiting for the flush the events reach the binlog file eventually.
+# FLUSH BINARY LOGS switches to the synchronous mode and drains the buffer.
+FLUSH BINARY LOGS;
+
+--let $assert_text = rows committed with wait_binlog_flush=OFF are present
+--let $assert_cond = COUNT(*) = 2 FROM t1 WHERE c1 IN (20, 21)
+--source include/assert.inc
+
+--echo #
+--echo # Case: binlog rotation while the feature is enabled
+--echo ###################################################
+--echo #
+INSERT INTO t1 VALUES(30, 'thirty');
+FLUSH BINARY LOGS;
+INSERT INTO t1 VALUES(31, 'thirtyone');
+FLUSH BINARY LOGS;
+INSERT INTO t1 VALUES(32, 'thirtytwo');
+
+--let $assert_text = rows written across binlog rotations are present
+--let $assert_cond = COUNT(*) = 3 FROM t1 WHERE c1 IN (30, 31, 32)
+--source include/assert.inc
+
+# The binlog files must be readable, i.e. the events written through the redo
+# path form a valid binlog.
+--let $binlog_file = query_get_value(SHOW MASTER STATUS, File, 1)
+--let $assert_text = the current binlog file has events
+--let $assert_cond = "$binlog_file" != ""
+--source include/assert.inc
+
+--echo #
+--echo # Case: GTIDs are assigned and executed set stays consistent
+--echo ##########################################################
+--echo #
+--let $gtid_mode = query_get_value(SELECT @@GLOBAL.gtid_mode AS v, v, 1)
+if ($gtid_mode == ON)
+{
+  --let $assert_text = gtid_executed is not empty
+  --let $assert_cond = "[SELECT @@GLOBAL.gtid_executed != \'\']" = 1
+  --source include/assert.inc
+}
+
+--echo #
+--echo # Case: RESET MASTER with the feature enabled
+--echo ############################################
+--echo #
+RESET MASTER;
+INSERT INTO t1 VALUES(40, 'forty');
+
+--let $assert_text = the server works after RESET MASTER
+--let $assert_cond = COUNT(*) = 1 FROM t1 WHERE c1 = 40
+--source include/assert.inc
+
+--echo #
+--echo # Cleanup
+--echo #########
+--echo #
+DROP TABLE t1, t2;
+SET GLOBAL persist_binlog_to_redo = @saved_persist_binlog_to_redo;
+SET debug_sync = "RESET";

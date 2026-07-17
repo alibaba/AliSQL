@@ -88,27 +88,34 @@ void store_duckdb_field_in_mysql_format(Field *field, duckdb::Value &value,
       case MYSQL_TYPE_LONG_BLOB:
       case MYSQL_TYPE_BLOB:
       case MYSQL_TYPE_GEOMETRY:
-      case MYSQL_TYPE_BIT: {
-        auto str = value.GetValueUnsafe<duckdb::string>();
-        auto varchar = str.c_str();
-        auto varchar_len = str.size();
-        field->store(varchar, varchar_len, &my_charset_bin);
-        break;
-      }
+      case MYSQL_TYPE_BIT:
       case MYSQL_TYPE_VARCHAR:
       case MYSQL_TYPE_STRING:
       case MYSQL_TYPE_VAR_STRING: {
         if (field->has_charset()) {
           assert(field->charset() != &my_charset_bin);
+          const CHARSET_INFO *data_cs = field->charset();
+          if (strcmp(field->charset()->csname, "latin1") == 0) {
+            /* DuckDB store latin1 column's data as utf8mb4. Here we donot do
+            the conversion, but use utf8mb4 as input. field::store will convert
+          */
+            data_cs = myduck::get_utf8mb4_charset_for_latin1(data_cs);
+          }
           auto str = value.GetValue<duckdb::string>();
           auto varchar = str.c_str();
           auto varchar_len = str.size();
-          field->store(varchar, varchar_len, field->charset());
+          field->store(varchar, varchar_len, data_cs);
           break;
         } else {
           auto str = value.GetValueUnsafe<duckdb::string>();
           auto varchar = str.c_str();
           auto varchar_len = str.size();
+          if (value.type().id() == duckdb::LogicalTypeId::BIT) {
+            auto padding = *(reinterpret_cast<const uint8_t *>(varchar));
+            str[1] = str[1] & ((1 << (8 - padding)) - 1);
+            varchar = str.c_str() + 1;
+            varchar_len -= 1;
+          }
           field->store(varchar, varchar_len, &my_charset_bin);
           break;
         }

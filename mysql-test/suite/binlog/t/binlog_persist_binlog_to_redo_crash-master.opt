@@ -1,0 +1,4 @@
+--persist-binlog-to-redo=on
+--binlog-order-commits=off
+--innodb-flush-log-at-trx-commit=2
+--replica-preserve-commit-order=OFF

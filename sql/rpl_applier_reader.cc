@@ -34,7 +34,7 @@
 #include "sql/rpl_rli_pdb.h"
 #include "sql/sql_backup_lock.h"  // is_instance_backup_locked et al.
 
-#include "sql/duckdb/log.h"
+#include "sql/duckdb/duckdb_log.h"
 bool duckdb_commit_multi_trx_due_to_reader = true;
 
 /**
@@ -174,10 +174,6 @@ Log_event *Rpl_applier_reader::read_next_event() {
 
   if (m_reading_active_log &&
       m_relaylog_file_reader.position() >= m_log_end_pos) {
-    /* The existing relay log has been read. The maximum apply position
-       before crash is here. */
-    m_rli->set_duckdb_idempotent_cnt(MTS_MAX_WORKERS);
-
     while (true) {
       if (sql_slave_killed(m_rli->info_thd, m_rli)) return nullptr;
 

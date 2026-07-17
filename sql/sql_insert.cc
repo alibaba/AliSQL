@@ -508,10 +508,18 @@ bool Sql_cmd_insert_values::execute_inner(THD *thd) {
   if (thd->lex->sql_command == SQLCOM_REPLACE) {
     bool exist_duckdb_table = false;
     bool exist_other_table = false;
-    lex->check_table_engine_type(exist_duckdb_table, exist_other_table);
+
+    Table_ref *non_duckdb_table;
+    Table_ref *duckdb_table;
+    lex->check_table_engine_type(exist_duckdb_table, exist_other_table,
+                                 &non_duckdb_table, &duckdb_table);
     if (exist_duckdb_table) {
-      my_error(ER_DUCKDB_CLIENT, MYF(0),
-               "Does not support duckdb engine in REPLACE satement");
+      char ebuff[MYSQL_ERRMSG_SIZE];
+      snprintf(ebuff, sizeof(ebuff),
+               "Does not support duckdb engine in REPLACE statement. "
+               "The table `%s` is a duckdb table",
+               duckdb_table->table_name);
+      my_error(ER_DUCKDB_CLIENT, MYF(0), ebuff);
     }
   }
 

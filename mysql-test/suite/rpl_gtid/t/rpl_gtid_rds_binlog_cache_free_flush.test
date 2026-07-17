@@ -1,0 +1,352 @@
+# Test Binlog cache Free Flush.
+
+--echo #
+--echo # Prepare.
+--echo ########################################################
+--echo #
+--source include/master-slave.inc
+--source include/have_binlog_format_row.inc
+--source include/have_debug.inc
+--source include/have_semisync_plugin.inc
+--source include/install_semisync.inc
+--let $MYSQLD_DATADIR= `select @@datadir`
+
+--source include/rpl_connection_master.inc
+--let $save_rpl_semi_sync_source_timeout= @@rpl_semi_sync_source_timeout;
+SET GLOBAL rpl_semi_sync_source_timeout= 6000000;
+
+FLUSH STATUS;
+
+call mtr.add_suppression("Semi-sync master failed on net_flush.. before waiting for replica reply");
+--let $gtid_event= Gtid
+if (!$gtid_mode_on)
+{
+  --let $gtid_event= Anonymous_Gtid
+}
+
+--echo #
+--echo # 1. Make test data.
+--echo ########################################################
+--echo #
+CREATE DATABASE rpl_test;
+CREATE TABLE rpl_test.t1 (s LONGTEXT);
+CREATE TABLE rpl_test.t2 (s LONGTEXT);
+
+--disable_query_log
+--let $i=0
+while ($i < 2)
+{
+  --eval INSERT INTO rpl_test.t1 values(repeat("1", 5242880))
+  --inc $i
+}
+--enable_query_log
+
+
+FLUSH BINARY LOGS;
+--source include/rpl_sync.inc
+--source include/rpl_connection_slave.inc
+FLUSH BINARY LOGS;
+
+--echo #
+--echo # 2.1 Execute transaction without binlog cache temp file and free flush.
+--echo ########################################################
+--echo #
+--source include/rpl_connection_master.inc
+INSERT INTO rpl_test.t2 values(repeat("1", 255));
+
+--echo # Check binlog and data. Expect 2 binlog files and no ignorable event exist in binlog.
+--replace_column 2 # 3 #
+SHOW BINARY LOGS;
+
+--let $event_sequence= Format_desc # Previous_gtids # $gtid_event # !Begin # !Insert # !Commit
+--let $binlog_file = query_get_value(SHOW BINARY LOGS, Log_name, 2)
+--let $include_header_events= 1
+--source include/assert_binlog_events.inc
+
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--source include/rpl_sync.inc
+--source include/rpl_connection_slave.inc
+--replace_column 2 # 3 #
+SHOW BINARY LOGS;
+
+--let $event_sequence= Format_desc # Previous_gtids # $gtid_event # !Begin # !Insert # !Commit
+--let $binlog_file = query_get_value(SHOW BINARY LOGS, Log_name, 2)
+--let $include_header_events= 1
+--source include/assert_binlog_events.inc
+
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--echo #
+--echo # 2.2 Execute transaction with binlog cache free flush.
+--echo ########################################################
+--echo #
+--source include/rpl_connection_master.inc
+--echo # Stop slave io to simulate semi sync wait on master will cause net_flush() error.
+--source include/rpl_connection_slave.inc
+--source include/stop_slave_io.inc
+
+--source include/rpl_connection_master.inc
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+--send COMMIT
+
+--echo # Test transaction commit should wait for semi-sync ack.
+--source include/rpl_connection_master1.inc
+--let $wait_condition= SELECT count(*) = 1 FROM performance_schema.threads WHERE PROCESSLIST_STATE = 'Waiting for semi-sync ACK from replica'
+--source include/wait_condition.inc
+
+--source include/rpl_connection_slave.inc
+--source include/start_slave_io.inc
+
+--source include/rpl_connection_master.inc
+--reap
+
+--echo # Check binlog and data. Expect 4 binlog files and ignorable event exist in the third binlog.
+--replace_column 2 # 3 #
+SHOW BINARY LOGS;
+
+--let $event_sequence= Format_desc # Previous_gtids # $gtid_event # !Begin # !Insert # !Commit # Rotate
+--let $binlog_file = query_get_value(SHOW BINARY LOGS, Log_name, 2)
+--let $include_header_events= 1
+--source include/assert_binlog_events.inc
+
+--let $event_sequence= Format_desc # Previous_gtids # Ignorable # $gtid_event # !Begin # !Insert # Write_rows # !Commit # Rotate
+--let $binlog_file = query_get_value(SHOW BINARY LOGS, Log_name, 3)
+--let $include_header_events= 1
+--source include/assert_binlog_events.inc
+
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--source include/rpl_sync.inc
+--source include/rpl_connection_slave.inc
+--replace_column 2 # 3 #
+SHOW BINARY LOGS;
+
+--let $event_sequence= Format_desc # Previous_gtids # $gtid_event # !Begin # !Insert # !Commit # Rotate
+--let $binlog_file = query_get_value(SHOW BINARY LOGS, Log_name, 2)
+--let $include_header_events= 1
+--source include/assert_binlog_events.inc
+
+--let $event_sequence= Format_desc # Previous_gtids # Ignorable # $gtid_event # !Begin # !Insert # Write_rows # !Commit # Rotate
+--let $binlog_file = query_get_value(SHOW BINARY LOGS, Log_name, 3)
+--let $include_header_events= 1
+--source include/assert_binlog_events.inc
+
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--echo #
+--echo # 2.3 Execute transaction with binlog cache temp file but without free flush.
+--echo ########################################################
+--echo #
+--source include/rpl_connection_master.inc
+
+--echo # 2.3.1 RDS Binlog cache is enabled for this transaction.
+--echo ########################################################
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+--echo # Check tmp file exist in binlog cache tmp file dir.
+--replace_regex /ML.*/ML.####/
+--list_files $MYSQLD_DATADIR/#alisql_binlog_cache_temp_file
+
+--source include/rpl_connection_slave.inc
+SET GLOBAL binlog_cache_free_flush = OFF;
+--source include/rpl_connection_master.inc
+SET GLOBAL binlog_cache_free_flush = OFF;
+
+COMMIT;
+
+--echo # 2.3.2 RDS Binlog cache is disabled for this transaction.
+--echo ########################################################
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+--echo # Check no tmp file exist in binlog cache tmp file dir.
+--list_files $MYSQLD_DATADIR/#alisql_binlog_cache_temp_file
+COMMIT;
+
+--source include/rpl_sync.inc
+
+SHOW STATUS LIKE "Binlog_cache_disk_use";
+
+--echo # Check binlog and data. Expect 4 binlog files and no ignorable event exist in the 4th binlog.
+--replace_column 2 # 3 #
+SHOW BINARY LOGS;
+
+--let $event_sequence= Format_desc # Previous_gtids # $gtid_event # !Begin # !Insert # Write_rows # !Commit # $gtid_event # !Begin # !Insert # Write_rows # !Commit
+--let $binlog_file = query_get_value(SHOW BINARY LOGS, Log_name, 4)
+--let $include_header_events= 1
+--source include/assert_binlog_events.inc
+
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--source include/rpl_sync.inc
+--source include/rpl_connection_slave.inc
+--replace_column 2 # 3 #
+SHOW BINARY LOGS;
+
+--let $event_sequence= Format_desc # Previous_gtids # $gtid_event # !Begin # !Insert # Write_rows # !Commit # $gtid_event # !Begin # !Insert # Write_rows # !Commit
+--let $binlog_file = query_get_value(SHOW BINARY LOGS, Log_name, 4)
+--let $include_header_events= 1
+--source include/assert_binlog_events.inc
+
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--echo #
+--echo # 2.4 Test change binlog_cache_free_flush_limit_size.
+--echo ########################################################
+--echo #
+SET GLOBAL binlog_cache_free_flush = ON;
+SET GLOBAL binlog_cache_free_flush_limit_size = 100000000;
+--source include/rpl_connection_master.inc
+SET GLOBAL binlog_cache_free_flush = ON;
+SET GLOBAL binlog_cache_free_flush_limit_size = 100000000;
+
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+--source include/rpl_sync.inc
+
+SHOW STATUS LIKE "Binlog_cache_disk_use";
+
+--echo # Check binlog and data. Expect 4 binlog files and no ignorable event exist in the 4th binlog.
+--replace_column 2 # 3 #
+SHOW BINARY LOGS;
+
+--let $event_sequence= Format_desc # Previous_gtids # $gtid_event # !Begin # !Insert # Write_rows # !Commit # $gtid_event # !Begin # !Insert # Write_rows # !Commit # $gtid_event # !Begin # !Insert # Write_rows # !Commit
+--let $binlog_file = query_get_value(SHOW BINARY LOGS, Log_name, 4)
+--let $include_header_events= 1
+--source include/assert_binlog_events.inc
+
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--source include/rpl_sync.inc
+--source include/rpl_connection_slave.inc
+--replace_column 2 # 3 #
+SHOW BINARY LOGS;
+
+--let $event_sequence= Format_desc # Previous_gtids # $gtid_event # !Begin # !Insert # Write_rows # !Commit # $gtid_event # !Begin # !Insert # Write_rows # !Commit # $gtid_event # !Begin # !Insert # Write_rows # !Commit
+--let $binlog_file = query_get_value(SHOW BINARY LOGS, Log_name, 4)
+--let $include_header_events= 1
+--source include/assert_binlog_events.inc
+
+SELECT COUNT(*) FROM rpl_test.t2;
+
+SET GLOBAL binlog_cache_free_flush_limit_size = 10485760;
+--source include/rpl_connection_master.inc
+SET GLOBAL binlog_cache_free_flush_limit_size = 10485760;
+
+--echo #
+--echo # 2.5 Test XA transaction.
+--echo ########################################################
+--echo #
+XA BEGIN "test_xa_trx";
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+XA END "test_xa_trx";
+XA PREPARE "test_xa_trx";
+
+XA COMMIT "test_xa_trx";
+SHOW STATUS LIKE "Binlog_cache_disk_use";
+
+--echo # Check binlog and data. Expect 6 binlog files and ignorable event exist in the 5th binlog, query event(XA commit) exist in 6th binlog.
+--replace_column 2 # 3 #
+SHOW BINARY LOGS;
+
+--let $event_sequence= Format_desc # Previous_gtids # Ignorable # $gtid_event # Query # !Insert # Write_rows # Query # XA_prepare # Rotate
+--let $binlog_file = query_get_value(SHOW BINARY LOGS, Log_name, 5)
+--let $include_header_events= 1
+--source include/assert_binlog_events.inc
+
+--let $event_sequence= Format_desc # Previous_gtids # $gtid_event # Query
+--let $binlog_file = query_get_value(SHOW BINARY LOGS, Log_name, 6)
+--let $include_header_events= 1
+--source include/assert_binlog_events.inc
+
+--source include/rpl_sync.inc
+--source include/rpl_connection_slave.inc
+--replace_column 2 # 3 #
+SHOW BINARY LOGS;
+
+--let $event_sequence= Format_desc # Previous_gtids # Ignorable # $gtid_event # Query # !Insert # Write_rows # Query # XA_prepare # Rotate
+--let $binlog_file = query_get_value(SHOW BINARY LOGS, Log_name, 5)
+--let $include_header_events= 1
+--source include/assert_binlog_events.inc
+
+--let $event_sequence= Format_desc # Previous_gtids # $gtid_event # Query
+--let $binlog_file = query_get_value(SHOW BINARY LOGS, Log_name, 6)
+--let $include_header_events= 1
+--source include/assert_binlog_events.inc
+
+--echo #
+--echo # 3. Test free flush is not support for binlog encryption.
+--echo ########################################################
+--echo #
+
+--echo # 3.1 Restarting the master with "--binlog_encryption=ON" and keyring installed.
+# Restart the master loading the keyring
+--let $keyring_master= $MYSQL_TMP_DIR/keyring_master
+--let $keyring_opt=$KEYRING_PLUGIN_OPT --early-plugin-load=keyring_file=$KEYRING_PLUGIN
+--let $rpl_server_number= 1
+--let $rpl_server_parameters= $keyring_opt --keyring_file_data=$keyring_master --binlog_encryption=ON
+--let $rpl_server_error= 0
+--let $rpl_omit_print_server_parameters= 1
+--source include/rpl_restart_server.inc
+--connection master
+
+--let $assert_text=binlog_encryption option shall be ON
+--let $option_value = `SELECT variable_value FROM performance_schema.global_variables WHERE variable_name = "binlog_encryption"`
+--let $assert_cond= "$option_value" = "ON"
+--source include/assert.inc
+
+--let $assert_text= 7nd binary log is encrypted on master
+--let $assert_cond= "[SHOW BINARY LOGS, Encrypted, 7]" = "Yes"
+--source include/assert.inc
+
+--echo # 3.2 Test free flush is not support for binlog encryption.
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+--echo # Check binlog and data. Expect 4 binlog files and ignorable event exist in the third binlog.
+--replace_column 2 # 3 #
+SHOW BINARY LOGS;
+
+--let $event_sequence= Format_desc # Previous_gtids # $gtid_event # !Begin # !Insert # Write_rows # !Commit
+--let $binlog_file = query_get_value(SHOW BINARY LOGS, Log_name, 7)
+--let $include_header_events= 1
+--source include/assert_binlog_events.inc
+
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--source include/rpl_sync.inc
+--source include/rpl_connection_slave.inc
+--replace_column 2 # 3 #
+SHOW BINARY LOGS;
+
+--let $event_sequence= Format_desc # Previous_gtids # Ignorable # $gtid_event # !Begin # !Insert # Write_rows # !Commit # Rotate
+--let $binlog_file = query_get_value(SHOW BINARY LOGS, Log_name, 7)
+--let $include_header_events= 1
+--source include/assert_binlog_events.inc
+
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--echo # 3.3 Restarting the master with "--binlog_encryption=OFF" and keyring uninstalled.
+--source include/rpl_connection_master.inc
+# Need to SET binlog_encryption to rotate to a unencryption binlog file.
+SET GLOBAL binlog_encryption = OFF;
+UNINSTALL PLUGIN keyring_file;
+--remove_file $keyring_master
+--let $rpl_server_number= 1
+--let $rpl_server_parameters=
+--source include/rpl_restart_server.inc
+
+--echo #
+--echo # 4. Cleanup
+--echo ########################################################
+--echo #
+
+--source include/rpl_connection_master.inc
+DROP DATABASE rpl_test;
+--source include/rpl_sync.inc
+--eval SET GLOBAL rpl_semi_sync_source_timeout= $save_rpl_semi_sync_source_timeout
+--source include/uninstall_semisync.inc
+--source include/rpl_connection_master.inc
+--source include/rpl_end.inc
+

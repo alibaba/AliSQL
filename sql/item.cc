@@ -712,7 +712,11 @@ void Item::print_item_w_name(const THD *thd, String *str,
 
   if (item_name.is_set() && query_type != QT_NORMALIZED_FORMAT) {
     str->append(STRING_WITH_LEN(" AS "));
-    append_identifier(thd, str, item_name.ptr(), item_name.length());
+    if ((query_type & QT_DUCKDB_REWRITE) && item_name.length() == 0) {
+      str->append(STRING_WITH_LEN("\'\'"));
+    } else {
+      append_identifier(thd, str, item_name.ptr(), item_name.length());
+    }
   }
 }
 
@@ -751,8 +755,11 @@ void Item::print_for_order(const THD *thd, String *str,
         interpretation we write "ORDER BY ''", which is equivalent.
       */
       str->append("''");
-    } else
+    } else if ((query_type & QT_DUCKDB_REWRITE) && const_item()) {
+      str->append("''");
+    } else {
       print(thd, str, query_type);
+    }
   }
 }
 
@@ -3019,8 +3026,13 @@ void Item_ident::print(const THD *thd, String *str, enum_query_type query_type,
   if (!(query_type & QT_NO_DB) && db_name_arg && db_name_arg[0] &&
       !alias_name_used()) {
     const size_t d_name_len = strlen(d_name);
-    if (!((query_type & QT_NO_DEFAULT_DB) &&
-          db_is_default_db(d_name, d_name_len, thd))) {
+    if (!(((query_type & QT_NO_DEFAULT_DB) &&
+           db_is_default_db(d_name, d_name_len, thd)) &&
+          !(query_type & QT_DUCKDB_REWRITE)) &&
+        !((query_type & QT_DUCKDB_REWRITE) && cached_table &&
+          cached_table->is_view_or_derived()) &&
+        !((query_type & QT_DUCKDB_REWRITE) && cached_table &&
+          cached_table->is_alias)) {
       append_identifier(thd, str, d_name, d_name_len);
       str->append('.');
     }
@@ -3488,6 +3500,8 @@ void Item_string::print(const THD *, String *str,
 
   str->append('\'');
 
+  bool duckdb_rewrite = (query_type & QT_DUCKDB_REWRITE);
+
   if (query_type & QT_TO_SYSTEM_CHARSET) {
     if (print_introducer) {
       /*
@@ -3506,20 +3520,20 @@ void Item_string::print(const THD *, String *str,
       str->append(tmp.ptr());
     } else {
       // Convert to system charset.
-      convert_and_print(&str_value, str, system_charset_info);
+      convert_and_print(&str_value, str, system_charset_info, duckdb_rewrite);
     }
   } else if (query_type & QT_TO_ARGUMENT_CHARSET) {
     if (print_introducer)
-      convert_and_print(&str_value, str, collation.collation);
+      convert_and_print(&str_value, str, collation.collation, duckdb_rewrite);
     else
       /*
         Convert the string literals to str->charset(),
         which is typically equal to charset_set_client.
       */
-      convert_and_print(&str_value, str, str->charset());
+      convert_and_print(&str_value, str, str->charset(), duckdb_rewrite);
   } else {
     // Caller wants a result in the charset of str_value.
-    str_value.print(str);
+    str_value.print(str, duckdb_rewrite);
   }
 
   str->append('\'');
@@ -7219,6 +7233,15 @@ void Item_hex_string::print(const THD *, String *str,
     str->append("X''");
     return;
   }
+  if (query_type & QT_DUCKDB_REWRITE) {
+    str->append("X'");
+    for (; ptr != end; ptr++) {
+      str->append(_dig_vec_lower[*ptr >> 4]);
+      str->append(_dig_vec_lower[*ptr & 0x0F]);
+    }
+    str->append("'");
+    return;
+  }
   str->append("0x");
   for (; ptr != end; ptr++) {
     str->append(_dig_vec_lower[*ptr >> 4]);
@@ -10734,17 +10757,32 @@ void Item_result_field::raise_numeric_overflow(const char *type_name) {
   @param to_cs        Character set to which the string is to be converted.
 */
 void convert_and_print(const String *from_str, String *to_str,
-                       const CHARSET_INFO *to_cs) {
+                       const CHARSET_INFO *to_cs, bool duckdb_rewrite) {
   if (my_charset_same(from_str->charset(), to_cs)) {
-    from_str->print(to_str);  // already in to_cs, no need to convert
-  } else                      // need to convert
+    from_str->print(to_str,
+                    duckdb_rewrite);  // already in to_cs, no need to convert
+  } else if (duckdb_rewrite) {
+    // Always convert to utf8mb4
+    if (strcmp(from_str->charset()->csname, "utf8mb3") == 0 ||
+        strcmp(from_str->charset()->csname, "utf8mb4") == 0) {
+      from_str->print(to_str,
+                      duckdb_rewrite);  // already in utf8, no need to convert
+    } else {
+      THD *thd = current_thd;
+      LEX_STRING lex_str;
+      thd->convert_string(&lex_str, &my_charset_utf8mb3_bin, from_str->ptr(),
+                          from_str->length(), from_str->charset());
+      String tmp(lex_str.str, lex_str.length, to_cs);
+      tmp.print(to_str, duckdb_rewrite);
+    }
+  } else  // need to convert
   {
     THD *thd = current_thd;
     LEX_STRING lex_str;
     thd->convert_string(&lex_str, to_cs, from_str->ptr(), from_str->length(),
                         from_str->charset());
     String tmp(lex_str.str, lex_str.length, to_cs);
-    tmp.print(to_str);
+    tmp.print(to_str, duckdb_rewrite);
   }
 }
 

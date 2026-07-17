@@ -82,6 +82,13 @@ SELECT CONCAT('MySQL', '数据库'), CONCAT(col1, 'RDS') FROM t_duckdb;
 CONCAT('MySQL', '数据库')	CONCAT(col1, 'RDS')
 MySQL数据库	MySQLRDS
 MySQL数据库	数据库RDS
+CREATE TABLE t1 (id INT PRIMARY KEY, col1 INT, col2 INT) ENGINE=DuckDB;
+INSERT INTO t1 VALUES (1, 1, NULL), (2, 2, 2);
+SELECT CONCAT(id, 'a', col2) FROM t1;
+CONCAT(id, 'a', col2)
+NULL
+2a2
+DROP TABLE t1;
 --------------------------
 8. CONCAT_WS()
 --------------------------
@@ -102,6 +109,54 @@ MySQL,数据库	数据库,RDS
 --------------------------
 11. FIELD()
 --------------------------
+SELECT FIELD('Bb', 'Aa', 'Bb', 'Cc', 'Dd', 'Ff'), FIELD('Gg', 'Aa', 'Bb', 'Cc', 'Dd', 'Ff') FROM t_innodb;
+FIELD('Bb', 'Aa', 'Bb', 'Cc', 'Dd', 'Ff')	FIELD('Gg', 'Aa', 'Bb', 'Cc', 'Dd', 'Ff')
+2	0
+2	0
+SELECT FIELD('Bb', 'Aa', 'Bb', 'Cc', 'Dd', 'Ff'), FIELD('Gg', 'Aa', 'Bb', 'Cc', 'Dd', 'Ff') FROM t_duckdb;
+FIELD('Bb', 'Aa', 'Bb', 'Cc', 'Dd', 'Ff')	FIELD('Gg', 'Aa', 'Bb', 'Cc', 'Dd', 'Ff')
+2	0
+2	0
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+col1 VARCHAR(20) COLLATE utf8mb4_0900_ai_ci,
+col2 VARCHAR(20) COLLATE utf8mb4_0900_as_cs,
+col3 INT,
+col4 DECIMAL(20, 10),
+col5 DOUBLE
+) ENGINE = DuckDB;
+INSERT INTO t1 VALUES (1, '1.23A', '1.23a', 1, 1.23, 1.23), (2, '2.34A', '2.34a', 3, 3.45, 4.56);
+SET duckdb_sql_normalization = ON;
+SELECT FIELD(col1, col2) FROM t1;
+FIELD(col1, col2)
+1
+1
+SELECT FIELD(col2, col1) FROM t1;
+FIELD(col2, col1)
+0
+0
+SELECT FIELD(col3, col4) FROM t1;
+FIELD(col3, col4)
+0
+0
+SELECT FIELD(col3, col3) FROM t1;
+FIELD(col3, col3)
+1
+1
+SELECT FIELD(col1, col5) FROM t1;
+FIELD(col1, col5)
+1
+0
+SELECT FIELD(col3, col5) FROM t1;
+FIELD(col3, col5)
+0
+0
+SELECT FIELD(col4, col5) FROM t1;
+FIELD(col4, col5)
+1
+0
+SET duckdb_sql_normalization = OFF;
+DROP TABLE t1;
 --------------------------
 12. FIND_IN_SET()
 --------------------------
@@ -109,10 +164,48 @@ SELECT FIND_IN_SET('MySQL', 'MySQL,RDS'), FIND_IN_SET('数据库', 'MySQL,RDS'),
 FIND_IN_SET('MySQL', 'MySQL,RDS')	FIND_IN_SET('数据库', 'MySQL,RDS')	FIND_IN_SET(col1, 'MySQL,RDS')
 1	0	1
 1	0	0
-SELECT FIND_IN_SET('MySQL', 'MySQL,RDS'), FIND_IN_SET('数据库', 'MySQL,RDS'), FIND_IN_SET(col1, 'MySQL,RDS') FROM t_innodb;
+SELECT FIND_IN_SET('MySQL', 'MySQL,RDS'), FIND_IN_SET('数据库', 'MySQL,RDS'), FIND_IN_SET(col1, 'MySQL,RDS') FROM t_duckdb;
 FIND_IN_SET('MySQL', 'MySQL,RDS')	FIND_IN_SET('数据库', 'MySQL,RDS')	FIND_IN_SET(col1, 'MySQL,RDS')
 1	0	1
 1	0	0
+SELECT FIND_IN_SET('MySQL', 'MySQL,MySQL'), FIND_IN_SET('数据库', 'MySQL,MySQL'), FIND_IN_SET(col1, 'MySQL,MySQL') FROM t_innodb;
+FIND_IN_SET('MySQL', 'MySQL,MySQL')	FIND_IN_SET('数据库', 'MySQL,MySQL')	FIND_IN_SET(col1, 'MySQL,MySQL')
+1	0	1
+1	0	0
+SELECT FIND_IN_SET('MySQL', 'MySQL,MySQL'), FIND_IN_SET('数据库', 'MySQL,MySQL'), FIND_IN_SET(col1, 'MySQL,MySQL') FROM t_duckdb;
+FIND_IN_SET('MySQL', 'MySQL,MySQL')	FIND_IN_SET('数据库', 'MySQL,MySQL')	FIND_IN_SET(col1, 'MySQL,MySQL')
+1	0	1
+1	0	0
+SET collation_connection = 'utf8mb4_0900_ai_ci';
+SELECT FIND_IN_SET('mysql', 'MySQL,mysql'), FIND_IN_SET('', ''), FIND_IN_SET('mysql', '') FROM t_duckdb;
+FIND_IN_SET('mysql', 'MySQL,mysql')	FIND_IN_SET('', '')	FIND_IN_SET('mysql', '')
+1	0	0
+1	0	0
+SET collation_connection = 'utf8mb4_0900_as_cs';
+SELECT FIND_IN_SET('mysql', 'MySQL,mysql'), FIND_IN_SET('', ''), FIND_IN_SET('mysql', '') FROM t_duckdb;
+FIND_IN_SET('mysql', 'MySQL,mysql')	FIND_IN_SET('', '')	FIND_IN_SET('mysql', '')
+2	0	0
+2	0	0
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+col1 VARCHAR(20) COLLATE utf8mb4_0900_ai_ci,
+col2 VARCHAR(20) COLLATE utf8mb4_0900_as_cs
+) ENGINE = DuckDB;
+INSERT INTO t1 VALUES (1, 'MySQL', 'MySQL,mysql'), (2, 'MySQL,mysql', 'MySQL');
+SELECT FIND_IN_SET(col1, col2) FROM t1;
+ERROR HY000: Illegal mix of collations (utf8mb4_0900_ai_ci,IMPLICIT) and (utf8mb4_0900_as_cs,IMPLICIT) for operation 'find_in_set'
+SET collation_connection = 'utf8mb4_0900_ai_ci';
+SELECT FIND_IN_SET('mysql', col1), FIND_IN_SET('mysql', col2) FROM t1;
+FIND_IN_SET('mysql', col1)	FIND_IN_SET('mysql', col2)
+1	2
+1	0
+SET collation_connection = 'utf8mb4_0900_as_cs';
+SELECT FIND_IN_SET('mysql', col1), FIND_IN_SET('mysql', col2) FROM t1;
+FIND_IN_SET('mysql', col1)	FIND_IN_SET('mysql', col2)
+1	2
+1	0
+SET collation_connection = DEFAULT;
+DROP TABLE t1;
 --------------------------
 13. FORMAT()
 --------------------------

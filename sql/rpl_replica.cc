@@ -5023,30 +5023,11 @@ static int exec_relay_log_event(THD *thd, Relay_log_info *rli,
         return 1;
     }
 
-    if (rli->get_duckdb_idempotent_cnt() < MTS_MAX_WORKERS &&
-        myduck::global_mode == myduck::enum_modes::DUCKDB_ON &&
-        ev->get_type_code() == binary_log::GTID_LOG_EVENT) {
+    if (myduck::global_mode == myduck::enum_modes::DUCKDB_ON &&
+        ev->get_type_code() == binary_log::GTID_LOG_EVENT &&
+        rli->get_global_duckdb_idempotent_flag()) {
       auto gtid_ev = (Gtid_log_event *)ev;
-
-      /* Check whether the Transaction has been executed */
-      global_sid_lock->rdlock();
-      Gtid gtid_copy{gtid_ev->get_sidno(false), gtid_ev->get_gno()};
-      gtid_state->lock_sidno(gtid_copy.sidno);
-      bool executed = gtid_state->is_executed(gtid_copy);
-      gtid_state->unlock_sidno(gtid_copy.sidno);
-      global_sid_lock->unlock();
-
-      if (!executed) {
-        /* The first MTS_MAX_WORKERS transactions should be replayed
-           idempotently */
-        gtid_ev->set_duckdb_idempotent_flag(true);
-        rli->set_duckdb_idempotent_cnt(rli->get_duckdb_idempotent_cnt() + 1);
-
-        DBUG_EXECUTE("duckdb_idempotent_2trx", {
-          if (rli->get_duckdb_idempotent_cnt() == 2)
-            rli->set_duckdb_idempotent_cnt(MTS_MAX_WORKERS);
-        });
-      }
+      gtid_ev->set_gtid_duckdb_idempotent_flag(true);
     }
 
     DBUG_EXECUTE_IF("wait_on_exec_relay_log_event", {
@@ -7026,6 +7007,7 @@ extern "C" void *handle_slave_sql(void *arg) {
   Rpl_applier_reader applier_reader(rli);
   Relay_log_info::enum_priv_checks_status priv_check_status =
       Relay_log_info::enum_priv_checks_status::SUCCESS;
+  rli->set_global_duckdb_idempotent_flag(true);
 
   // needs to call my_thread_init(), otherwise we get a coredump in DBUG_ stuff
   my_thread_init();
@@ -7319,10 +7301,6 @@ extern "C" void *handle_slave_sql(void *arg) {
       mysql_mutex_lock(&rli->data_lock);
       ev = applier_reader.read_next_event();
       mysql_mutex_unlock(&rli->data_lock);
-
-      if (ev && is_gtid_event(ev)) {
-        rli->decide_parallel_for_duckdb();
-      }
 
       // set additional context as needed by the scheduler before execution
       // takes place
@@ -11241,6 +11219,11 @@ static int check_slave_sql_config_conflict(const Relay_log_info *rli) {
                "when replica_parallel_type is DATABASE");
       return ER_DONT_SUPPORT_REPLICA_PRESERVE_COMMIT_ORDER;
     }
+  }
+
+  if (duckdb_multi_trx_in_batch && replica_parallel_workers > 0) {
+    my_error(ER_DUCKDB_DONT_SUPPORT_BATCH_MULTI_TRX, MYF(0));
+    return ER_DUCKDB_DONT_SUPPORT_BATCH_MULTI_TRX;
   }
 
   if (rli) {

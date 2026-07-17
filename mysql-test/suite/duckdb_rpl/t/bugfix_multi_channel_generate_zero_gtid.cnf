@@ -6,12 +6,14 @@ log-bin
 binlog-format = row
 gtid-mode=on
 enforce-gtid-consistency
+duckdb_mode=ON
 
 [mysqld.2]
 log-bin
 binlog-format = row
 gtid-mode=on
 enforce-gtid-consistency
+duckdb_mode=ON
 
 [mysqld.3]
 log-bin
@@ -19,9 +21,10 @@ binlog-format = mixed
 gtid-mode=on
 enforce-gtid-consistency
 log-slave-updates
+slave_parallel_workers=0
 duckdb_multi_trx_in_batch=on
+duckdb_mode=ON
 force_innodb_to_duckdb = on
-duckdb_mode = ON
 duckdb_log_options = 'DUCKDB_MULTI_TRX_BATCH_COMMIT,DUCKDB_MULTI_TRX_BATCH_DETAIL,DUCKDB_QUERY,DUCKDB_QUERY_RESULT'
 
 [mysqld.4]
@@ -30,9 +33,10 @@ binlog-format = mixed
 gtid-mode=on
 enforce-gtid-consistency
 log-slave-updates
+slave_parallel_workers=0
 duckdb_multi_trx_in_batch=on
+duckdb_mode=ON
 force_innodb_to_duckdb = on
-duckdb_mode = ON
 duckdb_log_options = 'DUCKDB_MULTI_TRX_BATCH_COMMIT,DUCKDB_MULTI_TRX_BATCH_DETAIL,DUCKDB_QUERY,DUCKDB_QUERY_RESULT'
 
 [ENV]

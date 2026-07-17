@@ -7234,8 +7234,12 @@ extern int stored_field_cmp_to_item(THD *thd, Field *field, Item *item);
 extern bool is_null_on_empty_table(THD *thd, Item_field *i);
 
 extern const String my_null_string;
+/**
+ For cases where single quotes appear in a string, DuckDB is incompatible with
+ '\'', so it must be rewritten as ''''.
+ */
 void convert_and_print(const String *from_str, String *to_str,
-                       const CHARSET_INFO *to_cs);
+                       const CHARSET_INFO *to_cs, bool duckdb_rewrite = false);
 
 std::string ItemToString(const Item *item);
 

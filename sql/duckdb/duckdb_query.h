@@ -52,15 +52,19 @@ struct result_template {
 
 std::unique_ptr<duckdb::QueryResult> duckdb_query(THD *thd,
                                                   const std::string &query,
-                                                  bool need_config = true);
+                                                  bool need_config = true,
+                                                  bool keep_schema = true);
 
 std::unique_ptr<duckdb::QueryResult> duckdb_query(
-    duckdb::ClientContext &context, const std::string &query);
+    duckdb::ClientContext &context, const std::string &query,
+    bool keep_schema = true);
 
 std::unique_ptr<duckdb::QueryResult> duckdb_query(
-    duckdb::Connection &connection, const std::string &query);
+    duckdb::Connection &connection, const std::string &query,
+    bool keep_schema = true);
 
-std::unique_ptr<duckdb::QueryResult> duckdb_query(const std::string &query);
+std::unique_ptr<duckdb::QueryResult> duckdb_query(const std::string &query,
+                                                  bool keep_schema = true);
 
 bool duckdb_query_and_send(THD *thd, const std::string &query, bool send_result,
                            bool push_error);

@@ -186,7 +186,7 @@ bool Sql_cmd_proc::check_parameter() {
   @retval       false         Success
 */
 bool Sql_cmd_proc::prepare(THD *thd) {
-  if (check_parameter() || check_access(thd))
+  if (check_access(thd) || check_parameter())
     return true;
   set_prepared();
   return false;

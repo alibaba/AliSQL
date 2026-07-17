@@ -142,6 +142,7 @@ class MYSQL_BIN_LOG : public TC_LOG {
 
  private:
   friend class Binlog_ext;
+  friend class Binlog_cache_free_flush;
   enum enum_log_state { LOG_OPENED, LOG_CLOSED, LOG_TO_BE_OPENED };
 
   /* LOCK_log is inited by init_pthread_objects() */
@@ -794,7 +795,8 @@ class MYSQL_BIN_LOG : public TC_LOG {
   bool assign_automatic_gtids_to_flush_group(THD *first_seen);
   bool write_transaction(THD *thd, binlog_cache_data *cache_data,
                          Binlog_event_writer *writer,
-                         bool parallelization_barrier);
+                         bool parallelization_barrier,
+                         ulonglong immediate_commit_ts_arg = 0);
 
   /**
      Write a dml into statement cache and then flush it into binlog. It writes

@@ -297,20 +297,66 @@ DROP TABLE t_duckdb, t_innodb;
 
 SET NAMES utf8mb4; 
 
+--echo # 3.4 define collation for table with latin1
+set names latin1;
+
+CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) COLLATE latin1_general_ci) engine=duckdb CHARSET=latin1 COLLATE=latin1_general_ci;
+CREATE TABLE t_innodb (id INT PRIMARY KEY, a varchar(32) COLLATE latin1_general_ci) engine=innodb CHARSET=latin1 COLLATE=latin1_general_ci;
+
+INSERT INTO t_duckdb VALUES (1, 'a');
+INSERT INTO t_innodb VALUES (1, 'a');
+
+SELECT a FROM t_duckdb where a = 'a'; SELECT a FROM t_innodb where a = 'a';
+SELECT a FROM t_duckdb where a = 'A'; SELECT a FROM t_innodb where a = 'A';
+
+CALL dbms_duckdb.query("DELETE FROM test.t_duckdb");
+DELETE FROM t_innodb;
+
+# ALTER TABLE
+ALTER TABLE t_duckdb ADD COLUMN b varchar(32) COLLATE latin1_general_ci,
+                     ADD COLUMN c varchar(32) COLLATE latin1_bin,
+                     ADD COLUMN d varchar(32) COLLATE latin1_general_cs;
+
+ALTER TABLE t_innodb ADD COLUMN b varchar(32) COLLATE latin1_general_ci,
+                     ADD COLUMN c varchar(32) COLLATE latin1_bin,
+                     ADD COLUMN d varchar(32) COLLATE latin1_general_cs;
+
+INSERT INTO t_duckdb VALUES (1, 'a', 'a', 'a', 'a');
+INSERT INTO t_innodb VALUES (1, 'a', 'a', 'a', 'a');
+
+SELECT a FROM t_duckdb where a = 'a'; SELECT a FROM t_innodb where a = 'a';
+SELECT a FROM t_duckdb where a = 'A'; SELECT a FROM t_innodb where a = 'A';
+SELECT a FROM t_duckdb where a = 'á'; SELECT a FROM t_innodb where a = 'á';
+
+SELECT b FROM t_duckdb where b = 'a'; SELECT b FROM t_innodb where b = 'a';
+SELECT b FROM t_duckdb where b = 'A'; SELECT b FROM t_innodb where b = 'A';
+SELECT b FROM t_duckdb where b = 'á'; SELECT b FROM t_innodb where b = 'á';
+
+SELECT c FROM t_duckdb where c = 'a'; SELECT c FROM t_innodb where c = 'a';
+SELECT c FROM t_duckdb where c = 'A'; SELECT c FROM t_innodb where c = 'A';
+SELECT c FROM t_duckdb where c = 'á'; SELECT c FROM t_innodb where c = 'á';
+
+SELECT d FROM t_duckdb where d = 'a'; SELECT d FROM t_innodb where d = 'a';
+SELECT d FROM t_duckdb where d = 'A'; SELECT d FROM t_innodb where d = 'A';
+SELECT d FROM t_duckdb where d = 'á'; SELECT d FROM t_innodb where d = 'á';
+
+DROP TABLE t_duckdb, t_innodb;
+
+SET NAMES utf8mb4; 
 
 --echo #
---echo # Test 4. NON-UTF8 CHARSET
+--echo # Test 4. Not-Supported CHARSET
 --echo #
 --echo # 4.1 CREATE TABLE
 --error ER_DUCKDB_TABLE_STRUCT_INVALID
-CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32)) engine=duckdb CHARSET=latin1;
+CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32)) engine=duckdb CHARSET=gbk;
 --error ER_DUCKDB_TABLE_STRUCT_INVALID
-CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) CHARSET latin1) engine=duckdb CHARSET=utf8mb4;
+CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) CHARSET gbk) engine=duckdb CHARSET=utf8mb4;
 --error ER_DUCKDB_TABLE_STRUCT_INVALID
-CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) COLLATE latin1_general_ci) engine=duckdb CHARSET=utf8mb4;
+CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) COLLATE gbk_chinese_ci) engine=duckdb CHARSET=utf8mb4;
 
 --echo # 4.2 ALTER TABLE
-CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) CHARSET utf8mb3, b varchar(32) CHARSET utf8mb4) engine=duckdb CHARSET=latin1;
+CREATE TABLE t_duckdb (id INT PRIMARY KEY, a varchar(32) CHARSET utf8mb3, b varchar(32) CHARSET utf8mb4) engine=duckdb CHARSET=gbk;
 
 --error ER_DUCKDB_TABLE_STRUCT_INVALID
 ALTER TABLE t_duckdb ADD COLUMN c varchar(32);
@@ -319,7 +365,7 @@ ALTER TABLE t_duckdb ADD COLUMN c varchar(32) CHARSET utf8mb3, ADD COLUMN d varc
 --error ER_DUCKDB_TABLE_STRUCT_INVALID
 ALTER TABLE t_duckdb MODIFY COLUMN a varchar(32);
 --error ER_DUCKDB_TABLE_STRUCT_INVALID
-ALTER TABLE t_duckdb MODIFY COLUMN b varchar(32) CHARSET latin1;
+ALTER TABLE t_duckdb MODIFY COLUMN b varchar(32) CHARSET gbk;
 
 
 --echo #

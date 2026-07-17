@@ -89,7 +89,7 @@ PartitionGlobalSinkState::PartitionGlobalSinkState(ClientContext &context,
 	GenerateOrderings(partitions, orders, partition_bys, order_bys, partition_stats);
 
 	memory_per_thread = PhysicalOperator::GetMaxThreadMemory(context);
-	external = ClientConfig::GetConfig(context).GetSetting<DebugForceExternalSetting>(context);
+	external = ClientConfig::GetConfig(context).force_external;
 
 	const auto thread_pages = PreviousPowerOfTwo(memory_per_thread / (4 * buffer_manager.GetBlockAllocSize()));
 	while (max_bits < 10 && (thread_pages >> max_bits) > 1) {
@@ -100,13 +100,13 @@ PartitionGlobalSinkState::PartitionGlobalSinkState(ClientContext &context,
 	if (!orders.empty()) {
 		if (partitions.empty()) {
 			//	Sort early into a dedicated hash group if we only sort.
-			grouping_types_ptr->Initialize(payload_types);
+			grouping_types_ptr->Initialize(payload_types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
 			auto new_group = make_uniq<PartitionGlobalHashGroup>(context, partitions, orders, payload_types, external);
 			hash_groups.emplace_back(std::move(new_group));
 		} else {
 			auto types = payload_types;
 			types.push_back(LogicalType::HASH);
-			grouping_types_ptr->Initialize(types);
+			grouping_types_ptr->Initialize(types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
 			ResizeGroupingData(estimated_cardinality);
 		}
 	}
@@ -402,7 +402,7 @@ PartitionGlobalMergeState::PartitionGlobalMergeState(PartitionGlobalSinkState &s
                                                      hash_t hash_bin)
     : sink(sink), group_data(std::move(group_data_p)), group_idx(sink.hash_groups.size()),
       memory_per_thread(sink.memory_per_thread),
-      num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(sink.context).NumberOfThreads())),
+      num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(sink.context).NumberOfThreads(sink.context))),
       stage(PartitionSortStage::INIT), total_tasks(0), tasks_assigned(0), tasks_completed(0) {
 
 	auto new_group = make_uniq<PartitionGlobalHashGroup>(sink.context, sink.partitions, sink.orders, sink.payload_types,
@@ -423,7 +423,7 @@ PartitionGlobalMergeState::PartitionGlobalMergeState(PartitionGlobalSinkState &s
 
 PartitionGlobalMergeState::PartitionGlobalMergeState(PartitionGlobalSinkState &sink)
     : sink(sink), group_idx(0), memory_per_thread(sink.memory_per_thread),
-      num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(sink.context).NumberOfThreads())),
+      num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(sink.context).NumberOfThreads(sink.context))),
       stage(PartitionSortStage::INIT), total_tasks(0), tasks_assigned(0), tasks_completed(0) {
 
 	const hash_t hash_bin = 0;
@@ -659,7 +659,7 @@ void PartitionMergeEvent::Schedule() {
 
 	// Schedule tasks equal to the number of threads, which will each merge multiple partitions
 	auto &ts = TaskScheduler::GetScheduler(context);
-	auto num_threads = NumericCast<idx_t>(ts.NumberOfThreads());
+	auto num_threads = NumericCast<idx_t>(ts.NumberOfThreads(context));
 
 	vector<shared_ptr<Task>> merge_tasks;
 	for (idx_t tnum = 0; tnum < num_threads; tnum++) {

@@ -23817,6 +23817,26 @@ static void test_bug36686351() {
   mysql_stmt_close(stmt);
 }
 
+static void test_duckdb_pstmt_cursor() {
+  MYSQL_STMT *stmt;
+  int rc;
+  DBUG_TRACE;
+  myheader("test_duckdb_pstmt_cursor");
+
+  rc = mysql_query(mysql, "drop table if exists t_duckdb");
+  myquery(rc);
+  rc = mysql_query(mysql, "create table t_duckdb (id int primary key) engine=duckdb");
+  myquery(rc);
+
+  const char *query = "select id from t_duckdb";
+  stmt = open_cursor(query);
+  rc = mysql_stmt_execute(stmt);
+
+  rc = mysql_query(mysql, "drop table t_duckdb");
+  mysql_stmt_close(stmt);
+}
+
+
 static struct my_tests_st my_tests[] = {
     {"test_bug5194", test_bug5194},
     {"disable_query_logs", disable_query_logs},
@@ -24138,6 +24158,7 @@ static struct my_tests_st my_tests[] = {
     {"test_bug34951115", test_bug34951115},
     {"test_bug36891894", test_bug36891894},
     {"test_bug36686351", test_bug36686351},
+    {"test_duckdb_pstmt_cursor", test_duckdb_pstmt_cursor},
     {nullptr, nullptr}};
 
 static struct my_tests_st *get_my_tests() { return my_tests; }

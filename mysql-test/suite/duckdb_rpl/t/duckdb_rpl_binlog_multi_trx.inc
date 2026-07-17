@@ -7,6 +7,7 @@ STOP REPLICA;
 --echo [connection server_3]
 STOP REPLICA;
 --let $server3_binlog_postion=query_get_value("SHOW MASTER STATUS", Position, 1)
+--let $server3_binlog_file=query_get_value("SHOW MASTER STATUS", File, 1)
 
 --connection server_1
 --echo [connection server_1]
@@ -51,4 +52,5 @@ START REPLICA;
 --connection server_3
 --echo [connection server_3]
 --let $binlog_start=$server3_binlog_postion
+--let $binlog_file=$server3_binlog_file
 --source include/show_binlog_events.inc

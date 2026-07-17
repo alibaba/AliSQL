@@ -34,13 +34,13 @@ static inline void AssertInSupportedRange(idx_t input_size, int64_t offset, int6
 	}
 }
 
-string_t SubstringEmptyString(Vector &result) {
+static string_t SubstringEmptyString(Vector &result) {
 	auto result_string = StringVector::EmptyString(result, 0);
 	result_string.Finalize();
 	return result_string;
 }
 
-string_t SubstringSlice(Vector &result, const char *input_data, int64_t offset, int64_t length) {
+static string_t SubstringSlice(Vector &result, const char *input_data, int64_t offset, int64_t length) {
 	auto result_string = StringVector::EmptyString(result, UnsafeNumericCast<idx_t>(length));
 	auto result_data = result_string.GetDataWriteable();
 	memcpy(result_data, input_data + offset, UnsafeNumericCast<size_t>(length));
@@ -49,7 +49,7 @@ string_t SubstringSlice(Vector &result, const char *input_data, int64_t offset, 
 }
 
 // compute start and end characters from the given input size and offset/length
-bool SubstringStartEnd(int64_t input_size, int64_t offset, int64_t length, int64_t &start, int64_t &end) {
+static bool SubstringStartEnd(int64_t input_size, int64_t offset, int64_t length, int64_t &start, int64_t &end) {
 	if (length == 0) {
 		return false;
 	}
@@ -273,6 +273,7 @@ string_t SubstringBlob(Vector &result, string_t input, int64_t offset, int64_t l
 	}
 	return SubstringSlice(result, input_data, start, UnsafeNumericCast<int64_t>(end - start));
 }
+namespace {
 
 struct SubstringUnicodeOp {
 	static string_t Substring(Vector &result, string_t input, int64_t offset, int64_t length) {
@@ -293,7 +294,7 @@ struct SubstringBlobOp {
 };
 
 template <class OP>
-static void SubstringFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void SubstringFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input_vector = args.data[0];
 	auto &offset_vector = args.data[1];
 	if (args.ColumnCount() == 3) {
@@ -312,7 +313,7 @@ static void SubstringFunction(DataChunk &args, ExpressionState &state, Vector &r
 	}
 }
 
-static void SubstringFunctionASCII(DataChunk &args, ExpressionState &state, Vector &result) {
+void SubstringFunctionASCII(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input_vector = args.data[0];
 	auto &offset_vector = args.data[1];
 	if (args.ColumnCount() == 3) {
@@ -331,7 +332,7 @@ static void SubstringFunctionASCII(DataChunk &args, ExpressionState &state, Vect
 	}
 }
 
-static unique_ptr<BaseStatistics> SubstringPropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
+unique_ptr<BaseStatistics> SubstringPropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
 	// can only propagate stats if the children have stats
@@ -341,6 +342,8 @@ static unique_ptr<BaseStatistics> SubstringPropagateStats(ClientContext &context
 	}
 	return nullptr;
 }
+
+} // namespace
 
 ScalarFunctionSet SubstringFun::GetFunctions() {
 	ScalarFunctionSet substr("substring");

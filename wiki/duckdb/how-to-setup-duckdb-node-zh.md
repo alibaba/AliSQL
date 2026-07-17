@@ -9,15 +9,16 @@ AliSQL 集成 DuckDB 作为分析型存储引擎。典型用法是：
 - **系统表与元数据**：仍由 **InnoDB** 保存（例如 `mysql.*`、数据字典等）
 
 你可以：
-1) 从零初始化一个 **DuckDB 为默认引擎** 的新实例
-2) 将现有 **InnoDB 实例一键转换** 为 DuckDB
-3) 构建 **DuckDB 从节点（HTAP/读写分离）**，从主库复制数据用于分析
+
+1. 从零初始化一个将用户 InnoDB 表 DDL 自动转为 DuckDB 的新实例。
+2. 在启动阶段将现有 **InnoDB 实例转换** 为 DuckDB。
+3. 构建 **DuckDB 从节点（HTAP/读写分离）**，从主库复制数据用于分析。
 
 ---
 
 ## 1. 从零开始构建 DuckDB 实例（推荐新建实例）
 
-适用于：初始化一个全新实例，后续新建表默认落入 DuckDB.
+适用于：初始化一个全新实例，后续用户表 DDL 自动转为 DuckDB。
 
 ### 1.1 安装 AliSQL 8.0.44
 
@@ -155,9 +156,11 @@ CREATE TABLE t (
   name VARCHAR(255)
 ) ENGINE = DuckDB;
 
--- 引擎转换
+-- 先临时关闭强制转换，确保 DuckDB 到 InnoDB 的转换真实发生。
+SET GLOBAL force_innodb_to_duckdb = OFF;
 ALTER TABLE t ENGINE = InnoDB;
 ALTER TABLE t ENGINE = DuckDB;
+SET GLOBAL force_innodb_to_duckdb = ON;
 
 -- DML
 INSERT INTO t VALUES (1, 'John');
@@ -172,16 +175,16 @@ ALTER TABLE t RENAME TO t_new;
 
 ---
 
-## 2. 从现有 InnoDB 实例一键转换为 DuckDB
+## 2. 在启动阶段将现有 InnoDB 实例转换为 DuckDB
 
 适用于：希望将历史数据整体迁移到 DuckDB 以提升分析性能。
 
 ### 步骤
 
-1) **停止现有实例**
+1. **停止现有实例**
 确保 MySQL 实例已 clean shutdown。
 
-1) **在 `my.cnf` 增加参数**
+2. **在 `my.cnf` 增加参数**
 ```ini
 [mysqld]
 duckdb_mode=ON
@@ -194,12 +197,12 @@ duckdb_temp_directory=/path/to/duckdb_temp_dir
 # Convert all InnoDB tables at startup
 duckdb_convert_all_at_startup=ON
 duckdb_convert_all_at_startup_threads=32
-duckdb_convert_all_at_startup_ignore_error=ON
+duckdb_convert_all_at_startup_ignore_error=OFF
 ```
 
-3) **启动实例**
+3. **启动实例**
 
-4) **验证转换状态与结果**
+4. **验证转换状态与结果**
 ```sql
 -- 检查转换阶段
 SHOW GLOBAL STATUS LIKE 'DuckDB_convert_stage_at_startup';
@@ -213,10 +216,11 @@ WHERE engine = 'DuckDB';
 ### 注意事项
 
 1. 启动自动转换会大量读写数据并占用 CPU/IO；建议通过 error log 观察进度与报错。
-2. 转换过程中可能需要额外磁盘空间（建议预留 ≥ 原始数据大小）。
-3. 转换前务必备份（推荐使用备份集拉起 DuckDB 节点）。
-4. MySQL 5.7 及以下请先升级到 8.0。
-5. 非 8.0.44 的实例启动后可能触发升级流程，建议先确保 clean shutdown。
+2. 首次迁移应保持 `duckdb_convert_all_at_startup_ignore_error=OFF`，让单表失败终止转换。如果确需开启，实例可能在仅转换部分用户表后启动，投入使用前必须逐表核对。
+3. 转换过程中可能需要额外磁盘空间（建议预留 ≥ 原始数据大小）。
+4. 转换前务必备份（推荐使用备份集拉起 DuckDB 节点）。
+5. MySQL 5.7 及以下请先升级到 8.0。
+6. 非 8.0.44 的实例启动后可能触发升级流程，建议先确保 clean shutdown。
 
 ---
 
@@ -226,17 +230,26 @@ WHERE engine = 'DuckDB';
 
 ### 步骤
 
-1) **准备主库**
+1. **准备主库**
+
 - 开启 binlog
 - `binlog_format=ROW`
-- 开启 GTID
+- 配置非零且唯一的 `server_id`（例如 `server_id=1`）
+- 使用 `gtid_mode=ON` 和 `enforce_gtid_consistency=ON` 开启 GTID
 
-1) **配置从节点 `my.cnf`**
+2. **配置从节点 `my.cnf`**
+
 ```ini
 [mysqld]
+server_id=2
+gtid_mode=ON
+enforce_gtid_consistency=ON
 duckdb_mode=ON
 duckdb_require_primary_key=ON
 force_innodb_to_duckdb=ON
+
+# Multi-Trx Batch 与并行复制 Worker 不兼容。
+replica_parallel_workers=0
 
 duckdb_dml_in_batch=ON
 duckdb_update_modified_column_only=ON
@@ -245,10 +258,15 @@ duckdb_multi_trx_timeout=5000
 duckdb_multi_trx_max_batch_length=268435456
 ```
 
-3) **初始化从节点实例**
-参考第 2 节（可选启用启动转换）或按第 1 节新建实例。
+从节点的 `server_id` 必须与主库及复制拓扑中的其他服务不同。
 
-4) **建立主从复制**
+3. **准备存量数据与 GTID 状态**
+
+主库已有数据时，必须先基于同一时点的一致性物理备份或逻辑备份准备从节点，恢复后的数据与 `gtid_executed`/`gtid_purged` 必须对应同一个主库快照。使用物理备份时，先恢复 InnoDB 数据，再按第 2 节执行启动转换；使用逻辑备份时，将备份导入 DuckDB 节点，并恢复备份工具记录的 GTID 元数据。继续操作前应核对行数与 GTID 状态。
+
+只有主库为空，或者仍保留从起始位置开始的全部所需 Binlog 时，才能直接使用第 1 节的空实例。否则 Auto Position 会因 `ER_SOURCE_HAS_PURGED_REQUIRED_GTIDS` 停止，应重新使用备份构建从节点。
+
+4. **建立主从复制**
 ```sql
 CHANGE MASTER TO
   MASTER_HOST='your-master-ip',
@@ -256,8 +274,14 @@ CHANGE MASTER TO
   MASTER_PASSWORD='your-password',
   MASTER_AUTO_POSITION=1;
 
-START SLAVE;
+START REPLICA;
 ```
 
-5) **完成**
+确认 `SHOW REPLICA STATUS\G` 中 I/O 和 SQL 线程均无报错后，再将查询流量路由到该节点。
+
+5. **完成**
 复制建立后，将分析/报表查询路由到 DuckDB 从节点。
+
+## RDS 托管方案
+
+阿里云 RDS MySQL 提供托管的 DuckDB 分析主实例和分析只读实例产品，其开通流程、产品拓扑、数据同步和适用条件属于 RDS 专属能力。使用托管方案时，请以官方[中文文档](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/duckdb-analysis-instance)或[英文文档](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/duckdb-analysis-instance)为准，不应沿用本文的自建初始化流程。

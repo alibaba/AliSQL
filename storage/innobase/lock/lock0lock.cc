@@ -1326,7 +1326,9 @@ lock_t *RecLock::create(trx_t *trx, const lock_prdt_t *prdt) {
       strstr(m_index->table->name.m_name, "mysql/innodb_index_stats") ==
           nullptr &&
       strstr(m_index->table->name.m_name, "mysql/table_stats") == nullptr &&
-      strstr(m_index->table->name.m_name, "mysql/index_stats") == nullptr) {
+      strstr(m_index->table->name.m_name, "mysql/index_stats") == nullptr &&
+      strstr(m_index->table->name.m_name,
+             "mysql/innodb_flashback_snapshot") == nullptr) {
     ut_ad(lock_rec_get_rec_not_gap(lock));
   }
 #endif /* UNIV_DEBUG */
@@ -6252,7 +6254,8 @@ bool Deadlock_notifier::is_allowed_to_be_on_cycle(const lock_t *lock) {
   return (!strcmp(name, "mysql/innodb_table_stats") ||
           !strcmp(name, "mysql/innodb_index_stats") ||
           !strcmp(name, "mysql/table_stats") ||
-          !strcmp(name, "mysql/index_stats"));
+          !strcmp(name, "mysql/index_stats") ||
+          !strcmp(name, "mysql/innodb_flashback_snapshot"));
 }
 #endif /* UNIV_DEBUG */
 

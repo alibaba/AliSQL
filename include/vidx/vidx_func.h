@@ -125,7 +125,8 @@ class Item_func_vector_dim : public Item_int_func {
 
 static inline bool check_item_func_vec_distance(const Item *item) {
   return item->type() == Item::FUNC_ITEM &&
-         ((Item_func *)item)->functype() == Item_func::VECTOR_DISTANCE_FUNC;
+         down_cast<const Item_func *>(item)->functype() ==
+             Item_func::VECTOR_DISTANCE_FUNC;
 }
 }  // namespace vidx
 

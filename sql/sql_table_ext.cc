@@ -29,6 +29,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "scope_guard.h"
 #include "sql/create_field.h"
 #include "sql/derror.h"
+#include "sql/duckdb/duckdb_query.h"
+#include "sql/handler.h"
+#include "sql/mysqld.h"
+#include "sql/partition_info.h"
 #include "sql/sql_base.h"
 #include "sql/sql_thd_internal_api.h"
 #include "sql/transaction.h"
@@ -41,6 +45,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 bool duckdb_require_primary_key = true;
 bool force_innodb_to_duckdb = false;
+bool ignore_index_hint_error = false;
 
 LEX_CSTRING FORCE_CONVERT_SYS_SCHEMA_NAME = {STRING_WITH_LEN("sys")};
 
@@ -340,7 +345,11 @@ static void free_fake_table(TABLE *table) {
   }
 
   free_io_cache(table);
-  if (table->file) destroy(table->file);
+  if (table->file) {
+    destroy(table->file);
+    table->file = nullptr;
+  }
+  closefrm(table, false);
   my_free(const_cast<char *>(table->alias));
   destroy(table);
   my_free(table);
@@ -360,7 +369,8 @@ static void copy_data_thread(THD *ori_thd [[maybe_unused]],
 
   my_thread_init();
   assert(current_thd == nullptr);
-  THD *thd = create_internal_thd();
+  THD *thd = create_thd(false, false, false, PSI_NOT_INSTRUMENTED, 0);
+  thd->security_context()->skip_grants();
   assert(current_thd == thd);
   TABLE *from = nullptr;
   TABLE *to = nullptr;
@@ -368,12 +378,23 @@ static void copy_data_thread(THD *ori_thd [[maybe_unused]],
   auto restore_thd = create_scope_guard([&]() {
     free_fake_table(from);
     free_fake_table(to);
-    destroy_internal_thd(thd);
+    thd->free_items();
+    destroy_thd(thd);
     assert(current_thd == nullptr);
     my_thread_end();
   });
 
   {
+    /*
+      For partition table, query_block may be accessed during open_table,
+      so we bind original lex to the temporary thd.
+    */
+    auto saved_lex = thd->lex;
+    thd->lex = ori_thd->lex;
+    auto reset_current_thd = create_scope_guard([&]() {
+      thd->lex = saved_lex;
+    });
+
     from = (TABLE *)my_malloc(key_memory_TABLE, sizeof(TABLE), MYF(MY_WME));
     if (from == nullptr ||
         open_table_from_share(thd, ori_from->s, "", 0, (uint)READ_ALL, 0, from,
@@ -543,6 +564,11 @@ static void copy_data_thread(THD *ori_thd [[maybe_unused]],
 
   rec_buf_t rec_buf(nullptr, 0);
   while (record_buffers->pop(rec_buf)) {
+    DBUG_EXECUTE_IF("duckdb_convert_sleep_during_parallel_alter", {
+      fprintf(stderr, "duckdb_convert_sleep_during_parallel_alter\n");
+      my_sleep(6000000);
+    });
+
     for (size_t i = 0; i < rec_buf.n_rows; i++) {
       memcpy(from->record[0], (uchar *)(rec_buf.buf) + i * from->s->reclength,
              from->s->reclength);
@@ -665,14 +691,16 @@ static void copy_data_thread(THD *ori_thd [[maybe_unused]],
   if (to->file->ha_external_lock(thd, F_UNLCK)) error = 1;
   if (error < 0 && to->file->ha_extra(HA_EXTRA_PREPARE_FOR_RENAME)) error = 1;
   thd->check_for_truncated_fields = CHECK_FIELD_IGNORE;
-  error = error < 0 ? -1 : 0;
+  error = error > 0 ? -1 : 0;
 
   if (error == -1) {
     trans_rollback_stmt(thd);
     trans_rollback(thd);
   } else {
-    trans_commit_stmt(thd);
-    trans_commit(thd);
+    if (trans_commit_stmt(thd) || trans_commit(thd) ||
+        DBUG_EVALUATE_IF("duckdb_parallel_copy_ddl_failed", true, false)) {
+      error = -1;
+    }
   }
 }
 
@@ -746,6 +774,9 @@ int parallel_copy_data_between_tables(
     current_rows += current_rows_array[i];
     if (errs[i] != 0) {
       error = errs[i];
+      if (!thd->get_stmt_da()->is_set()) {
+        my_error(ER_DUCKDB_CLIENT, MYF(0), "parallel copy ddl failed");
+      }
     }
   }
   thd->get_stmt_da()->set_current_row_for_condition(current_rows);
@@ -768,4 +799,273 @@ int parallel_copy_data_between_tables(
   }
 
   return error;
+}
+
+/**
+  Check if key is a unique key without nullable part.
+*/
+bool is_not_nullable_uk(Key_spec *key, Alter_info *alter_info) {
+  if (key->type != KEYTYPE_UNIQUE) {
+    return false;
+  }
+
+  for (uint i = 0; i < key->columns.size(); i++) {
+    const Key_part_spec *col = key->columns[i];
+    if (col->get_field_name() == nullptr) {
+      return false;
+    }
+
+    List_iterator<Create_field> it(alter_info->create_list);
+    Create_field *sql_field = nullptr;
+    while ((sql_field = it++) &&
+           my_strcasecmp(system_charset_info, col->get_field_name(),
+                         sql_field->field_name))
+      ;
+    if (sql_field != nullptr && sql_field->is_nullable) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+  Copy data between DuckDB tables using "INSERT ... SELECT ..."
+
+  @param[in]  thd          Thread handle.
+  @param[in]  psi          Progress indicator.
+  @param[in]  from         Table to copy from.
+  @param[in]  to           Table to copy to.
+  @param[in]  copy         Field-pairs to copy.
+  @param[in]  copy_end     End of field-pairs to copy.
+  @param[out] found_count  Number of rows copied.
+
+  @return 0 if success, otherwise error code.
+*/
+int copy_data_use_select_insert(THD *thd, PSI_stage_progress *psi, TABLE *from,
+                                TABLE *to, Copy_field *copy,
+                                Copy_field *copy_end, ulong &found_count) {
+  std::string query;
+  std::string from_table =
+      "`" + std::string(from->s->db.str, from->s->db.length) + "`.`" +
+      std::string(from->s->table_name.str, from->s->table_name.length) + "`";
+  std::string to_table =
+      "`" + std::string(to->s->db.str, to->s->db.length) + "`.`" +
+      std::string(to->s->table_name.str, to->s->table_name.length) + "`";
+
+  std::string from_fields_str;
+  std::string to_fields_str;
+
+  Field *from_field = nullptr;
+  Field *to_field = nullptr;
+
+  /**
+    TODO: gen_field is not support now. And some default
+    value/expression may be lost.
+  */
+  for (Copy_field *copy_ptr = copy; copy_ptr != copy_end; copy_ptr++) {
+    from_field = copy_ptr->from_field();
+    to_field = copy_ptr->to_field();
+
+    from_fields_str += "`";
+    from_fields_str += from_field->field_name;
+    from_fields_str += "`";
+
+    to_fields_str += "`";
+    to_fields_str += to_field->field_name;
+    to_fields_str += "`";
+
+    if (copy_ptr + 1 != copy_end) {
+      from_fields_str += ", ";
+      to_fields_str += ", ";
+    }
+  }
+
+  query += "INSERT INTO " + to_table + " (" + to_fields_str + ") ";
+  query += "SELECT " + from_fields_str + " FROM " + from_table;
+
+  auto query_result = myduck::duckdb_query(thd, query, true);
+
+  if (query_result->HasError()) {
+    my_error(ER_DUCKDB_QUERY_ERROR, MYF(0), query_result->GetError().c_str());
+    return 1;
+  }
+
+  if (query_result->type == duckdb::QueryResultType::STREAM_RESULT) {
+    auto &stream_result = query_result->Cast<duckdb::StreamQueryResult>();
+    query_result = stream_result.Materialize();
+  }
+  assert(query_result->type == duckdb::QueryResultType::MATERIALIZED_RESULT);
+  auto &materialize_query_result =
+      query_result->Cast<duckdb::MaterializedQueryResult>();
+  auto &coll = materialize_query_result.Collection();
+  for (auto &row : coll.Rows()) {
+    assert(coll.ColumnCount() == 1);
+    auto value = row.GetValue(0);
+    found_count += value.GetValue<uint64_t>();
+  }
+  mysql_stage_set_work_completed(psi, found_count);
+  thd->get_stmt_da()->set_current_row_for_condition(found_count);
+
+  return 0;
+}
+
+int copy_data_between_duckdb_tables(THD *thd, PSI_stage_progress *psi,
+                                    TABLE *from, TABLE *to,
+                                    List<Create_field> &create,
+                                    ulonglong *copied, ulonglong *deleted,
+                                    Alter_table_ctx *alter_ctx
+                                    [[maybe_unused]]) {
+  int error;
+  Copy_field *copy, *copy_end;
+  Field **ptr;
+  /*
+    Fields which values need to be generated for each row, i.e. either
+    generated fields or newly added fields with generated default values.
+  */
+  Field **gen_fields, **gen_fields_end;
+  /* auto_increment_field_copied is not used. */
+  sql_mode_t save_sql_mode;
+
+  /* We do not use unit and select here. */
+
+  /*
+    If target storage engine supports atomic DDL we should not commit
+    and disable transaction to let SE do proper cleanup on error/crash.
+    Such engines should be smart enough to disable undo/redo logging
+    for target table automatically.
+    Temporary tables path doesn't employ atomic DDL support so disabling
+    transaction is OK. Moreover doing so allows to not interfere with
+    concurrent FLUSH TABLES WITH READ LOCK.
+  */
+  if ((!(to->file->ht->flags & HTON_SUPPORTS_ATOMIC_DDL) ||
+       from->s->tmp_table) &&
+      mysql_trans_prepare_alter_copy_data(thd))
+    return -1;
+
+  if (!(copy = new (thd->mem_root) Copy_field[to->s->fields]))
+    return -1; /* purecov: inspected */
+
+  if (!(gen_fields = thd->mem_root->ArrayAlloc<Field *>(
+            to->s->gen_def_field_count + to->s->vfields))) {
+    destroy_array(copy, to->s->fields);
+    return -1;
+  }
+
+  if (to->file->ha_external_lock(thd, F_WRLCK)) {
+    destroy_array(copy, to->s->fields);
+    return -1;
+  }
+
+  /* DuckDB do not need to handle manage keys. */
+
+  /* Only consider not preapred */
+
+  /*
+    We want warnings/errors about data truncation emitted when we
+    copy data to new version of table.
+  */
+  thd->check_for_truncated_fields = CHECK_FIELD_WARN;
+  thd->num_truncated_fields = 0L;
+
+  /* Skip from file info. */
+
+  /* DuckDB ha_start_bulk_insert do nothing, skip. */
+
+  mysql_stage_set_work_estimated(psi, from->file->stats.records);
+
+  save_sql_mode = thd->variables.sql_mode;
+
+  List_iterator<Create_field> it(create);
+  const Create_field *def;
+  copy_end = copy;
+  gen_fields_end = gen_fields;
+  for (ptr = to->field; *ptr; ptr++) {
+    def = it++;
+    if ((*ptr)->is_gcol()) {
+      /*
+        Values in generated columns need to be (re)generated even for
+        pre-existing columns, as they might depend on other columns,
+        values in which might have changed as result of this ALTER.
+        Because of this there is no sense in copying old values for
+        these columns.
+        TODO: Figure out if we can avoid even reading these old values
+              from SE.
+      */
+      *(gen_fields_end++) = *ptr;
+      continue;
+    }
+    // Array fields will be properly generated during GC update loop below
+    assert(!def->is_array);
+    if (def->field) {
+      if (*ptr == to->next_number_field) {
+        /* auto_increment_field_copied is not used. */
+        /*
+          If we are going to copy contents of one auto_increment column to
+          another auto_increment column it is sensible to preserve zeroes.
+          This condition also covers case when we are don't actually alter
+          auto_increment column.
+        */
+        if (def->field == from->found_next_number_field)
+          thd->variables.sql_mode |= MODE_NO_AUTO_VALUE_ON_ZERO;
+      }
+      (copy_end++)->set(*ptr, def->field);
+    } else {
+      /*
+        New column. Add it to the array of columns requiring value
+        generation if it has generated default.
+      */
+      if ((*ptr)->has_insert_default_general_value_expression()) {
+        assert(!((*ptr)->is_gcol()));
+        *(gen_fields_end++) = *ptr;
+      }
+    }
+  }
+
+  ulong found_count = 0;
+  ulong delete_count = 0;
+
+  /* DuckDB do case order. */
+
+  /* DuckDB do not use RowIterator */
+
+  /* Tell handler that we have values for all columns in the to table */
+  to->use_all_columns();
+
+  /* Do not handle prepared. */
+
+  /* Skip create iterator. */
+
+  thd->get_stmt_da()->reset_current_row_for_condition();
+
+  set_column_static_defaults(to, create);
+
+  to->file->ha_extra(HA_EXTRA_BEGIN_ALTER_COPY);
+
+  error = copy_data_use_select_insert(thd, psi, from, to, copy, copy_end,
+                                      found_count);
+
+  /* Skip iterator reset. */
+  free_io_cache(from);
+
+  /* DuckDB do nothing in ha_end_bulk_insert. Skip. */
+
+  to->file->ha_extra(HA_EXTRA_END_ALTER_COPY);
+
+  DBUG_EXECUTE_IF("crash_copy_before_commit", DBUG_SUICIDE(););
+  if ((!(to->file->ht->flags & HTON_SUPPORTS_ATOMIC_DDL) ||
+       from->s->tmp_table) &&
+      mysql_trans_commit_alter_copy_data(thd))
+    error = 1;
+
+  destroy_array(copy, to->s->fields);
+  thd->variables.sql_mode = save_sql_mode;
+  free_io_cache(from);
+  *copied = found_count;
+  *deleted = delete_count;
+  to->file->ha_release_auto_increment();
+  if (to->file->ha_external_lock(thd, F_UNLCK)) error = 1;
+  if (error < 0 && to->file->ha_extra(HA_EXTRA_PREPARE_FOR_RENAME)) error = 1;
+  thd->check_for_truncated_fields = CHECK_FIELD_IGNORE;
+  return error > 0 ? -1 : 0;
 }

@@ -30,6 +30,7 @@ SOFTWARE.
 #pragma once
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <vector>
 
 #include "my_bit.h"
@@ -359,7 +360,8 @@ struct PatternedSimdBloomFilter {
     uint64_t maskIdx = hash & maskIdxMask;
     uint64_t maskByteIdx = maskIdx >> 3;
     uint64_t maskBitIdx = maskIdx & 7;
-    uint64_t rawMask = *(uint64_t *)(masks + maskByteIdx);
+    uint64_t rawMask;
+    std::memcpy(&rawMask, masks + maskByteIdx, sizeof(rawMask));
     uint64_t unrotated = (rawMask >> maskBitIdx) & maskMask;
     uint64_t rotation = (hash >> mask_idx_bits) & ((1 << rotate_bits) - 1);
     return rotation ? (unrotated << rotation) | (unrotated >> (64 - rotation))

@@ -211,6 +211,10 @@ class Gtid_table_persistor {
     if (!thd->is_operating_gtid_table_implicitly &&
         table->lock_descriptor().type >= TL_WRITE_ALLOW_WRITE &&
         !strcmp(table->table_name, Gtid_table_access_context::TABLE_NAME.str)) {
+      thd->get_transaction()
+          ->get_rds_transaction_ctx()
+          ->set_modified_gtid_executed_table();
+
       if (thd->get_transaction()->xid_state()->has_state(
               XID_STATE::XA_ACTIVE)) {
         /*

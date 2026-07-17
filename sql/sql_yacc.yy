@@ -1492,6 +1492,9 @@ void warn_on_deprecated_user_defined_collation(
         json_attribute
         opt_channel
 
+%type <table_snapshot_and_alias>
+        opt_table_snapshot_alias
+
 %type <lex_str_list> TEXT_STRING_sys_list
 
 %type <table>
@@ -12176,9 +12179,10 @@ single_table_parens:
         ;
 
 single_table:
-          table_ident opt_use_partition opt_table_alias opt_key_definition
+          table_ident opt_use_partition opt_table_snapshot_alias opt_key_definition
           {
-            $$= NEW_PTN PT_table_factor_table_ident($1, $2, $3, $4);
+            $$= NEW_PTN PT_table_factor_table_ident($1, $2, $3.alias, $4);
+            ((PT_table_factor_table_ident*)$$)->set_snapshot($3.ts);
           }
         ;
 
@@ -12496,6 +12500,17 @@ opt_as:
 opt_table_alias:
           %empty { $$ = NULL_CSTR; }
         | opt_as ident { $$ = to_lex_cstring($2); }
+        ;
+
+opt_table_snapshot_alias:
+          %empty { $$ = {NULL_CSTR, nullptr}; }
+        | ident { $$ = {to_lex_cstring($1), nullptr}; }
+        | AS ident { $$ = {to_lex_cstring($2), nullptr}; }
+        | AS OF_SYM TIMESTAMP_SYM expr { $$ = {NULL_CSTR, $4}; }
+        | AS OF_SYM TIMESTAMP_SYM expr ident
+          { $$ = {to_lex_cstring($5), $4}; }
+        | AS OF_SYM TIMESTAMP_SYM expr AS ident
+          { $$ = {to_lex_cstring($6), $4}; }
         ;
 
 opt_all:
@@ -13551,6 +13566,7 @@ update_stmt:
           opt_order_clause      /* #8 */
           opt_simple_limit      /* #9 */
           {
+            YYTHD->lex->disallow_table_snapshot = true;
             $$= NEW_PTN PT_update($1, $2, $3, $4, $5, $7.column_list, $7.value_list,
                                   $8, $9, $10);
           }
@@ -13607,6 +13623,7 @@ delete_stmt:
           opt_order_clause
           opt_simple_limit
           {
+            YYTHD->lex->disallow_table_snapshot = true;
             $$= NEW_PTN PT_delete($1, $2, $3, $5, $6, $7, $8, $9, $10);
           }
         | opt_with_clause
@@ -13617,6 +13634,7 @@ delete_stmt:
           table_reference_list
           opt_where_clause
           {
+            YYTHD->lex->disallow_table_snapshot = true;
             $$= NEW_PTN PT_delete($1, $2, $3, $4, $6, $7);
           }
         | opt_with_clause
@@ -13628,6 +13646,7 @@ delete_stmt:
           table_reference_list
           opt_where_clause
           {
+            YYTHD->lex->disallow_table_snapshot = true;
             $$= NEW_PTN PT_delete($1, $2, $3, $5, $7, $8);
           }
         ;

@@ -1,0 +1,132 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+call mtr.add_suppression("trx has modified gtid_executed table.");
+#
+# 1. Make test data.
+########################################################
+#
+CREATE DATABASE rpl_test;
+CREATE TABLE rpl_test.t1 (s LONGTEXT);
+CREATE TABLE rpl_test.t2 (s LONGTEXT);
+FLUSH BINARY LOGS;
+include/rpl_sync.inc
+[connection slave]
+FLUSH BINARY LOGS;
+#
+# 2.1 Execute a non innodb trx, which will not update mysql.gtid_executed during commit.
+########################################################
+#
+[connection master]
+TRUNCATE TABLE mysql.slow_log;
+#
+# 2.2 Execute transaction with binlog cache free flush. Server will crash without this bugfix.
+########################################################
+#
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+SHOW BINARY LOGS;
+Log_name	File_size	Encrypted
+master-bin.000001	#	#
+master-bin.000002	#	#
+master-bin.000003	#	#
+master-bin.000004	#	#
+include/assert_binlog_events.inc [Format_desc # Previous_gtids # Gtid # !Q(TRUNCATE TABLE mysql.slow_log) # Rotate]
+include/assert_binlog_events.inc [Format_desc # Previous_gtids # Ignorable # Gtid # !Begin # !Insert # Write_rows # !Commit # Rotate]
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+2
+include/rpl_sync.inc
+[connection slave]
+SHOW BINARY LOGS;
+Log_name	File_size	Encrypted
+slave-bin.000001	#	#
+slave-bin.000002	#	#
+slave-bin.000003	#	#
+slave-bin.000004	#	#
+include/assert_binlog_events.inc [Format_desc # Previous_gtids # Gtid # !Q(TRUNCATE TABLE mysql.slow_log) # Rotate]
+include/assert_binlog_events.inc [Format_desc # Previous_gtids # Ignorable # Gtid # !Begin # !Insert # Write_rows # !Commit # Rotate]
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+2
+#
+# 2.3 Transaction modified mysql.gtid_executed table will not use binlog cache free flush.
+########################################################
+#
+[connection master]
+BEGIN;
+INSERT INTO mysql.gtid_executed values("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", 100000, 100000);
+Warnings:
+Warning	3129	Please do not modify the gtid_executed table. This is a mysql internal system table to store GTIDs for committed transactions. Modifying it can lead to an inconsistent GTID state.
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+COMMIT;
+DELETE FROM mysql.gtid_executed WHERE source_uuid = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" AND interval_start = 100000;
+Warnings:
+Warning	3129	Please do not modify the gtid_executed table. This is a mysql internal system table to store GTIDs for committed transactions. Modifying it can lead to an inconsistent GTID state.
+SHOW BINARY LOGS;
+Log_name	File_size	Encrypted
+master-bin.000001	#	#
+master-bin.000002	#	#
+master-bin.000003	#	#
+master-bin.000004	#	#
+include/assert_binlog_events.inc [Format_desc # Previous_gtids # Gtid # !Begin # !Insert # Write_rows # !Commit]
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+4
+include/rpl_sync.inc
+[connection slave]
+SHOW BINARY LOGS;
+Log_name	File_size	Encrypted
+slave-bin.000001	#	#
+slave-bin.000002	#	#
+slave-bin.000003	#	#
+slave-bin.000004	#	#
+slave-bin.000005	#	#
+slave-bin.000006	#	#
+include/assert_binlog_events.inc [Format_desc # Previous_gtids # Ignorable # Gtid # !Begin # !Insert # Write_rows # !Commit # Rotate]
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+4
+#
+# 2.4 Big transaction in same session of last step should use binlog cache free flush.
+########################################################
+#
+[connection master]
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+SHOW BINARY LOGS;
+Log_name	File_size	Encrypted
+master-bin.000001	#	#
+master-bin.000002	#	#
+master-bin.000003	#	#
+master-bin.000004	#	#
+master-bin.000005	#	#
+master-bin.000006	#	#
+include/assert_binlog_events.inc [Format_desc # Previous_gtids # Ignorable # Gtid # !Begin # !Insert # Write_rows # !Commit # Rotate]
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+6
+include/rpl_sync.inc
+[connection slave]
+SHOW BINARY LOGS;
+Log_name	File_size	Encrypted
+slave-bin.000001	#	#
+slave-bin.000002	#	#
+slave-bin.000003	#	#
+slave-bin.000004	#	#
+slave-bin.000005	#	#
+slave-bin.000006	#	#
+slave-bin.000007	#	#
+slave-bin.000008	#	#
+include/assert_binlog_events.inc [Format_desc # Previous_gtids # Ignorable # Gtid # !Begin # !Insert # Write_rows # !Commit # Rotate]
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+6
+#
+# 3. Cleanup.
+########################################################
+#
+[connection master]
+DROP DATABASE rpl_test;
+include/rpl_sync.inc
+include/rpl_end.inc

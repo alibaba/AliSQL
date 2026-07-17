@@ -752,7 +752,13 @@ bool DDSE_dict_init(THD *thd, dict_init_mode_t dict_init_mode, uint version) {
   */
   List_iterator<const Object_table> table_it(ddse_tables);
   const Object_table *ddse_table = nullptr;
+  const Object_table *flashback_snapshot_table = nullptr;
   while ((ddse_table = table_it++)) {
+    if (ddse_table->name() == "innodb_flashback_snapshot") {
+      flashback_snapshot_table = ddse_table;
+      continue;
+    }
+
     System_tables::Types table_type = System_tables::Types::DDSE_PROTECTED;
     if (ddse_table->is_hidden()) {
       table_type = System_tables::Types::DDSE_PRIVATE;
@@ -800,6 +806,13 @@ bool DDSE_dict_init(THD *thd, dict_init_mode_t dict_init_mode, uint version) {
     DD tables.
   */
   System_tables::instance()->add_remaining_dd_tables();
+
+  if (flashback_snapshot_table != nullptr) {
+    System_tables::instance()->add(MYSQL_SCHEMA_NAME.str,
+                                   flashback_snapshot_table->name(),
+                                   System_tables::Types::DDSE_PRIVATE,
+                                   flashback_snapshot_table);
+  }
 
   /*
     Iterate over the tablespace definitions, add the names and the
@@ -1619,7 +1632,9 @@ bool sync_meta_data(THD *thd) {
     std::vector<Table *>::const_iterator table_it = dd_tables.begin();
     for (System_tables::Const_iterator it = System_tables::instance()->begin();
          it != System_tables::instance()->end() && table_it != dd_tables.end();
-         ++it, ++table_it) {
+         ++it) {
+      if ((*it)->entity() == nullptr) continue;
+
       /*
         If we are in the process of upgrading, there may not be an entry
         in the dd_tables for new tables that have been added after the
@@ -1629,6 +1644,7 @@ bool sync_meta_data(THD *thd) {
         assert((*it)->entity()->name() == (*table_it)->name());
         dd::cache::Storage_adapter::instance()->core_drop(thd, *table_it);
       }
+      ++table_it;
     }
 
     std::vector<std::unique_ptr<Table_impl>>::const_iterator persisted_it =
@@ -1636,18 +1652,24 @@ bool sync_meta_data(THD *thd) {
     for (System_tables::Const_iterator it = System_tables::instance()->begin();
          it != System_tables::instance()->end() &&
          persisted_it != persisted_dd_tables.end();
-         ++it, ++persisted_it) {
+         ++it) {
+      if ((*it)->entity() == nullptr) continue;
+
       /*
         If we are in the process of upgrading, there may not be an entry
         in the persisted_dd_tables for new tables that have been added after
         the version we are upgrading from.
       */
-      if ((*persisted_it) == nullptr) continue;
+      if ((*persisted_it) == nullptr) {
+        ++persisted_it;
+        continue;
+      }
 
       if ((*it)->property() == System_tables::Types::CORE) {
         dd::cache::Storage_adapter::instance()->core_store(
             thd, static_cast<Table *>((*persisted_it).get()));
       }
+      ++persisted_it;
     }
   }
 

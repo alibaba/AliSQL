@@ -14,8 +14,11 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
+
+namespace {
 
 template <class T>
 struct MinMaxState {
@@ -334,8 +337,8 @@ unique_ptr<FunctionData> BindMinMax(ClientContext &context, AggregateFunction &f
                                     vector<unique_ptr<Expression>> &arguments) {
 	if (arguments[0]->return_type.id() == LogicalTypeId::VARCHAR) {
 		auto str_collation = StringType::GetCollation(arguments[0]->return_type);
-		if ((!str_collation.empty() || !ClientConfig::GetConfig(context).GetSetting<DefaultCollationSetting>(context).empty()) &&
-			 !ClientConfig::GetConfig(context).GetSetting<ForceNoCollationSetting>(context)) {
+		if ((!str_collation.empty() || !ClientConfig::GetConfig(context).collation.empty()) &&
+			 !ClientConfig::GetConfig(context).force_no_collation) {
 			// If aggr function is min/max and uses collations, replace bound_function with arg_min/arg_max
 			// to make sure the result's correctness.
 			string function_name = function.name == "min" ? "arg_min" : "arg_max";
@@ -389,10 +392,12 @@ unique_ptr<FunctionData> BindMinMax(ClientContext &context, AggregateFunction &f
 }
 
 template <class OP, class OP_STRING, class OP_VECTOR>
-static AggregateFunction GetMinMaxOperator(string name) {
+AggregateFunction GetMinMaxOperator(string name) {
 	return AggregateFunction(std::move(name), {LogicalType::ANY}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr,
 	                         nullptr, nullptr, BindMinMax<OP, OP_STRING, OP_VECTOR>);
 }
+
+} // namespace
 
 AggregateFunction MinFunction::GetFunction() {
 	return GetMinMaxOperator<MinOperation, MinOperationString, MinOperationVector>("min");
@@ -405,6 +410,7 @@ AggregateFunction MaxFunction::GetFunction() {
 //---------------------------------------------------
 // MinMaxN
 //---------------------------------------------------
+namespace {
 
 template <class A, class COMPARATOR>
 class MinMaxNState {
@@ -426,8 +432,8 @@ public:
 };
 
 template <class STATE>
-static void MinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t input_count, Vector &state_vector,
-                          idx_t count) {
+void MinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t input_count, Vector &state_vector,
+                   idx_t count) {
 
 	auto &val_vector = inputs[0];
 	auto &n_vector = inputs[1];
@@ -477,7 +483,7 @@ static void MinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t
 }
 
 template <class VAL_TYPE, class COMPARATOR>
-static void SpecializeMinMaxNFunction(AggregateFunction &function) {
+void SpecializeMinMaxNFunction(AggregateFunction &function) {
 	using STATE = MinMaxNState<VAL_TYPE, COMPARATOR>;
 	using OP = MinMaxNOperation;
 
@@ -491,7 +497,7 @@ static void SpecializeMinMaxNFunction(AggregateFunction &function) {
 }
 
 template <class COMPARATOR>
-static void SpecializeMinMaxNFunction(PhysicalType arg_type, AggregateFunction &function) {
+void SpecializeMinMaxNFunction(PhysicalType arg_type, AggregateFunction &function) {
 	switch (arg_type) {
 	case PhysicalType::VARCHAR:
 		SpecializeMinMaxNFunction<MinMaxStringValue, COMPARATOR>(function);
@@ -534,11 +540,12 @@ unique_ptr<FunctionData> MinMaxNBind(ClientContext &context, AggregateFunction &
 }
 
 template <class COMPARATOR>
-static AggregateFunction GetMinMaxNFunction() {
+AggregateFunction GetMinMaxNFunction() {
 	return AggregateFunction({LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::LIST(LogicalType::ANY), nullptr,
 	                         nullptr, nullptr, nullptr, nullptr, nullptr, MinMaxNBind<COMPARATOR>, nullptr);
 }
 
+} // namespace
 //---------------------------------------------------
 // Function Registration
 //---------------------------------------------------s

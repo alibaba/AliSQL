@@ -166,10 +166,20 @@ static int duckdb_register_trx(THD *thd) {
     return HA_DUCKDB_REGISTER_TRX_ERROR;
   }
 
+  /* When log_bin=on but log_replica_updates=off, we need to set_no_2pc
+     explicitly */
+  bool need_set_no_2pc =
+      thd->slave_thread && opt_bin_log && !opt_log_replica_updates;
   trans_register_ha(thd, false, duckdb_hton, nullptr);
+  if (need_set_no_2pc) {
+    thd->get_transaction()->set_no_2pc(Transaction_ctx::STMT, true);
+  }
 
   if (thd_test_options(thd, OPTION_NOT_AUTOCOMMIT | OPTION_BEGIN)) {
     trans_register_ha(thd, true, duckdb_hton, nullptr);
+    if (need_set_no_2pc) {
+      thd->get_transaction()->set_no_2pc(Transaction_ctx::SESSION, true);
+    }
   }
 
   /*
@@ -279,6 +289,12 @@ static MYSQL_SYSVAR_BOOL(copy_ddl_in_batch, copy_ddl_in_batch,
 static MYSQL_SYSVAR_BOOL(dml_in_batch, dml_in_batch, PLUGIN_VAR_RQCMDARG,
                          "Use batch to speed up INSERT/UPDATE/DELETE", NULL,
                          NULL, true);
+
+static MYSQL_SYSVAR_ULONGLONG(
+    batch_max_row_count, batch_max_row_count, PLUGIN_VAR_RQCMDARG,
+    "To avoid out-of-memory errors, DuckDB needs to split large batch, which "
+    "limits the number of rows in a batch; 0 means no limit.",
+    NULL, NULL, 0, 0, ULLONG_MAX, 0);
 
 static MYSQL_SYSVAR_BOOL(
     update_modified_column_only, update_modified_column_only,
@@ -548,9 +564,9 @@ static myduck::BatchState get_batch_state(THD *thd, bool idempotent_flag,
       batch = copy_ddl_in_batch ||
               thd->get_rds_context().is_copy_ddl_from_duckdb_to_duckdb();
       insert_only = true;
-    } else if (dml_in_batch &&
-               (!idempotent_flag || duckdb_multi_trx_in_batch)) {
+    } else if (dml_in_batch) {
       batch = true;
+      if (idempotent_flag) insert_only = false;
     }
 
     if (!batch) {
@@ -579,7 +595,8 @@ static void build_duckdb_blob_map(Field **field_list, MY_BITMAP *map) {
         type == MYSQL_TYPE_JSON || type == MYSQL_TYPE_TINY_BLOB ||
         type == MYSQL_TYPE_BLOB || type == MYSQL_TYPE_MEDIUM_BLOB ||
         type == MYSQL_TYPE_LONG_BLOB) {
-      if (FieldConvertor::convert_type(field) == "BLOB") {
+      if (FieldConvertor::convert_type(field) == "BLOB" ||
+          FieldConvertor::convert_type(field) == "BITSTRING") {
         bitmap_set_bit(map, field->field_index());
       }
     }
@@ -624,7 +641,7 @@ int ha_duckdb::write_row(uchar *) {
   ret = duckdb_register_trx(thd);
   if (ret) return ret;
 
-  bool idempotent_flag = rli ? rli->get_duckdb_idempotent_flag() : false;
+  bool idempotent_flag = rli ? rli->get_local_duckdb_idempotent_flag() : false;
   bool insert_only_flag = rli ? rli->get_duckdb_insert_only_flag() : true;
 
   if (rli == nullptr && thd->variables.duckdb_data_import_mode) {
@@ -677,7 +694,7 @@ int ha_duckdb::update_row(const uchar *old_row, uchar *new_row) {
   ret = duckdb_register_trx(thd);
   if (ret) return ret;
 
-  bool idempotent_flag = rli ? rli->get_duckdb_idempotent_flag() : false;
+  bool idempotent_flag = rli ? rli->get_local_duckdb_idempotent_flag() : false;
   myduck::BatchState batch_state = get_batch_state(thd, idempotent_flag, false);
   assert(batch_state == myduck::BatchState::NOT_IN_BATCH ||
          batch_state == myduck::BatchState::IN_MIX_BATCH);
@@ -761,7 +778,7 @@ int ha_duckdb::delete_row(const uchar *) {
   ret = duckdb_register_trx(thd);
   if (ret) return ret;
 
-  bool idempotent_flag = rli ? rli->get_duckdb_idempotent_flag() : false;
+  bool idempotent_flag = rli ? rli->get_local_duckdb_idempotent_flag() : false;
   myduck::BatchState batch_state = get_batch_state(thd, idempotent_flag, false);
   assert(batch_state == myduck::BatchState::NOT_IN_BATCH ||
          batch_state == myduck::BatchState::IN_MIX_BATCH);
@@ -1467,6 +1484,28 @@ static inline bool database_changed(const char *old_schema,
   return my_strcasecmp(system_charset_info, old_schema, new_schema) != 0;
 }
 
+static inline bool gcol_added_or_modifed(Alter_info *alter_info) {
+  /*
+    Since it is somewhat complex to determine whether only generated columns
+    have been modified, the current solution is brute-force: as long as a table
+    contains generated columns, we fall back to COPY DDL. This is an area that
+    still needs optimization.
+  */
+  List_iterator<Create_field> new_field_it(alter_info->create_list);
+  Create_field *new_field;
+  while ((new_field = new_field_it++)) {
+    if (new_field->is_gcol()) {
+      return true;
+    }
+
+    if (new_field->field != nullptr && new_field->field->is_gcol()) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 enum_alter_inplace_result ha_duckdb::check_if_supported_inplace_alter(
     TABLE *altered_table [[maybe_unused]],
     Alter_inplace_info *ha_alter_info [[maybe_unused]]) {
@@ -1486,6 +1525,14 @@ enum_alter_inplace_result ha_duckdb::check_if_supported_inplace_alter(
   }
 
   if (ha_alter_info->alter_info->flags & Alter_info::ALTER_COLUMN_ORDER) {
+    return HA_ALTER_INPLACE_NOT_SUPPORTED;
+  }
+
+  /*
+    Check of generated column. Adding/modifying generated columns after table
+    creation is not supported yet.
+  */
+  if (gcol_added_or_modifed(ha_alter_info->alter_info)) {
     return HA_ALTER_INPLACE_NOT_SUPPORTED;
   }
 
@@ -1663,6 +1710,7 @@ struct st_mysql_storage_engine duckdb_storage_engine = {
 
 static SYS_VAR *duckdb_system_variables[] = {
     MYSQL_SYSVAR(copy_ddl_in_batch), MYSQL_SYSVAR(dml_in_batch),
+    MYSQL_SYSVAR(batch_max_row_count),
     MYSQL_SYSVAR(update_modified_column_only), nullptr};
 
 /** Get the tablespace type given the name.

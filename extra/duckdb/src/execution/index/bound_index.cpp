@@ -1,11 +1,13 @@
 #include "duckdb/execution/index/bound_index.hpp"
 
+#include "duckdb/common/array.hpp"
 #include "duckdb/common/radix.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/common/types/selection_vector.hpp"
 
 namespace duckdb {
 
@@ -117,14 +119,13 @@ void BoundIndex::ExecuteExpressions(DataChunk &input, DataChunk &result) {
 	executor.Execute(input, result);
 }
 
-unique_ptr<Expression> BoundIndex::BindExpression(unique_ptr<Expression> expr) {
-	if (expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
-		return make_uniq<BoundReferenceExpression>(expr->return_type, column_ids[bound_colref.binding.column_index]);
-	}
-	ExpressionIterator::EnumerateChildren(
-	    *expr, [this](unique_ptr<Expression> &expr) { expr = BindExpression(std::move(expr)); });
-	return expr;
+unique_ptr<Expression> BoundIndex::BindExpression(unique_ptr<Expression> root_expr) {
+	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
+	    root_expr, [&](BoundColumnRefExpression &bound_colref, unique_ptr<Expression> &expr) {
+		    expr =
+		        make_uniq<BoundReferenceExpression>(expr->return_type, column_ids[bound_colref.binding.column_index]);
+	    });
+	return root_expr;
 }
 
 bool BoundIndex::IndexIsUpdated(const vector<PhysicalIndex> &column_ids_p) const {
@@ -136,8 +137,12 @@ bool BoundIndex::IndexIsUpdated(const vector<PhysicalIndex> &column_ids_p) const
 	return false;
 }
 
-IndexStorageInfo BoundIndex::GetStorageInfo(const case_insensitive_map_t<Value> &options, const bool to_wal) {
-	throw NotImplementedException("The implementation of this index serialization does not exist.");
+IndexStorageInfo BoundIndex::SerializeToDisk(QueryContext context, const case_insensitive_map_t<Value> &options) {
+	throw NotImplementedException("The implementation of this index disk serialization does not exist.");
+}
+
+IndexStorageInfo BoundIndex::SerializeToWAL(const case_insensitive_map_t<Value> &options) {
+	throw NotImplementedException("The implementation of this index WAL serialization does not exist.");
 }
 
 string BoundIndex::AppendRowError(DataChunk &input, idx_t index) {
@@ -149,6 +154,84 @@ string BoundIndex::AppendRowError(DataChunk &input, idx_t index) {
 		error += input.GetValue(c, index).ToString();
 	}
 	return error;
+}
+
+namespace {
+
+struct BufferedReplayState {
+	optional_ptr<ColumnDataCollection> buffer = nullptr;
+	ColumnDataScanState scan_state;
+	DataChunk current_chunk;
+	bool scan_initialized = false;
+};
+} // namespace
+
+void BoundIndex::ApplyBufferedReplays(const vector<LogicalType> &table_types, BufferedIndexReplays &buffered_replays,
+                                      const vector<StorageIndex> &mapped_column_ids) {
+	if (!buffered_replays.HasBufferedReplays()) {
+		return;
+	}
+
+	// We have two replay states: one for inserts and one for deletes. These are indexed into using the
+	// replay_type. Both scans are interleaved, so the state maintains the position of each scan.
+	array<BufferedReplayState, 2> replay_states;
+	DataChunk table_chunk;
+	table_chunk.InitializeEmpty(table_types);
+
+	for (const auto &replay_range : buffered_replays.ranges) {
+		const auto type_idx = static_cast<idx_t>(replay_range.type);
+		auto &state = replay_states[type_idx];
+
+		// Initialize the scan state if necessary. Take ownership of buffered operations, since we won't need
+		// them after replaying anyways.
+		if (!state.scan_initialized) {
+			state.buffer = buffered_replays.GetBuffer(replay_range.type);
+			state.buffer->InitializeScan(state.scan_state);
+			state.buffer->InitializeScanChunk(state.current_chunk);
+			state.scan_initialized = true;
+		}
+
+		idx_t current_row = replay_range.start;
+		while (current_row < replay_range.end) {
+			// Scan the next DataChunk from the ColumnDataCollection buffer if the current row is on or after
+			// that chunk's starting row index.
+			if (current_row >= state.scan_state.next_row_index) {
+				if (!state.buffer->Scan(state.scan_state, state.current_chunk)) {
+					throw InternalException("Buffered index data exhausted during replay");
+				}
+			}
+
+			// We need to process the remaining rows in the current chunk, which is the minimum of the available
+			// rows in the chunk and the remaining rows in the current range.
+			const auto offset_in_chunk = current_row - state.scan_state.current_row_index;
+			const auto available_in_chunk = state.current_chunk.size() - offset_in_chunk;
+			// [start, end) in ReplayRange is [inclusive, exclusive).
+			const auto range_remaining = replay_range.end - current_row;
+			const auto rows_to_process = MinValue<idx_t>(available_in_chunk, range_remaining);
+
+			SelectionVector sel(offset_in_chunk, rows_to_process);
+
+			for (idx_t col_idx = 0; col_idx < state.current_chunk.ColumnCount() - 1; col_idx++) {
+				const auto col_id = mapped_column_ids[col_idx].GetPrimaryIndex();
+				table_chunk.data[col_id].Reference(state.current_chunk.data[col_idx]);
+				table_chunk.data[col_id].Slice(sel, rows_to_process);
+			}
+			table_chunk.SetCardinality(rows_to_process);
+			Vector row_ids(state.current_chunk.data.back(), sel, rows_to_process);
+
+			if (replay_range.type == BufferedIndexReplay::INSERT_ENTRY) {
+				IndexAppendInfo append_info(IndexAppendMode::INSERT_DUPLICATES, nullptr);
+				const auto error = Append(table_chunk, row_ids, append_info);
+				if (error.HasError()) {
+					throw InternalException("error while applying buffered appends: " + error.Message());
+				}
+				current_row += rows_to_process;
+				continue;
+			}
+			Delete(table_chunk, row_ids);
+			current_row += rows_to_process;
+		}
+	}
 }
 
 } // namespace duckdb

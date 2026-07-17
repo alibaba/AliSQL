@@ -918,6 +918,8 @@ class Item_func_json_unquote : public Item_str_func {
   }
 
   String *val_str(String *str) override;
+  void print(const THD *thd, String *str,
+             enum_query_type query_type) const override;
   bool m_caller_is_duckdb = false;
 };
 

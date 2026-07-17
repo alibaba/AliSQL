@@ -168,8 +168,18 @@ jobs:
           TAG:      ${{ github.ref_name }}
           VERSION:  ${{ needs.parse.outputs.version }}
         run: |
+          NOTES="Auto-built AliSQL ${VERSION} (oraclelinux:7, glibc 2.17). x86_64 and aarch64 binaries attached."
+
+          if [[ "$VERSION" == 8.0.44-* ]]; then
+            NOTES="${NOTES}
+
+          Release details / 发布详情:
+          - [English changes](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/wiki/changes/changes-in-alisql-8.0.44.2026-06-30-en.md)
+          - [中文变更说明](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/wiki/changes/changes-in-alisql-8.0.44.2026-06-30-zh.md)"
+          fi
+
           gh release create "$TAG" \
             --repo "$GITHUB_REPOSITORY" \
             --title "$TAG" \
-            --notes "Auto-built AliSQL ${VERSION} (oraclelinux:7, glibc 2.17). x86_64 and aarch64 binaries attached." \
+            --notes "$NOTES" \
             artifacts/*.tar.xz

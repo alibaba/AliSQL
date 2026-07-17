@@ -17,7 +17,7 @@ INSERT INTO t_innodb2 VALUES(1, 0.1), (2, 0.1), (3, 0.1);
 INSERT INTO t_duckdb1 VALUES(4, rand());
 INSERT INTO t_innodb1 VALUES(4, rand());
 REPLACE INTO t_duckdb1 VALUES(5, rand());
-ERROR HY000: [DuckDB] Does not support duckdb engine in REPLACE satement.
+ERROR HY000: [DuckDB] Does not support duckdb engine in REPLACE statement. The table `t_duckdb1` is a duckdb table.
 REPLACE INTO t_innodb1 VALUES(5, rand());
 include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
@@ -43,7 +43,7 @@ INSERT INTO t_duckdb1 SELECT 7, c2 FROM t_innodb1 WHERE c1 = 1 LIMIT 1;
 INSERT INTO t_innodb1 SELECT * FROM t_duckdb1 WHERE c1 = 1 LIMIT 1;
 ERROR HY000: [DuckDB] Does not support SELECT from duckdb table and insert into other engines.
 REPLACE INTO t_duckdb1 SELECT 8, c2 FROM t_duckdb1 WHERE c1 = 1 LIMIT 1;
-ERROR HY000: [DuckDB] Does not support duckdb engine in REPLACE statement.
+ERROR HY000: [DuckDB] Does not support duckdb engine in REPLACE statement. The table `t_duckdb1` is a duckdb table.
 REPLACE INTO t_innodb1 SELECT 8, c2 FROM t_innodb1 WHERE c1 = 1 LIMIT 1;
 include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
@@ -69,12 +69,12 @@ UPDATE t_duckdb1 SET c2 = 0.2 WHERE c1 = (SELECT 1 LIMIT 1);
 UPDATE t_innodb1 SET c2 = 0.2 WHERE c1 = (SELECT 1 LIMIT 1);
 UPDATE t_duckdb1, t_duckdb2 SET t_duckdb1.c2 = 0.2, t_duckdb2.c2 = 0.2
 WHERE t_duckdb1.c1 = (SELECT 2 LIMIT 1) AND t_duckdb2.c1 = 2;
-ERROR HY000: [DuckDB] Does not support duckdb engine in multi-table UPDATE/DELETE statement.
+ERROR HY000: [DuckDB] Does not support duckdb engine in multi-table UPDATE/DELETE statement. The table `t_duckdb2` is a duckdb table.
 UPDATE t_innodb1, t_innodb2 SET t_innodb1.c2 = 0.2, t_innodb2.c2 = 0.2
 WHERE t_innodb1.c1 = (SELECT 2 LIMIT 1) AND t_innodb2.c1 = 2;
 UPDATE t_duckdb1, t_innodb1 SET t_duckdb1.c2 = 0.2, t_innodb1.c2 = 0.2
 WHERE t_duckdb1.c1 = (SELECT 3 LIMIT 1) AND t_innodb1.c1 = 3;
-ERROR HY000: [DuckDB] Does not support duckdb engine in multi-table UPDATE/DELETE statement.
+ERROR HY000: [DuckDB] Does not support duckdb engine in multi-table UPDATE/DELETE statement. The table `t_duckdb1` is a duckdb table.
 include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
 master-bin.000001	#	Query	#	#	BEGIN
@@ -98,7 +98,7 @@ DELETE FROM t_duckdb1 WHERE c1 = (SELECT 1 LIMIT 1);
 DELETE FROM t_innodb1 WHERE c1 = (SELECT 1 LIMIT 1);
 DELETE t_duckdb1, t_duckdb2 FROM t_duckdb1, t_duckdb2
 WHERE t_duckdb1.c1 = 2 AND t_duckdb2.c1 = (SELECT 2 LIMIT 1);
-ERROR HY000: [DuckDB] Does not support duckdb engine in multi-table UPDATE/DELETE statement.
+ERROR HY000: [DuckDB] Does not support duckdb engine in multi-table UPDATE/DELETE statement. The table `t_duckdb2` is a duckdb table.
 DELETE t_innodb1, t_innodb2 FROM t_innodb1, t_innodb2
 WHERE t_innodb1.c1 = 2 AND t_innodb2.c1 = (SELECT 2 LIMIT 1);
 include/show_binlog_events.inc

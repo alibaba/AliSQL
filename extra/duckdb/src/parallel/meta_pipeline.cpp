@@ -174,7 +174,7 @@ void MetaPipeline::AddRecursiveDependencies(const vector<shared_ptr<Pipeline>> &
 
 	// we try to limit the performance impact of these dependencies on smaller workloads,
 	// by only adding the dependencies if the source operator can likely keep all threads busy
-	const auto thread_count = NumericCast<idx_t>(TaskScheduler::GetScheduler(executor.context).NumberOfThreads());
+	const auto thread_count = NumericCast<idx_t>(TaskScheduler::GetScheduler(executor.context).NumberOfThreads(executor.context));
 	for (; it != child_meta_pipelines.end(); it++) {
 		for (auto &pipeline : it->get()->pipelines) {
 			if (!PipelineExceedsThreadCount(*pipeline, thread_count)) {

@@ -50,6 +50,29 @@ struct SAVEPOINT {
   MDL_savepoint mdl_savepoint;
 };
 
+/**
+  This class contents the transactional context added by RDS.
+  Its value is reset on Transaction_ctx::cleanup().
+*/
+class Rds_transaction_ctx {
+ public:
+  Rds_transaction_ctx() : m_modified_gtid_executed_table(false) {}
+
+  void cleanup() { m_modified_gtid_executed_table = false; }
+
+  bool get_modified_gtid_executed_table() {
+    return m_modified_gtid_executed_table;
+  }
+
+  void set_modified_gtid_executed_table() {
+    m_modified_gtid_executed_table = true;
+  }
+
+ private:
+  /* Whether this transaction has modified mysql.gtid_executed table. */
+  bool m_modified_gtid_executed_table;
+};
+
 class Transaction_ctx {
  public:
   enum enum_trx_scope { STMT = 0, SESSION };
@@ -229,6 +252,7 @@ class Transaction_ctx {
     m_savepoints = nullptr;
     m_xid_state.cleanup();
     m_rpl_transaction_ctx.cleanup();
+    m_rds_transaction_ctx.cleanup();
     m_transaction_write_set_ctx.reset_state();
     trans_begin_hook_invoked = false;
     m_mem_root.ClearForReuse();
@@ -366,6 +390,14 @@ class Transaction_ctx {
     return &m_rpl_transaction_ctx;
   }
 
+  Rds_transaction_ctx *get_rds_transaction_ctx() {
+    return &m_rds_transaction_ctx;
+  }
+
+  const Rds_transaction_ctx *get_rds_transaction_ctx() const {
+    return &m_rds_transaction_ctx;
+  }
+
   Rpl_transaction_write_set_ctx *get_transaction_write_set_ctx() {
     return &m_transaction_write_set_ctx;
   }
@@ -381,6 +413,7 @@ class Transaction_ctx {
  private:
   Rpl_transaction_ctx m_rpl_transaction_ctx;
   Rpl_transaction_write_set_ctx m_transaction_write_set_ctx;
+  Rds_transaction_ctx m_rds_transaction_ctx;
   bool trans_begin_hook_invoked;
 };
 

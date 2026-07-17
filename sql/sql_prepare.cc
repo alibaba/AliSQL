@@ -1413,6 +1413,7 @@ bool Prepared_statement::prepare_query(THD *thd) {
     case SQLCOM_SHOW_TRIGGERS:
     case SQLCOM_SHOW_VARIABLES:
     case SQLCOM_SET_RESOURCE_GROUP:
+    case SQLCOM_ADMIN_PROC:
     case SQLCOM_SHOW_WARNS:
       res = m_lex->m_sql_cmd->prepare(thd);
       break;
@@ -1906,6 +1907,14 @@ void mysqld_stmt_execute(THD *thd, Prepared_statement *stmt, bool has_new_types,
   // If no error happened while setting the parameters, execute statement.
   if (!stmt->set_parameters(thd, &expanded_query, has_new_types, parameters)) {
     bool open_cursor = execute_flags & (ulong)CURSOR_TYPE_READ_ONLY;
+
+    if (open_cursor && stmt->m_lex && stmt->m_lex->use_duckdb_computation_engine) {
+      open_cursor = false;
+      stmt->m_arena.is_duckdb_cursor_disabled = true;
+    } else {
+      stmt->m_arena.is_duckdb_cursor_disabled = false;
+    }
+
     stmt->execute_loop(thd, &expanded_query, open_cursor);
   }
 
@@ -3025,6 +3034,16 @@ bool Prepared_statement::execute_loop(THD *thd, String *expanded_query,
   // when the keys involve an expression.
   if (!m_first_execution && m_lex->m_sql_cmd &&
       m_lex->m_sql_cmd->reprepare_on_execute_required()) {
+    if (reprepare(thd)) return true;
+  }
+
+  // If dudkcdb_sql_normalization changes between the prepare and execute, we
+  // need to reprepare.
+  if (m_lex->use_duckdb_computation_engine &&
+      ((thd->variables.duckdb_sql_normalization &&
+        m_lex->optimizer_rewrite_enabled) ||
+       (!thd->variables.duckdb_sql_normalization &&
+        !m_lex->optimizer_rewrite_enabled))) {
     if (reprepare(thd)) return true;
   }
 

@@ -59,6 +59,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "buf0lru.h"
 #include "clone0api.h"
 #include "dict0boot.h"
+#include "dict0flashback.h"
 #include "dict0load.h"
 #include "dict0stats_bg.h"
 #include "fsp0sysspace.h"
@@ -1238,6 +1239,9 @@ void srv_free(void) {
 
   trx_i_s_cache_free(trx_i_s_cache);
 
+  ut::delete_(im::flashback_sys);
+  im::flashback_sys = nullptr;
+
   ut::free(srv_sys);
 
   srv_sys = nullptr;
@@ -1276,6 +1280,8 @@ static void srv_general_init() {
   que_init();
   row_mysql_init();
   undo_spaces_init();
+  im::flashback_sys =
+      ut::new_withkey<im::Flashback_manager_v2>(UT_NEW_THIS_FILE_PSI_KEY);
 }
 
 /** Boots the InnoDB server. */

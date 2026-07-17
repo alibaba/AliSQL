@@ -5,6 +5,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/logging/log_manager.hpp"
 #include "duckdb/main/database.hpp"
 
 namespace duckdb {
@@ -38,6 +39,10 @@ ColumnCheckpointState &ColumnDataCheckpointData::GetCheckpointState() {
 	return *checkpoint_state;
 }
 
+StorageManager &ColumnDataCheckpointData::GetStorageManager() {
+	return *storage_manager;
+}
+
 //! ColumnDataCheckpointer
 
 static Vector CreateIntermediateVector(vector<reference<ColumnCheckpointState>> &states) {
@@ -49,6 +54,9 @@ static Vector CreateIntermediateVector(vector<reference<ColumnCheckpointState>> 
 	if (type.id() == LogicalTypeId::VALIDITY) {
 		return Vector(LogicalType::BOOLEAN, true, /* initialize_to_zero = */ true);
 	}
+	if (type.InternalType() == PhysicalType::LIST) {
+		return Vector(LogicalType::UBIGINT, true, false);
+	}
 	return Vector(type, true, false);
 }
 
@@ -57,18 +65,6 @@ ColumnDataCheckpointer::ColumnDataCheckpointer(vector<reference<ColumnCheckpoint
                                                ColumnCheckpointInfo &checkpoint_info)
     : checkpoint_states(checkpoint_states), storage_manager(storage_manager), row_group(row_group),
       intermediate(CreateIntermediateVector(checkpoint_states)), checkpoint_info(checkpoint_info) {
-
-	auto &db = storage_manager.GetDatabase();
-	auto &config = DBConfig::GetConfig(db);
-	compression_functions.resize(checkpoint_states.size());
-	for (idx_t i = 0; i < checkpoint_states.size(); i++) {
-		auto &col_data = checkpoint_states[i].get().column_data;
-		auto to_add = config.GetCompressionFunctions(col_data.type.InternalType());
-		auto &functions = compression_functions[i];
-		for (auto &func : to_add) {
-			functions.push_back(&func.get());
-		}
-	}
 }
 
 void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx_t)> &callback) {
@@ -101,9 +97,10 @@ CompressionType ForceCompression(StorageManager &storage_manager,
                                  CompressionType compression_type) {
 	// One of the force_compression flags has been set
 	// check if this compression method is available
-	// if (CompressionTypeIsDeprecated(compression_type, storage_manager)) {
+	// auto compression_availability_result = CompressionTypeIsAvailable(compression_type, storage_manager);
+	// if (!compression_availability_result.IsAvailable()) {
 	//	throw InvalidInputException("The forced compression method (%s) is not available in the current storage
-	// version", 	                            CompressionTypeToString(compression_type));
+	// version", CompressionTypeToString(compression_type));
 	//}
 
 	bool found = false;
@@ -325,8 +322,8 @@ void ColumnDataCheckpointer::WriteToDisk() {
 		auto &checkpoint_state = checkpoint_states[i];
 		auto &col_data = checkpoint_state.get().column_data;
 
-		checkpoint_data[i] =
-		    ColumnDataCheckpointData(checkpoint_state, col_data, col_data.GetDatabase(), row_group, checkpoint_info);
+		checkpoint_data[i] = ColumnDataCheckpointData(checkpoint_state, col_data, col_data.GetDatabase(), row_group,
+		                                              checkpoint_info, storage_manager);
 		compression_states[i] = function->init_compression(checkpoint_data[i], std::move(analyze_state));
 	}
 
@@ -354,21 +351,7 @@ void ColumnDataCheckpointer::WriteToDisk() {
 }
 
 bool ColumnDataCheckpointer::HasChanges(ColumnData &col_data) {
-	auto &nodes = col_data.data.ReferenceSegments();
-	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
-		auto segment = nodes[segment_idx].node.get();
-		if (segment->segment_type == ColumnSegmentType::TRANSIENT) {
-			// transient segment: always need to write to disk
-			return true;
-		}
-		// persistent segment; check if there were any updates or deletions in this segment
-		idx_t start_row_idx = segment->start - row_group.start;
-		idx_t end_row_idx = start_row_idx + segment->count;
-		if (col_data.HasChanges(start_row_idx, end_row_idx)) {
-			return true;
-		}
-	}
-	return false;
+	return col_data.HasAnyChanges();
 }
 
 void ColumnDataCheckpointer::WritePersistentSegments(ColumnCheckpointState &state) {
@@ -378,8 +361,28 @@ void ColumnDataCheckpointer::WritePersistentSegments(ColumnCheckpointState &stat
 	auto &col_data = state.column_data;
 	auto nodes = col_data.data.MoveSegments();
 
+	idx_t current_row = row_group.start;
 	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
 		auto segment = nodes[segment_idx].node.get();
+		if (segment->start != current_row) {
+			string extra_info;
+			for (auto &s : nodes) {
+				extra_info += "\n";
+				extra_info += StringUtil::Format("Start %d, count %d", s.node->start, s.node->count.load());
+			}
+			const_reference<ColumnData> root = col_data;
+			while (root.get().HasParent()) {
+				root = root.get().Parent();
+			}
+			throw InternalException(
+			    "Failure in RowGroup::Checkpoint - column data pointer is unaligned with row group "
+			    "start\nRow group start: %d\nRow group count %d\nCurrent row: %d\nSegment start: %d\nColumn index: "
+			    "%d\nColumn type: %s\nRoot type: %s\nTable: %s.%s\nAll segments:%s",
+			    row_group.start, row_group.count.load(), current_row, segment->start, root.get().column_index,
+			    col_data.type, root.get().type, root.get().info.GetSchemaName(), root.get().info.GetTableName(),
+			    extra_info);
+		}
+		current_row += segment->count;
 		auto pointer = segment->GetDataPointer();
 
 		// merge the persistent stats into the global column stats
@@ -410,6 +413,19 @@ void ColumnDataCheckpointer::Checkpoint() {
 		// Nothing has undergone any changes, no need to checkpoint
 		// just move on to finalizing
 		return;
+	}
+
+	D_ASSERT(compression_functions.empty());
+	auto &db = storage_manager.GetDatabase();
+	auto &config = DBConfig::GetConfig(db);
+	compression_functions.resize(checkpoint_states.size());
+	for (idx_t i = 0; i < checkpoint_states.size(); i++) {
+		auto &col_data = checkpoint_states[i].get().column_data;
+		auto to_add = config.GetCompressionFunctions(col_data.type.InternalType());
+		auto &functions = compression_functions[i];
+		for (auto &func : to_add) {
+			functions.push_back(&func.get());
+		}
 	}
 
 	WriteToDisk();

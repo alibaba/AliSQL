@@ -46,6 +46,14 @@ enum BatchState {
   IN_MIX_BATCH
 };
 
+inline bool operator==(const timeval& lhs, const timeval& rhs) {
+  return lhs.tv_sec == rhs.tv_sec && lhs.tv_usec == rhs.tv_usec;
+}
+
+inline bool operator!=(const timeval& lhs, const timeval& rhs) {
+  return lhs.tv_sec != rhs.tv_sec || lhs.tv_usec != rhs.tv_usec;
+}
+
 class DuckdbThdContext {
  public:
   DuckdbThdContext(THD *thd)
@@ -84,7 +92,7 @@ class DuckdbThdContext {
 
   void add_gtid_to_batch_set();
 
-  bool duckdb_delay_commit();
+  bool duckdb_delay_commit(Log_event *ev);
 
   bool multi_trx_in_batch() { return batch_multi_trx_started; }
 
@@ -136,28 +144,69 @@ class DuckdbThdContext {
     std::unique_ptr<duckdb::QueryResult> compare_and_config(
         THD *thd, duckdb::Connection &connection);
 
+    template <typename T>
+    class Config {
+     private:
+      T m_value;
+      bool m_valid;
+
+     public:
+      Config() : m_value(), m_valid(false) {}
+
+      friend bool operator==(const T &lhs, const Config &rhs) {
+        if (!rhs.m_valid) return false;
+        return lhs == rhs.m_value;
+      }
+
+      friend bool operator==(const Config &lhs, const T &rhs) {
+        if (!lhs.m_valid) return false;
+        return lhs.m_value == rhs;
+      }
+
+      friend bool operator!=(const T &lhs, const Config &rhs) {
+        if (!rhs.m_valid) return true;
+        return lhs != rhs.m_value;
+      }
+
+      friend bool operator!=(const Config &lhs, const T &rhs) {
+        if (!lhs.m_valid) return true;
+        return lhs.m_value != rhs;
+      }
+
+      void Set(const T &lhs) {
+        m_value = lhs;
+        m_valid = true;
+      }
+
+      void SetInvalid() { m_valid = false; }
+    };
+
     void reset_cached_config() {
-      m_database.clear();
-      m_timezone.clear();
-      m_collation.clear();
-      m_force_no_collation.clear();
-      m_explain_output_str.clear();
-      m_user_time.tv_sec = 0;
-      m_user_time.tv_usec = 0;
-      m_default_week_format = 0;
+      m_database.SetInvalid();
+      m_timezone.SetInvalid();
+      m_collation.SetInvalid();
+      m_explain_output_str.SetInvalid();
+      m_force_no_collation.SetInvalid();
+      m_user_time.SetInvalid();
+      m_sql_mode.SetInvalid();
+      m_disabled_optimizers.SetInvalid();
+      m_merge_join_threshold.SetInvalid();
+      m_query_max_threads.SetInvalid();
     }
 
    private:
-    std::string m_database;
-    std::string m_timezone;
-    std::string m_collation;
-    std::string m_force_no_collation;
-    std::string m_explain_output_str;
-    timeval m_user_time{0, 0};
-    ulong m_default_week_format = 0;
-    ulonglong m_sql_mode = 0;
-    ulonglong m_disabled_optimizers = 0;
-    ulonglong m_merge_join_threshold = 0;
+    Config<std::string> m_database;
+    Config<std::string> m_timezone;
+    Config<std::string> m_collation;
+    Config<std::string> m_explain_output_str;
+    Config<bool> m_force_no_collation;
+    Config<timeval> m_user_time;
+    Config<ulong> m_default_week_format;
+    Config<ulonglong> m_sql_mode;
+    Config<ulonglong> m_disabled_optimizers;
+    Config<ulonglong> m_merge_join_threshold;
+    Config<ulonglong> m_query_max_threads;
+    Config<bool> m_prefer_high_precision;
   };
 
  public:
@@ -166,7 +215,7 @@ class DuckdbThdContext {
   /** Appender related functions */
   bool flush_appenders(std::string &error_msg) {
     if (m_appenders && !m_appenders->is_empty()) {
-      if (m_appenders->flush_all(get_idempotent_flag(), error_msg)) {
+      if (m_appenders->flush_all(error_msg)) {
         return true;
       }
     }
@@ -228,6 +277,8 @@ class DuckdbThdContext {
   Gtid_set batch_gtid_set;
 
   ulonglong gtid_compression_counter = 0;
+
+  my_off_t xid_event_master_log_pos;
 
   my_off_t xid_event_relay_log_pos;
 

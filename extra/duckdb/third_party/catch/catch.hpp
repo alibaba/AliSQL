@@ -13,6 +13,8 @@
 // start catch.hpp
 
 #include <memory>
+#include <sstream>
+
 #ifndef DUCKDB_BASE_STD
 namespace duckdb_base_std {
 	using ::std::unique_ptr;
@@ -21,7 +23,7 @@ namespace duckdb_base_std {
 	using ::std::stringstream;
 } // namespace duckdb_base_std
 #endif
-// optional support for printing stacktraces on a crash -- using the backtrace support in DuckDB 
+// optional support for printing stacktraces on a crash -- using the backtrace support in DuckDB
 #ifdef DUCKDB_DEBUG_STACKTRACE
 #include "duckdb/common/exception.hpp"
 #define CATCH_STACKTRACE(X) duckdb::Exception::FormatStackTrace(X).c_str()
@@ -3013,6 +3015,7 @@ namespace Catch {
         virtual void registerTranslator( const IExceptionTranslator* translator ) = 0;
         virtual void registerTagAlias( std::string const& alias, std::string const& tag, SourceLineInfo const& lineInfo ) = 0;
         virtual void registerStartupException() noexcept = 0;
+        virtual void clearTests() = 0;
         virtual IMutableEnumValuesRegistry& getMutableEnumValuesRegistry() = 0;
     };
 
@@ -12385,6 +12388,7 @@ namespace Catch {
         virtual ~TestRegistry() = default;
 
         virtual void registerTest( TestCase const& testCase );
+        virtual void clearTests();
 
         std::vector<TestCase> const& getAllTests() const override;
         std::vector<TestCase> const& getAllTestsSorted( IConfig const& config ) const override;
@@ -12566,6 +12570,9 @@ namespace Catch {
             }
             void registerTest( TestCase const& testInfo ) override {
                 m_testCaseRegistry.registerTest( testInfo );
+            }
+            void clearTests() override {
+                m_testCaseRegistry.clearTests();
             }
             void registerTranslator( const IExceptionTranslator* translator ) override {
                 m_exceptionTranslatorRegistry.registerTranslator( translator );
@@ -14448,6 +14455,10 @@ namespace Catch {
             return registerTest( testCase.withName( rss.str() ) );
         }
         m_functions.push_back( testCase );
+    }
+
+    void TestRegistry::clearTests() {
+        m_functions.clear();
     }
 
     std::vector<TestCase> const& TestRegistry::getAllTests() const {
@@ -16417,18 +16428,21 @@ private:
     bool printInfoMessages;
 };
 
-std::size_t makeRatio(std::size_t number, std::size_t total) {
-    std::size_t ratio = total > 0 ? CATCH_CONFIG_CONSOLE_WIDTH * number / total : 0;
-    return (ratio == 0 && number > 0) ? 1 : ratio;
+std::size_t makeRatio(std::uint64_t number, std::uint64_t total) {
+    const auto ratio = total > 0 ? CATCH_CONFIG_CONSOLE_WIDTH * number / total : 0;
+    return (ratio == 0 && number > 0) ? 1 : static_cast<std::size_t>(ratio);
 }
 
-std::size_t& findMax(std::size_t& i, std::size_t& j, std::size_t& k) {
-    if (i > j && i > k)
+std::size_t&
+findMax( std::size_t& i, std::size_t& j, std::size_t& k, std::size_t& l ) {
+    if (i > j && i > k && i > l)
         return i;
-    else if (j > k)
+    else if (j > k && j > l)
         return j;
-    else
+    else if (k > l)
         return k;
+    else
+        return l;
 }
 
 struct ColumnInfo {
@@ -16913,13 +16927,15 @@ void ConsoleReporter::printSummaryRow(std::string const& label, std::vector<Summ
 
 void ConsoleReporter::printTotalsDivider(Totals const& totals) {
     if (totals.testCases.total() > 0) {
-        std::size_t failedRatio = makeRatio(totals.testCases.failed, totals.testCases.total());
-        std::size_t failedButOkRatio = makeRatio(totals.testCases.failedButOk + totals.skippedTests, totals.testCases.total());
-        std::size_t passedRatio = makeRatio(totals.testCases.passed - totals.skippedTests, totals.testCases.total());
-        while (failedRatio + failedButOkRatio + passedRatio < CATCH_CONFIG_CONSOLE_WIDTH - 1)
-            findMax(failedRatio, failedButOkRatio, passedRatio)++;
-        while (failedRatio + failedButOkRatio + passedRatio > CATCH_CONFIG_CONSOLE_WIDTH - 1)
-            findMax(failedRatio, failedButOkRatio, passedRatio)--;
+		const std::size_t total = totals.testCases.total() + totals.skippedTests;
+        std::size_t failedRatio = makeRatio(totals.testCases.failed, total);
+        std::size_t failedButOkRatio = makeRatio(totals.testCases.failedButOk, total);
+        std::size_t passedRatio = makeRatio(totals.testCases.passed, total);
+		std::size_t skippedRatio = makeRatio(totals.skippedTests, total);
+        while (failedRatio + failedButOkRatio + passedRatio + skippedRatio < CATCH_CONFIG_CONSOLE_WIDTH - 1)
+            findMax(failedRatio, failedButOkRatio, passedRatio, skippedRatio)++;
+        while (failedRatio + failedButOkRatio + passedRatio + skippedRatio > CATCH_CONFIG_CONSOLE_WIDTH - 1)
+            findMax(failedRatio, failedButOkRatio, passedRatio, skippedRatio)--;
 
         stream << Colour(Colour::Error) << std::string(failedRatio, '=');
         stream << Colour(Colour::ResultExpectedFailure) << std::string(failedButOkRatio, '=');
@@ -18130,4 +18146,3 @@ using Catch::Detail::Approx;
 // end catch_reenable_warnings.h
 // end catch.hpp
 #endif // TWOBLUECUBES_SINGLE_INCLUDE_CATCH_HPP_INCLUDED
-

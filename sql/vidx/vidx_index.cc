@@ -661,7 +661,7 @@ bool delete_table(THD *thd, const dd::Table *dd_table, const char *db_name) {
   /* 4. remove the "__hlindexes__" option in base dd table. The base dd
   table may be used later in acquire_uncached_table() to build the base
   table share */
-  ((dd::Table *)dd_table)->options().remove("__hlindexes__");
+  const_cast<dd::Table *>(dd_table)->options().remove("__hlindexes__");
 
   /* 5. Drop dd table */
   return dd::drop_table(thd, db_name, hlindex_name, *hlindex_dd);

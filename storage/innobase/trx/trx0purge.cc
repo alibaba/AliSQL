@@ -38,6 +38,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "clone0api.h"
 #include "clone0clone.h"
 #include "dict0dd.h"
+#include "dict0flashback.h"
 #include "fil0fil.h"
 #include "fsp0fsp.h"
 #include "fsp0sysspace.h"
@@ -2213,6 +2214,9 @@ void Purge_groups_t::distribute_if_needed() {
   }
 
   if (purge_sys->iter.trx_no >= purge_sys->view.low_limit_no()) {
+    if (purge_sys->view.m_flashback_flag) {
+      im::flashback_sys->blocking_purge();
+    }
     return nullptr;
   }
 
@@ -2403,15 +2407,36 @@ ulint trx_purge(ulint n_purge_threads, /*!< in: number of purge tasks
   /* The number of tasks submitted should be completed. */
   ut_a(purge_sys->n_submitted == purge_sys->n_completed);
 
+  scn_transform_result_t result;
+  if (im::flashback_sys != nullptr && im::srv_scn_history_keep_seconds > 0) {
+    im::flashback_sys->get_oldest_readview_record(&result);
+  }
+
   rw_lock_x_lock(&purge_sys->latch, UT_LOCATION_HERE);
 
   purge_sys->view_active = false;
 
   trx_sys->mvcc->clone_oldest_view(&purge_sys->view);
 
+  ReadView *view = nullptr;
+  if (im::flashback_sys != nullptr) {
+    view = im::flashback_sys->get_oldest_readview(&result);
+  }
+
+  if (view != nullptr &&
+      view->low_limit_no() < purge_sys->view.low_limit_no()) {
+    purge_sys->view.copy_complete(*view);
+  } else if (im::flashback_sys != nullptr) {
+    im::flashback_sys->reset_purge_block_status();
+  }
+
   purge_sys->view_active = true;
 
   rw_lock_x_unlock(&purge_sys->latch);
+
+  if (view != nullptr) {
+    im::flashback_sys->remove_readview(view);
+  }
 
 #ifdef UNIV_DEBUG
   if (srv_purge_view_update_only_debug) {

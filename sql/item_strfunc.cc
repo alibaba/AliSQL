@@ -3103,8 +3103,33 @@ String *Item_func_conv::val_str(String *str) {
   return str;
 }
 
+void Item_func_conv::print(const THD *thd, String *str,
+                           enum_query_type query_type) const {
+  if ((query_type & QT_DUCKDB_REWRITE) && args[1]->type() == INT_ITEM &&
+      args[2]->type() == INT_ITEM) {
+    int from_base = args[1]->val_int();
+    int to_base = args[2]->val_int();
+    if (from_base == 10 && to_base == 2) {
+      str->append(STRING_WITH_LEN("bin("));
+      args[0]->print(thd, str, query_type);
+      str->append(')');
+      return;
+    } else if (from_base == 10 && to_base == 8) {
+      str->append(STRING_WITH_LEN("oct("));
+      args[0]->print(thd, str, query_type);
+      str->append(')');
+      return;
+    }
+  }
+  Item_func::print(thd, str, query_type);
+}
+
 void Item_func_conv_charset::print(const THD *thd, String *str,
                                    enum_query_type query_type) const {
+  if (query_type & QT_DUCKDB_REWRITE) {
+    args[0]->print(thd, str, query_type);
+    return;
+  }
   str->append(STRING_WITH_LEN("convert("));
   args[0]->print(thd, str, query_type);
   str->append(STRING_WITH_LEN(" using "));
@@ -3522,6 +3547,16 @@ void Item_typecast_char::print(const THD *thd, String *str,
                                enum_query_type query_type) const {
   str->append(STRING_WITH_LEN("cast("));
   args[0]->print(thd, str, query_type);
+  if (query_type & QT_DUCKDB_REWRITE) {
+    if (m_cast_cs == &my_charset_bin) {
+      str->append(STRING_WITH_LEN(" as binary"));
+    } else {
+      str->append(STRING_WITH_LEN(" as char"));
+    }
+    if (m_cast_length >= 0) str->append_parenthesized(m_cast_length);
+    str->append(')');
+    return;
+  }
   str->append(STRING_WITH_LEN(" as char"));
   if (m_cast_length >= 0) str->append_parenthesized(m_cast_length);
   if (m_cast_cs) {

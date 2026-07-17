@@ -521,6 +521,16 @@ struct System_variables {
   ulonglong duckdb_merge_join_threshold;
 
   bool duckdb_data_import_mode;
+
+  bool duckdb_sql_normalization;
+
+  bool duckdb_copy_data_between_tables_use_ins_sel;
+
+  ulonglong duckdb_max_threads_per_query;
+
+  bool duckdb_psmt_cursor_send_extra_eof;
+
+  bool duckdb_prefer_high_precision;
 };
 
 /**

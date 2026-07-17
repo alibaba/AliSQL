@@ -21,17 +21,19 @@
 
 namespace duckdb {
 
-PhysicalUngroupedAggregate::PhysicalUngroupedAggregate(vector<LogicalType> types,
+PhysicalUngroupedAggregate::PhysicalUngroupedAggregate(PhysicalPlan &physical_plan, vector<LogicalType> types,
                                                        vector<unique_ptr<Expression>> expressions,
-                                                       idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::UNGROUPED_AGGREGATE, std::move(types), estimated_cardinality),
+                                                       idx_t estimated_cardinality,
+                                                       TupleDataValidityType distinct_validity)
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::UNGROUPED_AGGREGATE, std::move(types),
+                       estimated_cardinality),
       aggregates(std::move(expressions)) {
 
 	distinct_collection_info = DistinctAggregateCollectionInfo::Create(aggregates);
 	if (!distinct_collection_info) {
 		return;
 	}
-	distinct_data = make_uniq<DistinctAggregateData>(*distinct_collection_info);
+	distinct_data = make_uniq<DistinctAggregateData>(*distinct_collection_info, distinct_validity);
 }
 
 //===--------------------------------------------------------------------===//
@@ -492,8 +494,7 @@ void UngroupedDistinctAggregateFinalizeEvent::Schedule() {
 		global_source_states.push_back(radix_table_p.GetGlobalSourceState(context));
 	}
 	n_tasks = MaxValue<idx_t>(n_tasks, 1);
-	n_tasks = MinValue<idx_t>(n_tasks, NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads()));
-
+	n_tasks = MinValue<idx_t>(n_tasks, NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads(context)));
 	vector<shared_ptr<Task>> tasks;
 	for (idx_t i = 0; i < n_tasks; i++) {
 		tasks.push_back(

@@ -10,6 +10,7 @@
 
 #include "duckdb.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/mutex.hpp"
@@ -81,10 +82,10 @@ public:
 	ParquetWriter(ClientContext &context, FileSystem &fs, string file_name, vector<LogicalType> types,
 	              vector<string> names, duckdb_parquet::CompressionCodec::type codec, ChildFieldIDs field_ids,
 	              const vector<pair<string, string>> &kv_metadata,
-	              shared_ptr<ParquetEncryptionConfig> encryption_config, idx_t dictionary_size_limit,
+	              shared_ptr<ParquetEncryptionConfig> encryption_config, optional_idx dictionary_size_limit,
 	              idx_t string_dictionary_page_size_limit, bool enable_bloom_filters,
 	              double bloom_filter_false_positive_ratio, int64_t compression_level, bool debug_use_openssl,
-	              ParquetVersion parquet_version);
+	              ParquetVersion parquet_version, GeoParquetVersion geoparquet_version);
 	~ParquetWriter();
 
 public:
@@ -94,7 +95,8 @@ public:
 	void Finalize();
 
 	static duckdb_parquet::Type::type DuckDBTypeToParquetType(const LogicalType &duckdb_type);
-	static void SetSchemaProperties(const LogicalType &duckdb_type, duckdb_parquet::SchemaElement &schema_ele);
+	static void SetSchemaProperties(const LogicalType &duckdb_type, duckdb_parquet::SchemaElement &schema_ele,
+	                                bool allow_geometry);
 
 	ClientContext &GetContext() {
 		return context;
@@ -117,7 +119,7 @@ public:
 	idx_t FileSize() {
 		return total_written;
 	}
-	idx_t DictionarySizeLimit() const {
+	optional_idx DictionarySizeLimit() const {
 		return dictionary_size_limit;
 	}
 	idx_t StringDictionaryPageSizeLimit() const {
@@ -137,6 +139,9 @@ public:
 	}
 	ParquetVersion GetParquetVersion() const {
 		return parquet_version;
+	}
+	GeoParquetVersion GetGeoParquetVersion() const {
+		return geoparquet_version;
 	}
 	const string &GetFileName() const {
 		return file_name;
@@ -166,7 +171,7 @@ private:
 	duckdb_parquet::CompressionCodec::type codec;
 	ChildFieldIDs field_ids;
 	shared_ptr<ParquetEncryptionConfig> encryption_config;
-	idx_t dictionary_size_limit;
+	optional_idx dictionary_size_limit;
 	idx_t string_dictionary_page_size_limit;
 	bool enable_bloom_filters;
 	double bloom_filter_false_positive_ratio;
@@ -174,6 +179,7 @@ private:
 	bool debug_use_openssl;
 	shared_ptr<EncryptionUtil> encryption_util;
 	ParquetVersion parquet_version;
+	GeoParquetVersion geoparquet_version;
 	vector<ParquetColumnSchema> column_schemas;
 
 	unique_ptr<BufferedFileWriter> writer;

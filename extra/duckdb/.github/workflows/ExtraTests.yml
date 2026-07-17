@@ -34,11 +34,7 @@ jobs:
       shell: bash
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests
 
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+    - uses: ./.github/actions/ccache-action
 
     - name: Build Last Release
       shell: bash

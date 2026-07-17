@@ -100,19 +100,19 @@ makeTypeCast(PGNode *arg, PGTypeName *tpname, int trycast, int location)
 }
 
 static PGNode *
-makeStringConst(char *str, int location)
+makeStringConst(const char *str, int location)
 {
 	PGAConst *n = makeNode(PGAConst);
 
 	n->val.type = T_PGString;
-	n->val.val.str = str;
+	n->val.val.str = (char *) str;
 	n->location = location;
 
 	return (PGNode *)n;
 }
 
 static PGNode *
-makeStringConstCast(char *str, int location, PGTypeName *tpname)
+makeStringConstCast(const char *str, int location, PGTypeName *tpname)
 {
 	PGNode *s = makeStringConst(str, location);
 
@@ -273,7 +273,7 @@ makeBoolAConst(bool state, int location)
 	PGAConst *n = makeNode(PGAConst);
 
 	n->val.type = T_PGString;
-	n->val.val.str = (state ? (char*) "t" : (char*) "f");
+	n->val.val.str = (state ? (char*) "1" : (char*) "0");
 	n->location = location;
 
 	return makeTypeCast((PGNode *)n, SystemTypeName("bool"), 0, -1);

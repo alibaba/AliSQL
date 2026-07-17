@@ -1570,10 +1570,10 @@ RESULT
 column_name	column_index	data_type	numeric_precision	
 VARCHAR	INTEGER	VARCHAR	INTEGER	
 [ Rows: 4]
-a	1	BLOB	NULL
-b	2	BLOB	NULL
-c	3	BLOB	NULL
-d	4	BLOB	NULL
+a	1	BIT	NULL
+b	2	BIT	NULL
+c	3	BIT	NULL
+d	4	BIT	NULL
 
 
 # ② Print CONSTRAINTs of t_bit ##
@@ -3680,6 +3680,163 @@ duckdb_checksum  : .	1028691471
 duckdb_batch_insert_checksum: .	1028691471
 innotoduck_checksum: .	1028691471
 ducktoinno_checksum: .	1028691471
+# cleanup
+#
+# column with charset latin1
+#
+# display innodb table structure.
+Field	Type	Null	Key	Default	Extra
+a	varchar(32)	YES		NULL	
+b	varchar(32)	YES		NULL	
+c	varchar(32)	YES		NULL	
+d	char(32)	YES		NULL	
+e	text	YES		NULL	
+# display duckdb table structure.
+Field	Type	Null	Key	Default	Extra
+a	varchar(32)	YES		NULL	
+b	varchar(32)	YES		NULL	
+c	varchar(32)	YES		NULL	
+d	char(32)	YES		NULL	
+e	text	YES		NULL	
+------------------------------------------------------------------------
+## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_latin1 begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
+# ① Print columns of t_latin1 ##
+RESULT
+column_name	column_index	data_type	numeric_precision	
+VARCHAR	INTEGER	VARCHAR	INTEGER	
+[ Rows: 5]
+a	1	VARCHAR	NULL
+b	2	VARCHAR	NULL
+c	3	VARCHAR	NULL
+d	4	VARCHAR	NULL
+e	5	VARCHAR	NULL
+
+
+# ② Print CONSTRAINTs of t_latin1 ##
+RESULT
+table_name	constraint_type	constraint_text	
+VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 0]
+
+
+# ③ Print INDEXs of t_latin1 ##
+RESULT
+index_name	comment	tags	is_unique	is_primary	expressions	
+VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
+[ Rows: 0]
+
+
+# ④ Print SEQUENCE of t_latin1 ##
+RESULT
+sequence_name	min_value	increment_by	last_value	
+VARCHAR	BIGINT	BIGINT	BIGINT	
+[ Rows: 0]
+
+
+## ↑↑↑↑↑↑↑↑↑↑↑↑↑↑ Print table t_latin1 end ↑↑↑↑↑↑↑↑↑↑↑↑↑↑ ##
+------------------------------------------------------------------------
+SET DEBUG='+d,skip_dd_table_access_check';
+#
+# =======================================================================
+# Show mysql dd structure of duckdb_db.t_latin1
+# =======================================================================
+#
+include/assert.inc [table is not duckdb, which is DUCKDB]
+include/assert.inc [duckdb not support partition_expression, which is ]
+# Show colunmn info of t_latin1
+SELECT c.name, c.type, c.is_nullable, c.is_zerofill, c.is_unsigned, c.datetime_precision, c.comment FROM mysql.columns c, mysql.tables t, mysql.schemata s WHERE s.name='duckdb_db' and s.id = t.schema_id and c.table_id = t.id and t.name = 't_latin1' ORDER BY t.schema_id, t.name, c.name;
+name	type	is_nullable	is_zerofill	is_unsigned	datetime_precision	comment
+a	MYSQL_TYPE_VARCHAR	1	0	0	NULL	
+b	MYSQL_TYPE_VARCHAR	1	0	0	NULL	
+c	MYSQL_TYPE_VARCHAR	1	0	0	NULL	
+d	MYSQL_TYPE_STRING	1	0	0	NULL	
+e	MYSQL_TYPE_BLOB	1	0	0	NULL	
+include/assert.inc [duckdb do not support auto increment]
+include/assert.inc [duckdb do not support virtual column, but is_virtual is 0]
+include/assert.inc [duckdb do not support virtual column, but generation_expression is ]
+include/assert.inc [duckdb do not support se_private_data, but it is ]
+SET DEBUG='-d,skip_dd_table_access_check';
+# check inserted data
+innodb_result  : latin1	lAtin1	lÀtin1	lÀTin1	
+duckdb_result_1: latin1	lAtin1	lÀtin1	lÀTin1	
+duckdb_result_2: latin1	lAtin1	lÀtin1	lÀTin1	
+innotoduck_result: latin1	lAtin1	lÀtin1	lÀTin1	
+ducktoinno_result: latin1	lAtin1	lÀtin1	lÀTin1	
+ducktoinnotoduck_result: latin1	lAtin1	lÀtin1	lÀTin1	
+innodb_checksum: .1	2402295621
+duckdb_checksum  : .1	2402295621
+duckdb_batch_insert_checksum: .1	2402295621
+innotoduck_checksum: .1	2402295621
+ducktoinno_checksum: .1	2402295621
+# cleanup
+# display innodb table structure.
+Field	Type	Null	Key	Default	Extra
+e	text	YES		NULL	
+# display duckdb table structure.
+Field	Type	Null	Key	Default	Extra
+e	text	YES		NULL	
+------------------------------------------------------------------------
+## ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ Print t_latin1 begin ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓ ##
+# ① Print columns of t_latin1 ##
+RESULT
+column_name	column_index	data_type	numeric_precision	
+VARCHAR	INTEGER	VARCHAR	INTEGER	
+[ Rows: 1]
+e	1	VARCHAR	NULL
+
+
+# ② Print CONSTRAINTs of t_latin1 ##
+RESULT
+table_name	constraint_type	constraint_text	
+VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 0]
+
+
+# ③ Print INDEXs of t_latin1 ##
+RESULT
+index_name	comment	tags	is_unique	is_primary	expressions	
+VARCHAR	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	VARCHAR	
+[ Rows: 0]
+
+
+# ④ Print SEQUENCE of t_latin1 ##
+RESULT
+sequence_name	min_value	increment_by	last_value	
+VARCHAR	BIGINT	BIGINT	BIGINT	
+[ Rows: 0]
+
+
+## ↑↑↑↑↑↑↑↑↑↑↑↑↑↑ Print table t_latin1 end ↑↑↑↑↑↑↑↑↑↑↑↑↑↑ ##
+------------------------------------------------------------------------
+SET DEBUG='+d,skip_dd_table_access_check';
+#
+# =======================================================================
+# Show mysql dd structure of duckdb_db.t_latin1
+# =======================================================================
+#
+include/assert.inc [table is not duckdb, which is DUCKDB]
+include/assert.inc [duckdb not support partition_expression, which is ]
+# Show colunmn info of t_latin1
+SELECT c.name, c.type, c.is_nullable, c.is_zerofill, c.is_unsigned, c.datetime_precision, c.comment FROM mysql.columns c, mysql.tables t, mysql.schemata s WHERE s.name='duckdb_db' and s.id = t.schema_id and c.table_id = t.id and t.name = 't_latin1' ORDER BY t.schema_id, t.name, c.name;
+name	type	is_nullable	is_zerofill	is_unsigned	datetime_precision	comment
+e	MYSQL_TYPE_BLOB	1	0	0	NULL	
+include/assert.inc [duckdb do not support auto increment]
+include/assert.inc [duckdb do not support virtual column, but is_virtual is 0]
+include/assert.inc [duckdb do not support virtual column, but generation_expression is ]
+include/assert.inc [duckdb do not support se_private_data, but it is ]
+SET DEBUG='-d,skip_dd_table_access_check';
+# check inserted data
+innodb_result  : lÀTin1
+duckdb_result_1: lÀTin1
+duckdb_result_2: lÀTin1
+innotoduck_result: lÀTin1
+ducktoinno_result: lÀTin1
+ducktoinnotoduck_result: lÀTin1
+innodb_checksum: .1	2529662793
+duckdb_checksum  : .1	2529662793
+duckdb_batch_insert_checksum: .1	2529662793
+innotoduck_checksum: .1	2529662793
+ducktoinno_checksum: .1	2529662793
 # cleanup
 #
 # column with utf8mb4 and emoji

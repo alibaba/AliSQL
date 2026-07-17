@@ -476,6 +476,12 @@ const char *ut_strerr(dberr_t num) {
       return ("Sample reader has been requested to stop sampling");
     case DB_OUT_OF_RESOURCES:
       return ("System has run out of resources");
+    case DB_SNAPSHOT_OUT_OF_RANGE:
+      return ("Snapshot is out of retained undo history range");
+    case DB_FLASHBACK_PK_INVISIBLE:
+      return ("Flashback primary key is invisible");
+    case DB_FLASHBACK_INTERNAL_ERROR:
+      return ("Flashback internal error");
     case DB_FTS_TOO_MANY_NESTED_EXP:
       return ("Too many nested sub-expressions in a full-text search");
     case DB_PAGE_IS_STALE:

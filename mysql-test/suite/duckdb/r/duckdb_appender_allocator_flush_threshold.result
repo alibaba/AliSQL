@@ -3,10 +3,10 @@ Variable_name	Value
 duckdb_appender_allocator_flush_threshold	67108864
 CALL dbms_duckdb.query("FROM duckdb_settings() WHERE name = 'appender_allocator_flush_threshold'");
 RESULT
-name	value	description	input_type	scope	
-VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
+name	value	description	input_type	scope	aliases	
+VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR[]	
 [ Rows: 1]
-appender_allocator_flush_threshold	64.0 MiB	Peak allocation threshold at which to flush the allocator when appender flushs chunk.	VARCHAR	GLOBAL
+appender_allocator_flush_threshold	64.0 MiB	Peak allocation threshold at which to flush the allocator when appender flushes chunk.	VARCHAR	GLOBAL	[]
 
 
 SET GLOBAL duckdb_appender_allocator_flush_threshold = 1048576;
@@ -15,10 +15,10 @@ Variable_name	Value
 duckdb_appender_allocator_flush_threshold	1048576
 CALL dbms_duckdb.query("FROM duckdb_settings() WHERE name = 'appender_allocator_flush_threshold'");
 RESULT
-name	value	description	input_type	scope	
-VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
+name	value	description	input_type	scope	aliases	
+VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR[]	
 [ Rows: 1]
-appender_allocator_flush_threshold	1.0 MiB	Peak allocation threshold at which to flush the allocator when appender flushs chunk.	VARCHAR	GLOBAL
+appender_allocator_flush_threshold	1.0 MiB	Peak allocation threshold at which to flush the allocator when appender flushes chunk.	VARCHAR	GLOBAL	[]
 
 
 SET GLOBAL duckdb_appender_allocator_flush_threshold = 1048576 * 1024;
@@ -27,10 +27,10 @@ Variable_name	Value
 duckdb_appender_allocator_flush_threshold	1073741824
 CALL dbms_duckdb.query("FROM duckdb_settings() WHERE name = 'appender_allocator_flush_threshold'");
 RESULT
-name	value	description	input_type	scope	
-VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
+name	value	description	input_type	scope	aliases	
+VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR[]	
 [ Rows: 1]
-appender_allocator_flush_threshold	1.0 GiB	Peak allocation threshold at which to flush the allocator when appender flushs chunk.	VARCHAR	GLOBAL
+appender_allocator_flush_threshold	1.0 GiB	Peak allocation threshold at which to flush the allocator when appender flushes chunk.	VARCHAR	GLOBAL	[]
 
 
 SET GLOBAL duckdb_appender_allocator_flush_threshold = default;

@@ -1,0 +1,3 @@
+--persist-binlog-to-redo=on
+--binlog-order-commits=off
+--replica-preserve-commit-order=OFF

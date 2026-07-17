@@ -104,6 +104,7 @@ SET(INNOBASE_SOURCES
   dict/dict0crea.cc
   dict/dict0dict.cc
   dict/dict0dd.cc
+  dict/dict0flashback.cc
   dict/dict0inst.cc
   dict/dict0load.cc
   dict/dict0mem.cc
@@ -146,6 +147,7 @@ SET(INNOBASE_SOURCES
   gis/gis0sea.cc
   fts/fts0plugin.cc
   handler/ha_innodb.cc
+  handler/ha_innodb_ext.cc
   handler/ha_innopart.cc
   handler/handler0alter.cc
   handler/i_s.cc
@@ -192,6 +194,7 @@ SET(INNOBASE_SOURCES
   log/log0write.cc
   mach/mach0data.cc
   mtr/mtr0log.cc
+  mtr/mtr0log_ext.cc
   mtr/mtr0mtr.cc
   os/os0file.cc
   os/os0enc.cc

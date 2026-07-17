@@ -61,22 +61,29 @@ class Queue {
 
   size_t elements() const { return m_queue.elements; }
   bool is_inited() const { return is_queue_inited(&m_queue); }
-  bool is_full() const { return queue_is_full((QUEUE *)(&m_queue)); }
+  bool is_full() const { return queue_is_full(&m_queue); }
   bool is_empty() const { return elements() == 0; }
-  Element *top() const { return (Element *)queue_top(&m_queue); }
+  Element *top() {
+    return reinterpret_cast<Element *>(queue_top(&m_queue));
+  }
+  const Element *top() const {
+    return reinterpret_cast<const Element *>(queue_top(&m_queue));
+  }
 
-  void push(const Element *element) {
-    queue_insert(&m_queue, (uchar *)element);
+  void push(Element *element) {
+    queue_insert(&m_queue, reinterpret_cast<uchar *>(element));
   }
-  void safe_push(const Element *element) {
+  void safe_push(Element *element) {
     if (is_full()) m_queue.elements--;  // remove one of the furthest elements
-    queue_insert(&m_queue, (uchar *)element);
+    queue_insert(&m_queue, reinterpret_cast<uchar *>(element));
   }
-  Element *pop() { return (Element *)queue_remove_top(&m_queue); }
+  Element *pop() {
+    return reinterpret_cast<Element *>(queue_remove_top(&m_queue));
+  }
   void clear() { queue_remove_all(&m_queue); }
   void propagate_top() { queue_replaced(&m_queue); }
-  void replace_top(const Element *element) {
-    queue_top(&m_queue) = (uchar *)element;
+  void replace_top(Element *element) {
+    queue_top(&m_queue) = reinterpret_cast<uchar *>(element);
     propagate_top();
   }
 

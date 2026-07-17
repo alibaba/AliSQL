@@ -1,0 +1,48 @@
+CALL mtr.add_suppression("persist_binlog_to_redo is not supported.*");
+#
+# Case: DuckDB is off, persist_binlog_to_redo is dynamically settable
+###################################################################
+#
+SELECT @@GLOBAL.duckdb_mode;
+@@GLOBAL.duckdb_mode
+NONE
+SET GLOBAL persist_binlog_to_redo = ON;
+SELECT @@GLOBAL.persist_binlog_to_redo;
+@@GLOBAL.persist_binlog_to_redo
+1
+SET GLOBAL persist_binlog_to_redo = OFF;
+SELECT @@GLOBAL.persist_binlog_to_redo;
+@@GLOBAL.persist_binlog_to_redo
+0
+SET GLOBAL persist_binlog_to_redo = ON;
+SET GLOBAL persist_binlog_to_redo = OFF;
+SELECT @@GLOBAL.persist_binlog_to_redo;
+@@GLOBAL.persist_binlog_to_redo
+0
+#
+# Case: DuckDB is on, enabling persist_binlog_to_redo is rejected
+###############################################################
+#
+# restart: --duckdb-mode=ON
+SELECT @@GLOBAL.duckdb_mode;
+@@GLOBAL.duckdb_mode
+ON
+SELECT @@GLOBAL.persist_binlog_to_redo;
+@@GLOBAL.persist_binlog_to_redo
+0
+SET GLOBAL persist_binlog_to_redo = ON;
+ERROR HY000: persist_binlog_to_redo is not supported for more than one engines.
+# The value is unchanged after the rejected SET.
+SELECT @@GLOBAL.persist_binlog_to_redo;
+@@GLOBAL.persist_binlog_to_redo
+0
+# Turning it off is always allowed, even with DuckDB on.
+SET GLOBAL persist_binlog_to_redo = OFF;
+SELECT @@GLOBAL.persist_binlog_to_redo;
+@@GLOBAL.persist_binlog_to_redo
+0
+#
+# Cleanup
+#########
+#
+# restart

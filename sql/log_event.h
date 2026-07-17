@@ -3584,6 +3584,46 @@ class Ignorable_log_event : public virtual binary_log::Ignorable_event,
 };
 
 /**
+  @class Empty_log_event
+  It is the subclass of Ignorable_log_event, used to fill the reserved space in
+  binary log.
+
+  @internal
+  The inheritance structure is as follows
+
+        Binary_log_event
+               ^
+               |
+               |
+ B_l:Ignorable_event     Log_event
+                 \       /
+       <<virtual>>\     /
+                   \   /
+             Ignorable_log_event
+                     \
+                      \
+                Empty_log_event
+
+  This event is composed of Event header and empty buffer.
+*/
+class Empty_log_event : public Ignorable_log_event {
+ public:
+#ifdef MYSQL_SERVER
+  Empty_log_event(THD *thd_arg, size_t size)
+      : Ignorable_log_event(thd_arg), m_size(size) {}
+
+  bool write_data_body(Basic_ostream *ostream) override;
+#endif
+
+  size_t get_data_size() override { return m_size - LOG_EVENT_HEADER_LEN; }
+
+  void set_size(size_t size) { m_size = size; }
+
+ private:
+  size_t m_size;
+};
+
+/**
   @class Rows_query_log_event
   It is used to record the original query for the rows
   events in RBR.
@@ -3939,7 +3979,9 @@ class Gtid_log_event : public binary_log::Gtid_event, public Log_event {
   /// Return the GNO for this GTID.
   rpl_gno get_gno() const override { return spec.gtid.gno; }
 
-  void set_duckdb_idempotent_flag(bool flag) { duckdb_idempotent_flag = flag; }
+  void set_gtid_duckdb_idempotent_flag(bool flag) {
+    duckdb_idempotent_flag = flag;
+  }
 
   /// string holding the text "SET @@GLOBAL.GTID_NEXT = '"
   static const char *SET_STRING_PREFIX;

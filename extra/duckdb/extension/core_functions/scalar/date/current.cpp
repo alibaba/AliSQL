@@ -27,13 +27,6 @@ double UnixTimestampOperator::Operation(timestamp_tz_t input) {
 	return static_cast<double>(end) / Interval::MICROS_PER_SEC;
 }
 
-template<>
-double UnixTimestampOperator::Operation(date_t input) {
-	dtime_t t0(0);
-	const auto end = Timestamp::GetEpochMicroSeconds(Timestamp::FromDatetime(input, t0));
-	return static_cast<double>(end) / Interval::MICROS_PER_SEC;
-}
-
 static timestamp_t GetTransactionTimestamp(ExpressionState &state) {
 	return MetaTransaction::Get(state.GetContext()).start_timestamp;
 }
@@ -116,7 +109,6 @@ ScalarFunctionSet UnixTimestampFun::GetFunctions() {
 	ScalarFunctionSet unix_timestamp;
 	unix_timestamp.AddFunction(ScalarFunction({}, LogicalType::DOUBLE, UnixTimestampFunctionNoParam));
 	unix_timestamp.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ}, LogicalType::DOUBLE, UnixTimestampFunction<timestamp_tz_t>));
-	unix_timestamp.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::DOUBLE, UnixTimestampFunction<date_t>));
 	for (auto &func : unix_timestamp.functions) {
 		func.stability = FunctionStability::CONSISTENT_WITHIN_QUERY;
 	}

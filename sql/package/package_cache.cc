@@ -27,6 +27,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "my_macros.h"
 #include "mysql/psi/mysql_memory.h"
 
+#include "sql/flashback_query/flashback_proc.h"
 #include "sql/package/package.h"
 #include "sql/package/package_common.h"
 #include "sql/package/package_parse.h"
@@ -121,6 +122,14 @@ void package_context_init() {
 
   /* dbms_duckdb.query() */
   register_package<Proc, myduck::Duckdb_proc_query>(myduck::DUCKDB_PROC_SCHEMA);
+
+  /* Native flashback procedures under dbms_admin. */
+  register_package<Proc, im::flashback::Flashback_proc_show>(
+      im::ADMIN_PROC_SCHEMA);
+  register_package<Proc, im::flashback::Flashback_proc_del>(
+      im::ADMIN_PROC_SCHEMA);
+  register_package<Proc, im::flashback::Flashback_proc_analyze>(
+      im::ADMIN_PROC_SCHEMA);
 
   /* dbms_admin.show_native_procedure() */
   register_package<Proc, im::Show_native_procedure_proc>(im::ADMIN_PROC_SCHEMA);

@@ -78,11 +78,11 @@ uchar *queue_remove(QUEUE *queue, uint idx);
 
 static inline void queue_remove_all(QUEUE *queue) { queue->elements = 0; }
 
-static inline bool queue_is_full(QUEUE *queue) {
+static inline bool queue_is_full(const QUEUE *queue) {
   return queue->elements == queue->max_elements;
 }
 
-static inline bool is_queue_inited(QUEUE *queue) {
+static inline bool is_queue_inited(const QUEUE *queue) {
   return queue->root != nullptr;
 }
 

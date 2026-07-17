@@ -81,25 +81,14 @@ static void process_fields(THD *thd, Alter_info *alter_info) {
 }
 
 /** Check current index is functional index.
-  @param[in]  create  columns in the table
+  @param[in]  key  index definition
 
   @return true if has functional index, false otherwise.
 */
-static bool is_functional_index(const Key_spec *key,
-                                List<Create_field> &create) {
+static bool is_functional_index(const Key_spec *key) {
   for (size_t j = 0; j < key->columns.size(); ++j) {
     Key_part_spec *key_part_spec = key->columns[j];
-    // In the case of procedures, the Key_part_spec may both have an
-    // expression and a field name assigned to it. But the hidden generated
-    // will not exist in the create list, so we will have to add it.
-    if (!key_part_spec->has_expression() ||
-        (key_part_spec->get_field_name() != nullptr &&
-         std::find_if(create.begin(), create.end(),
-                      [key_part_spec](Create_field const &cf) {
-                        return my_strcasecmp(system_charset_info,
-                                             key_part_spec->get_field_name(),
-                                             cf.field_name) == 0;
-                      }) != create.end())) {
+    if (!key_part_spec->has_expression()) {
       continue;
     }
     return true;
@@ -157,7 +146,7 @@ static bool select_primary_key(THD *thd, Alter_info *alter_info,
       position recorded in the binlog to shift, causing replication
       interruption.
     */
-    if (is_functional_index(key, alter_info->create_list)) {
+    if (is_functional_index(key)) {
       my_error(ER_DUCKDB_TABLE_STRUCT_INVALID, MYF(0),
                "functional index is not supported");
       return true;
@@ -511,7 +500,8 @@ bool report_duckdb_table_struct_error(const std::string &err_msg) {
 static bool is_functional_index(const dd::Index *index) {
   for (const dd::Index_element *e : index->elements()) {
     const dd::Column &c = e->column();
-    if (c.hidden() == dd::Column::enum_hidden_type::HT_HIDDEN_SQL) {
+    if (c.hidden() == dd::Column::enum_hidden_type::HT_HIDDEN_SQL &&
+        !c.is_generation_expression_null()) {
       return true;
     }
   }
@@ -565,19 +555,9 @@ bool precheck_convert_to_duckdb(const dd::Table *dd_table) {
           "invisible column is not supported");
     }
 
-    if (c->is_virtual()) {
-      return report_duckdb_table_struct_error(
-          "virtual column is not supported");
-    }
-
     if (c->type() == dd::enum_column_types::GEOMETRY) {
       return report_duckdb_table_struct_error(
           "geometry column is not supported");
-    }
-
-    if (!c->is_generation_expression_null()) {
-      return report_duckdb_table_struct_error(
-          "generation expression is not supported");
     }
   }
 

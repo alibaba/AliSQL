@@ -7,7 +7,7 @@
 
 [DuckDB](https://github.com/duckdb/duckdb) is an open-source embedded analytical database system (OLAP) designed for data analysis workloads. DuckDB is rapidly becoming a popular choice in data science, BI tools, and embedded analytics scenarios due to its key characteristics:
 
-- **Exceptional Query Performance**: Single-node DuckDB performance not only far exceeds InnoDB, but even surpasses ClickHouse and SelectDB
+- **Analytical Query Performance**: Columnar execution is designed for analytical workloads; the reference benchmark below compares AliSQL DuckDB with InnoDB and ClickHouse
 - **Excellent Compression**: DuckDB uses columnar storage and automatically selects appropriate compression algorithms based on data types, achieving very high compression ratios
 - **Embedded Design**: DuckDB is an embedded database system, naturally suitable for integration into MySQL
 - **Plugin Architecture**: DuckDB uses a plugin-based design, making it very convenient for third-party development and feature extensions
@@ -19,13 +19,55 @@
 MySQL has long lacked an analytical query engine. While InnoDB is naturally designed for OLTP and excels in TP scenarios, its query efficiency is very low for analytical workloads. This integration enables:
 
 - **Hybrid Workloads**: Run both OLTP (MySQL/InnoDB) and OLAP (DuckDB) queries in a single database system
-- **High-Performance Analytics**: Analytical query performance improves up to **200x** compared to InnoDB
-- **Storage Cost Reduction**: DuckDB read replicas typically use only **20%** of the main instance's storage space due to high compression
-- **100% MySQL Syntax Compatibility**: No learning curve - DuckDB is integrated as a storage engine, so users continue using MySQL syntax
-- **Zero Additional Management Cost**: DuckDB instances are managed, operated, and monitored exactly like regular RDS MySQL instances
-- **One-Click Deployment**: Create DuckDB read-only instances with automatic data conversion from InnoDB to DuckDB
+- **High-Performance Analytics**: In the reference TPC-H SF100 results below, multiple queries show more than **200x speedups** over InnoDB
+- **Storage Cost Reduction**: Columnar compression can reduce the storage footprint of analytical replicas; measure the ratio with production-shaped data
+- **MySQL-Compatible SQL Interface**: DuckDB is integrated as a storage engine, so applications continue to use the MySQL protocol and familiar SQL. Compatibility is high but not identical; see the compatibility notes below
+- **Familiar Operations**: DuckDB instances retain the MySQL protocol and can use the same operational entry points as other AliSQL instances
+- **Startup Conversion**: Existing InnoDB user tables can be converted to DuckDB during a controlled server startup
 
 **AliSQL** integrates **DuckDB** as a native AP engine, empowering users with high-performance, lightweight analytical capabilities while maintaining a seamless, MySQL-compatible experience.
+
+## Quick Start
+
+Enable DuckDB at startup; `duckdb_mode` is read-only after the server starts:
+
+```ini
+[mysqld]
+duckdb_mode=ON
+duckdb_memory_limit=2147483648
+duckdb_threads=0
+duckdb_temp_directory=/path/to/duckdb-tmp
+```
+
+Then create or convert an analytical table through MySQL SQL:
+
+```sql
+CREATE TABLE sales (
+    id BIGINT PRIMARY KEY,
+    region VARCHAR(32),
+    amount DECIMAL(18,2)
+) ENGINE=DuckDB;
+
+SELECT region, SUM(amount)
+FROM sales
+GROUP BY region
+ORDER BY SUM(amount) DESC;
+
+ALTER TABLE existing_innodb_table ENGINE=DuckDB;
+```
+
+For production topology and initialization details, see [How to Setup a DuckDB Node](./how-to-setup-duckdb-node-en.md).
+
+## AliSQL 8.0.44 Highlights
+
+- DuckDB core upgraded to v1.4.4.
+- Optional SQL normalization rewrites additional MySQL syntax and functions for DuckDB, including cross-database queries and prepared-statement reprepare.
+- Added generated-column conversion, Latin1 support, BIT/default-value compatibility, and BLOB/VARCHAR comparison.
+- Added per-query thread limits for user and replication workloads, plus an optional high-precision calculation mode.
+- Added an `INSERT ... SELECT` path for faster Copy DDL between DuckDB tables.
+- Improved batch replication, GTID handling, idempotent replay, crash rollback, and orphan-table cleanup.
+
+See the [AliSQL 8.0.44 release notes](../changes-in-alisql-8.0.44.md) and [DuckDB variables reference](./duckdb_variables-en.md) for the complete list and controls.
 
 
 ## Architecture
@@ -63,7 +105,7 @@ DuckDB analytical read-only instances use a read-write separation architecture:
 **Compatibility**:
 - Extended DuckDB's syntax parser to support MySQL-specific syntax
 - Rewrote numerous DuckDB functions and added many MySQL functions
-- Automated compatibility testing platform with ~170,000 SQL tests shows **[99% compatibility rate](https://www.alibabacloud.com/help/en/rds/apsaradb-rds-for-mysql/compatibility-of-duckdb-based-analytical-instances?spm=a2c63.p38356.help-menu-26090.d_3_4_2.6a97448exEuaFG)**
+- Compatibility is broad but not complete. Validate application-specific SQL, data types, collations, and DDL before migration; RDS product compatibility metrics do not automatically apply to a self-managed build
 
 ### Binlog Replication Path
 
@@ -77,8 +119,9 @@ AliSQL allows DuckDB nodes to serve as replicas via Binlog synchronization. By r
 
 **DML Replay Optimization**:
 - DuckDB favors large transactions; frequent small transactions cause severe replication lag
-- Implemented batch replay mechanism achieving **300K rows/s** replay capability
-- In Sysbench testing, achieves zero replication lag, even higher than InnoDB replay performance
+- Batch replay groups small transactions to improve replication throughput and reduce commit overhead
+- Multi-Trx Batch requires `replica_parallel_workers=0`, and `duckdb_multi_trx_in_batch` can be changed only while replication is stopped
+- The resulting replay rate and lag depend on row shape, transaction size, hardware, and source concurrency
 - Batch-write optimization also applies to the primary node: with our DML optimizations, INSERT and DELETE may achieve excellent performance on the primary.
 ![Batch commit](./pic/batch_commit.png)
 
@@ -88,14 +131,25 @@ AliSQL allows DuckDB nodes to serve as replicas via Binlog synchronization. By r
 
 - Natively supported DDL uses Inplace/Instant execution
 - For DDL operations DuckDB doesn't natively support (e.g., column reordering), implemented Copy DDL mechanism
-- Convert from InnoDB to DuckDB using multi-threaded parallel execution. Execution time reduced by **7x**
+- InnoDB-to-DuckDB conversion uses multi-threaded parallel execution to reduce migration time
 ![Copy DDL from InnoDB](./pic/parallel_copy_from_innodb.png)
+
+## Operational Scope and Limitations
+
+- DuckDB is intended for analytical workloads. Keep latency-sensitive transactional writes on InnoDB and use a DuckDB replica when workload isolation is required.
+- Enable `duckdb_require_primary_key` for replicated DuckDB tables. DuckDB does not physically enforce MySQL PRIMARY/UNIQUE indexes, so source data must preserve uniqueness.
+- MySQL SQL compatibility is broad but not complete. Test unsupported syntax, functions, collations, and DDL behavior against the target release.
+- DuckDB does not natively implement MySQL two-phase commit. AliSQL supplies a dedicated commit and idempotent replay protocol; do not bypass the supported binlog replication path.
+- `duckdb_use_direct_io` is experimental and is not recommended for production use.
 
 
 ## Performance Benchmarks
 **Test Environment**:
 - ECS Instance: 32 CPU, 128GB Memory, ESSD PL1 Cloud Disk 500GB
 - Benchmark: TPC-H SF100
+- Values below are query latency in seconds; `1800` denotes the test timeout and `OOM` denotes out-of-memory.
+
+These are directional reference results supplied with the original integration material, not a performance guarantee. Exact engine versions, cache state, schema options, and run-count methodology are not recorded here. Validate performance with your own data and configuration. The `total` row reproduces the supplied aggregation; because timeout and OOM entries are censored outcomes, it is not a strict end-to-end speedup metric.
 
 | Query ID | DuckDB | InnoDB | ClickHouse |
 | --- | --- | --- | --- |
@@ -121,14 +175,17 @@ AliSQL allows DuckDB nodes to serve as replicas via Binlog synchronization. By r
 |q20|0.51|1800|3.38|
 |q21|1.64|1800|OOM|
 |q22|0.33|361.4|4|
-|total|15.31|25234.31|80.01
+|total|15.31|25234.31|80.01|
 
-DuckDB demonstrates significant performance advantages over InnoDB in analytical query scenarios, with up to **200x improvement**.
+In these reference results, DuckDB shows more than **200x speedups** over InnoDB on multiple completed queries.
 
-## Try It on Alibaba Cloud
-You can experience RDS MySQL with DuckDB engine on Alibaba Cloud:
+## Alibaba Cloud RDS MySQL Commercial Offering
 
-https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/duckdb-based-analytical-instance/
+Alibaba Cloud RDS MySQL offers DuckDB analytical primary and analytical read-only instance products. The managed read-only topology adds native binlog synchronization, automatic DDL handling, and resource isolation from the transactional primary; the analytical primary is available as a separately deployed product topology.
+
+The official RDS product page documents product-level SQL compatibility and analytical acceleration results, as well as current availability and trial options. Those metrics and lifecycle capabilities apply to RDS-managed configurations and are not performance or compatibility guarantees for arbitrary self-managed builds.
+
+- DuckDB analytical instances: [English](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/duckdb-analysis-instance) / [中文](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/duckdb-analysis-instance)
 
 
 ## See also

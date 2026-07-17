@@ -35,7 +35,7 @@ static const DefaultCompressionMethod internal_compression_methods[] = {
     {CompressionType::COMPRESSION_AUTO, nullptr, nullptr}};
 
 static optional_ptr<CompressionFunction> FindCompressionFunction(CompressionFunctionSet &set, CompressionType type,
-                                                                 const PhysicalType physical_type) {
+                                                                 const PhysicalType physical_type, bool *not_supported) {
 	auto &functions = set.functions;
 	auto comp_entry = functions.find(type);
 	if (comp_entry != functions.end()) {
@@ -45,6 +45,19 @@ static optional_ptr<CompressionFunction> FindCompressionFunction(CompressionFunc
 			return &type_entry->second;
 		}
 	}
+
+	/* Check if function is loaded but not supported for physical type. */
+	if (not_supported != nullptr) {
+		auto funcs = set.functions_unsupported;
+		auto entry = funcs.find(type);
+		if (entry != funcs.end()) {
+			auto &types_map = entry->second;
+			if (types_map.find(physical_type) != types_map.end()) {
+				*not_supported = true;
+			}
+		}
+	}
+
 	return nullptr;
 }
 
@@ -54,12 +67,13 @@ static optional_ptr<CompressionFunction> LoadCompressionFunction(CompressionFunc
 		const auto &method = internal_compression_methods[i];
 		if (method.type == type) {
 			if (!method.supports_type(physical_type)) {
+				set.functions_unsupported[type].insert(physical_type);
 				return nullptr;
 			}
 			// The type is supported. We create the function and insert it into the set of available functions.
 			auto function = method.get_function(physical_type);
 			set.functions[type].insert(make_pair(physical_type, function));
-			return FindCompressionFunction(set, type, physical_type);
+			return FindCompressionFunction(set, type, physical_type, nullptr);
 		}
 	}
 	throw InternalException("Unsupported compression function type");
@@ -100,10 +114,14 @@ optional_ptr<CompressionFunction> DBConfig::GetCompressionFunction(CompressionTy
 
 	{
 		auto read_lock = compression_functions->lock.GetSharedLock();
+		bool not_supported = false;
 		// Check if the function is already loaded into the global compression functions.
-		auto function = FindCompressionFunction(*compression_functions, type, physical_type);
+		auto function = FindCompressionFunction(*compression_functions, type, physical_type, &not_supported);
 		if (function) {
 			return function;
+		} else if (not_supported) {
+			// The function is loaded but not supported for this physical type
+			return nullptr;
 		}
 	}
 	{

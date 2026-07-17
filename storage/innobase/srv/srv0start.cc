@@ -105,6 +105,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "clone0clone.h"
 #include "dict0boot.h"
 #include "dict0crea.h"
+#include "dict0flashback.h"
 #include "dict0load.h"
 #include "dict0stats_bg.h"
 #include "lock0lock.h"
@@ -153,7 +154,9 @@ enum srv_start_state_t {
   /** Started purge thread(s) */
   SRV_START_STATE_PURGE = 2,
   /** Started bufdump + dict stat and FTS optimize thread. */
-  SRV_START_STATE_STAT = 4
+  SRV_START_STATE_STAT = 4,
+  /** Started flashback snapshot history thread. */
+  SRV_START_STATE_SCN_HIST = 8
 };
 
 /** Track server thrd starting phases */
@@ -186,6 +189,7 @@ mysql_pfs_key_t srv_lock_timeout_thread_key;
 mysql_pfs_key_t srv_master_thread_key;
 mysql_pfs_key_t srv_monitor_thread_key;
 mysql_pfs_key_t srv_purge_thread_key;
+mysql_pfs_key_t scn_history_thread_key;
 mysql_pfs_key_t srv_worker_thread_key;
 mysql_pfs_key_t trx_recovery_rollback_thread_key;
 mysql_pfs_key_t srv_ts_alter_encrypt_thread_key;
@@ -2572,6 +2576,14 @@ void srv_start_threads_after_ddl_recovery() {
   Start the Purge thread */
   srv_start_purge_threads();
 
+  if (im::srv_scn_history_task_enabled || im::srv_scn_history_keep_seconds > 0) {
+    srv_threads.m_scn_hist = os_thread_create(scn_history_thread_key, 0,
+                                              im::srv_scn_history_thread);
+    im::srv_scn_history_thread_init();
+    srv_threads.m_scn_hist.start();
+    srv_start_state_set(SRV_START_STATE_SCN_HIST);
+  }
+
   /* If recovered, should do write back the dynamic metadata. */
   dict_persist_to_dd_table_buffer();
 }
@@ -2646,6 +2658,7 @@ void srv_pre_dd_shutdown() {
     /* In read-only mode, no purge should be done, so goal of the
     SRV_SHUTDOWN_PURGE is already satisfied (no purge threads). */
     ut_a(!srv_purge_threads_active());
+    ut_a(!srv_thread_is_active(srv_threads.m_scn_hist));
 
     /* Advance quickly through all states to SRV_SHUTDOWN_DD. */
     srv_shutdown_set_state(SRV_SHUTDOWN_RECOVERY_ROLLBACK);
@@ -2693,6 +2706,13 @@ void srv_pre_dd_shutdown() {
   }
   ut_a(!srv_thread_is_active(srv_threads.m_fts_optimize));
   ut_a(!srv_thread_is_active(srv_threads.m_dict_stats));
+
+  if (srv_start_state_is_set(SRV_START_STATE_SCN_HIST)) {
+    im::srv_scn_history_shutdown();
+    im::srv_scn_history_thread_deinit();
+    srv_start_state &= ~SRV_START_STATE_SCN_HIST;
+  }
+  ut_a(!srv_thread_is_active(srv_threads.m_scn_hist));
 
   for (uint32_t count = 1; srv_thread_is_active(srv_threads.m_ts_alter_encrypt);
        ++count) {
@@ -2974,7 +2994,8 @@ void srv_shutdown() {
       std::cref(srv_threads.m_ts_alter_encrypt),
       std::cref(srv_threads.m_fts_optimize),
       std::cref(srv_threads.m_recv_writer),
-      std::cref(srv_threads.m_dict_stats)};
+      std::cref(srv_threads.m_dict_stats),
+      std::cref(srv_threads.m_scn_hist)};
 
   for (const auto &thread : threads_stopped_before_shutdown) {
     ut_a(!srv_thread_is_active(thread));

@@ -47,7 +47,7 @@ t_innodb	CREATE TABLE `t_innodb` (
   `id` bigint NOT NULL,
   `c0` int DEFAULT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=DUCKDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 [connection master]
 CREATE PROCEDURE insert_duckdb_innodb(val INT)
 BEGIN
@@ -74,11 +74,6 @@ CREATE PROCEDURE update_duckdb_nopk(val INT)
 BEGIN
 UPDATE t_duckdb SET c0 = c0 + 1 WHERE id = val;
 END|
-CREATE PROCEDURE select_both()
-BEGIN
-SELECT * FROM t_duckdb;
-SELECT * FROM t_innodb;
-END|
 include/rpl_sync.inc
 ###########################################################################
 # 1. Test transaction first INSERT DuckDB table, then INSERT InnoDB table
@@ -96,11 +91,8 @@ START REPLICA;
 Warnings:
 Note	3083	Replication thread(s) for channel '' are already runnning.
 include/rpl_sync.inc
-CALL select_both();
-id	c0
-1	1
-id	c0
-1	1
+include/rpl_diff.inc
+include/rpl_diff.inc
 # 1.2 Crash After DuckDB Commit
 [connection slave]
 STOP REPLICA;
@@ -114,13 +106,8 @@ START REPLICA;
 Warnings:
 Note	3083	Replication thread(s) for channel '' are already runnning.
 include/rpl_sync.inc
-CALL select_both();
-id	c0
-1	1
-2	2
-id	c0
-1	1
-2	2
+include/rpl_diff.inc
+include/rpl_diff.inc
 ###########################################################################
 # 2. Test transaction first INSERT InnoDB table, then INSERT DuckDB table
 ###########################################################################
@@ -137,15 +124,8 @@ START REPLICA;
 Warnings:
 Note	3083	Replication thread(s) for channel '' are already runnning.
 include/rpl_sync.inc
-CALL select_both();
-id	c0
-1	1
-2	2
-3	3
-id	c0
-1	1
-2	2
-3	3
+include/rpl_diff.inc
+include/rpl_diff.inc
 # 2.2 Crash After DuckDB Commit
 [connection slave]
 STOP REPLICA;
@@ -159,17 +139,8 @@ START REPLICA;
 Warnings:
 Note	3083	Replication thread(s) for channel '' are already runnning.
 include/rpl_sync.inc
-CALL select_both();
-id	c0
-1	1
-2	2
-3	3
-4	4
-id	c0
-1	1
-2	2
-3	3
-4	4
+include/rpl_diff.inc
+include/rpl_diff.inc
 ###########################################################################
 # 3. Test transaction UPDATE DuckDB table's non-PK field
 ###########################################################################
@@ -186,12 +157,7 @@ START REPLICA;
 Warnings:
 Note	3083	Replication thread(s) for channel '' are already runnning.
 include/rpl_sync.inc
-SELECT * FROM t_duckdb;
-id	c0
-1	2
-2	2
-3	3
-4	4
+include/rpl_diff.inc
 # 3.2 Crash After DuckDB Commit
 [connection slave]
 STOP REPLICA;
@@ -205,12 +171,7 @@ START REPLICA;
 Warnings:
 Note	3083	Replication thread(s) for channel '' are already runnning.
 include/rpl_sync.inc
-SELECT * FROM t_duckdb;
-id	c0
-1	2
-2	3
-3	3
-4	4
+include/rpl_diff.inc
 ###########################################################################
 # 4. Test transaction UPDATE DuckDB table's PK field
 ###########################################################################
@@ -227,12 +188,7 @@ START REPLICA;
 Warnings:
 Note	3083	Replication thread(s) for channel '' are already runnning.
 include/rpl_sync.inc
-SELECT * FROM t_duckdb;
-id	c0
-1	2
-2	3
-5	4
-4	3
+include/rpl_diff.inc
 # 4.2 Crash After DuckDB Commit
 [connection slave]
 STOP REPLICA;
@@ -246,12 +202,45 @@ START REPLICA;
 Warnings:
 Note	3083	Replication thread(s) for channel '' are already runnning.
 include/rpl_sync.inc
-SELECT * FROM t_duckdb;
-id	c0
-1	2
-2	3
-6	4
-5	3
+include/rpl_diff.inc
+###########################################################################
+# 5. Test duckdb_dml_in_batch=on
+###########################################################################
+include/assert_grep.inc [Check no batch up to now]
+# 5.1 Crash Before DuckDB Commit
+[connection slave]
+STOP REPLICA;
+[connection master]
+CALL insert_duckdb_innodb(7);
+[connection slave]
+SET GLOBAL debug="+d,crash_before_duckdb_commit";
+START REPLICA;
+include/rpl_start_server.inc [server_number=2 parameters: --duckdb_dml_in_batch=on]
+START REPLICA;
+Warnings:
+Note	3083	Replication thread(s) for channel '' are already runnning.
+include/rpl_sync.inc
+include/rpl_diff.inc
+include/rpl_diff.inc
+include/assert_grep.inc [Check 1 batch commit after Crash Recovery]
+# 5.2 Crash After DuckDB Commit
+[connection slave]
+STOP REPLICA;
+[connection master]
+CALL insert_duckdb_innodb(8);
+[connection slave]
+SET GLOBAL debug="+d,crash_after_duckdb_commit";
+START REPLICA;
+include/rpl_start_server.inc [server_number=2 parameters: --duckdb_dml_in_batch=on]
+START REPLICA;
+Warnings:
+Note	3083	Replication thread(s) for channel '' are already runnning.
+include/rpl_sync.inc
+include/rpl_diff.inc
+include/rpl_diff.inc
+include/assert_grep.inc [Check 1+2 batch commits after Crash Recovery]
+[connection slave]
+SET GLOBAL duckdb_dml_in_batch=off;
 ###########################################################################
 # Cleanup
 ###########################################################################
@@ -260,7 +249,6 @@ DROP PROCEDURE insert_duckdb_innodb;
 DROP PROCEDURE insert_innodb_duckdb;
 DROP PROCEDURE update_duckdb_pk;
 DROP PROCEDURE update_duckdb_nopk;
-DROP PROCEDURE select_both;
 DROP TABLE t_duckdb;
 DROP TABLE t_innodb;
 include/rpl_sync.inc

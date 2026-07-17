@@ -78,6 +78,12 @@ ALTER TABLE t1 ADD COLUMN c3 INT DEFAULT 5;
 --let $assert_count = 0
 --source include/assert_grep.inc
 
+--let $assert_file = $MYSQLTEST_VARDIR/log/mysqld.2.err
+--let $assert_text = Check there are 2 commits of Multi-Trx Batch
+--let $assert_select = DROP TABLE IF EXISTS main.`test_rds_buf_t1`
+--let $assert_count = 2
+--source include/assert_grep.inc
+
 --echo ###########################################################################
 --echo # 6. Test Cleanup
 --echo ###########################################################################

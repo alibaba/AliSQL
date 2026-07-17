@@ -557,8 +557,9 @@ class Value_generator {
      Writes the generation expression into a String with proper syntax.
      @param thd  THD
      @param out  output String
+     @param duckdb_rewrite  true if we are printing the expression for DuckDB
   */
-  void print_expr(THD *thd, String *out);
+  void print_expr(THD *thd, String *out, bool duckdb_rewrite = false);
 
   /*
    The following data is only updated by the parser and read

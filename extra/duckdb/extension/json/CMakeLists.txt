@@ -22,6 +22,7 @@ set(JSON_EXTENSION_FILES
     json_functions/json_exists.cpp
     json_functions/json_extract.cpp
     json_functions/json_keys.cpp
+    json_functions/json_member_of.cpp
     json_functions/json_merge_patch.cpp
     json_functions/json_pretty.cpp
     json_functions/json_table_in_out.cpp

@@ -41,12 +41,8 @@ CREATE TABLE t2(a INT, name VARCHAR(255), PRIMARY KEY (name), UNIQUE INDEX uk_a(
 INSERT INTO t2 VALUES (1, 'one');
 CREATE TABLE t3 (id INT, name VARCHAR(255), age INT INVISIBLE, PRIMARY KEY (id)) ENGINE = InnoDB;
 INSERT INTO t3 VALUES (1, 'one');
-CREATE TABLE t4(id INT PRIMARY KEY, a INT, b INT GENERATED ALWAYS AS (a - 1) STORED) ENGINE = InnoDB;
-INSERT INTO t4(id, a) VALUES (1, 1);
-CREATE TABLE t5(id INT PRIMARY KEY, a INT, b INT GENERATED ALWAYS AS (a - 1) VIRTUAL) ENGINE = InnoDB;
-INSERT INTO t5(id, a) VALUES (1, 1);
-CREATE TABLE t6 (fid INT PRIMARY KEY, g POINT) ENGINE = InnoDB;
-INSERT INTO t6 VALUES (101, ST_PointFromText('POINT(10 10)'));
+CREATE TABLE t4 (fid INT PRIMARY KEY, g POINT) ENGINE = InnoDB;
+INSERT INTO t4 VALUES (101, ST_PointFromText('POINT(10 10)'));
 #
 # 4) RESTART WITH duckdb_convert_all_at_startup=ON, duckdb_convert_all_at_startup_ignore_error=OFF, FAILED.
 #
@@ -57,8 +53,6 @@ DuckDB_convert_stage_at_startup	CHECK_FAILED
 include/assert_grep.inc [Found no primary key error.]
 include/assert_grep.inc [Found functional index error.]
 include/assert_grep.inc [Found invisible column error.]
-include/assert_grep.inc [Found generation expression error.]
-include/assert_grep.inc [Found virtual column error.]
 include/assert_grep.inc [Found geometry column error.]
 #
 # 5) RESTART WITH duckdb_convert_all_at_startup=ON, duckdb_convert_all_at_startup_ignore_error=ON, SUCCESSFUL.
@@ -72,4 +66,4 @@ DuckDB_convert_stage_at_startup	FINISHED
 #
 # 6) CLEANUP
 #
-DROP TABLE t1, t2, t3, t4, t5, t6;
+DROP TABLE t1, t2, t3, t4;

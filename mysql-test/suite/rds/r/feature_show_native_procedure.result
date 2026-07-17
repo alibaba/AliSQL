@@ -1,0 +1,9 @@
+call dbms_admin.show_native_procedure();
+SCHEMA_NAME	PROC_NAME	PROC_TYPE	PARAMETERS
+dbms_admin	analyze_flashback_snapshots	ADMIN_PROC	NULL
+dbms_admin	del_flashback_snapshots	ADMIN_PROC	VARCHAR, VARCHAR
+dbms_admin	show_flashback_snapshots	ADMIN_PROC	VARCHAR, VARCHAR, LONGLONG
+dbms_admin	show_native_procedure	ADMIN_PROC	NULL
+dbms_duckdb	query	ADMIN_PROC	VARCHAR
+mysql	dummy	ADMIN_PROC	NULL
+mysql	dummy_2	ADMIN_PROC	LONGLONG, VARCHAR

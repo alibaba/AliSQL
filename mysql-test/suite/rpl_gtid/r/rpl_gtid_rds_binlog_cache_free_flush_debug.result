@@ -1,0 +1,264 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+#
+# 1. Make test data.
+########################################################
+#
+[connection master]
+CREATE DATABASE rpl_test;
+CREATE TABLE rpl_test.t1 (s LONGTEXT);
+CREATE TABLE rpl_test.t2 (s LONGTEXT);
+CALL mtr.add_suppression("Binary logging not possible.");
+CALL mtr.add_suppression("Attempting backtrace. You can use the following information to find out");
+CALL mtr.add_suppression("Binlog cache free flush failed because failed to flush gtid event");
+CALL mtr.add_suppression("Binlog cache free flush failed because failed to rename temp file.");
+CALL mtr.add_suppression("Binlog cache free flush message: check reserve space for front events is not enough");
+FLUSH BINARY LOGS;
+#
+# 2. Test rename fail will crash the server.
+########################################################
+#
+[connection master]
+SET DEBUG = "+d,simulate_binlog_cache_free_flush_rename_fail";
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+COMMIT;
+ERROR HY000: Binary logging not possible. Message: An error occurred during sync stage of the commit. 'binlog_error_action' is set to 'ABORT_SERVER'. Server is being stopped.
+include/rpl_start_server.inc [server_number=1]
+# Check no binlog cache temp file exist.
+# Check binlog and data. Expect 3 binlog files.
+[connection master]
+SHOW BINARY LOGS;
+Log_name	File_size	Encrypted
+master-bin.000001	#	#
+master-bin.000002	#	#
+master-bin.000003	#	#
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+0
+include/rpl_sync.inc
+[connection slave]
+SHOW BINARY LOGS;
+Log_name	File_size	Encrypted
+slave-bin.000001	#	#
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+0
+#
+# 3. Test reserved space not enough will go back to original logic.
+########################################################
+#
+[connection master]
+SET debug = "+d,simulate_small_rds_binlog_cache_reserved_space";
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+SET debug = "-d,simulate_small_rds_binlog_cache_reserved_space";
+# Check binlog and data. Expect 3 binlog files, and no ignorable event in binlog.
+SHOW BINARY LOGS;
+Log_name	File_size	Encrypted
+master-bin.000001	#	#
+master-bin.000002	#	#
+master-bin.000003	#	#
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+2
+include/assert_binlog_events.inc [Gtid # !Begin # !Insert # Write_rows # !Commit]
+include/rpl_sync.inc
+[connection slave]
+SHOW BINARY LOGS;
+Log_name	File_size	Encrypted
+slave-bin.000001	#	#
+slave-bin.000002	#	#
+slave-bin.000003	#	#
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+2
+include/assert_binlog_events.inc [Ignorable # Gtid # !Begin # !Insert # Write_rows # !Commit]
+#
+# 4. Test binlog cache free flush crash safe.
+# 4.1. Test crash after create purge index file for old binlog file.
+########################################################
+#
+[connection master]
+SET debug = "+d,crash_create_non_critical_before_update_index";
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+ERROR HY000: Lost connection to MySQL server during query
+include/rpl_start_server.inc [server_number=1]
+# Check binlog and data. Expect 4 binlog files.
+SHOW BINARY LOGS;
+Log_name	File_size	Encrypted
+master-bin.000001	#	#
+master-bin.000002	#	#
+master-bin.000003	#	#
+master-bin.000004	#	#
+include/rpl_sync.inc
+[connection slave]
+SHOW BINARY LOGS;
+Log_name	File_size	Encrypted
+slave-bin.000001	#	#
+slave-bin.000002	#	#
+slave-bin.000003	#	#
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+2
+#
+# 4.2 Test crash before rename temp file to binlog file.
+########################################################
+#
+[connection master]
+SET debug = "+d,crash_before_rename_file";
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+ERROR HY000: Lost connection to MySQL server during query
+# Check binlog cache temp file is remained.
+ML.####
+include/rpl_start_server.inc [server_number=1]
+# Check binlog cache temp file dir is empty.
+# Check binlog and data. Expect 5 binlog files.
+SHOW BINARY LOGS;
+Log_name	File_size	Encrypted
+master-bin.000001	#	#
+master-bin.000002	#	#
+master-bin.000003	#	#
+master-bin.000004	#	#
+master-bin.000005	#	#
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+2
+include/rpl_sync.inc
+[connection slave]
+SHOW BINARY LOGS;
+Log_name	File_size	Encrypted
+slave-bin.000001	#	#
+slave-bin.000002	#	#
+slave-bin.000003	#	#
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+2
+#
+# 4.3 Test crash after persist temp file before add index file.
+########################################################
+#
+[connection master]
+SET debug = "+d,crash_after_rename_file";
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+ERROR HY000: Lost connection to MySQL server during query
+include/rpl_start_server.inc [server_number=1]
+# Check binlog and data. Expect 6 binlog files.
+SHOW BINARY LOGS;
+Log_name	File_size	Encrypted
+master-bin.000001	#	#
+master-bin.000002	#	#
+master-bin.000003	#	#
+master-bin.000004	#	#
+master-bin.000005	#	#
+master-bin.000006	#	#
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+2
+include/rpl_sync.inc
+[connection slave]
+SHOW BINARY LOGS;
+Log_name	File_size	Encrypted
+slave-bin.000001	#	#
+slave-bin.000002	#	#
+slave-bin.000003	#	#
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+2
+#
+# 4.4 Test crash after add binlog index file.
+########################################################
+#
+[connection master]
+SET debug = "+d,crash_after_free_flush_add_index_file";
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+ERROR HY000: Lost connection to MySQL server during query
+include/rpl_start_server.inc [server_number=1]
+# Check binlog and data. Expect 8 binlog files and ignorable event exist in the 7th binlog.
+SHOW BINARY LOGS;
+Log_name	File_size	Encrypted
+master-bin.000001	#	#
+master-bin.000002	#	#
+master-bin.000003	#	#
+master-bin.000004	#	#
+master-bin.000005	#	#
+master-bin.000006	#	#
+master-bin.000007	#	#
+master-bin.000008	#	#
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+4
+include/assert_binlog_events.inc [Ignorable # Gtid # !Begin # !Insert # Write_rows # !Commit]
+include/rpl_sync.inc
+[connection slave]
+SHOW BINARY LOGS;
+Log_name	File_size	Encrypted
+slave-bin.000001	#	#
+slave-bin.000002	#	#
+slave-bin.000003	#	#
+slave-bin.000004	#	#
+slave-bin.000005	#	#
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+4
+include/assert_binlog_events.inc [Ignorable # Gtid # !Begin # !Insert # Write_rows # !Commit]
+#
+# 4. Valid free flush binlog transaction compression.
+########################################################
+#
+[connection master]
+SET binlog_transaction_compression_level_zstd = 1;
+SET binlog_transaction_compression = ON;
+SET debug = "+d,free_flush_skip_limit_size_check";
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+# Check binlog and data. Expect 10 binlog files and ignorable event exist in the 9th binlog.
+SHOW BINARY LOGS;
+Log_name	File_size	Encrypted
+master-bin.000001	#	#
+master-bin.000002	#	#
+master-bin.000003	#	#
+master-bin.000004	#	#
+master-bin.000005	#	#
+master-bin.000006	#	#
+master-bin.000007	#	#
+master-bin.000008	#	#
+master-bin.000009	#	#
+master-bin.000010	#	#
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+6
+include/show_binlog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000009	#	Ignorable	#	#	# Unrecognized ignorable event
+master-bin.000009	#	Transaction_payload	#	#	compression='ZSTD', decompressed_size=## bytes
+master-bin.000009	#	Query	#	#	BEGIN
+master-bin.000009	#	Table_map	#	#	table_id: # (rpl_test.t2)
+master-bin.000009	#	Write_rows	#	#	table_id: #
+master-bin.000009	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+master-bin.000009	#	Xid	#	#	COMMIT /* XID */
+master-bin.000009	#	Rotate	#	#	master-bin.000010;pos=POS
+include/rpl_sync.inc
+[connection slave]
+SHOW BINARY LOGS;
+Log_name	File_size	Encrypted
+slave-bin.000001	#	#
+slave-bin.000002	#	#
+slave-bin.000003	#	#
+slave-bin.000004	#	#
+slave-bin.000005	#	#
+slave-bin.000006	#	#
+slave-bin.000007	#	#
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+6
+include/assert_binlog_events.inc [Ignorable # Gtid # !Begin # !Insert # Write_rows # !Commit]
+#
+# 5. Cleanup.
+########################################################
+#
+[connection master]
+DROP DATABASE rpl_test;
+include/sync_slave_sql_with_master.inc
+include/rpl_end.inc

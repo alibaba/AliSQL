@@ -1,0 +1,272 @@
+# Native Flashback Query
+
+## Prepare
+--echo Prepare
+create database mytest;
+use mytest;
+create table t1 (id int key, c1 int);
+
+
+## Init
+--echo Init
+connect (conn1, localhost, root,,);
+connect (conn2, localhost, root,,);
+connect (conn3, localhost, root,,);
+
+--connection default
+
+show variables like "%flashback%";
+show variables like "%innodb_undo%";
+
+set @old_innodb_undo_retention = @@global.innodb_undo_retention;
+set @old_innodb_rds_flashback_task_enabled = @@global.innodb_rds_flashback_task_enabled;
+set @old_innodb_rds_flashback_allow_gap = @@global.innodb_rds_flashback_allow_gap;
+set @old_innodb_rds_flashback_print_warning = @@global.innodb_rds_flashback_print_warning;
+
+--disable_warnings
+
+set global innodb_rds_flashback_task_enabled = 0;
+set global innodb_undo_retention = 0;
+
+--sleep 3
+
+
+## Case 1 : Normal case
+--echo
+--echo Case 1 : Normal case
+set global innodb_rds_flashback_task_enabled = 1;
+set global innodb_undo_retention = 3600;
+set global innodb_rds_flashback_allow_gap = 30;
+
+select * from t1;
+
+--sleep 3
+
+insert into t1 values (1, 1);
+insert into t1 values (2, 2);
+insert into t1 values (3, 3);
+
+select * from t1;
+select * from t1 as of timestamp date_sub(now(), interval 5 second);
+
+--sleep 3
+
+update t1 set c1 = 100;
+
+select * from t1;
+select * from t1 as of timestamp date_sub(now(), interval 5 second);
+select * from t1 as of timestamp date_sub(now(), interval 8 second);
+
+--sleep 3
+
+delete from t1 where id = 1;
+
+select * from t1;
+select * from t1 as of timestamp date_sub(now(), interval 5 second);
+select * from t1 as of timestamp date_sub(now(), interval 8 second);
+select * from t1 as of timestamp date_sub(now(), interval 11 second);
+
+create table t1_tmp like t1;
+insert into t1_tmp select * from t1 as of timestamp date_sub(now(), interval 5 second);
+select * from t1_tmp;
+
+set global innodb_rds_flashback_task_enabled = 0;
+set global innodb_undo_retention = 0;
+
+--sleep 3
+
+select * from t1;
+--error ER_SNAPSHOT_OUT_OF_RANGE
+select * from t1 as of timestamp date_sub(now(), interval 5 second);
+--error ER_SNAPSHOT_OUT_OF_RANGE
+select * from t1 as of timestamp date_sub(now(), interval 8 second);
+--error ER_SNAPSHOT_OUT_OF_RANGE
+select * from t1 as of timestamp date_sub(now(), interval 11 second);
+
+drop table t1_tmp;
+truncate table t1;
+set @case2_start = now();
+
+
+## Case 2 : Error case
+--echo
+--echo Case 2 : Error case
+set global innodb_rds_flashback_task_enabled = 1;
+set global innodb_undo_retention = 3600;
+set global innodb_rds_flashback_allow_gap = 1;
+
+--error ER_SNAPSHOT_OUT_OF_RANGE
+select * from t1 as of timestamp now();
+
+--error ER_SNAPSHOT_OUT_OF_RANGE
+select * from t1 as of timestamp date_add(now(), interval 5 second);
+
+--sleep 3
+select * from t1 as of timestamp date_sub(now(), interval 5 second);
+
+select * from t1 as of timestamp @case2_start;
+
+--error ER_SNAPSHOT_OUT_OF_RANGE
+select * from t1 as of timestamp '2000-01-01 00:00:00';
+
+
+## Case 3 : multi sessions
+--echo
+--echo Case 3 : multi sessions
+set global innodb_rds_flashback_allow_gap = 10;
+
+--connection conn1
+use mytest;
+set @case3_start = now();
+--sleep 2
+set session transaction_isolation = 'REPEATABLE-READ';
+begin;
+select * from t1;
+
+--connection conn2
+use mytest;
+insert into t1 values (1, 1);
+
+--connection conn3
+use mytest;
+insert into t1 values (2, 2);
+
+--connection conn1
+select sleep(5);
+select * from t1;
+select * from t1 as of timestamp date_sub(now(), interval 3 second);
+select * from t1;
+commit;
+
+select * from t1;
+select * from t1 as of timestamp date_sub(now(), interval 3 second);
+select * from t1 as of timestamp @case3_start;
+
+--connection conn2
+begin;
+insert into t1 values (3, 3);
+select sleep(5);
+commit;
+
+--connection conn1
+select * from t1;
+select * from t1 as of timestamp date_sub(now(), interval 3 second);
+select * from t1 as of timestamp date_sub(now(), interval 8 second);
+select * from t1 as of timestamp @case3_start;
+
+set global innodb_rds_flashback_task_enabled = 0;
+set global innodb_undo_retention = 0;
+
+--sleep 3
+
+truncate table t1;
+
+
+## Case 4 : DDL
+--echo
+--echo Case 4 : DDL
+--connection default
+
+set global innodb_rds_flashback_task_enabled = 1;
+set global innodb_undo_retention = 3600;
+set global innodb_rds_flashback_allow_gap = 30;
+
+--connection conn1
+select * from t1;
+
+insert into t1 values (1,1);
+select * from t1;
+--sleep 3
+set @t1 = now();
+
+--sleep 3
+
+insert into t1 values (2,2);
+select * from t1;
+select * from t1 as of timestamp @t1;
+--sleep 3
+set @t2 = now();
+
+--sleep 3
+
+insert into t1 values (3,1);
+alter table t1 add index idx_1(c1);
+select id from t1 where c1 = 1;
+select id from t1 as of timestamp @t2 where c1 = 1;
+
+--sleep 3
+
+alter table t1 add column c2 int;
+select * from t1;
+# After fixing bug #33937504, both INSTANT and INPLACE ADD COLUMNS
+# modify the trx_id of PRIMARY INDEX
+--error ER_FLASHBACK_PK_INVISIBLE
+select * from t1 as of timestamp @t2;
+
+--sleep 3
+
+alter table t1 drop column id;
+select * from t1;
+--error ER_FLASHBACK_PK_INVISIBLE
+select * from t1 as of timestamp @t2;
+
+--sleep 3
+
+drop table t1;
+create table t1 (id int key, c1 int);
+select * from t1;
+--error ER_FLASHBACK_PK_INVISIBLE
+select * from t1 as of timestamp @t2;
+
+set global innodb_rds_flashback_task_enabled = 0;
+set global innodb_undo_retention = 0;
+
+--sleep 3
+
+truncate table t1;
+
+
+## Case 5 : Warning
+--echo
+--echo Case 5 : Warning
+--connection conn1
+set @t0 = now();
+
+--sleep 3
+
+set global innodb_rds_flashback_task_enabled = 1;
+set global innodb_undo_retention = 3600;
+set global innodb_rds_flashback_allow_gap = 30;
+
+select * from t1;
+
+--sleep 3
+
+insert into t1 values (1,1);
+select * from t1;
+select * from t1 as of timestamp @t0;
+--replace_column 2 # 3 #
+show warnings;
+
+set global innodb_rds_flashback_print_warning = 0;
+select * from t1 as of timestamp @t0;
+show warnings;
+
+
+## Cleanup
+--echo
+--echo Cleanup
+--connection default
+--disconnect conn1
+--disconnect conn2
+--disconnect conn3
+
+--enable_warnings
+
+use mysql;
+drop database mytest;
+
+set global innodb_rds_flashback_task_enabled = @old_innodb_rds_flashback_task_enabled;
+set global innodb_undo_retention = @old_innodb_undo_retention;
+set global innodb_rds_flashback_allow_gap = @old_innodb_rds_flashback_allow_gap;
+set global innodb_rds_flashback_print_warning  = @old_innodb_rds_flashback_print_warning;

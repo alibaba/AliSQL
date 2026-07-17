@@ -86,7 +86,9 @@ id	col1
 3	13
 [connection master]
 UPDATE t1 SET col1 = (SELECT max(col1) FROM t2) WHERE id = 1;
-ERROR HY000: [DuckDB] Does not support mixed queries of duckdb engine and other engines in UPDATE Statement.
+ERROR HY000: [DuckDB] Does not support mixed queries of duckdb engine and other engines in UPDATE Statement. The table `t1` is a duckdb table. The table `t2` is not a duckdb table.
+UPDATE t2 SET col1 = (SELECT max(col1) FROM t1) WHERE id = 1;
+ERROR HY000: [DuckDB] Does not support mixed queries of duckdb engine and other engines in UPDATE Statement. The table `t1` is a duckdb table. The table `t2` is not a duckdb table.
 
 3. Delete Single Table Statement
 
@@ -122,7 +124,9 @@ SELECT * FROM t1;
 id	col1
 [connection master]
 DELETE FROM t1 WHERE col1 = (SELECT min(col1) FROM t2);
-ERROR HY000: [DuckDB] Does not support mixed queries of duckdb engine and other engines in DELETE Statement.
+ERROR HY000: [DuckDB] Does not support mixed queries of duckdb engine and other engines in DELETE Statement. The table `t1` is a duckdb table. The table `t2` is not a duckdb table.
+DELETE FROM t2 WHERE col1 = (SELECT min(col1) FROM t1);
+ERROR HY000: [DuckDB] Does not support mixed queries of duckdb engine and other engines in DELETE Statement. The table `t1` is a duckdb table. The table `t2` is not a duckdb table.
 [connection master]
 DELETE FROM t1;
 SELECT * FROM t1;
@@ -181,21 +185,51 @@ DELETE FROM t1;
 INSERT INTO t1 VALUES (1, 1), (2, 2), (3, 3);
 INSERT INTO t3 VALUES (1, 1);
 UPDATE t1, t2 SET t1.col1 =1 WHERE t1.id = t2.id;
-ERROR HY000: [DuckDB] Does not support duckdb engine in multi-table UPDATE/DELETE statement.
+ERROR HY000: [DuckDB] Does not support duckdb engine in multi-table UPDATE/DELETE statement. The table `t1` is a duckdb table.
 UPDATE t1, t3 SET t1.col1 =1 WHERE t1.id = t3.id;
-ERROR HY000: [DuckDB] Does not support duckdb engine in multi-table UPDATE/DELETE statement.
+ERROR HY000: [DuckDB] Does not support duckdb engine in multi-table UPDATE/DELETE statement. The table `t3` is a duckdb table.
+UPDATE t1 SET col1 = 1 WHERE id in (SELECT id FROM t2);
+ERROR HY000: [DuckDB] Does not support mixed queries of duckdb engine and other engines in UPDATE Statement. The table `t1` is a duckdb table. The table `t2` is not a duckdb table.
+UPDATE t2 SET col1 = 1 WHERE id in (SELECT id FROM t1);
+ERROR HY000: [DuckDB] Does not support mixed queries of duckdb engine and other engines in UPDATE Statement. The table `t1` is a duckdb table. The table `t2` is not a duckdb table.
+UPDATE t1 SET col1 = 10 WHERE id in (SELECT id FROM t3);
+SELECT * FROM t1;
+id	col1
+1	10
+2	2
+3	10
+include/rpl_sync.inc
+[connection slave]
+SELECT * FROM t1;
+id	col1
+1	10
+2	2
+3	10
 
 6. Delete Multi Table Statement
 
 [connection master]
 DELETE t1, t2 FROM t1, t2 WHERE t1.id = t2.id;
-ERROR HY000: [DuckDB] Does not support duckdb engine in multi-table UPDATE/DELETE statement.
+ERROR HY000: [DuckDB] Does not support duckdb engine in multi-table UPDATE/DELETE statement. The table `t1` is a duckdb table.
 DELETE t1, t3 FROM t1, t3 WHERE t1.id = t3.id;
-ERROR HY000: [DuckDB] Does not support duckdb engine in multi-table UPDATE/DELETE statement.
+ERROR HY000: [DuckDB] Does not support duckdb engine in multi-table UPDATE/DELETE statement. The table `t3` is a duckdb table.
 DELETE t1 FROM t1 INNER JOIN t2 ON t1.id = t2.id;
-ERROR HY000: [DuckDB] Does not support duckdb engine in multi-table UPDATE/DELETE statement.
+ERROR HY000: [DuckDB] Does not support duckdb engine in multi-table UPDATE/DELETE statement. The table `t1` is a duckdb table.
 DELETE t1 FROM t1 INNER JOIN t3 ON t1.id = t3.id;
-ERROR HY000: [DuckDB] Does not support duckdb engine in multi-table UPDATE/DELETE statement.
+ERROR HY000: [DuckDB] Does not support duckdb engine in multi-table UPDATE/DELETE statement. The table `t3` is a duckdb table.
+DELETE FROM t1 WHERE id in (SELECT id FROM t2);
+ERROR HY000: [DuckDB] Does not support mixed queries of duckdb engine and other engines in DELETE Statement. The table `t1` is a duckdb table. The table `t2` is not a duckdb table.
+DELETE FROM t2 WHERE id in (SELECT id FROM t1);
+ERROR HY000: [DuckDB] Does not support mixed queries of duckdb engine and other engines in DELETE Statement. The table `t1` is a duckdb table. The table `t2` is not a duckdb table.
+DELETE FROM t1 WHERE id in (SELECT id FROM t3);
+SELECT * FROM t1;
+id	col1
+2	2
+include/rpl_sync.inc
+[connection slave]
+SELECT * FROM t1;
+id	col1
+2	2
 
 7. INSERT/DELETE/UPDATE in a transaction
 
@@ -401,13 +435,13 @@ id	col1
 10. Replace
 
 REPLACE INTO t1 VALUES (1, 1);
-ERROR HY000: [DuckDB] Does not support duckdb engine in REPLACE satement.
+ERROR HY000: [DuckDB] Does not support duckdb engine in REPLACE statement. The table `t1` is a duckdb table.
 REPLACE INTO t1 SELECT * FROM t2;
-ERROR HY000: [DuckDB] Does not support duckdb engine in REPLACE statement.
+ERROR HY000: [DuckDB] Does not support duckdb engine in REPLACE statement. The table `t1` is a duckdb table.
 REPLACE INTO t1 SELECT * FROM t3;
-ERROR HY000: [DuckDB] Does not support duckdb engine in REPLACE statement.
+ERROR HY000: [DuckDB] Does not support duckdb engine in REPLACE statement. The table `t3` is a duckdb table.
 REPLACE INTO t2 SELECT * FROM t1;
-ERROR HY000: [DuckDB] Does not support duckdb engine in REPLACE statement.
+ERROR HY000: [DuckDB] Does not support duckdb engine in REPLACE statement. The table `t1` is a duckdb table.
 
 11. CREATE TABLE AS SELECT
 

@@ -23,15 +23,18 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
+#include "duckdb/main/settings.hpp"
+#include "duckdb/logging/log_manager.hpp"
 
 namespace duckdb {
 
-PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
-                                   vector<JoinCondition> cond, JoinType join_type,
+PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left,
+                                   PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
                                    const vector<idx_t> &left_projection_map, const vector<idx_t> &right_projection_map,
                                    vector<LogicalType> delim_types, idx_t estimated_cardinality,
                                    unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
-    : PhysicalComparisonJoin(op, PhysicalOperatorType::HASH_JOIN, std::move(cond), join_type, estimated_cardinality),
+    : PhysicalComparisonJoin(physical_plan, op, PhysicalOperatorType::HASH_JOIN, std::move(cond), join_type,
+                             estimated_cardinality),
       delim_types(std::move(delim_types)) {
 
 	filter_pushdown = std::move(pushdown_info_p);
@@ -99,9 +102,11 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, PhysicalOperator &left, 
 	}
 }
 
-PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
-                                   vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality)
-    : PhysicalHashJoin(op, left, right, std::move(cond), join_type, {}, {}, {}, estimated_cardinality, nullptr) {
+PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left,
+                                   PhysicalOperator &right, vector<JoinCondition> cond, JoinType join_type,
+                                   idx_t estimated_cardinality)
+    : PhysicalHashJoin(physical_plan, op, left, right, std::move(cond), join_type, {}, {}, {}, estimated_cardinality,
+                       nullptr) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -130,7 +135,7 @@ class HashJoinGlobalSinkState : public GlobalSinkState {
 public:
 	HashJoinGlobalSinkState(const PhysicalHashJoin &op_p, ClientContext &context_p)
 	    : context(context_p), op(op_p),
-	      num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads())),
+	      num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads(context))),
 	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)), finalized(false),
 	      active_local_states(0), total_size(0), max_partition_size(0), max_partition_count(0),
 	      probe_side_requirement(0), scanned_data(false) {
@@ -145,7 +150,7 @@ public:
 			                                                               NumericStats::Max(*op.join_stats[1]));
 		}
 		// For external hash join
-		external = ClientConfig::GetConfig(context).GetSetting<DebugForceExternalSetting>(context);
+		external = ClientConfig::GetConfig(context).force_external;
 		// Set probe types
 		probe_types = op.children[0].get().GetTypes();
 		probe_types.emplace_back(LogicalType::HASH);
@@ -157,6 +162,11 @@ public:
 			}
 			global_filter_state = op.filter_pushdown->GetGlobalState(context, op);
 		}
+	}
+
+	~HashJoinGlobalSinkState() override {
+		DUCKDB_LOG(context, PhysicalOperatorLogType, op, "PhysicalHashJoin", "GetData",
+		           {{"total_probe_matches", to_string(hash_table->total_probe_matches)}});
 	}
 
 	void ScheduleFinalize(Pipeline &pipeline, Event &event);
@@ -758,7 +768,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, o
 		return final_min_max; // There are not table souces in which we can push down filters
 	}
 
-	auto dynamic_or_filter_threshold = ClientConfig::GetSetting<DynamicOrFilterThresholdSetting>(context);
+	auto dynamic_or_filter_threshold = DBConfig::GetSetting<DynamicOrFilterThresholdSetting>(context);
 	// create a filter for each of the aggregates
 	for (idx_t filter_idx = 0; filter_idx < join_condition.size(); filter_idx++) {
 		const auto cmp = op.conditions[join_condition[filter_idx]].comparison;

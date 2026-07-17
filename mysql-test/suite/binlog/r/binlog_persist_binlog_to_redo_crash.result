@@ -1,0 +1,73 @@
+CALL mtr.add_suppression("Found invalid server redo log type");
+CALL mtr.add_suppression("Failed to recover binlog from redo log");
+CREATE TABLE t1(c1 INT PRIMARY KEY, c2 VARCHAR(100)) ENGINE=InnoDB;
+INSERT INTO t1 VALUES(1, 'one');
+#
+# Case: the whole tail of the binlog file is lost
+################################################
+#
+SET GLOBAL innodb_checkpoint_disabled = ON;
+INSERT INTO t1 VALUES(2, 'two');
+INSERT INTO t1 VALUES(3, 'three');
+SET debug = "d,crash_commit_after_sync_to_redo";
+INSERT INTO t1 VALUES(4, 'four');
+ERROR HY000: Lost connection to MySQL server during query
+# restart
+include/assert.inc [all four rows survived the crash]
+include/assert_grep.inc [the binlog was recovered from the redo log]
+include/assert_grep.inc [the binlog recovery finished]
+#
+# Case: only some of the binlog events are lost
+##############################################
+#
+SET GLOBAL innodb_checkpoint_disabled = ON;
+TRUNCATE t1;
+INSERT INTO t1 VALUES(11, 'eleven');
+INSERT INTO t1 VALUES(12, 'twelve');
+INSERT INTO t1 VALUES(13, 'thirteen');
+SET debug = "d,crash_commit_after_sync_to_redo";
+INSERT INTO t1 VALUES(14, 'fourteen');
+ERROR HY000: Lost connection to MySQL server during query
+# restart
+include/assert.inc [the four rows are there after a partial binlog loss]
+#
+# Case: the binlog file is truncated in the middle of an event
+#############################################################
+#
+SET GLOBAL innodb_checkpoint_disabled = ON;
+TRUNCATE t1;
+INSERT INTO t1 VALUES(21, 'twentyone');
+SET debug = "d,crash_commit_after_sync_to_redo";
+INSERT INTO t1 VALUES(22, 'twentytwo');
+ERROR HY000: Lost connection to MySQL server during query
+# restart
+include/assert.inc [both rows are there after the binlog was cut inside an event]
+#
+# Case: the recovered binlog file is a valid binlog
+##################################################
+#
+FLUSH BINARY LOGS;
+INSERT INTO t1 VALUES(23, 'twentythree');
+SELECT * FROM t1 ORDER BY c1;
+c1	c2
+21	twentyone
+22	twentytwo
+23	twentythree
+#
+# Case: a crash before anything reaches the redo log loses nothing
+#       that was already committed
+################################################################
+#
+SET GLOBAL innodb_checkpoint_disabled = ON;
+INSERT INTO t1 VALUES(31, 'thirtyone');
+SET debug = "d,crash_commit_before_log";
+INSERT INTO t1 VALUES(32, 'thirtytwo');
+ERROR HY000: Lost connection to MySQL server during query
+# restart
+include/assert.inc [the committed row survived, the crashed one did not]
+include/assert.inc [the transaction killed before logging is not committed]
+#
+# Cleanup
+#########
+#
+DROP TABLE t1;

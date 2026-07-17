@@ -1,0 +1,140 @@
+# Test of `AS OF`, only check the syntatic
+
+set @old_innodb_rds_flashback_enabled = @@global.innodb_rds_flashback_enabled;
+
+set global innodb_rds_flashback_enabled = 0;
+
+create table tt (a int);
+create table pp (a int);
+create view vv as select * from pp;
+
+# Normal cases ===============
+
+# in from list
+select * from tt as of timestamp now() as alias;
+select * from tt as of timestamp now() alias;
+select * from tt as of timestamp now();
+select * from tt as of timestamp date_sub(now(), interval 1 minute);
+select * from tt as of timestamp date_sub(current_timestamp, interval 5 second);
+
+# in subquery
+select * from (select * from tt as of timestamp now()) ff;
+select * from (
+  select * from tt as of timestamp date_sub(now(), interval 1 minute) as alias
+  union all
+  select * from tt as of timestamp now()
+) ff;
+
+# in with clause
+with ff as (select * from tt as of timestamp now()) select * from ff;
+with ff as (select * from tt as of timestamp now()) update pp set a = 0 where a = (select max(a) from ff);
+
+# in where or having cond
+select * from pp where a = (select max(a) from tt as of timestamp now() as alias);
+select * from tt group by a having a < (select sum(a) from pp as of timestamp now() as alias);
+update tt set a = 0 where a < (select sum(a) from pp as of timestamp now() as alias);
+
+# in join
+select ll.* from tt as of timestamp now() ll join pp as of timestamp now() as vv on vv.a = ll.a;
+
+# constant expr
+select * from tt as of timestamp (select date_add(current_timestamp, interval 1 day));
+select * from tt as of timestamp date_add(current_timestamp, interval 1 day);
+
+# timestamp
+select * from tt as of timestamp now();
+
+# cast type
+select * from tt as of timestamp '2020-01-01 01:01:01';
+
+# Bad parameter cases =======================
+
+--error ER_AS_OF_BAD_TIMESTAMP_TYPE
+select * from tt as of timestamp (1 < 2);
+
+
+# Prepared statement ======================
+
+delete from pp;
+insert into pp values(1);
+
+--error ER_AS_OF_BAD_TIMESTAMP_TYPE
+prepare ps from 'select * from tt as of timestamp ?';
+prepare ps from 'select * from tt as of timestamp (select now() from pp where 1=?)';
+
+set @var=1;
+execute ps using @var;
+
+set @var=0;
+--error ER_AS_OF_BAD_TIMESTAMP_TYPE
+execute ps using @var;
+
+drop prepare ps;
+delete from pp;
+
+# Stored procedure ========================
+DELIMITER |;
+CREATE PROCEDURE execute_dml()
+BEGIN
+  DECLARE var INT;
+  select count(*) from tt as of timestamp now() into var;
+END|
+DELIMITER ;|
+
+call execute_dml();
+call execute_dml();
+call execute_dml();
+
+DROP PROCEDURE execute_dml;
+
+
+# Not surpported  ==========================
+
+create temporary table tmp(a int);
+--error ER_AS_OF_NOT_INNODB_TABLE
+select * from tmp as of timestamp now();
+drop table tmp;
+
+--error ER_AS_OF_CONFLICT_LOCK_CLAUSE
+select * from tt as of timestamp now() as alias for update;
+--error ER_AS_OF_CONFLICT_LOCK_CLAUSE
+select * from tt as of timestamp now() as alias LOCK IN SHARE MODE;
+
+--error ER_AS_OF_NOT_INNODB_TABLE
+select * from vv as of timestamp now();
+
+lock tables vv read;
+--error ER_AS_OF_NOT_INNODB_TABLE
+select * from vv as of timestamp now();
+unlock tables;
+
+--error ER_AS_OF_NOT_SELECT
+update tt as of timestamp now() as alias set a = 0;
+
+--error 1064
+delete from tt as of timestamp now() as alias;
+
+--error 1064
+insert into tt as of timestamp now() values (1);
+
+--error 1064
+create table no_ok as of timestamp now() alias (a int);
+
+--error 1064
+alter table tt as of timestamp now() add column b int;
+
+--error 1064
+lock table tt as of timestamp now();
+
+--error 1064
+handler tt as of timestamp now() open;
+
+--error 1064
+replace into tt as of timestamp now() valuse (1);
+
+# =====================
+drop view vv;
+drop table tt;
+drop table pp;
+
+set global innodb_rds_flashback_enabled = @old_innodb_rds_flashback_enabled;

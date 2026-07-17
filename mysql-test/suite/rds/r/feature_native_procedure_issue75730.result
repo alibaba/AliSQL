@@ -14,9 +14,9 @@ call mysql.dummy_2(1, 'xpchild');
 NAME	ID
 xpchild	1
 call mysql.dummy_2(1, 1);
-ERROR HY000: Native procedure mysql.dummy_2 the 2th parameter mismatch
+ERROR HY000: The 2th parameter didn't match for native procedure mysql.dummy_2
 call mysql.dummy_2("xpchild", 1);
-ERROR HY000: Native procedure mysql.dummy_2 the 1th parameter mismatch
+ERROR HY000: The 1th parameter didn't match for native procedure mysql.dummy_2
 call mysql.dummy();
 ERROR 42000: Access denied; you need (at least one of) the SUPER privilege(s) for this operation
 CREATE PROCEDURE mysql.dummy()

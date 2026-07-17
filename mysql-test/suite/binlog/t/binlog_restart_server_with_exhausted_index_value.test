@@ -98,6 +98,7 @@ EOF
 # causes the server to abort.
 --error ER_BINLOG_LOGGING_IMPOSSIBLE
 FLUSH BINARY LOGS;
+--source include/wait_until_disconnected.inc
 
 --let $server_params= --binlog_error_action=IGNORE_ERROR
 --source $MYSQLTEST_VARDIR/tmp/binlog_restart_server_with_exhausted_index_value.inc

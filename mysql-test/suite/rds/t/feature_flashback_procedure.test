@@ -1,0 +1,102 @@
+# Native Flashback Procedure
+
+## Prepare
+--echo Prepare
+
+set @old_innodb_undo_retention = @@global.innodb_undo_retention;
+set @old_innodb_rds_flashback_task_enabled = @@global.innodb_rds_flashback_task_enabled;
+
+create user 'u1'@'%';
+create user 'u2'@'%';
+grant all privileges on *.* to 'u1'@'%';
+grant select on *.* to 'u2'@'%';
+
+connect(con_u1, localhost, u1,,);
+connect(con_u2, localhost, u2,,);
+
+
+
+## Init
+--echo
+--echo Init
+
+--connection default
+use mysql;
+show tables like "innodb_flashback_snapshot";
+
+set global innodb_rds_flashback_task_enabled = 1;
+set global innodb_undo_retention = 60000;
+
+--sleep 60
+
+set global innodb_rds_flashback_task_enabled = 0;
+
+
+
+## Test
+--echo
+--echo Test
+
+--connection con_u1
+
+--replace_column 1 # 2 # 3 #
+call dbms_admin.analyze_flashback_snapshots();
+
+--replace_column 1 # 2 # 3 #
+call dbms_admin.show_flashback_snapshots('2020-11-01 00:00:00', 'DESC', 10);
+
+--replace_column 1 # 2 # 3 #
+call dbms_admin.show_flashback_snapshots('2020-11-01 00:00:00', 'ASC', 10);
+
+--error ER_NATIVE_PROC_PARAMETER_MISMATCH
+call dbms_admin.show_flashback_snapshots('xxx', 'ASC', 10);
+
+--error ER_NATIVE_PROC_PARAMETER_MISMATCH
+call dbms_admin.show_flashback_snapshots('2020-11-01 00:00:00', 'xxx', 10);
+
+--error ER_NATIVE_PROC_PARAMETER_MISMATCH
+call dbms_admin.show_flashback_snapshots('2020-11-01 00:00:00', 'ASC', 'xxx');
+
+
+--connection con_u2
+
+--replace_column 1 # 2 # 3 #
+call dbms_admin.analyze_flashback_snapshots();
+
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+call dbms_admin.show_flashback_snapshots('2020-11-01 00:00:00', 'ASC', 10);
+
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+call dbms_admin.del_flashback_snapshots('2020-11-01 00:00:00', 'ASC');
+
+
+--connection con_u1
+
+--error ER_NATIVE_PROC_PARAMETER_MISMATCH
+call dbms_admin.del_flashback_snapshots('xxx', 'ASC');
+
+--error ER_NATIVE_PROC_PARAMETER_MISMATCH
+call dbms_admin.del_flashback_snapshots('2020-11-01 00:00:00', 'xxx');
+
+call dbms_admin.del_flashback_snapshots('2020-11-01 00:00:00', 'ASC');
+
+--replace_column 1 # 2 # 3 #
+call dbms_admin.analyze_flashback_snapshots();
+
+
+
+
+## Cleanup
+--echo
+--echo Cleanup
+
+--connection default
+
+--disconnect con_u1
+--disconnect con_u2
+
+drop user 'u1'@'%';
+drop user 'u2'@'%';
+
+set global innodb_rds_flashback_task_enabled = @old_innodb_rds_flashback_task_enabled;
+set global innodb_undo_retention = @old_innodb_undo_retention;

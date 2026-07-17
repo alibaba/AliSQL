@@ -44,12 +44,15 @@ extern ulonglong global_memory_limit;
 extern const char *global_duckdb_temp_directory;
 extern ulonglong global_max_temp_directory_size;
 extern ulonglong global_max_threads;
+extern ulonglong max_threads_per_query;
 extern bool global_use_dio;
 extern bool global_scheduler_process_partial;
 extern ulonglong appender_allocator_flush_threshold;
 extern ulonglong checkpoint_threshold;
 
 extern bool use_double_for_decimal;
+
+extern ulonglong duckdb_max_threads_per_query_rpl;
 
 inline bool global_mode_on() { return global_mode == DUCKDB_ON; }
 

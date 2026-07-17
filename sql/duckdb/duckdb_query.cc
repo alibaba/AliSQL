@@ -29,7 +29,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
  */
 
 #include "duckdb_query.h"
+#include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/main/client_data.hpp"
+#include <optional>
 #include "duckdb_context.h"
 #include "duckdb_manager.h"
 #include "m_ctype.h"
@@ -46,7 +49,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/sql_time.h"
 #include "sql/tztime.h"
 #include "sql/protocol.h"
-#include "sql/duckdb/log.h"
+#include "sql/duckdb/duckdb_log.h"
 
 //===--------------------------------------------------------------------===//
 // Functions to execute query.
@@ -56,11 +59,43 @@ namespace myduck {
 
 static constexpr int INTERRUPT_CHECK_ROW = 256;
 
+class DuckdbSchemaGuard {
+ public:
+  explicit DuckdbSchemaGuard(duckdb::ClientContext &context, bool enable = true)
+      : m_context(context),
+        m_enabled(enable) {
+    if (m_enabled) {
+      m_saved_entry = duckdb::ClientData::Get(context).catalog_search_path->GetDefault();
+    }
+  }
+
+  ~DuckdbSchemaGuard() {
+    /* Only restore if enabled and we have a saved entry */
+    if (m_enabled && m_saved_entry.has_value()) {
+      try {
+        duckdb::ClientData::Get(m_context).catalog_search_path->Set(
+            m_saved_entry.value(), duckdb::CatalogSetPathType::SET_SCHEMA);
+      } catch (...) {
+        /* Best-effort restore; ignore any exception during cleanup. */
+      }
+    }
+  }
+
+  /* Non-copyable, non-movable */
+  DuckdbSchemaGuard(const DuckdbSchemaGuard &) = delete;
+  DuckdbSchemaGuard &operator=(const DuckdbSchemaGuard &) = delete;
+
+ private:
+  duckdb::ClientContext &m_context;
+  bool m_enabled;
+  std::optional<duckdb::CatalogSearchEntry> m_saved_entry;
+};
+
 std::unique_ptr<duckdb::QueryResult> duckdb_query(THD *thd,
                                                   const std::string &query,
-                                                  bool need_config) {
+                                                  bool need_config,
+                                                  bool keep_schema) {
   DuckdbThdContext *context = thd->get_duckdb_context();
-
   /* Config duckdb parameters before executing query. */
   if (need_config) {
     auto res = context->config_duckdb_env(thd, context->get_connection());
@@ -69,24 +104,29 @@ std::unique_ptr<duckdb::QueryResult> duckdb_query(THD *thd,
     }
   }
 
-  return duckdb_query(context->get_connection(), query);
+  return duckdb_query(context->get_connection(), query, keep_schema);
 }
 
 std::unique_ptr<duckdb::QueryResult> duckdb_query(
-    duckdb::Connection &connection, const std::string &query) {
-  return duckdb_query(*connection.context, query);
+    duckdb::Connection &connection, const std::string &query, bool keep_schema) {
+  return duckdb_query(*connection.context, query, keep_schema);
 }
 
-std::unique_ptr<duckdb::QueryResult> duckdb_query(const std::string &query) {
+std::unique_ptr<duckdb::QueryResult> duckdb_query(const std::string &query,
+                                                  bool keep_schema) {
   auto connection = DuckdbManager::CreateConnection();
-  return (duckdb_query(*connection, query));
+  return duckdb_query(*connection, query, keep_schema);
 }
 
 std::unique_ptr<duckdb::QueryResult> duckdb_query(
-    duckdb::ClientContext &context, const std::string &query) {
+    duckdb::ClientContext &context, const std::string &query,
+    bool keep_schema) {
   if (myduck::duckdb_log_options & LOG_DUCKDB_QUERY) {
     LogErr(INFORMATION_LEVEL, ER_DUCKDB, query.c_str());
   }
+
+  /* Guard captures and restores schema only if keep_schema is true */
+  DuckdbSchemaGuard schema_guard(context, keep_schema);
 
   auto res = context.Query(query, true);
 
@@ -235,6 +275,21 @@ void duckdb_send_result(THD *thd, duckdb::QueryResult &result) {
     return;
   }
 
+  /* DuckDB returns results without going through `Query_result`, therefore it
+  does not support server-side cursors. In `mysqld_stmt_execute`, server-side
+  cursors are disabled for DuckDB, meaning `SERVER_STATUS_CURSOR_EXIST` returns
+  false. JDBC has a Bug#112090, when handles this situation, jdbc client will be
+  blocked forever. This bug is fixed by jdbc version 9.5.0 in commit#1e484a2.
+  Therefore, for empty query results without rows, we send an additional EOF 
+  packet. */
+  if ((!data_chunk || data_chunk->size() == 0) && 
+       thd->stmt_arena && thd->stmt_arena->is_duckdb_cursor_disabled &&
+       thd->variables.duckdb_psmt_cursor_send_extra_eof) {
+    thd->get_protocol()->send_eof(thd->server_status, 0);
+    my_eof(thd);
+    return;
+  }
+
   while (true) {
     if (!data_chunk || data_chunk->size() == 0) {
       my_eof(thd);
@@ -272,13 +327,7 @@ void duckdb_send_result(THD *thd, duckdb::QueryResult &result) {
             case MYSQL_TYPE_LONG_BLOB:
             case MYSQL_TYPE_BLOB:
             case MYSQL_TYPE_GEOMETRY:
-            case MYSQL_TYPE_BIT: {
-              auto str = value.GetValueUnsafe<duckdb::string>();
-              auto varchar = str.c_str();
-              auto varchar_len = str.size();
-              protocol->store_string(varchar, varchar_len, &my_charset_bin);
-              break;
-            }
+            case MYSQL_TYPE_BIT:
             case MYSQL_TYPE_VARCHAR:
             case MYSQL_TYPE_VAR_STRING:
             case MYSQL_TYPE_STRING: {
@@ -286,12 +335,27 @@ void duckdb_send_result(THD *thd, duckdb::QueryResult &result) {
                 auto str = value.GetValue<duckdb::string>();
                 auto varchar = str.c_str();
                 auto varchar_len = str.size();
-                protocol->store_string(varchar, varchar_len,
-                                       mysql_type.cs);
+
+                /* DuckDB store latin1 column's data as utf8mb4. */
+                if (strcmp(mysql_type.cs->csname, "latin1") == 0) {
+                  const CHARSET_INFO *utf8mb4_cs =
+                      myduck::get_utf8mb4_charset_for_latin1(mysql_type.cs);
+                  /* Here we donot do the conversion, but use utf8mb4 as input.
+                  protocol will convert to character_set_result if need. */
+                  protocol->store_string(varchar, varchar_len, utf8mb4_cs);
+                } else {
+                  protocol->store_string(varchar, varchar_len, mysql_type.cs);
+                }
               } else {
                 auto str = value.GetValueUnsafe<duckdb::string>();
                 auto varchar = str.c_str();
                 auto varchar_len = str.size();
+                if (value.type().id() == duckdb::LogicalTypeId::BIT) {
+                  auto padding = *(reinterpret_cast<const uint8_t *>(varchar));
+                  str[1] = str[1] & ((1 << (8 - padding)) - 1);
+                  varchar = str.c_str() + 1;
+                  varchar_len -= 1;
+                }
                 protocol->store_string(varchar, varchar_len, &my_charset_bin);
               }
               break;
@@ -431,6 +495,8 @@ void duckdb_send_result(THD *thd, duckdb::QueryResult &result) {
 }
 
 std::string BytesToHumanReadableString(uint64_t bytes, uint64_t multiplier) {
-  return duckdb::StringUtil::BytesToHumanReadableString(bytes, multiplier);
+  std::string str = duckdb::StringUtil::BytesToHumanReadableString(bytes, multiplier);
+  str.erase(std::remove(str.begin(), str.end(), ' '), str.end());
+  return str;
 }
 }  // namespace myduck

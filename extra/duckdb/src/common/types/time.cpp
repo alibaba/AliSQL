@@ -261,7 +261,7 @@ bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &resul
 		if (!strict) {
 			// last chance, check if we can parse as timestamp
 			timestamp_t timestamp;
-			if (Timestamp::TryConvertTimestamp(buf, len, timestamp, nanos) == TimestampCastResult::SUCCESS) {
+			if (Timestamp::TryConvertTimestamp(buf, len, timestamp, false, nanos) == TimestampCastResult::SUCCESS) {
 				if (!Timestamp::IsFinite(timestamp)) {
 					return false;
 				}
@@ -300,7 +300,7 @@ bool Time::TryConvertTimeTZ(const char *buf, idx_t len, idx_t &pos, dtime_tz_t &
 		if (!strict) {
 			// last chance, check if we can parse as timestamp
 			timestamp_t timestamp;
-			if (Timestamp::TryConvertTimestamp(buf, len, timestamp, nanos) == TimestampCastResult::SUCCESS) {
+			if (Timestamp::TryConvertTimestamp(buf, len, timestamp, true, nanos) == TimestampCastResult::SUCCESS) {
 				if (!Timestamp::IsFinite(timestamp)) {
 					return false;
 				}

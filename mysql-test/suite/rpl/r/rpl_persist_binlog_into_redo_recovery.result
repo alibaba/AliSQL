@@ -1,0 +1,215 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+SET GLOBAL binlog_checksum = "CRC32";
+SET GLOBAL persist_binlog_to_redo = ON;
+CREATE TABLE t1(c1_my_test INT) ENGINE=InnoDB;
+include/sync_slave_sql_with_master.inc
+include/stop_slave_io.inc
+#
+# Case: All binlog events are lost.
+########################################################
+#
+[connection master]
+SET GLOBAL innodb_checkpoint_disabled = ON;
+INSERT INTO t1 VALUES(1);
+CREATE TABLE t2(c1 int, c2 TEXT) ENGINE=InnoDB;
+BEGIN;
+INSERT INTO t2 VALUES(1, repeat("1", 500));
+INSERT INTO t2 VALUES(2, repeat("2", 500));
+COMMIT;
+BEGIN;
+INSERT INTO t2 VALUES(4, repeat('4', 50000));
+INSERT INTO t2 VALUES(5, repeat('5', 50000));
+COMMIT;
+DROP TABLE t2;
+SET debug = "d,crash_commit_after_sync_to_redo";
+INSERT INTO t1 VALUES(2);
+ERROR HY000: Lost connection to MySQL server during query
+include/rpl_start_server.inc [server_number=1]
+include/assert.inc [there are two rows in the table]
+[connection slave]
+include/start_slave_io.inc
+include/rpl_diff.inc
+include/stop_slave_io.inc
+#
+# Case: Some binlog events are lost.
+########################################################
+#
+[connection master]
+SET GLOBAL innodb_checkpoint_disabled = ON;
+TRUNCATE t1;
+INSERT INTO t1 VALUES(3);
+INSERT INTO t1 VALUES(4);
+INSERT INTO t1 VALUES(5);
+SET debug = "d,crash_commit_after_sync_to_redo";
+INSERT INTO t1 VALUES(6);
+ERROR HY000: Lost connection to MySQL server during query
+include/rpl_start_server.inc [server_number=1]
+include/assert.inc [there are 4 rows in the table]
+[connection slave]
+include/start_slave_io.inc
+include/rpl_diff.inc
+include/stop_slave_io.inc
+#
+# Case: Binlog lost in the middle of an event
+#############################################
+#
+[connection master]
+SET GLOBAL innodb_checkpoint_disabled = ON;
+TRUNCATE t1;
+INSERT INTO t1 VALUES(7);
+SET debug = "d,crash_commit_after_sync_to_redo";
+INSERT INTO t1 VALUES(8);
+ERROR HY000: Lost connection to MySQL server during query
+include/rpl_start_server.inc [server_number=1]
+include/assert.inc [there are two rows in the table]
+[connection slave]
+include/start_slave_io.inc
+include/rpl_diff.inc
+#
+# Case: It can recovered correctly when binlog is disordered in redo
+####################################################################
+#
+include/stop_slave_io.inc
+[connection master]
+SET GLOBAL innodb_checkpoint_disabled = ON;
+DROP TABLE t1;
+CREATE TABLE t1(c1 varchar(20)) ENGINE=InnoDB;
+SET debug_sync = "before_flush_binlog_cache SIGNAL insert1_before_flush
+                  WAIT_FOR insert1_continue";
+INSERT INTO t1 VALUES("insert1");
+[connection server_1]
+SET debug_sync = "now WAIT_FOR insert1_before_flush";
+SET debug_sync = "after_write_to_redo SIGNAL insert2_written_to_redo";
+INSERT INTO t1 VALUES("insert2");
+[connection server_1_1]
+SET debug_sync = "now WAIT_FOR insert2_written_to_redo";
+SET debug_sync = "before_flush_binlog_cache SIGNAL insert3_before_flush
+                  WAIT_FOR insert3_continue";
+INSERT INTO t1 VALUES("insert3");
+SET debug_sync = "now WAIT_FOR insert3_before_flush";
+SET debug_sync = "after_write_to_redo SIGNAL insert1_continue";
+INSERT INTO t1 VALUES("insert4");
+[connection master]
+SET debug_sync = "now SIGNAL insert3_continue";
+[connection server_1]
+[connection server_1_2]
+[connection server_1_1]
+SET debug_sync = "before_flush_binlog_cache SIGNAL insert5_before_flush
+                  WAIT_FOR insert5_continue";
+INSERT INTO t1 VALUES("insert5");
+[connection master]
+SET debug_sync = "now WAIT_FOR insert5_before_flush";
+SET debug_sync = "after_write_to_redo SIGNAL insert6_written_to_redo";
+INSERT INTO t1 VALUES("insert6");
+[connection server_1]
+SET debug_sync = "now WAIT_FOR insert6_written_to_redo";
+SET debug = "d,crash_commit_after_sync_to_redo";
+INSERT INTO t1 VALUES("insert7");
+ERROR HY000: Lost connection to MySQL server during query
+[connection server_1_1]
+ERROR HY000: Lost connection to MySQL server during query
+[connection master]
+ERROR HY000: Lost connection to MySQL server during query
+include/rpl_start_server.inc [server_number=1 parameters: --binlog-buffer-size=50000000]
+include/assert.inc [there are 6 rows in the table]
+[connection slave]
+include/start_slave_io.inc
+include/rpl_diff.inc
+#
+# Case: It should increase binlog buffer automatically if it is
+# too small.
+################################################################
+#
+include/stop_slave_io.inc
+[connection master]
+SET GLOBAL persist_binlog_to_redo_size_limit = 10000000;
+SELECT @@GLOBAL.persist_binlog_to_redo_size_limit;
+@@GLOBAL.persist_binlog_to_redo_size_limit
+10000000
+SET GLOBAL wait_binlog_flush = OFF;
+SET GLOBAL innodb_checkpoint_disabled = ON;
+DROP TABLE t1;
+CREATE TABLE t1(c1 varchar(20), c2 LONGTEXT) ENGINE=InnoDB;
+SET debug_sync = "before_flush_binlog_cache SIGNAL insert1_before_flush
+                  WAIT_FOR insert1_continue";
+SET debug = "+d,crash_commit_after_sync_to_redo";
+INSERT INTO t1 VALUES("insert1", "insert1");
+[connection server_1]
+SET debug_sync = "now WAIT_FOR insert1_before_flush";
+INSERT INTO t1 VALUES("insert2", repeat("A", 9000000));
+INSERT INTO t1 VALUES("insert3", repeat("B", 9000000));
+INSERT INTO t1 VALUES("insert4", repeat("C", 9000000));
+INSERT INTO t1 VALUES("insert5", repeat("D", 9000000));
+INSERT INTO t1 VALUES("insert6", repeat("E", 9000000));
+include/show_binlog_events.inc
+SET debug_sync = "now SIGNAL insert1_continue";
+[connection master]
+ERROR HY000: Lost connection to MySQL server during query
+include/rpl_start_server.inc [server_number=1]
+include/assert.inc [there are 6 rows in the table]
+[connection slave]
+include/start_slave_io.inc
+include/rpl_diff.inc
+#
+# Case: It should recovery correctly when event header is split by
+#       buffer end
+################################################################
+#
+include/stop_slave_io.inc
+[connection master]
+include/rpl_restart_server.inc [server_number=1]
+SET GLOBAL innodb_checkpoint_disabled = ON;
+TRUNCATE t1;
+SET debug_sync = "before_flush_binlog_cache SIGNAL insert1_before_flush
+                  WAIT_FOR insert1_continue";
+SET debug = "d,crash_commit_after_sync_to_redo";
+INSERT INTO t1 VALUES("insert1", "insert1");
+[connection server_1]
+SET debug_sync = "now WAIT_FOR insert1_before_flush";
+SET debug = "d,simulate_event_header_split";
+SET debug_sync = "after_write_to_redo SIGNAL insert1_continue";
+INSERT INTO t1 VALUES("insert2", "insert2");
+[connection master]
+ERROR HY000: Lost connection to MySQL server during query
+include/rpl_start_server.inc [server_number=1]
+include/assert.inc [there are 2 rows in the table]
+include/assert_grep.inc [Find message: event header is split]
+[connection slave]
+include/start_slave_io.inc
+include/rpl_diff.inc
+#
+# Case: It should recovery correctly when event checksum is split by
+#       buffer end
+#####################################################################
+#
+[connection master]
+[connection slave]
+include/stop_slave_io.inc
+[connection master]
+SET GLOBAL innodb_checkpoint_disabled = ON;
+TRUNCATE t1;
+SET debug_sync = "before_flush_binlog_cache SIGNAL insert1_before_flush
+                  WAIT_FOR insert1_continue";
+SET debug = "d,crash_commit_after_sync_to_redo";
+INSERT INTO t1 VALUES("insert1", "insert1");
+[connection server_1]
+SET debug_sync = "now WAIT_FOR insert1_before_flush";
+SET debug = "d,simulate_event_checksum_split";
+SET debug_sync = "after_write_to_redo SIGNAL insert1_continue";
+INSERT INTO t1 VALUES("insert2", "insert2");
+[connection master]
+ERROR HY000: Lost connection to MySQL server during query
+include/rpl_start_server.inc [server_number=1]
+include/assert.inc [there are 2 rows in the table]
+include/assert_grep.inc [Find message: event checksum is split]
+[connection slave]
+include/start_slave_io.inc
+include/rpl_diff.inc
+[connection master]
+DROP TABLE t1;
+SET GLOBAL binlog_checksum = DEFAULT;
+include/rpl_end.inc

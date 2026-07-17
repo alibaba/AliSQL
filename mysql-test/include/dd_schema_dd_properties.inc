@@ -71,6 +71,20 @@ perl;
     @all_lines = grep(!/$filter/, @all_lines);
   }
 
+  my @filtered_lines;
+  my $skip_flashback = 0;
+  for my $line (@all_lines) {
+    if ($line =~ /^innodb_flashback_snapshot=/) {
+      $skip_flashback = 1;
+      next;
+    }
+    if ($skip_flashback && $line =~ /^[^\s].*=/) {
+      $skip_flashback = 0;
+    }
+    push @filtered_lines, $line unless $skip_flashback;
+  }
+  @all_lines = @filtered_lines;
+
   open $fh, '>', $file or die "unable to open file '$file' : $!";
   print $fh @all_lines;
   close $fh;

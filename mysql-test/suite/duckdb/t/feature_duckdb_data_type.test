@@ -148,4 +148,25 @@ select length(col1), length(col2), octet_length(col3),
 from mytest.t1;
 drop table t1;
 
+# 4. Change the data type of BIT in DuckDB from BLOB to BIT.
+--echo
+--echo Tables storing BIT fields as BLOB type can correctly perform DML.
+
+CREATE TABLE t1 (
+  id int PRIMARY KEY,
+  col1 BIT(10) DEFAULT b'101'
+) ENGINE=DUCKDB;
+
+CALL dbms_duckdb.query('DROP TABLE mytest.t1;');
+CALL dbms_duckdb.query("CREATE TABLE mytest.t1 (id INT, col1 BLOB DEFAULT ('\x00\x05::BLOB'));");
+
+INSERT INTO t1 VALUES (1, B'011001'), (2, B'1111011001'), (3, B'0'), (4, B'1');
+INSERT INTO t1 (id) VALUES (5);
+--exec $MYSQL test --binary-as-hex -e "SELECT *, hex(col1) FROM mytest.t1;"
+UPDATE t1 SET col1 = B'0011111111' WHERE id = 1;
+--exec $MYSQL test --binary-as-hex -e "SELECT *, hex(col1) FROM mytest.t1 WHERE id = 1;"
+DELETE FROM t1 WHERE col1 = B'0011111111';
+--exec $MYSQL test --binary-as-hex -e "SELECT *, hex(col1) FROM mytest.t1;"
+DROP TABLE t1;
+
 drop database mytest;

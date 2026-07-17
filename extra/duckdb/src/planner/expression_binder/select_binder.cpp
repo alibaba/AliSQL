@@ -1,11 +1,13 @@
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 
 namespace duckdb {
 
-SelectBinder::SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info)
-    : BaseSelectBinder(binder, context, node, info) {
+SelectBinder::SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info,
+                           bool only_full_group_by)
+    : BaseSelectBinder(binder, context, node, info), only_full_group_by(only_full_group_by) {
 }
 
 unique_ptr<ParsedExpression> SelectBinder::GetSQLValueFunction(const string &column_name) {
@@ -19,7 +21,15 @@ unique_ptr<ParsedExpression> SelectBinder::GetSQLValueFunction(const string &col
 
 BindResult SelectBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
 	// first try to bind the column reference regularly
+	auto expr_copy = expr_ptr->Copy();
 	auto result = BaseSelectBinder::BindColumnRef(expr_ptr, depth, root_expression);
+	if (!only_full_group_by && HasBoundColumns()) {
+		vector<unique_ptr<ParsedExpression>> func_children;
+		func_children.push_back(std::move(expr_copy));
+		expr_copy = std::move(make_uniq<FunctionExpression>("any_value", std::move(func_children)));
+		result = ExpressionBinder::BindExpression(expr_copy, depth);
+		bound_columns.pop_back();
+	}
 	if (!result.HasError()) {
 		return result;
 	}

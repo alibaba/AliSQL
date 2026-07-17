@@ -448,6 +448,8 @@ extern CHARSET_INFO my_charset_utf8mb3_tolower_ci;
 extern CHARSET_INFO my_charset_utf8mb3_unicode_ci;
 extern CHARSET_INFO my_charset_utf8mb3_bin;
 extern CHARSET_INFO my_charset_utf8mb4_bin;
+extern CHARSET_INFO my_charset_utf8mb4_0900_as_cs;
+extern CHARSET_INFO my_charset_utf8mb4_0900_as_ci;
 extern MYSQL_PLUGIN_IMPORT CHARSET_INFO my_charset_utf8mb4_general_ci;
 
 /* declarations for simple charsets */

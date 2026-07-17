@@ -1337,6 +1337,8 @@ class Item_func_atan final : public Item_dec_func {
   double val_real() override;
   const char *func_name() const override { return "atan"; }
   enum Functype functype() const override { return ATAN_FUNC; }
+  void print(const THD *thd, String *str,
+             enum_query_type query_type) const override;
 };
 
 class Item_func_cos final : public Item_dec_func {
@@ -1782,6 +1784,8 @@ class Item_func_field final : public Item_int_func {
   longlong val_int() override;
   const char *func_name() const override { return "field"; }
   bool resolve_type(THD *thd) override;
+  void print(const THD *thd, String *str,
+             enum_query_type query_type) const override;
 };
 
 class Item_func_ascii final : public Item_int_func {

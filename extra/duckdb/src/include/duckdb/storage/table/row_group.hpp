@@ -65,6 +65,8 @@ struct RowGroupWriteInfo {
 struct RowGroupWriteData {
 	vector<unique_ptr<ColumnCheckpointState>> states;
 	vector<BaseStatistics> statistics;
+	bool reuse_existing_metadata_blocks = false;
+	vector<idx_t> existing_extra_metadata_blocks;
 };
 
 class RowGroup : public SegmentBase<RowGroup> {
@@ -92,6 +94,11 @@ public:
 	RowGroupCollection &GetCollection() {
 		return collection.get();
 	}
+	//! Returns the list of meta block pointers used by the columns
+	vector<idx_t> GetOrComputeExtraMetadataBlocks(bool force_compute = false);
+
+	const vector<MetaBlockPointer> &GetColumnStartPointers() const;
+
 	BlockManager &GetBlockManager();
 	DataTableInfo &GetTableInfo();
 
@@ -106,6 +113,7 @@ public:
 	void CommitDropColumn(const idx_t column_index);
 
 	void InitializeEmpty(const vector<LogicalType> &types);
+	bool HasChanges() const;
 
 	//! Initialize a scan over this row_group
 	bool InitializeScan(CollectionScanState &state);
@@ -152,12 +160,12 @@ public:
 	void InitializeAppend(RowGroupAppendState &append_state);
 	void Append(RowGroupAppendState &append_state, DataChunk &chunk, idx_t append_count);
 
-	void Update(TransactionData transaction, DataChunk &updates, row_t *ids, idx_t offset, idx_t count,
-	            const vector<PhysicalIndex> &column_ids);
+	void Update(TransactionData transaction, DataTable &data_table, DataChunk &updates, row_t *ids, idx_t offset,
+	            idx_t count, const vector<PhysicalIndex> &column_ids);
 	//! Update a single column; corresponds to DataTable::UpdateColumn
 	//! This method should only be called from the WAL
-	void UpdateColumn(TransactionData transaction, DataChunk &updates, Vector &row_ids,
-	                  const vector<column_t> &column_path);
+	void UpdateColumn(TransactionData transaction, DataTable &data_table, DataChunk &updates, Vector &row_ids,
+	                  idx_t offset, idx_t count, const vector<column_t> &column_path);
 
 	void MergeStatistics(idx_t column_idx, const BaseStatistics &other);
 	void MergeIntoStatistics(idx_t column_idx, BaseStatistics &other);
@@ -186,6 +194,8 @@ public:
 
 	static FilterPropagateResult CheckRowIdFilter(const TableFilter &filter, idx_t beg_row, idx_t end_row);
 
+	vector<MetaBlockPointer> CheckpointDeletes(MetadataManager &manager);
+
 private:
 	optional_ptr<RowVersionManager> GetVersionInfo();
 	shared_ptr<RowVersionManager> GetOrCreateVersionInfoPtr();
@@ -196,11 +206,11 @@ private:
 	ColumnData &GetColumn(const StorageIndex &c);
 	idx_t GetColumnCount() const;
 	vector<shared_ptr<ColumnData>> &GetColumns();
+	ColumnData &GetRowIdColumnData();
+	void SetCount(idx_t count);
 
 	template <TableScanType TYPE>
 	void TemplatedScan(TransactionData transaction, CollectionScanState &state, DataChunk &result);
-
-	vector<MetaBlockPointer> CheckpointDeletes(MetadataManager &manager);
 
 	bool HasUnloadedDeletes() const;
 
@@ -209,8 +219,13 @@ private:
 	vector<MetaBlockPointer> column_pointers;
 	unique_ptr<atomic<bool>[]> is_loaded;
 	vector<MetaBlockPointer> deletes_pointers;
+	bool has_metadata_blocks = false;
+	vector<idx_t> extra_metadata_blocks;
 	atomic<bool> deletes_is_loaded;
-	idx_t allocation_size;
+	atomic<idx_t> allocation_size;
+	unique_ptr<ColumnData> row_id_column_data;
+	atomic<bool> row_id_is_loaded;
+	atomic<bool> has_changes;
 };
 
 } // namespace duckdb

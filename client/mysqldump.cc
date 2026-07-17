@@ -138,7 +138,8 @@ static char *current_user = nullptr, *current_host = nullptr, *path = nullptr,
             *fields_terminated = nullptr, *lines_terminated = nullptr,
             *enclosed = nullptr, *opt_enclosed = nullptr, *escaped = nullptr,
             *where = nullptr, *opt_compatible_mode_str = nullptr,
-            *opt_ignore_error = nullptr, *log_error_file = nullptr;
+            *opt_ignore_error = nullptr, *log_error_file = nullptr,
+            *opt_init_command = nullptr;
 static MEM_ROOT argv_alloc{PSI_NOT_INSTRUMENTED, 512};
 static bool ansi_mode = false;  ///< Force the "ANSI" SQL_MODE.
 /* Server supports character_set_results session variable? */
@@ -664,6 +665,11 @@ static struct my_option my_long_options[] = {
      "be dumped or not.",
      &opt_skip_gipk, &opt_skip_gipk, nullptr, GET_BOOL, NO_ARG, 0, 0, 0,
      nullptr, 0, nullptr},
+    {"init-command", OPT_INIT_COMMAND,
+     "SQL Command to execute when connecting to MySQL server. Will "
+     "automatically be re-executed when reconnecting.",
+     &opt_init_command, &opt_init_command, nullptr, GET_STR, REQUIRED_ARG, 0, 0,
+     0, nullptr, 0, nullptr},
 #include "authentication_kerberos_clientopt-longopts.h"
     {nullptr, 0, nullptr, nullptr, nullptr, nullptr, GET_NO_ARG, NO_ARG, 0, 0,
      0, nullptr, 0, nullptr}};
@@ -1071,6 +1077,7 @@ static int get_options(int *argc, char ***argv) {
   ignore_table->insert("mysql.schema");
   ignore_table->insert("mysql.general_log");
   ignore_table->insert("mysql.slow_log");
+  ignore_table->insert("mysql.innodb_flashback_snapshot");
 
   if ((ho_error = handle_options(argc, argv, my_long_options, get_one_option)))
     return (ho_error);
@@ -1603,6 +1610,8 @@ static int connect_to_db(char *host, char *user) {
 
   verbose_msg("-- Connecting to %s...\n", host ? host : "localhost");
   mysql_init(&mysql_connection);
+  if (opt_init_command)
+    mysql_options(&mysql_connection, MYSQL_INIT_COMMAND, opt_init_command);
   if (opt_compress) mysql_options(&mysql_connection, MYSQL_OPT_COMPRESS, NullS);
   if (SSL_SET_OPTIONS(&mysql_connection)) {
     fprintf(stderr, "%s", SSL_SET_OPTIONS_ERROR);

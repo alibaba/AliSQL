@@ -195,6 +195,7 @@ class Binlog_sender {
     Type of the previously processed event.
   */
   binary_log::Log_event_type m_prev_event_type;
+
   /*
     It initializes the context, checks if the dump request is valid and
     if binlog status is correct.

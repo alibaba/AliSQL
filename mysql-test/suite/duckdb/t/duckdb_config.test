@@ -89,12 +89,11 @@ SET GLOBAL duckdb_max_temp_directory_size = '1GB';
 SET GLOBAL duckdb_max_temp_directory_size = 1048576;
 call dbms_duckdb.query("SELECT current_setting('max_temp_directory_size') AS max_temp_directory_size");
 SET GLOBAL duckdb_max_temp_directory_size = 0;
+--replace_column 1 MAX_TEMP_DIRECTORY_SIZE
 call dbms_duckdb.query("SELECT current_setting('max_temp_directory_size') AS max_temp_directory_size");
 SET GLOBAL duckdb_max_temp_directory_size = 1048576*1024*1024; # 1TB
 call dbms_duckdb.query("SELECT current_setting('max_temp_directory_size') AS max_temp_directory_size");
 SET GLOBAL duckdb_max_temp_directory_size = DEFAULT;
-call dbms_duckdb.query("SELECT current_setting('max_temp_directory_size') AS max_temp_directory_size");
-
 
 --echo #
 --echo # 5) duckdb_threads
@@ -249,6 +248,34 @@ SET GLOBAL duckdb_checkpoint_threshold = 0;
 call dbms_duckdb.query("SELECT current_setting('checkpoint_threshold') AS checkpoint_threshold");
 
 SET GLOBAL duckdb_checkpoint_threshold = DEFAULT;
+
+--echo #
+--echo # 12) duckdb_max_threads_per_query
+--echo #
+
+CREATE TABLE t1 (id int primary key) engine=duckdb;
+
+CALL dbms_duckdb.query("SELECT current_setting('max_threads_per_query')");
+
+SET duckdb_max_threads_per_query = 1000;
+SELECT * FROM t1;
+CALL dbms_duckdb.query("SELECT current_setting('max_threads_per_query')");
+# cannot be set to 0
+SET duckdb_max_threads_per_query = 0;
+SELECT * FROM t1;
+CALL dbms_duckdb.query("SELECT current_setting('max_threads_per_query')");
+
+SET GLOBAL duckdb_max_threads_per_query = 8192;
+
+--let restart_parameters="restart: --duckdb_max_threads_per_query=1024"
+--source include/restart_mysqld.inc
+SELECT @@session.duckdb_max_threads_per_query;
+SELECT * FROM t1;
+CALL dbms_duckdb.query("SELECT current_setting('max_threads_per_query')");
+
+SET duckdb_max_threads_per_query = default;
+
+DROP TABLE t1;
 
 --echo #
 --echo # print all duckdb queries

@@ -3288,12 +3288,12 @@ String *Item_func_json_unquote::val_str(String *str) {
         return error_str();
       }
 
-      null_value = false;
-      // String pointer may be null.
-      if (m_value.is_empty()) return make_empty_result();
+        null_value = false;
+        // String pointer may be null.
+        if (m_value.is_empty()) return make_empty_result();
 
-      return &m_value;
-    }
+        return &m_value;
+      }
 
     String *res = args[0]->val_str(str);
 
@@ -3365,6 +3365,25 @@ String *Item_func_json_unquote::val_str(String *str) {
 
   null_value = false;
   return str;
+}
+
+void Item_func_json_unquote::print(const THD *thd, String *str,
+                                   enum_query_type query_type) const {
+  if (query_type & QT_DUCKDB_REWRITE) {
+    if (args[0]->type() == FUNC_ITEM) {
+      Item_func *func = static_cast<Item_func *>(args[0]);
+      if (!strcasecmp(func->func_name(), "json_extract") &&
+          func->arg_count == 2) {
+        str->append(STRING_WITH_LEN("(("));
+        func->get_arg(0)->print(thd, str, query_type);
+        str->append(STRING_WITH_LEN(")->>("));
+        func->get_arg(1)->print(thd, str, query_type);
+        str->append(STRING_WITH_LEN("))"));
+        return;
+      }
+    }
+  }
+  Item_func::print(thd, str, query_type);
 }
 
 String *Item_func_json_pretty::val_str(String *str) {
@@ -4030,6 +4049,14 @@ longlong Item_func_member_of::val_int() {
 
 void Item_func_member_of::print(const THD *thd, String *str,
                                 enum_query_type query_type) const {
+  if (query_type & QT_DUCKDB_REWRITE) {
+    str->append(STRING_WITH_LEN("member_of("));
+    args[0]->print(thd, str, query_type);
+    str->append(',');
+    args[1]->print(thd, str, query_type);
+    str->append(')');
+    return;
+  }
   args[0]->print(thd, str, query_type);
   str->append(STRING_WITH_LEN(" member of ("));
   args[1]->print(thd, str, query_type);
@@ -4500,19 +4527,31 @@ bool Item_func_json_value::fix_fields(THD *thd, Item **ref) {
 
 void Item_func_json_value::print(const THD *thd, String *str,
                                  enum_query_type query_type) const {
-  str->append(STRING_WITH_LEN("json_value("));
-  args[0]->print(thd, str, query_type);
-  str->append(STRING_WITH_LEN(", "));
-  args[1]->print(thd, str, query_type);
-  str->append(STRING_WITH_LEN(" returning "));
-  print_cast_type(m_cast_target, this, str);
-  // ON EMPTY
-  print_on_empty_or_error(thd, str, query_type, /*on_empty=*/true, m_on_empty,
-                          args[2]);
-  // ON ERROR
-  print_on_empty_or_error(thd, str, query_type, /*on_empty=*/false, m_on_error,
-                          args[3]);
-  str->append(')');
+  if (query_type & QT_DUCKDB_REWRITE) {
+    str->append(STRING_WITH_LEN("cast("));
+    str->append(STRING_WITH_LEN("json_value("));
+    args[0]->print(thd, str, query_type);
+    str->append(STRING_WITH_LEN(", "));
+    args[1]->print(thd, str, query_type);
+    str->append(')');
+    str->append(STRING_WITH_LEN(" AS "));
+    print_cast_type(m_cast_target, this, str);
+    str->append(')');
+  } else {
+    str->append(STRING_WITH_LEN("json_value("));
+    args[0]->print(thd, str, query_type);
+    str->append(STRING_WITH_LEN(", "));
+    args[1]->print(thd, str, query_type);
+    str->append(STRING_WITH_LEN(" returning "));
+    print_cast_type(m_cast_target, this, str);
+    // ON EMPTY
+    print_on_empty_or_error(thd, str, query_type, /*on_empty=*/true, m_on_empty,
+                            args[2]);
+    // ON ERROR
+    print_on_empty_or_error(thd, str, query_type, /*on_empty=*/false,
+                            m_on_error, args[3]);
+    str->append(')');
+  }
 }
 
 /**

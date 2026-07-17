@@ -397,18 +397,25 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
       has_update_triggers &&
       table->triggers->has_triggers(TRG_EVENT_UPDATE, TRG_ACTION_AFTER);
 
+  /** There may be subqueries in the update statement. */
+  bool exist_duckdb_table = false;
+  bool exist_other_table = false;
+  Table_ref *non_duckdb_table;
+  Table_ref *duckdb_table;
+  lex->check_table_engine_type(exist_duckdb_table, exist_other_table,
+                               &non_duckdb_table, &duckdb_table);
+  if (exist_other_table && exist_duckdb_table) {
+    char ebuff[MYSQL_ERRMSG_SIZE];
+    snprintf(ebuff, sizeof(ebuff),
+             "Does not support mixed queries of duckdb engine and other "
+             "engines in UPDATE Statement. The table `%s` is a duckdb table. "
+             "The table `%s` is not a duckdb table",
+             duckdb_table->table_name, non_duckdb_table->table_name);
+    my_error(ER_DUCKDB_CLIENT, MYF(0), ebuff);
+    return true;
+  }
+
   if (myduck::is_duckdb_table(table)) {
-    /** There may be subqueries in the update statement. */
-    bool exist_duckdb_table = false;
-    bool exist_other_table = false;
-    lex->check_table_engine_type(exist_duckdb_table, exist_other_table);
-    if (exist_other_table) {
-      my_error(ER_DUCKDB_CLIENT, MYF(0),
-                 "Does not support mixed queries of duckdb engine and other "
-                 "engines in UPDATE Statement");
-      return true;
-    }
-    
     ha_rows duckdb_update_rows = 0;
     std::string query(thd->query().str);
 

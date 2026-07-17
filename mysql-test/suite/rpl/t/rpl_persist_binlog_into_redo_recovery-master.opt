@@ -1,0 +1,8 @@
+--persist-binlog-to-redo=on
+--replica-parallel-workers=4
+--binlog-order-commits=off
+--replica-preserve-commit-order=OFF
+# The test disables InnoDB checkpoints while writing tens of MB of binlog
+# events into the redo log, so the redo log must be big enough to hold them.
+# (innodb_log_file_size is deprecated since 8.0.30, use the capacity instead.)
+--innodb-redo-log-capacity=1073741824

@@ -116,6 +116,11 @@
 --let $rpl_skip_start_slave= 1
 --source include/master-slave.inc
 
+--disable_query_log
+CALL mtr.add_suppression('Cannot get file password for encrypted replication log file');
+CALL mtr.add_suppression('Could not read the last binlog file');
+--enable_query_log
+
 --let $keyring_file= $MYSQL_TMP_DIR/keyring_master
 --let $keyring_original_file= $MYSQL_TEST_DIR/std_data/rpl_nogtid_encryption_keyring_master
 --let $encrypted_binlog_file= $MYSQL_TEST_DIR/std_data/rpl_nogtid_encryption_master-bin.000002
@@ -230,8 +235,12 @@ while ($point < 13)
   --let $assert_file= $master_error_log
   --let $assert_text= Server reported: $error_message
   --let $assert_select= $error_message
-  --let $assert_count= 1
+  # Redo-based and ordinary binlog recovery can report the same failure.
+  # The number of reports depends on which recovery paths inspect the file.
+  --let $assert_count=
+  --let $assert_count_condition= >= 1
   --source include/assert_grep.inc
+  --let $assert_count_condition=
   --let $assert_text= Server failed to initialize binary log for recovery
   --let $assert_select= Can.t init tc log
   --let $assert_count= 1

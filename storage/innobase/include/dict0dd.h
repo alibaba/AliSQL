@@ -280,8 +280,6 @@ static const dd::String_type dd_tablespaces_name("mysql/tablespaces");
 static const dd::String_type dd_indexes_name("mysql/indexes");
 static const dd::String_type dd_columns_name("mysql/columns");
 
-#ifdef UNIV_DEBUG
-
 /** Hard-coded data dictionary information */
 struct innodb_dd_table_t {
   /** Data dictionary table name */
@@ -327,15 +325,15 @@ const innodb_dd_table_t innodb_dd_table[] = {
     INNODB_DD_TABLE("tablespaces", 2),
     INNODB_DD_TABLE("triggers", 7),
     INNODB_DD_TABLE("view_routine_usage", 2),
-    INNODB_DD_TABLE("view_table_usage", 2)};
+    INNODB_DD_TABLE("view_table_usage", 2),
+
+    INNODB_DD_TABLE("innodb_flashback_snapshot", 3)};
 
 /** Number of hard-coded data dictionary tables */
 static constexpr size_t innodb_dd_table_size = UT_ARR_SIZE(innodb_dd_table);
 
 /** @return total number of indexes of all DD Tables. */
 uint32_t dd_get_total_indexes_num();
-
-#endif /* UNIV_DEBUG */
 
 #endif /* !UNIV_HOTBACKUP */
 

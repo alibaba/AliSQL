@@ -46,4 +46,11 @@ a keyword, so we use POSIX instead. */
 static std::string COLLATION_BINARY = "POSIX";
 static std::string COLLATION_NOCASE = "NOCASE";
 static std::string COLLATION_NOCASE_NOACCENT = "NOCASE.NOACCENT";
+
+/** DuckDB store latin1 column's data as utf8mb4. Get the corresponding
+  utf8mb4 CHARSET_INFO according to latin1 CHARSET_INFO.
+   @param[in]  cs  Pointer to latin1 CHARSET_INFO structure
+   @return  utf8mb4 CHARSET_INFO
+*/
+const CHARSET_INFO *get_utf8mb4_charset_for_latin1(const CHARSET_INFO *cs);
 }  // namespace myduck

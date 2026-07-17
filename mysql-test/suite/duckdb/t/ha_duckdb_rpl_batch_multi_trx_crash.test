@@ -82,24 +82,40 @@ START REPLICA;
 --source include/rpl_diff.inc
 
 --echo ###########################################################################
---echo # 3. Test Crash after DuckDB commit an Insert-only Batch
+--echo # 3. Test transactions are not replayed by executing SQL
+--echo ###########################################################################
+--let $assert_file = $MYSQLTEST_VARDIR/log/mysqld.2.err
+--let $assert_text = Check DML SQL is not executed
+--let $assert_select = duckdb_print_dml
+--let $assert_count = 0
+--source include/assert_grep.inc
+
+--echo ###########################################################################
+--echo # 4. Test Crash after DuckDB commit an Insert-only Batch
 --echo ###########################################################################
 --source include/rpl_connection_slave.inc
-STOP REPLICA;
+STOP REPLICA SQL_THREAD;
 
+--echo # 4.1 Execute 3 Insert-only Trx, and then Rotate Binlog after the first two Trxs have finished executing
 --source include/rpl_connection_master.inc
 SET autocommit = 1;
 INSERT INTO t1 (id, c0, c1, c2, c3, c4, c5) VALUES (5, '25sg', 'RDS', 5.2, NULL, '2028-11-11 15:30:34', X'e18080e18080');
 INSERT INTO t1 (id, c0, c1, c2, c3, c4, c5) VALUES (6, '0aaaa', NULL, 88.88, '2023-06-07', NULL, X'1a53aa890ee6');
+FLUSH LOGS;
 INSERT INTO t1 (id, c0, c1, c2, c3, c4, c5) VALUES (7, 'hdnnn', 'MYSQL', 11.11, '2023-10-21', NULL, X'e18080e18080');
 
+--let $rpl_only_running_threads=1
+--source include/rpl_sync.inc
+
+--echo # 4.2 Make Slave Restart
 --source include/rpl_connection_slave.inc
 SET GLOBAL debug = "+d,crash_after_duckdb_commit";
 --source include/expect_crash.inc
 --enable_reconnect
-START REPLICA;
+START REPLICA SQL_THREAD;
 --source include/wait_until_disconnected.inc
 
+--exec rm $MYSQLTEST_VARDIR/log/mysqld.2.err
 --let $rpl_server_number= 2
 --source include/rpl_start_server.inc
 --disable_reconnect
@@ -108,13 +124,17 @@ START REPLICA;
 --let $rpl_diff_statement = SELECT id, c0, c1, c2, c3, c4, HEX(c5) FROM test.t1 ORDER BY id, c0;
 --source include/rpl_diff.inc
 
---echo ###########################################################################
---echo # 4. Test transactions are not replayed by executing SQL
---echo ###########################################################################
+--echo # 4.3 Check the first batch (Trx 1 and Trx 2) is replayed idempotently, the second batch is replayed normally
 --let $assert_file = $MYSQLTEST_VARDIR/log/mysqld.2.err
---let $assert_text = Check DML SQL is not executed
---let $assert_select = duckdb_print_dml
---let $assert_count = 0
+--let $assert_text = Check 1 Delete Batch SQL after Restart
+--let $assert_select = DELETE.*rds_buf
+--let $assert_count = 1
+--source include/assert_grep.inc
+
+--let $assert_file = $MYSQLTEST_VARDIR/log/mysqld.2.err
+--let $assert_text = Check 2 INSERT Batch SQL after Restart
+--let $assert_select = INSERT.*rds_buf
+--let $assert_count = 2
 --source include/assert_grep.inc
 
 --echo ###########################################################################

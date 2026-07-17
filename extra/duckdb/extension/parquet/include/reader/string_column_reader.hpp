@@ -15,15 +15,31 @@ namespace duckdb {
 
 class StringColumnReader : public ColumnReader {
 public:
+	enum class StringColumnType : uint8_t { VARCHAR, JSON, OTHER };
+
+	static StringColumnType GetStringColumnType(const LogicalType &type) {
+		if (type.IsJSONType()) {
+			return StringColumnType::JSON;
+		}
+		if (type.id() == LogicalTypeId::VARCHAR) {
+			return StringColumnType::VARCHAR;
+		}
+		return StringColumnType::OTHER;
+	}
+
+public:
 	static constexpr const PhysicalType TYPE = PhysicalType::VARCHAR;
 
 public:
 	StringColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema);
 	idx_t fixed_width_string_length;
+	const StringColumnType string_column_type;
 
 public:
-	static void VerifyString(const char *str_data, uint32_t str_len, const bool isVarchar);
-	void VerifyString(const char *str_data, uint32_t str_len);
+	static bool IsValid(const char *str_data, uint32_t str_len, bool is_varchar);
+	static bool IsValid(const string &str, bool is_varchar);
+	static void VerifyString(const char *str_data, uint32_t str_len, bool is_varchar);
+	void VerifyString(const char *str_data, uint32_t str_len) const;
 
 	static void ReferenceBlock(Vector &result, shared_ptr<ResizeableBuffer> &block);
 

@@ -20,7 +20,7 @@ struct OrdOperator {
         if (width == -1) {
             return str[0];
         }
-        u_int32_t ret = 0;
+        uint32_t ret = 0;
         for (int i = 0; i < width; i++) {
             ret <<= 8;
             ret += str[i];
@@ -31,7 +31,7 @@ struct OrdOperator {
 
 ScalarFunction OrdFun::GetFunction() {
 	return ScalarFunction({LogicalType::VARCHAR}, LogicalType::UINTEGER,
-	                      ScalarFunction::UnaryFunction<string_t, u_int32_t, OrdOperator>);
+	                      ScalarFunction::UnaryFunction<string_t, uint32_t, OrdOperator>);
 }
 
 } // namespace duckdb

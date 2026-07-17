@@ -34,7 +34,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/set_var.h"
 #include "sql/sql_lex.h"
 #include "sql/transaction.h"
-#include "sql/duckdb/log.h"
+#include "sql/duckdb/duckdb_config.h"
+#include "sql/duckdb/duckdb_log.h"
 
 bool duckdb_idempotent_data_import_enabled = false;
 #define my_millisecond_getsystime() (my_getsystime() / 10000)
@@ -74,8 +75,8 @@ DuckdbThdContext::DuckdbSessionConfig::compare_and_config(
     db = std::string(thd->db().str);
     std::string sql = "USE `" + db + "`";
     /* Allow 'use db' execution failure */
-    auto res = duckdb_query(connection, sql);
-    m_database = res->HasError() ? "" : db;
+    auto res = duckdb_query(connection, sql, false);
+    m_database.Set(res->HasError() ? "" : db);
   }
 
   std::string warn_msg;
@@ -84,7 +85,7 @@ DuckdbThdContext::DuckdbSessionConfig::compare_and_config(
   if (tz != m_timezone) {
     config_sql.push_back("SET TimeZone = '" + tz + "'");
     push_warning(thd, warn_msg);
-    m_timezone = tz;
+    m_timezone.Set(tz);
   }
 
   std::string collation =
@@ -92,21 +93,21 @@ DuckdbThdContext::DuckdbSessionConfig::compare_and_config(
   if (collation != m_collation) {
     config_sql.push_back("SET default_collation = '" + collation + "'");
     push_warning(thd, warn_msg);
-    m_collation = collation;
+    m_collation.Set(collation);
   }
 
-  std::string force_no_collation =
-      (thd->slave_thread || thd->variables.duckdb_force_no_collation) ? "true"
-                                                                      : "false";
-  if (force_no_collation != m_force_no_collation) {
-    config_sql.push_back("SET force_no_collation = '" + force_no_collation +
-                         "'");
-    m_force_no_collation = force_no_collation;
+  bool force_no_collation =
+      (thd->slave_thread || thd->variables.duckdb_force_no_collation)
+          ? true : false;
+  if (m_force_no_collation != force_no_collation) {
+    config_sql.push_back(
+        std::string("SET force_no_collation = ") +
+        (force_no_collation ? "true" : "false"));
+    m_force_no_collation.Set(force_no_collation);
   }
 
   timeval user_time = thd->user_time;
-  if (user_time.tv_sec != m_user_time.tv_sec ||
-      user_time.tv_usec != m_user_time.tv_usec) {
+  if (m_user_time != user_time) {
     std::string config_timestamp("SET timestamp = ");
     if (user_time.tv_sec || user_time.tv_usec) {
       config_timestamp.append(
@@ -115,20 +116,20 @@ DuckdbThdContext::DuckdbSessionConfig::compare_and_config(
       config_timestamp.append("-1");
     }
     config_sql.push_back(config_timestamp);
-    m_user_time = user_time;
+    m_user_time.Set(user_time);
   }
 
   ulong default_week_format = thd->variables.default_week_format;
   if (default_week_format != m_default_week_format) {
     config_sql.push_back("SET default_week_format = " +
                          std::to_string(default_week_format));
-    m_default_week_format = default_week_format;
+    m_default_week_format.Set(default_week_format);
   }
 
   ulonglong sql_mode = thd->variables.sql_mode;
   if (sql_mode != m_sql_mode) {
     config_sql.push_back("SET sql_mode = " + std::to_string(sql_mode));
-    m_sql_mode = sql_mode;
+    m_sql_mode.Set(sql_mode);
   }
 
   ulonglong disabled_optimizers = thd->variables.duckdb_disabled_optimizers;
@@ -141,7 +142,7 @@ DuckdbThdContext::DuckdbSessionConfig::compare_and_config(
       sql += "'";
     }
     config_sql.push_back(sql);
-    m_disabled_optimizers = disabled_optimizers;
+    m_disabled_optimizers.Set(disabled_optimizers);
   }
 
   ulonglong merge_join_threshold = thd->variables.duckdb_merge_join_threshold;
@@ -149,7 +150,17 @@ DuckdbThdContext::DuckdbSessionConfig::compare_and_config(
     std::string sql = "SET merge_join_threshold = ";
     sql += std::to_string(merge_join_threshold);
     config_sql.push_back(sql);
-    m_merge_join_threshold = merge_join_threshold;
+    m_merge_join_threshold.Set(merge_join_threshold);
+  }
+
+  ulonglong max_threads_per_query =
+    thd->slave_thread ? duckdb_max_threads_per_query_rpl
+                      : thd->variables.duckdb_max_threads_per_query;
+  if (max_threads_per_query != m_query_max_threads) {
+    std::string sql = "SET max_threads_per_query = ";
+    sql += std::to_string(max_threads_per_query);
+    config_sql.push_back(sql);
+    m_query_max_threads.Set(max_threads_per_query);
   }
 
   if (thd->lex->is_explain()) {
@@ -157,8 +168,15 @@ DuckdbThdContext::DuckdbSessionConfig::compare_and_config(
     if (cur_explain_output_str != m_explain_output_str) {
       config_sql.push_back("set explain_output = '" + cur_explain_output_str +
                            "'");
-      m_explain_output_str = cur_explain_output_str;
+      m_explain_output_str.Set(cur_explain_output_str);
     }
+  }
+
+  bool prefer_high_precision = thd->variables.duckdb_prefer_high_precision;
+  if (m_prefer_high_precision != prefer_high_precision) {
+    config_sql.push_back(std::string("SET prefer_high_precision = ") +
+                         (prefer_high_precision ? "true" : "false"));
+    m_prefer_high_precision.Set(prefer_high_precision);
   }
 
   std::unique_ptr<duckdb::QueryResult> res;
@@ -181,7 +199,7 @@ DuckdbThdContext::DuckdbSessionConfig::compare_and_config(
 
 DeltaAppender *DuckdbThdContext::get_appender(TABLE *table) {
   if (!m_appenders) {
-    m_appenders = std::make_unique<DeltaAppenders>(m_con);
+    m_appenders = std::make_unique<DeltaAppenders>();
   }
 
   cur_batch_could_be_committed = false;
@@ -189,8 +207,8 @@ DeltaAppender *DuckdbThdContext::get_appender(TABLE *table) {
   std::string db(table->s->db.str, table->s->db.length);
   std::string tb(table->s->table_name.str, table->s->table_name.length);
 
-  return m_appenders->get_appender(db, tb, batch_state == IN_INSERT_ONLY_BATCH,
-                                   table);
+  return m_appenders->get_appender(m_thd, db, tb, batch_state == IN_INSERT_ONLY_BATCH,
+                                   get_idempotent_flag(), table);
 }
 
 int DuckdbThdContext::append_row_insert(TABLE *table,
@@ -218,7 +236,8 @@ bool DuckdbThdContext::get_idempotent_flag() {
     return true;
   }
 
-  return m_thd->rli_slave && m_thd->rli_slave->get_duckdb_idempotent_batch();
+  return m_thd->rli_slave &&
+         m_thd->rli_slave->get_local_duckdb_idempotent_flag();
 }
 
 void DuckdbThdContext::add_gtid_to_batch_set() {
@@ -231,10 +250,10 @@ void DuckdbThdContext::add_gtid_to_batch_set() {
   m_thd->variables.gtid_next.set_undefined();
 }
 
-bool DuckdbThdContext::duckdb_delay_commit() {
+bool DuckdbThdContext::duckdb_delay_commit(Log_event *ev) {
   event_seq_state = DuckdbThdContext::INITIAL;
 
-  if (!duckdb_multi_trx_in_batch && !batch_multi_trx_started) return false;
+  if (!duckdb_multi_trx_in_batch) return false;
   if (batch_state != IN_MIX_BATCH) return false;
   if (m_thd->owned_gtid.sidno <= 0) return false;
 
@@ -250,6 +269,7 @@ bool DuckdbThdContext::duckdb_delay_commit() {
   add_gtid_to_batch_set();
 
   mysql_mutex_lock(&rli->data_lock);
+  xid_event_master_log_pos = ev->common_header->log_pos;
   xid_event_relay_log_pos = rli->get_event_relay_log_pos();
   strmake(xid_event_relay_log_name, rli->get_event_relay_log_name(),
           FN_REFLEN - 1);
@@ -398,6 +418,10 @@ void DuckdbThdContext::update_on_commit() {
 }
 
 void DuckdbThdContext::update_on_rollback() {
+  /* When log_bin=on, we retrieved a GTID and put it into 'thd->owned_gtid',
+     which needs to be released here */
+  gtid_state->update_on_rollback(m_thd);
+
   Gtid_set::Gtid_iterator git(&batch_gtid_set);
   Gtid g = git.get();
 
@@ -434,6 +458,7 @@ int DuckdbThdContext::commit_if_possible() {
   set_batch_state(UNDEFINED);
 
   Xid_log_event ev(m_thd, 0);
+  ev.common_header->log_pos = xid_event_master_log_pos;
   int ret = ev.do_apply_event(rli);
 
   mysql_mutex_lock(&rli->data_lock);
@@ -477,7 +502,6 @@ bool DuckdbThdContext::need_implicit_commit_batch(Log_event *ev) {
       } else if (ev_type == binary_log::XID_EVENT ||
                  (ev_type == binary_log::QUERY_EVENT &&
                   strcmp("COMMIT", ((Query_log_event *)ev)->query) == 0)) {
-        add_gtid_to_batch_set();
         event_seq_state = DuckdbThdContext::INITIAL;
         return false;
       } else {

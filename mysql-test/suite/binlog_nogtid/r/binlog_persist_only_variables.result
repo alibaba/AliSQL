@@ -47,9 +47,12 @@ INSERT INTO aliases(name) VALUES
 ('slave_parallel_workers'), ('slave_pending_jobs_size_max'),
 ('pseudo_slave_mode'), ('skip_slave_start');
 
-include/assert.inc [Expect 115 variables in the table.]
+include/assert.inc [Expect 125 variables in the table.]
 
 # Test SET PERSIST_ONLY
+SET PERSIST_ONLY binlog_buffer_size = @@GLOBAL.binlog_buffer_size;
+SET PERSIST_ONLY binlog_cache_free_flush = @@GLOBAL.binlog_cache_free_flush;
+SET PERSIST_ONLY binlog_cache_free_flush_limit_size = @@GLOBAL.binlog_cache_free_flush_limit_size;
 SET PERSIST_ONLY binlog_cache_size = @@GLOBAL.binlog_cache_size;
 SET PERSIST_ONLY binlog_checksum = @@GLOBAL.binlog_checksum;
 SET PERSIST_ONLY binlog_direct_non_transactional_updates = @@GLOBAL.binlog_direct_non_transactional_updates;
@@ -63,6 +66,8 @@ Warning	1287	'@@binlog_format' is deprecated and will be removed in a future rel
 Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 SET PERSIST_ONLY binlog_group_commit_sync_delay = @@GLOBAL.binlog_group_commit_sync_delay;
 SET PERSIST_ONLY binlog_group_commit_sync_no_delay_count = @@GLOBAL.binlog_group_commit_sync_no_delay_count;
+SET PERSIST_ONLY binlog_group_delay = @@GLOBAL.binlog_group_delay;
+SET PERSIST_ONLY binlog_group_delay_running_threads = @@GLOBAL.binlog_group_delay_running_threads;
 SET PERSIST_ONLY binlog_gtid_simple_recovery = @@GLOBAL.binlog_gtid_simple_recovery;
 SET PERSIST_ONLY binlog_max_flush_queue_time = @@GLOBAL.binlog_max_flush_queue_time;
 Warnings:
@@ -83,6 +88,7 @@ SET PERSIST_ONLY binlog_transaction_dependency_tracking = @@GLOBAL.binlog_transa
 Warnings:
 Warning	1287	'@@binlog_transaction_dependency_tracking' is deprecated and will be removed in a future release.
 Warning	1287	'@@binlog_transaction_dependency_tracking' is deprecated and will be removed in a future release.
+SET PERSIST_ONLY duckdb_max_threads_per_query_rpl = @@GLOBAL.duckdb_max_threads_per_query_rpl;
 SET PERSIST_ONLY duckdb_source_set_insert_only_to_binlog = @@GLOBAL.duckdb_source_set_insert_only_to_binlog;
 SET PERSIST_ONLY enforce_gtid_consistency = @@GLOBAL.enforce_gtid_consistency;
 SET PERSIST_ONLY group_replication_consistency = @@GLOBAL.group_replication_consistency;
@@ -141,6 +147,8 @@ SET PERSIST_ONLY max_binlog_cache_size = @@GLOBAL.max_binlog_cache_size;
 SET PERSIST_ONLY max_binlog_size = @@GLOBAL.max_binlog_size;
 SET PERSIST_ONLY max_binlog_stmt_cache_size = @@GLOBAL.max_binlog_stmt_cache_size;
 SET PERSIST_ONLY max_relay_log_size = @@GLOBAL.max_relay_log_size;
+SET PERSIST_ONLY persist_binlog_to_redo = @@GLOBAL.persist_binlog_to_redo;
+SET PERSIST_ONLY persist_binlog_to_redo_size_limit = @@GLOBAL.persist_binlog_to_redo_size_limit;
 SET PERSIST_ONLY relay_log = @@GLOBAL.relay_log;
 ERROR HY000: Variable 'relay_log' is a non persistent read only variable
 SET PERSIST_ONLY relay_log_basename = @@GLOBAL.relay_log_basename;
@@ -271,6 +279,7 @@ Warnings:
 Warning	1287	'@@sql_slave_skip_counter' is deprecated and will be removed in a future release. Please use sql_replica_skip_counter instead.
 Warning	1287	'@@sql_slave_skip_counter' is deprecated and will be removed in a future release. Please use sql_replica_skip_counter instead.
 SET PERSIST_ONLY sync_binlog = @@GLOBAL.sync_binlog;
+SET PERSIST_ONLY sync_binlog_interval = @@GLOBAL.sync_binlog_interval;
 SET PERSIST_ONLY sync_master_info = @@GLOBAL.sync_master_info;
 Warnings:
 Warning	1287	'@@sync_master_info' is deprecated and will be removed in a future release. Please use sync_source_info instead.
@@ -281,21 +290,25 @@ Warnings:
 Warning	1287	'@@sync_relay_log_info' is deprecated and will be removed in a future release.
 Warning	1287	'@@sync_relay_log_info' is deprecated and will be removed in a future release.
 SET PERSIST_ONLY sync_source_info = @@GLOBAL.sync_source_info;
+SET PERSIST_ONLY wait_binlog_flush = @@GLOBAL.wait_binlog_flush;
 
-include/assert.inc [Expect 102 persisted variables in persisted_variables table.]
+include/assert.inc [Expect 112 persisted variables in persisted_variables table.]
 
 ############################################################
 # 2. Restart server, it must preserve the persisted variable
 #    settings. Verify persisted configuration.
 # restart
 
-include/assert.inc [Expect 102 persisted variables in persisted_variables table.]
-include/assert.inc [Expect 102 persisted variables shown as PERSISTED in variables_info table.]
-include/assert.inc [Expect 102 persisted variables with matching persisted and global values.]
+include/assert.inc [Expect 112 persisted variables in persisted_variables table.]
+include/assert.inc [Expect 112 persisted variables shown as PERSISTED in variables_info table.]
+include/assert.inc [Expect 112 persisted variables with matching persisted and global values.]
 
 ############################################################
 # 3. Test RESET PERSIST. Verify persisted variable settings
 #    are removed.
+RESET PERSIST binlog_buffer_size;
+RESET PERSIST binlog_cache_free_flush;
+RESET PERSIST binlog_cache_free_flush_limit_size;
 RESET PERSIST binlog_cache_size;
 RESET PERSIST binlog_checksum;
 RESET PERSIST binlog_direct_non_transactional_updates;
@@ -306,6 +319,8 @@ RESET PERSIST binlog_expire_logs_seconds;
 RESET PERSIST binlog_format;
 RESET PERSIST binlog_group_commit_sync_delay;
 RESET PERSIST binlog_group_commit_sync_no_delay_count;
+RESET PERSIST binlog_group_delay;
+RESET PERSIST binlog_group_delay_running_threads;
 RESET PERSIST binlog_gtid_simple_recovery;
 RESET PERSIST binlog_max_flush_queue_time;
 RESET PERSIST binlog_order_commits;
@@ -320,6 +335,7 @@ RESET PERSIST binlog_transaction_compression;
 RESET PERSIST binlog_transaction_compression_level_zstd;
 RESET PERSIST binlog_transaction_dependency_history_size;
 RESET PERSIST binlog_transaction_dependency_tracking;
+RESET PERSIST duckdb_max_threads_per_query_rpl;
 RESET PERSIST duckdb_source_set_insert_only_to_binlog;
 RESET PERSIST enforce_gtid_consistency;
 RESET PERSIST group_replication_consistency;
@@ -349,6 +365,8 @@ RESET PERSIST max_binlog_cache_size;
 RESET PERSIST max_binlog_size;
 RESET PERSIST max_binlog_stmt_cache_size;
 RESET PERSIST max_relay_log_size;
+RESET PERSIST persist_binlog_to_redo;
+RESET PERSIST persist_binlog_to_redo_size_limit;
 RESET PERSIST relay_log;
 ERROR HY000: Variable relay_log does not exist in persisted config file
 RESET PERSIST relay_log_basename;
@@ -396,9 +414,11 @@ RESET PERSIST slave_rows_search_algorithms;
 RESET PERSIST source_verify_checksum;
 RESET PERSIST sql_replica_skip_counter;
 RESET PERSIST sync_binlog;
+RESET PERSIST sync_binlog_interval;
 RESET PERSIST sync_relay_log;
 RESET PERSIST sync_relay_log_info;
 RESET PERSIST sync_source_info;
+RESET PERSIST wait_binlog_flush;
 
 include/assert.inc [Expect 0 persisted variables.]
 

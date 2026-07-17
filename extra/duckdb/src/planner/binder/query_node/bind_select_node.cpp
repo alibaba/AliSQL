@@ -167,8 +167,8 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 				if (star.exclude_list.empty() && star.replace_list.empty() && !star.expr) {
 					// ORDER BY ALL
 					// replace the order list with the all elements in the SELECT list
-					auto order_type = config.ResolveOrder(order.orders[0].type);
-					auto null_order = config.ResolveNullOrder(order_type, order.orders[0].null_order);
+					auto order_type = config.ResolveOrder(context, order.orders[0].type);
+					auto null_order = config.ResolveNullOrder(context, order_type, order.orders[0].null_order);
 					auto constant_expr = make_uniq<BoundConstantExpression>(Value("ALL"));
 					bound_order->orders.emplace_back(order_type, null_order, std::move(constant_expr));
 					bound_modifier = std::move(bound_order);
@@ -195,8 +195,8 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 				vector<unique_ptr<ParsedExpression>> sort_key_parameters;
 				for (auto &order_node : order.orders) {
 					sort_key_parameters.push_back(std::move(order_node.expression));
-					auto type = config.ResolveOrder(order_node.type);
-					auto null_order = config.ResolveNullOrder(type, order_node.null_order);
+					auto type = config.ResolveOrder(context, order_node.type);
+					auto null_order = config.ResolveNullOrder(context, type, order_node.null_order);
 					string sort_param = EnumUtil::ToString(type) + " " + EnumUtil::ToString(null_order);
 					sort_key_parameters.push_back(make_uniq<ConstantExpression>(Value(sort_param)));
 				}
@@ -209,8 +209,8 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 				vector<unique_ptr<ParsedExpression>> order_list;
 				order_binders[0].get().ExpandStarExpression(std::move(order_node.expression), order_list);
 
-				auto type = config.ResolveOrder(order_node.type);
-				auto null_order = config.ResolveNullOrder(type, order_node.null_order);
+				auto type = config.ResolveOrder(context, order_node.type);
+				auto null_order = config.ResolveNullOrder(context, type, order_node.null_order);
 				for (auto &order_expr : order_list) {
 					auto bound_expr = BindOrderExpression(order_binder, std::move(order_expr));
 					if (!bound_expr) {
@@ -539,6 +539,8 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 			bound_qualify_columns = qualify_binder.GetBoundColumns();
 		}
 	}
+	bool only_full_group_by = (ClientConfig::GetConfig(context).sql_mode &
+	                           1ULL << static_cast<uint8_t>(SqlModeType::MODE_ONLY_FULL_GROUP_BY));
 
 	// after that, we bind to the SELECT list
 	SelectBinder select_binder(*this, context, *result, info);
@@ -550,10 +552,11 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 	vector<LogicalType> internal_sql_types;
 	vector<unique_ptr<ParsedExpression>> expr_backups;
 	vector<idx_t> rebind_indexes;
-	bool need_rebind = false;
-	if (!(ClientConfig::GetConfig(context).GetSetting<SqlModeSetting>(context) &
-	      1ULL << static_cast<uint8_t>(SqlModeType::MODE_ONLY_FULL_GROUP_BY))) {
-		need_rebind = true;
+	idx_t bound_column_size = 0;
+	if (!only_full_group_by) {
+		for (idx_t i = 0; i < statement.select_list.size(); i++) {
+			expr_backups.push_back(statement.select_list[i]->Copy());
+		}
 	}
 
 	for (idx_t i = 0; i < statement.select_list.size(); i++) {
@@ -561,13 +564,10 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 		idx_t unnest_count = result->unnests.size();
 		LogicalType result_type;
 
-		if (need_rebind) {
-			expr_backups.emplace_back(std::move(statement.select_list[i]->Copy()));
-		}
-
 		auto expr = select_binder.Bind(statement.select_list[i], &result_type, true);
 
-		if (need_rebind && select_binder.GetBoundColumns().size() > rebind_indexes.size()) {
+		if (!only_full_group_by && select_binder.GetBoundColumns().size() != bound_column_size) {
+			bound_column_size = select_binder.GetBoundColumns().size();
 			rebind_indexes.push_back(i);
 		}
 
@@ -673,6 +673,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 			}
 
 			if (!bound_columns.empty()) {
+
 				string error;
 				error = "column \"%s\" must appear in the GROUP BY clause or must be part of an aggregate function.";
 				if (statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES) {
@@ -680,21 +681,29 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 					         "GROUP BY this entry explicitly.";
 					throw BinderException(bound_columns[0].query_location, error, bound_columns[0].name);
 				} else {
-					if (need_rebind) {
+					if (!only_full_group_by) {
+						SelectBinder select_binder_add_any_value(*this, context, *result, info, only_full_group_by);
 						for (auto &index : rebind_indexes) {
-							vector<unique_ptr<ParsedExpression>> first_children;
-							first_children.emplace_back(std::move(expr_backups[index]));
-							unique_ptr<ParsedExpression> first_func = make_uniq<FunctionExpression>("first", std::move(first_children));
 							LogicalType result_type;
-							auto expr = select_binder.Bind(first_func, &result_type, true);
+							auto expr = select_binder_add_any_value.Bind(expr_backups[index], &result_type, true);
 							result->select_list[index] = std::move(expr);
 						}
+						if (select_binder_add_any_value.GetBoundColumns().size() > 0) {
+							bound_columns = select_binder_add_any_value.GetBoundColumns();
+							string error;
+							error +=
+							    "\nEither add it to the GROUP BY list, or use \"ANY_VALUE(%s)\" if the exact value of "
+							    "\"%s\" "
+							    "is not important.";
+							throw BinderException(bound_columns[0].query_location, error, bound_columns[0].name,
+							                      bound_columns[0].name, bound_columns[0].name);
+						}
 					} else {
-						error +=
-							"\nEither add it to the GROUP BY list, or use \"ANY_VALUE(%s)\" if the exact value of \"%s\" "
-							"is not important.";
+						error += "\nEither add it to the GROUP BY list, or use \"ANY_VALUE(%s)\" if the exact value of "
+						         "\"%s\" "
+						         "is not important.";
 						throw BinderException(bound_columns[0].query_location, error, bound_columns[0].name,
-											bound_columns[0].name, bound_columns[0].name);
+						                      bound_columns[0].name, bound_columns[0].name);
 					}
 				}
 			}

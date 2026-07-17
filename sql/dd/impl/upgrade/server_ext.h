@@ -35,6 +35,8 @@ namespace myduck {
 /* Background thread to convert InnoDB table to DuckDB table. */
 void create_duckdb_convertor_thread();
 
+void stop_duckdb_convertor_thread();
+
 /* Show DuckDB convert stage. */
 int show_convert_stage(THD *, SHOW_VAR *var, char *buff);
 } /* namespace myduck */

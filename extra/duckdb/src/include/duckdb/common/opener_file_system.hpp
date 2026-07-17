@@ -21,13 +21,25 @@ public:
 	void VerifyNoOpener(optional_ptr<FileOpener> opener);
 	void VerifyCanAccessDirectory(const string &path);
 	void VerifyCanAccessFile(const string &path);
+	void VerifyCanAccessExtension(const string &path, const FileOpenFlags &flags) {
+		if (flags.OpenForWriting() && !flags.EnableExtensionInstall()) {
+			throw PermissionException(
+			    "File '%s' cannot be opened for writing since files ending with '.duckdb_extension' are reserved for "
+			    "DuckDB extensions, and these can only be installed through the INSTALL command",
+			    path);
+		}
+	}
+
+	bool IsDuckDBExtensionName(const string &path) {
+		return StringUtil::EndsWith(path, ".duckdb_extension");
+	}
 
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
 		GetFileSystem().Read(handle, buffer, nr_bytes, location);
-	};
+	}
 
 	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
-		GetFileSystem().Write(handle, buffer, nr_bytes, location);
+		throw InternalException("writing on the OpenerFileSystem is undefined");
 	}
 
 	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override {
@@ -41,7 +53,7 @@ public:
 	int64_t GetFileSize(FileHandle &handle) override {
 		return GetFileSystem().GetFileSize(handle);
 	}
-	time_t GetLastModifiedTime(FileHandle &handle) override {
+	timestamp_t GetLastModifiedTime(FileHandle &handle) override {
 		return GetFileSystem().GetLastModifiedTime(handle);
 	}
 	string GetVersionTag(FileHandle &handle) override {
@@ -80,6 +92,13 @@ public:
 		VerifyNoOpener(opener);
 		VerifyCanAccessFile(source);
 		VerifyCanAccessFile(target);
+		if (IsDuckDBExtensionName(target) && !IsDuckDBExtensionName(source)) {
+			throw PermissionException(
+			    "File '%s' cannot be moved to '%s', files ending with '.duckdb_extension' are reserved for DuckDB "
+			    "extensions, and these can only be installed through the INSTALL command, or moved if both are "
+			    "extensions'",
+			    source, target);
+		}
 		GetFileSystem().MoveFile(source, target, GetOpener());
 	}
 
@@ -143,6 +162,10 @@ public:
 		GetFileSystem().SetDisabledFileSystems(names);
 	}
 
+	bool SubSystemIsDisabled(const string &name) override {
+		return GetFileSystem().SubSystemIsDisabled(name);
+	}
+
 	vector<string> ListSubSystems() override {
 		return GetFileSystem().ListSubSystems();
 	}
@@ -152,6 +175,9 @@ protected:
 	                                        optional_ptr<FileOpener> opener = nullptr) override {
 		VerifyNoOpener(opener);
 		VerifyCanAccessFile(file.path);
+		if (IsDuckDBExtensionName(file.path)) {
+			VerifyCanAccessExtension(file.path, flags);
+		}
 		return GetFileSystem().OpenFile(file, flags, GetOpener());
 	}
 

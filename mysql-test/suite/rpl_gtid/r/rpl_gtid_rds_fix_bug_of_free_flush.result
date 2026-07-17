@@ -1,0 +1,56 @@
+#
+# Prepare.
+########################################################
+#
+#
+# 1. Make test data.
+########################################################
+#
+CREATE DATABASE rpl_test;
+CREATE TABLE rpl_test.t1 (s LONGTEXT);
+CREATE TABLE rpl_test.t2 (s LONGTEXT);
+FLUSH BINARY LOGS;
+#
+# 2 Execute transaction with binlog cache free flush.
+########################################################
+#
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+COMMIT;
+# Check binlog and data. Expect 4 binlog files and ignorable event exist in the third binlog.
+SHOW BINARY LOGS;
+Log_name	File_size	Encrypted
+master-bin.000001	#	#
+master-bin.000002	#	#
+master-bin.000003	#	#
+master-bin.000004	#	#
+master-bin.000003 
+include/assert_binlog_events.inc [Format_desc # Previous_gtids # Ignorable # Gtid # !Begin # !Insert # Write_rows # !Commit # Rotate]
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+2
+#
+# 3 Check immediate_commit_timestamp and original_committed_timestamp of Gtid_log_event.
+# 3.1 Check immediate_commit_timestamp of Gtid_log_event.
+########################################################
+#
+include/mysqlbinlog.inc
+include/assert_grep.inc [Test immediate_commit_timestamp of Gtid_log_event is correct.]
+#
+# 3.2 Check original_committed_timestamp of Gtid_log_event.
+########################################################
+#
+include/assert_grep.inc [Test original_committed_timestamp of Gtid_log_event is correct.]
+#
+# 4 Check that the correct error message will be printed in the error log.
+########################################################
+#
+CALL mtr.add_suppression("\\[ERROR\\] .*MY-\\d+.* \\[Server\\] Binlog cache free flush message.*");
+SET DEBUG = "+d,simulate_reserve_size_not_enough";
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+include/assert_grep.inc [Test correct error message will be printed in the error log.]
+#
+# 5 Cleanup
+########################################################
+#
+DROP DATABASE rpl_test;

@@ -25,6 +25,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 *****************************************************************************/
 
 #include "dml_convertor.h"
+#include "sql/duckdb/duckdb_charset_collation.h"
 
 #include <iomanip>
 #include <iostream>
@@ -135,12 +136,33 @@ void append_field_value_to_sql(String &target_str, const Field *field) {
     case MYSQL_TYPE_MEDIUM_BLOB:
     case MYSQL_TYPE_LONG_BLOB: {
       field->val_str(&field_value);
-      std::string hex_str =
-          toHex(field_value.c_ptr_safe(), field_value.length());
-
-      if (FieldConvertor::convert_type(field) == "BLOB") {
+      if (FieldConvertor::convert_type(field) == "BLOB" ||
+          FieldConvertor::convert_type(field) == "BITSTRING") {
+        std::string hex_str =
+            toHex(field_value.c_ptr_safe(), field_value.length());
         target_str.append(hex_str.c_str(), hex_str.size());
       } else {
+        std::string hex_str;
+        if (field->has_charset() &&
+            strcmp(field->charset()->csname, "latin1") == 0) {
+          /* DuckDB store latin1 column's data as utf8mb4. */
+          const CHARSET_INFO *utf8mb4_cs =
+              myduck::get_utf8mb4_charset_for_latin1(field->charset());
+          char utf8mb4_buf[512];
+          String utf8mb4_str(utf8mb4_buf, sizeof(utf8mb4_buf), utf8mb4_cs);
+          uint conversion_errors = 0;
+          if (utf8mb4_str.copy(field_value.ptr(), field_value.length(),
+                               field->charset(), utf8mb4_cs,
+                               &conversion_errors)) {
+            /* The conversion has no reason to fail */
+            assert(false);
+            hex_str = toHex(field_value.c_ptr_safe(), field_value.length());
+          } else {
+            hex_str = toHex(utf8mb4_str.c_ptr_safe(), utf8mb4_str.length());
+          }
+        } else {
+          hex_str = toHex(field_value.c_ptr_safe(), field_value.length());
+        }
         // append json as varchar
         target_str.append("DECODE(");
         target_str.append(hex_str.c_str(), hex_str.size());
@@ -168,6 +190,7 @@ static inline void get_write_fields(TABLE *table,
                                     std::vector<Field *> &fields) {
   for (uint i = 0; i < table->s->fields; i++) {
     Field *field = table->field[i];
+    if (field->is_gcol()) continue;
     if (bitmap_is_set(table->write_set, field->field_index())) {
       fields.push_back(field);
     }

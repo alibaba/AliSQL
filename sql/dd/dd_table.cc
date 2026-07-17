@@ -2268,14 +2268,28 @@ static bool fill_dd_table_from_create_info(
 
   @returns true if error, false otherwise.
 */
-static bool get_se_private_data(THD *thd, dd::Table *tab_obj) {
+static bool get_se_private_data(THD *thd, dd::Table *tab_obj,
+                                bool *missing_table_entry) {
   using dd::tables::DD_properties;
+  assert(missing_table_entry != nullptr);
+  *missing_table_entry = false;
+
   std::unique_ptr<dd::Properties> sys_tbl_props;
   bool exists = false;
   String_type tbl_prop_str;
   if (dd::tables::DD_properties::instance().get(thd, "SYSTEM_TABLES",
                                                 &sys_tbl_props, &exists) ||
-      !exists || sys_tbl_props->get(tab_obj->name(), &tbl_prop_str)) {
+      !exists) {
+    my_error(ER_DD_METADATA_NOT_FOUND, MYF(0), tab_obj->name().c_str());
+    return true;
+  }
+
+  if (!sys_tbl_props->exists(tab_obj->name())) {
+    *missing_table_entry = true;
+    return true;
+  }
+
+  if (sys_tbl_props->get(tab_obj->name(), &tbl_prop_str)) {
     my_error(ER_DD_METADATA_NOT_FOUND, MYF(0), tab_obj->name().c_str());
     return true;
   }
@@ -2364,7 +2378,16 @@ static std::unique_ptr<dd::Table> create_dd_system_table(
                             *table_type == System_tables::Types::INERT)))
       return nullptr;
   } else {
-    if (get_se_private_data(thd, tab_obj.get())) return nullptr;
+    bool missing_table_entry = false;
+    if (get_se_private_data(thd, tab_obj.get(), &missing_table_entry)) {
+      const bool missing_ddse_table_entry =
+          missing_table_entry && table_type != nullptr &&
+          (*table_type == System_tables::Types::DDSE_PRIVATE ||
+           *table_type == System_tables::Types::DDSE_PROTECTED);
+      if (!missing_ddse_table_entry ||
+          file->ha_get_se_private_data(tab_obj.get(), false))
+        return nullptr;
+    }
   }
 
   // Register the se private id with the DDSE.

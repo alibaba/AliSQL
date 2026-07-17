@@ -61,6 +61,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 #include "log0chkp.h"
 
+#include "mysql/plugin_engine.h"
+
 /* log_can_encrypt */
 #include "log0encryption.h"
 
@@ -458,6 +460,7 @@ static void log_checkpoint(log_t &log) {
   if (arch_page_sys != nullptr) {
     arch_page_sys->flush_at_checkpoint(checkpoint_lsn);
   }
+  notify_server_before_redo_checkpoint(checkpoint_lsn);
 
   log_sync_point("log_before_checkpoint_data_flush");
 

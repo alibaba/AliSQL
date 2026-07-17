@@ -149,7 +149,7 @@ const char *IO_CACHE_binlog_cache_storage::tmp_file_name() const {
 }
 
 bool IO_CACHE_binlog_cache_storage::begin(unsigned char **buffer,
-                                          my_off_t *length) {
+                                          my_off_t *length, my_off_t offset) {
   DBUG_EXECUTE_IF("simulate_tmpdir_partition_full",
                   { DBUG_SET("+d,simulate_file_write_error"); });
 
@@ -166,7 +166,7 @@ bool IO_CACHE_binlog_cache_storage::begin(unsigned char **buffer,
            m_io_cache.m_decryptor == nullptr);
   };);
 
-  if (reinit_io_cache(&m_io_cache, READ_CACHE, 0, false, false)) {
+  if (reinit_io_cache(&m_io_cache, READ_CACHE, offset, false, false)) {
     DBUG_EXECUTE_IF("simulate_tmpdir_partition_full",
                     { DBUG_SET("-d,simulate_file_write_error"); });
 
@@ -250,10 +250,12 @@ bool IO_CACHE_binlog_cache_storage::setup_ciphers_password() {
   return false;
 }
 
-bool Binlog_cache_storage::open(my_off_t cache_size, my_off_t max_cache_size) {
+bool Binlog_cache_storage::open(my_off_t cache_size, my_off_t max_cache_size,
+                                bool trx_flag_arg) {
   const char *LOG_PREFIX = "ML";
 
-  if (m_file.open(mysql_tmpdir, LOG_PREFIX, cache_size, max_cache_size))
+  if (m_file.open(mysql_tmpdir, LOG_PREFIX, cache_size, max_cache_size,
+                  trx_flag_arg))
     return true;
   m_pipeline_head = &m_file;
   return false;
@@ -411,3 +413,5 @@ bool Binlog_encryption_ostream::sync() { return m_down_ostream->sync(); }
 int Binlog_encryption_ostream::get_header_size() {
   return m_header->get_header_size();
 }
+
+#include "sql/binlog_ostream_ext.cc"

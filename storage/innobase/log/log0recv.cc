@@ -62,7 +62,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "log0test.h"
 #include "mem0mem.h"
 #include "mtr0log.h"
+#include "mtr0log_ext.h"
 #include "mtr0mtr.h"
+#include "mysql/plugin_engine.h"
 #include "os0thread-create.h"
 #include "page0cur.h"
 #include "page0zip.h"
@@ -2864,6 +2866,15 @@ static ulint recv_parse_log_rec(mlog_id_t *type, byte *ptr, byte *end_ptr,
       recv_sys->found_corrupt_log = true;
       return 0;
 
+    case MLOG_SERVER_DATA:
+    case MLOG_SERVER_DATA | MLOG_SINGLE_REC_FLAG:
+      new_ptr = mlog_parse_server_log(ptr + 1, end_ptr);
+
+      *page_no = FIL_NULL;
+      *space_id = SPACE_UNKNOWN;
+      *type = MLOG_SERVER_DATA;
+      return new_ptr == nullptr ? 0 : new_ptr - ptr;
+
     case MLOG_TABLE_DYNAMIC_META:
     case MLOG_TABLE_DYNAMIC_META | MLOG_SINGLE_REC_FLAG:
 
@@ -3046,6 +3057,7 @@ static bool recv_single_rec(byte *ptr, byte *end_ptr) {
     case MLOG_FILE_RENAME:
     case MLOG_FILE_CREATE:
     case MLOG_FILE_EXTEND:
+    case MLOG_SERVER_DATA:
     case MLOG_TABLE_DYNAMIC_META:
 
       /* These were already handled by
@@ -3194,6 +3206,7 @@ static bool recv_multi_rec(byte *ptr, byte *end_ptr) {
       case MLOG_FILE_CREATE:
       case MLOG_FILE_RENAME:
       case MLOG_FILE_EXTEND:
+      case MLOG_SERVER_DATA:
       case MLOG_TABLE_DYNAMIC_META:
         /* case MLOG_TRUNCATE: Disabled for WL6378 */
         /* These were already handled by
@@ -3861,10 +3874,12 @@ dberr_t recv_recovery_from_checkpoint_start(log_t &log, lsn_t flush_lsn) {
     }
   }
 
+  if (notify_server_redo_recovery_begin()) return DB_ERROR;
   err = recv_recovery_begin(log, checkpoint_lsn);
   if (err != DB_SUCCESS) {
     return err;
   }
+  if (notify_server_redo_recovery_end()) return DB_ERROR;
 
   if (srv_read_only_mode && log.m_scanned_lsn > checkpoint_lsn) {
     ib::error(ER_IB_MSG_RECOVERY_IN_READ_ONLY);
@@ -4037,6 +4052,9 @@ MetadataRecover *recv_recovery_from_checkpoint_finish(bool aborting) {
 @return string name of record log record */
 const char *get_mlog_string(mlog_id_t type) {
   switch (type) {
+    case MLOG_SERVER_DATA:
+      return "MLOG_SERVER_DATA";
+
     case MLOG_SINGLE_REC_FLAG:
       return "MLOG_SINGLE_REC_FLAG";
 

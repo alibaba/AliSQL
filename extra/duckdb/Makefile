@@ -25,8 +25,13 @@ FORCE_WARN_UNUSED_FLAG ?=
 DISABLE_UNITY_FLAG ?=
 DISABLE_SANITIZER_FLAG ?=
 FORCE_32_BIT_FLAG ?=
+CONFIGS_DIR = ./test/configs
+
+
 MKFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
 PROJ_DIR := $(dir $(MKFILE_PATH))
+
+PYTHON ?= python3
 
 ifeq ($(GEN),ninja)
 	GENERATOR=-G "Ninja"
@@ -61,6 +66,10 @@ ifeq (${THREADSAN}, 1)
 endif
 ifeq (${STATIC_LIBCPP}, 1)
 	STATIC_LIBCPP=-DSTATIC_LIBCPP=TRUE
+endif
+GIT_BASE_BRANCH:=main
+ifneq (${DUCKDB_GIT_BASE_BRANCH}, )
+	GIT_BASE_BRANCH:=${DUCKDB_GIT_BASE_BRANCH}
 endif
 
 COMMON_CMAKE_VARS ?=
@@ -109,10 +118,10 @@ endif
 ifeq (${GENERATE_EXTENSION_ENTRIES}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DGENERATE_EXTENSION_ENTRIES=1
 endif
-ifneq (${ENABLE_EXTENSION_AUTOLOADING}, "")
+ifneq ("${ENABLE_EXTENSION_AUTOLOADING}", "")
 	CMAKE_VARS:=${CMAKE_VARS} -DENABLE_EXTENSION_AUTOLOADING=${ENABLE_EXTENSION_AUTOLOADING}
 endif
-ifneq (${ENABLE_EXTENSION_AUTOINSTALL}, "")
+ifneq ("${ENABLE_EXTENSION_AUTOINSTALL}", "")
 	CMAKE_VARS:=${CMAKE_VARS} -DENABLE_EXTENSION_AUTOINSTALL=${ENABLE_EXTENSION_AUTOINSTALL}
 endif
 ifneq (${UNSAFE_NUMERIC_CAST}, )
@@ -141,7 +150,7 @@ ifeq (${BUILD_FTS}, 1)
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};fts
 endif
 ifeq (${BUILD_HTTPFS}, 1)
-	CORE_EXTENSIONS:=${CORE_EXTENSIONS};httpfs
+	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};httpfs
 endif
 ifeq (${BUILD_JSON}, 1)
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};json
@@ -149,27 +158,21 @@ endif
 ifeq (${BUILD_JEMALLOC}, 1)
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};jemalloc
 endif
+ifdef CORE_EXTENSIONS
+	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};${CORE_EXTENSIONS}
+endif
 ifeq (${BUILD_ALL_EXT}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXTENSION_CONFIGS=".github/config/in_tree_extensions.cmake;.github/config/out_of_tree_extensions.cmake"
+	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXTENSION_CONFIGS=".github/config/in_tree_extensions.cmake;.github/config/out_of_tree_extensions.cmake;.github/config/external_extensions.cmake;.github/config/rust_based_extensions.cmake"
 else ifeq (${BUILD_ALL_IT_EXT}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXTENSION_CONFIGS=".github/config/in_tree_extensions.cmake"
 else ifeq (${BUILD_ALL_OOT_EXT}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXTENSION_CONFIGS=".github/config/out_of_tree_extensions.cmake"
+	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXTENSION_CONFIGS=".github/config/out_of_tree_extensions.cmake;.github/config/external_extensions.cmake;"
 endif
 ifeq (${STATIC_OPENSSL}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DOPENSSL_USE_STATIC_LIBS=1
 endif
 ifeq (${BUILD_TPCE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_TPCE=1
-endif
-ifeq (${BUILD_PYTHON}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_PYTHON=1 -DDUCKDB_EXTENSION_CONFIGS="tools/pythonpkg/duckdb_extension_config.cmake"
-endif
-ifeq (${PYTHON_USER_SPACE}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DUSER_SPACE=1
-endif
-ifeq (${PYTHON_EDITABLE_BUILD}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DPYTHON_EDITABLE_BUILD=1
 endif
 ifeq (${CONFIGURE_R}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DCONFIGURE_R=1
@@ -188,9 +191,6 @@ ifneq ("${FORCE_QUERY_LOG}a", "a")
 endif
 ifneq ($(BUILD_EXTENSIONS),)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_EXTENSIONS="$(BUILD_EXTENSIONS)"
-endif
-ifneq ($(CORE_EXTENSIONS),)
-	CMAKE_VARS:=${CMAKE_VARS} -DCORE_EXTENSIONS="$(CORE_EXTENSIONS)"
 endif
 ifeq ($(SHADOW_FORBIDDEN_FUNCTIONS),1)
 	CMAKE_VARS:=${CMAKE_VARS} -DSHADOW_FORBIDDEN_FUNCTIONS=1
@@ -212,6 +212,9 @@ ifeq (${CRASH_ON_ASSERT}, 1)
 endif
 ifeq (${FORCE_ASSERT}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DFORCE_ASSERT=1
+endif
+ifeq (${FORCE_DEBUG}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DFORCE_DEBUG=1
 endif
 ifeq (${SMALLER_BINARY}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DSMALLER_BINARY=1
@@ -237,17 +240,14 @@ endif
 ifeq (${ALTERNATIVE_VERIFY}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DALTERNATIVE_VERIFY=1
 endif
-ifeq (${PREFETCH_ALL_PARQUET_FILES}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DPREFETCH_ALL_PARQUET_FILES=1
-endif
 ifeq (${DISABLE_POINTER_SALT}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_POINTER_SALT=1
 endif
+ifeq (${HASH_ZERO}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DHASH_ZERO=1
+endif
 ifeq (${LATEST_STORAGE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DLATEST_STORAGE=1
-endif
-ifeq (${BLOCK_VERIFICATION}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DBLOCK_VERIFICATION=1
 endif
 ifneq (${DISABLE_CPP_UNITTESTS}, )
 	CMAKE_VARS:=${CMAKE_VARS} -DENABLE_UNITTEST_CPP_TESTS=0
@@ -298,13 +298,13 @@ endif
 ifeq (${MAIN_BRANCH_VERSIONING}, 1)
         CMAKE_VARS:=${CMAKE_VARS} -DMAIN_BRANCH_VERSIONING=1
 endif
+ifeq (${STANDALONE_DEBUG}, 1)
+        CMAKE_VARS:=${CMAKE_VARS} -DSTANDALONE_DEBUG=1
+endif
 
 # Optional overrides
 ifneq (${STANDARD_VECTOR_SIZE}, )
 	CMAKE_VARS:=${CMAKE_VARS} -DSTANDARD_VECTOR_SIZE=${STANDARD_VECTOR_SIZE}
-endif
-ifneq (${BLOCK_ALLOC_SIZE}, )
-	CMAKE_VARS:=${CMAKE_VARS} -DBLOCK_ALLOC_SIZE=${BLOCK_ALLOC_SIZE}
 endif
 
 # Enable VCPKG for this build
@@ -325,7 +325,7 @@ ifeq (${EXPORT_DYNAMIC_SYMBOLS}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DEXPORT_DYNAMIC_SYMBOLS=1
 endif
 ifneq ("${CMAKE_LLVM_PATH}", "")
-	CMAKE_VARS:=${CMAKE_VARS} -DCMAKE_RANLIB='${CMAKE_LLVM_PATH}/bin/llvm-ranlib' -DCMAKE_AR='${CMAKE_LLVM_PATH}/bin/llvm-ar' -DCMAKE_CXX_COMPILER='${CMAKE_LLVM_PATH}/bin/clang++' -DCMAKE_C_COMPILER='${CMAKE_LLVM_PATH}/bin/clang'
+	CMAKE_VARS:=${CMAKE_VARS} -DCMAKE_RANLIB='${CMAKE_LLVM_PATH}/bin/llvm-ranlib' -DCMAKE_AR='${CMAKE_LLVM_PATH}/bin/llvm-ar' -DCMAKE_CXX_COMPILER='${CMAKE_LLVM_PATH}/bin/clang++' -DCMAKE_C_COMPILER='${CMAKE_LLVM_PATH}/bin/clang' -DCMAKE_EXE_LINKER_FLAGS_INIT='-L${CMAKE_LLVM_PATH}/lib -L${CMAKE_LLVM_PATH}/lib/c++' -DCMAKE_SHARED_LINKER_FLAGS_INIT='-L${CMAKE_LLVM_PATH}/lib -L${CMAKE_LLVM_PATH}/lib/c++'  -DCMAKE_MODULE_LINKER_FLAGS_INIT='-L${CMAKE_LLVM_PATH}/lib -L${CMAKE_LLVM_PATH}/lib/c++'
 endif
 
 CMAKE_VARS:=${CMAKE_VARS} ${COMMON_CMAKE_VARS}
@@ -336,18 +336,8 @@ ifdef DUCKDB_PLATFORM
 	endif
 endif
 
-ifeq ($(OS),Windows_NT)
-	DETECTED_JOBS := $(shell powershell -Command "Get-WmiObject Win32_ComputerSystem" 2>/dev/null | grep -oP 'NumberOfLogicalProcessors=\K\d+' || echo 4)
-else
-	DETECTED_JOBS := $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
-endif
-MAX_JOBS ?= $(DETECTED_JOBS)
-
 clean:
 	rm -rf build
-
-clean-python:
-	tools/pythonpkg/clean.sh
 
 debug: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/debug && \
@@ -367,7 +357,7 @@ release: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/release && \
 	cd build/release && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DCMAKE_BUILD_TYPE=Release ../.. && \
-	cmake --build . --config Release -j $(MAX_JOBS)
+	cmake --build . --config Release -j 32
 
 wasm_mvp: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/wasm_mvp && \
@@ -387,13 +377,13 @@ wasm_threads: ${EXTENSION_CONFIG_STEP}
 cldebug: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/cldebug && \
 	cd build/cldebug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DBUILD_PYTHON=1 -DENABLE_SANITIZER=0 -DENABLE_UBSAN=0 -DCMAKE_BUILD_TYPE=Debug ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DENABLE_SANITIZER=0 -DENABLE_UBSAN=0 -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build . --config Debug
 
 clreldebug:
 	mkdir -p ./build/clreldebug && \
 	cd build/clreldebug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} -DBUILD_PYTHON=1 -DBUILD_FTS_EXTENSION=1 -DENABLE_SANITIZER=0 -DENABLE_UBSAN=0 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} -DBUILD_FTS_EXTENSION=1 -DENABLE_SANITIZER=0 -DENABLE_UBSAN=0 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build . --config RelWithDebInfo
 
 extension_configuration: build/extension_configuration/vcpkg.json
@@ -416,7 +406,7 @@ unittest_release: release
 	build/release/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
 
 unittestci:
-	python3 scripts/run_tests_one_by_one.py build/debug/test/unittest --time_execution
+	$(PYTHON) scripts/run_tests_one_by_one.py build/debug/test/unittest --time_execution
 	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
 
 unittestarrow:
@@ -437,7 +427,7 @@ reldebug: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/reldebug && \
 	cd build/reldebug && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
-	cmake --build . --config RelWithDebInfo -j $(MAX_JOBS)
+	cmake --build . --config RelWithDebInfo -j 32
 
 relassert: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/relassert && \
@@ -453,7 +443,7 @@ benchmark:
 
 amaldebug:
 	mkdir -p ./build/amaldebug && \
-	python3 scripts/amalgamation.py && \
+	$(PYTHON) scripts/amalgamation.py && \
 	cd build/amaldebug && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${STATIC_LIBCPP} ${CMAKE_VARS} ${FORCE_32_BIT_FLAG} -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build . --config Debug
@@ -461,46 +451,50 @@ amaldebug:
 tidy-check:
 	mkdir -p ./build/tidy && \
 	cd build/tidy && \
-	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_EXTENSIONS=parquet -DBUILD_PYTHON_PKG=TRUE -DBUILD_SHELL=0 ../.. && \
-	python3 ../../scripts/run-clang-tidy.py -quiet ${TIDY_THREAD_PARAMETER} ${TIDY_BINARY_PARAMETER} ${TIDY_PERFORM_CHECKS}
+	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_EXTENSIONS=parquet -DBUILD_SHELL=0 ../.. && \
+	$(PYTHON) ../../scripts/run-clang-tidy.py -quiet ${TIDY_THREAD_PARAMETER} ${TIDY_BINARY_PARAMETER} ${TIDY_PERFORM_CHECKS}
 
 tidy-check-diff:
 	mkdir -p ./build/tidy && \
 	cd build/tidy && \
-	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_EXTENSIONS=parquet -DBUILD_PYTHON_PKG=TRUE -DBUILD_SHELL=0 ../.. && \
+	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_EXTENSIONS=parquet -DBUILD_SHELL=0 ../.. && \
 	cd ../../ && \
-	git diff origin/main . ':(exclude)tools' ':(exclude)extension' ':(exclude)test' ':(exclude)benchmark' ':(exclude)third_party' ':(exclude)src/common/adbc' ':(exclude)src/main/capi' | python3 scripts/clang-tidy-diff.py -path build/tidy -quiet ${TIDY_THREAD_PARAMETER} ${TIDY_BINARY_PARAMETER} ${TIDY_PERFORM_CHECKS} -p1
+	git diff origin/${GIT_BASE_BRANCH} . ':(exclude)tools' ':(exclude)extension' ':(exclude)test' ':(exclude)benchmark' ':(exclude)third_party' ':(exclude)src/common/adbc' ':(exclude)src/main/capi' | $(PYTHON) scripts/clang-tidy-diff.py -path build/tidy -quiet ${TIDY_THREAD_PARAMETER} ${TIDY_BINARY_PARAMETER} ${TIDY_PERFORM_CHECKS} -p1
 
 tidy-fix:
 	mkdir -p ./build/tidy && \
 	cd build/tidy && \
 	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_EXTENSIONS=parquet -DBUILD_SHELL=0 ../.. && \
-	python3 ../../scripts/run-clang-tidy.py -fix
+	$(PYTHON) ../../scripts/run-clang-tidy.py -fix
 
 test_compile: # test compilation of individual cpp files
-	python3 scripts/amalgamation.py --compile
+	$(PYTHON) scripts/amalgamation.py --compile
 
 format-check:
-	python3 scripts/format.py --all --check
+	$(PYTHON) scripts/format.py --all --check
 
 format-check-silent:
-	python3 scripts/format.py --all --check --silent
+	$(PYTHON) scripts/format.py --all --check --silent
 
 format-fix:
 	rm -rf src/amalgamation/*
-	python3 scripts/format.py --all --fix --noconfirm
+	$(PYTHON) scripts/format.py --all --fix --noconfirm
 
 format-head:
-	python3 scripts/format.py HEAD --fix --noconfirm
+	$(PYTHON) scripts/format.py HEAD --fix --noconfirm
 
 format-changes:
-	python3 scripts/format.py HEAD --fix --noconfirm
+	$(PYTHON) scripts/format.py HEAD --fix --noconfirm
 
 format-main:
-	python3 scripts/format.py main --fix --noconfirm
+	$(PYTHON) scripts/format.py main --fix --noconfirm
 
 format-feature:
-	python3 scripts/format.py feature --fix --noconfirm
+	$(PYTHON) scripts/format.py feature --fix --noconfirm
+
+format-configs:
+	$(foreach file, $(wildcard $(CONFIGS_DIR)/*), jq . < "$(file)" > "$(file).tmp" && mv "$(file).tmp" "$(file)" ;)
+
 
 third_party/sqllogictest:
 	git clone --depth=1 --branch hawkfish-statistical-rounding https://github.com/duckdb/sqllogictest.git third_party/sqllogictest
@@ -530,15 +524,18 @@ clangd:
 coverage-check:
 	./scripts/coverage_check.sh
 
+generate-files-deps:
+	pip install cxxheaderparser pcpp
+
 generate-files:
-	python3 scripts/generate_c_api.py
-	python3 scripts/generate_functions.py
-	python3 scripts/generate_settings.py
-	python3 scripts/generate_serialization.py
-	python3 scripts/generate_storage_info.py
-	python3 scripts/generate_enum_util.py
-	python3 scripts/generate_metric_enums.py
-	-@python3 tools/pythonpkg/scripts/generate_connection_code.py || echo "Warning: generate_connection_code.py failed, cxxheaderparser & pcpp are required to perform this step"
+	$(PYTHON) scripts/generate_c_api.py
+	$(PYTHON) scripts/generate_functions.py
+	$(PYTHON) scripts/generate_settings.py
+	$(PYTHON) scripts/generate_serialization.py
+	$(PYTHON) scripts/generate_storage_info.py
+	$(PYTHON) scripts/generate_enum_util.py
+	$(PYTHON) scripts/generate_metric_enums.py
+	$(PYTHON) scripts/generate_builtin_types.py
 # Run the formatter again after (re)generating the files
 	$(MAKE) format-main
 
@@ -549,6 +546,7 @@ bundle-setup:
 	cp src/libduckdb_static.a bundle/. && \
 	cp third_party/*/libduckdb_*.a bundle/. && \
 	cp extension/*/lib*_extension.a bundle/. && \
+	{ [ -d vcpkg_installed ] && find vcpkg_installed -name '*.a' -exec cp {} bundle/. \; || true; } && \
 	cd bundle && \
 	find . -name '*.a' -exec mkdir -p {}.objects \; -exec mv {} {}.objects \; && \
 	find . -name '*.a' -execdir ${AR} -x {} \;

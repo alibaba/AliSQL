@@ -4021,6 +4021,12 @@ struct LEX : public Query_tables_list {
   */
   bool safe_to_cache_query;
 
+  /** Number of table references that need AS OF TIMESTAMP evaluation. */
+  int table_snap_expr_count_to_evaluate;
+
+  /** Set while contextualizing statements that cannot use AS OF TIMESTAMP. */
+  bool disallow_table_snapshot;
+
  private:
   /// True if statement references UDF functions
   bool m_has_udf{false};
@@ -4482,15 +4488,20 @@ struct LEX : public Query_tables_list {
 
   /** Check table engine type in entire statement. */
   void check_table_engine_type(bool &exist_duckdb_table,
-                               bool &exist_other_table) {
+                               bool &exist_other_table,
+                               Table_ref **non_duckdb_table,
+                               Table_ref **duckdb_table) {
     for (Table_ref *table_ref = query_tables; table_ref != nullptr;
          table_ref = table_ref->next_global) {
       // TODO : view process
       if (myduck::is_duckdb_table(table_ref->table)) {
         exist_duckdb_table = true;
+        *duckdb_table = table_ref;
       } else if (!table_ref->is_derived() &&
-                 !table_ref->is_recursive_reference()) {
+                 !table_ref->is_recursive_reference() &&
+                 !table_ref->is_view()) {
         exist_other_table = true;
+        *non_duckdb_table = table_ref;
       }
     }
   }
@@ -4511,6 +4522,10 @@ struct LEX : public Query_tables_list {
       }
     }
   }
+ public:
+  bool use_duckdb_computation_engine{false};
+  /** When this parameter is true, we will not perform any SQL rewrite. */
+  bool optimizer_rewrite_enabled{false};
 };
 
 /**

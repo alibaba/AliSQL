@@ -135,8 +135,10 @@ static const char *handler_error_messages[] = {
     "DuckDB truncate table failed",
     "DuckDB cannot participate XA transaction",
     "DuckDB appender failed",
-    "DuckDB do not support specify partitions"
-};
+    "DuckDB do not support specify partitions",
+    "The snapshot to find is out of range",
+    "The definition of the table required by the flashback query has changed",
+    "Flashback query encountered an internal error"};
 
 // clang-format on
 

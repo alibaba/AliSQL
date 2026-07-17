@@ -1,0 +1,60 @@
+Prepare
+set @old_innodb_undo_retention = @@global.innodb_undo_retention;
+set @old_innodb_rds_flashback_task_enabled = @@global.innodb_rds_flashback_task_enabled;
+create user 'u1'@'%';
+create user 'u2'@'%';
+grant all privileges on *.* to 'u1'@'%';
+grant select on *.* to 'u2'@'%';
+
+Init
+use mysql;
+show tables like "innodb_flashback_snapshot";
+Tables_in_mysql (innodb_flashback_snapshot)
+set global innodb_rds_flashback_task_enabled = 1;
+set global innodb_undo_retention = 60000;
+set global innodb_rds_flashback_task_enabled = 0;
+
+Test
+call dbms_admin.analyze_flashback_snapshots();
+MIN_TIMESTAMP	MAX_TIMESTAMP	UNDO_SIZE(MB)
+#	#	#
+call dbms_admin.show_flashback_snapshots('2020-11-01 00:00:00', 'DESC', 10);
+TRX_ID	TIMESTAMP	READ_VIEW
+call dbms_admin.show_flashback_snapshots('2020-11-01 00:00:00', 'ASC', 10);
+TRX_ID	TIMESTAMP	READ_VIEW
+#	#	#
+#	#	#
+#	#	#
+#	#	#
+#	#	#
+#	#	#
+#	#	#
+#	#	#
+#	#	#
+#	#	#
+call dbms_admin.show_flashback_snapshots('xxx', 'ASC', 10);
+ERROR HY000: The 1th parameter didn't match for native procedure dbms_admin.show_flashback_snapshots
+call dbms_admin.show_flashback_snapshots('2020-11-01 00:00:00', 'xxx', 10);
+ERROR HY000: The 2th parameter didn't match for native procedure dbms_admin.show_flashback_snapshots
+call dbms_admin.show_flashback_snapshots('2020-11-01 00:00:00', 'ASC', 'xxx');
+ERROR HY000: The 3th parameter didn't match for native procedure dbms_admin.show_flashback_snapshots
+call dbms_admin.analyze_flashback_snapshots();
+MIN_TIMESTAMP	MAX_TIMESTAMP	UNDO_SIZE(MB)
+#	#	#
+call dbms_admin.show_flashback_snapshots('2020-11-01 00:00:00', 'ASC', 10);
+ERROR 42000: Access denied; you need (at least one of) the SUPER privilege(s) for this operation
+call dbms_admin.del_flashback_snapshots('2020-11-01 00:00:00', 'ASC');
+ERROR 42000: Access denied; you need (at least one of) the SUPER privilege(s) for this operation
+call dbms_admin.del_flashback_snapshots('xxx', 'ASC');
+ERROR HY000: The 1th parameter didn't match for native procedure dbms_admin.del_flashback_snapshots
+call dbms_admin.del_flashback_snapshots('2020-11-01 00:00:00', 'xxx');
+ERROR HY000: The 2th parameter didn't match for native procedure dbms_admin.del_flashback_snapshots
+call dbms_admin.del_flashback_snapshots('2020-11-01 00:00:00', 'ASC');
+call dbms_admin.analyze_flashback_snapshots();
+MIN_TIMESTAMP	MAX_TIMESTAMP	UNDO_SIZE(MB)
+
+Cleanup
+drop user 'u1'@'%';
+drop user 'u2'@'%';
+set global innodb_rds_flashback_task_enabled = @old_innodb_rds_flashback_task_enabled;
+set global innodb_undo_retention = @old_innodb_undo_retention;

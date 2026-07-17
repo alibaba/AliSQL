@@ -1,0 +1,22 @@
+--source include/master-slave.inc
+
+--source include/rpl_connection_slave.inc
+--source include/stop_slave_sql.inc
+
+--source include/rpl_connection_master.inc
+CREATE TABLE `t1` (
+  `id` varchar(50) NOT NULL,
+  `status` varchar(20),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB;
+
+ALTER TABLE `t1` DISABLE KEYS;
+
+--source include/rpl_connection_slave.inc
+--source include/start_slave_sql.inc
+--source include/rpl_sync.inc
+
+--source include/rpl_connection_master.inc
+DROP TABLE t1;
+--source include/rpl_sync.inc
+--source include/rpl_end.inc

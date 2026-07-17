@@ -85,27 +85,34 @@ Warnings:
 Note	3083	Replication thread(s) for channel '' are already runnning.
 include/rpl_diff.inc
 ###########################################################################
-# 3. Test Crash after DuckDB commit an Insert-only Batch
+# 3. Test transactions are not replayed by executing SQL
+###########################################################################
+include/assert_grep.inc [Check DML SQL is not executed]
+###########################################################################
+# 4. Test Crash after DuckDB commit an Insert-only Batch
 ###########################################################################
 [connection slave]
-STOP REPLICA;
+STOP REPLICA SQL_THREAD;
+# 4.1 Execute 3 Insert-only Trx, and then Rotate Binlog after the first two Trxs have finished executing
 [connection master]
 SET autocommit = 1;
 INSERT INTO t1 (id, c0, c1, c2, c3, c4, c5) VALUES (5, '25sg', 'RDS', 5.2, NULL, '2028-11-11 15:30:34', X'e18080e18080');
 INSERT INTO t1 (id, c0, c1, c2, c3, c4, c5) VALUES (6, '0aaaa', NULL, 88.88, '2023-06-07', NULL, X'1a53aa890ee6');
+FLUSH LOGS;
 INSERT INTO t1 (id, c0, c1, c2, c3, c4, c5) VALUES (7, 'hdnnn', 'MYSQL', 11.11, '2023-10-21', NULL, X'e18080e18080');
+include/rpl_sync.inc
+# 4.2 Make Slave Restart
 [connection slave]
 SET GLOBAL debug = "+d,crash_after_duckdb_commit";
-START REPLICA;
+START REPLICA SQL_THREAD;
 include/rpl_start_server.inc [server_number=2]
 START REPLICA;
 Warnings:
 Note	3083	Replication thread(s) for channel '' are already runnning.
 include/rpl_diff.inc
-###########################################################################
-# 4. Test transactions are not replayed by executing SQL
-###########################################################################
-include/assert_grep.inc [Check DML SQL is not executed]
+# 4.3 Check the first batch (Trx 1 and Trx 2) is replayed idempotently, the second batch is replayed normally
+include/assert_grep.inc [Check 1 Delete Batch SQL after Restart]
+include/assert_grep.inc [Check 2 INSERT Batch SQL after Restart]
 ###########################################################################
 # 4. Cleanup
 ###########################################################################

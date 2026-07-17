@@ -67,7 +67,7 @@ static LogicalType GetJSONType(StructNames &const_struct_names, const LogicalTyp
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::UUID:
-	case LogicalTypeId::VARINT:
+	case LogicalTypeId::BIGNUM:
 	case LogicalTypeId::DECIMAL:
 		return type;
 	case LogicalTypeId::LIST:
@@ -111,11 +111,11 @@ static unique_ptr<FunctionData> JSONCreateBindParams(ScalarFunction &bound_funct
 		auto &type = arguments[i]->return_type;
 		if (arguments[i]->HasParameter()) {
 			throw ParameterNotResolvedException();
-		} else if (type == LogicalTypeId::SQLNULL) {
-			// This is needed for macro's
-			bound_function.arguments.push_back(type);
 		} else if (object && i % 2 == 0) {
-			// Key, must be varchar
+			if (type != LogicalType::VARCHAR) {
+				throw BinderException("json_object() keys must be VARCHAR, add an explicit cast to argument \"%s\"",
+				                      arguments[i]->GetName());
+			}
 			bound_function.arguments.push_back(LogicalType::VARCHAR);
 		} else {
 			// Value, cast to types that we can put in JSON
@@ -128,7 +128,7 @@ static unique_ptr<FunctionData> JSONCreateBindParams(ScalarFunction &bound_funct
 static unique_ptr<FunctionData> JSONObjectBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
 	if (arguments.size() % 2 != 0) {
-		throw InvalidInputException("json_object() requires an even number of arguments");
+		throw BinderException("json_object() requires an even number of arguments");
 	}
 	return JSONCreateBindParams(bound_function, arguments, true);
 }
@@ -141,7 +141,7 @@ static unique_ptr<FunctionData> JSONArrayBind(ClientContext &context, ScalarFunc
 static unique_ptr<FunctionData> ToJSONBind(ClientContext &context, ScalarFunction &bound_function,
                                            vector<unique_ptr<Expression>> &arguments) {
 	if (arguments.size() != 1) {
-		throw InvalidInputException("to_json() takes exactly one argument");
+		throw BinderException("to_json() takes exactly one argument");
 	}
 	return JSONCreateBindParams(bound_function, arguments, false);
 }
@@ -149,14 +149,14 @@ static unique_ptr<FunctionData> ToJSONBind(ClientContext &context, ScalarFunctio
 static unique_ptr<FunctionData> ArrayToJSONBind(ClientContext &context, ScalarFunction &bound_function,
                                                 vector<unique_ptr<Expression>> &arguments) {
 	if (arguments.size() != 1) {
-		throw InvalidInputException("array_to_json() takes exactly one argument");
+		throw BinderException("array_to_json() takes exactly one argument");
 	}
 	auto arg_id = arguments[0]->return_type.id();
 	if (arguments[0]->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
 	if (arg_id != LogicalTypeId::LIST && arg_id != LogicalTypeId::SQLNULL) {
-		throw InvalidInputException("array_to_json() argument type must be LIST");
+		throw BinderException("array_to_json() argument type must be LIST");
 	}
 	return JSONCreateBindParams(bound_function, arguments, false);
 }
@@ -164,14 +164,14 @@ static unique_ptr<FunctionData> ArrayToJSONBind(ClientContext &context, ScalarFu
 static unique_ptr<FunctionData> RowToJSONBind(ClientContext &context, ScalarFunction &bound_function,
                                               vector<unique_ptr<Expression>> &arguments) {
 	if (arguments.size() != 1) {
-		throw InvalidInputException("row_to_json() takes exactly one argument");
+		throw BinderException("row_to_json() takes exactly one argument");
 	}
 	auto arg_id = arguments[0]->return_type.id();
 	if (arguments[0]->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
 	if (arguments[0]->return_type.id() != LogicalTypeId::STRUCT && arg_id != LogicalTypeId::SQLNULL) {
-		throw InvalidInputException("row_to_json() argument type must be STRUCT");
+		throw BinderException("row_to_json() argument type must be STRUCT");
 	}
 	return JSONCreateBindParams(bound_function, arguments, false);
 }
@@ -572,6 +572,7 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::INTERVAL:
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_NS:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
@@ -584,7 +585,7 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 		TemplatedCreateValues<string_t, string_t>(doc, vals, string_vector, count);
 		break;
 	}
-	case LogicalTypeId::VARINT: {
+	case LogicalTypeId::BIGNUM: {
 		Vector string_vector(LogicalTypeId::VARCHAR, count);
 		VectorOperations::DefaultCast(value_v, string_vector, count);
 		CreateRawValues(doc, vals, string_vector, count);
@@ -606,9 +607,12 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 	case LogicalTypeId::UNKNOWN:
 	case LogicalTypeId::ANY:
 	case LogicalTypeId::USER:
+	case LogicalTypeId::TEMPLATE:
+	case LogicalTypeId::VARIANT:
 	case LogicalTypeId::CHAR:
 	case LogicalTypeId::STRING_LITERAL:
 	case LogicalTypeId::INTEGER_LITERAL:
+	case LogicalTypeId::BLOB_LITERAL:
 	case LogicalTypeId::POINTER:
 	case LogicalTypeId::VALIDITY:
 	case LogicalTypeId::TABLE:
@@ -791,7 +795,7 @@ BoundCastInfo AnyToJSONCastBind(BindCastInput &input, const LogicalType &source,
 	return BoundCastInfo(AnyToJSONCast, std::move(cast_data), JSONFunctionLocalState::InitCastLocalState);
 }
 
-void JSONFunctions::RegisterJSONCreateCastFunctions(CastFunctionSet &casts) {
+void JSONFunctions::RegisterJSONCreateCastFunctions(ExtensionLoader &loader) {
 	// Anything can be cast to JSON
 	for (const auto &type : LogicalType::AllTypes()) {
 		LogicalType source_type;
@@ -818,9 +822,9 @@ void JSONFunctions::RegisterJSONCreateCastFunctions(CastFunctionSet &casts) {
 			source_type = type;
 		}
 		// We prefer going to JSON over going to VARCHAR if a function can do either
-		const auto source_to_json_cost =
-		    MaxValue<int64_t>(casts.ImplicitCastCost(source_type, LogicalType::VARCHAR) - 1, 0);
-		casts.RegisterCastFunction(source_type, LogicalType::JSON(), AnyToJSONCastBind, source_to_json_cost);
+		const auto source_to_json_cost = MaxValue<int64_t>(
+		    CastFunctionSet::ImplicitCastCost(loader.GetDatabaseInstance(), source_type, LogicalType::VARCHAR) - 1, 0);
+		loader.RegisterCastFunction(source_type, LogicalType::JSON(), AnyToJSONCastBind, source_to_json_cost);
 	}
 }
 

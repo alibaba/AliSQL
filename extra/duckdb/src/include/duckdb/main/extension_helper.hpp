@@ -126,8 +126,15 @@ public:
 	static string GetExtensionDirectoryPath(ClientContext &context);
 	static string GetExtensionDirectoryPath(DatabaseInstance &db, FileSystem &fs);
 
+	// Check signature of an Extension stored as FileHandle
 	static bool CheckExtensionSignature(FileHandle &handle, ParsedExtensionMetaData &parsed_metadata,
 	                                    const bool allow_community_extensions);
+	// Check signature of an Extension, represented by a buffer and total_buffer_length, and a signature to be added
+	static bool CheckExtensionBufferSignature(const char *buffer, idx_t buffer_length, const string &signature,
+	                                          const bool allow_community_extensions);
+	// Check signature of an Extension, represented by a buffer and total_buffer_length
+	static bool CheckExtensionBufferSignature(const char *buffer, idx_t total_buffer_length,
+	                                          const bool allow_community_extensions);
 	static ParsedExtensionMetaData ParseExtensionMetaData(const char *metadata) noexcept;
 	static ParsedExtensionMetaData ParseExtensionMetaData(FileHandle &handle);
 
@@ -250,6 +257,8 @@ private:
 	                           ExtensionInitResult &result, string &error);
 	//! Version tags occur with and without 'v', tag in extension path is always with 'v'
 	static const string NormalizeVersionTag(const string &version_tag);
+	static void LoadExternalExtensionInternal(DatabaseInstance &db, FileSystem &fs, const string &extension,
+	                                          ExtensionActiveLoad &info);
 
 private:
 	static ExtensionLoadResult LoadExtensionInternal(DuckDB &db, const std::string &extension, bool initial_load);

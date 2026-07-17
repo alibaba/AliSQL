@@ -3,7 +3,6 @@
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
-#include "duckdb/function/table_macro_function.hpp"
 
 #include "duckdb/function/scalar_macro_function.hpp"
 
@@ -180,7 +179,7 @@ static const DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "date_sub", {"date", "interval", nullptr}, {{nullptr, nullptr}}, "date - interval"},
 	{DEFAULT_SCHEMA, "date", {"expr", nullptr}, {{nullptr, nullptr}}, "cast(expr as DATE)"},
 	{DEFAULT_SCHEMA, "addtime", {"expr1", "expr2", nullptr}, {{nullptr, nullptr}}, "expr1 + to_days_duckdb(if(split_part(expr2, ' ', -2)=='', 0, cast(split_part(expr2, ' ', -2) as int))) + to_seconds_duckdb(epoch(cast(split_part(expr2, ' ', -1) as TIME)))"},
-	{DEFAULT_SCHEMA, "to_days", {"expr1", nullptr}, {{nullptr, nullptr}}, "cast(expr1 as date) - DATE '0000-01-01'"},
+	{DEFAULT_SCHEMA, "to_days", {"expr1", nullptr}, {{nullptr, nullptr}}, "cast(cast(expr1 as timestamp) as date) - DATE '0000-01-01'"},
 	{DEFAULT_SCHEMA, "to_seconds", {"expr1", nullptr}, {{nullptr, nullptr}}, "epoch(cast(expr1 as timestamp) - TIMESTAMP '0000-01-01')"},
 	// The function timediff will return incorrect result due to the different domain, so remove it.
 	// {DEFAULT_SCHEMA, "timediff", {"expr1", "expr2", nullptr}, {{nullptr, nullptr}}, "expr1 - expr2 + TIMESTAMP '1970-01-01 00:00:00'"},
@@ -200,7 +199,6 @@ static const DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "from_unixtime", {"sec", "format", nullptr}, {{nullptr, nullptr}}, "strftime(make_timestamptz(cast(cast(sec as double) * 1000000 as bigint)), format)"},
 
 	// mysql string function
-	{DEFAULT_SCHEMA, "find_in_set", {"str", "strlist", nullptr}, {{nullptr, nullptr}}, "ifnull((select n from (select row_number() over () as n, unnest from unnest(split(strlist, ',')))d where d.unnest = str), 0)"},
 	{DEFAULT_SCHEMA, "locate", {"substr", "str", nullptr}, {{nullptr, nullptr}}, "position(substr IN str)"},
 	{DEFAULT_SCHEMA, "locate", {"substr", "str", "pos", nullptr}, {{nullptr, nullptr}}, "position(substr IN str[pos:]) + if(position(substr IN str[pos:]), pos - 1, 0)"},
 	{DEFAULT_SCHEMA, "strcmp", {"expr1", "expr2", nullptr}, {{nullptr, nullptr}}, "if(expr1 is null or expr2 is null, null, if(cast(expr1 as char) >= cast(expr2 as char), if(cast(expr1 as char) = cast(expr2 as char), 0, 1), -1))"},
@@ -234,12 +232,13 @@ unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(ar
 			    make_uniq<ColumnRefExpression>(default_macro.parameters[param_idx]));
 		}
 		for (idx_t named_idx = 0; default_macro.named_parameters[named_idx].name != nullptr; named_idx++) {
-			auto expr_list = Parser::ParseExpressionList(default_macro.named_parameters[named_idx].default_value);
+			const auto &named_param = default_macro.named_parameters[named_idx];
+			auto expr_list = Parser::ParseExpressionList(named_param.default_value);
 			if (expr_list.size() != 1) {
 				throw InternalException("Expected a single expression");
 			}
-			function->default_parameters.insert(
-				make_pair(default_macro.named_parameters[named_idx].name, std::move(expr_list[0])));
+			function->parameters.push_back(make_uniq<ColumnRefExpression>(named_param.name));
+			function->default_parameters.insert(make_pair(named_param.name, std::move(expr_list[0])));
 		}
 		D_ASSERT(function->type == MacroType::SCALAR_MACRO);
 		bind_info->macros.push_back(std::move(function));

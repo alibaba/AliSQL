@@ -50,6 +50,9 @@ static inline bool JSONFuzzyEquals(yyjson_val *haystack, yyjson_val *needle) {
 		if (type == YYJSON_TYPE_ARR && unsafe_yyjson_get_type(needle) != YYJSON_TYPE_ARR) {
 			auto lhs_tmp = unsafe_yyjson_get_first(haystack);
 			idx_t lhs_len = unsafe_yyjson_get_len(haystack);
+			if (lhs_len == 0) {
+				return false;
+			}
 			while (lhs_len > 0) {
 				if (JSONFuzzyEquals(lhs_tmp, needle)) break;
 				lhs_len--;
@@ -57,14 +60,6 @@ static inline bool JSONFuzzyEquals(yyjson_val *haystack, yyjson_val *needle) {
 				lhs_tmp = unsafe_yyjson_get_next(lhs_tmp);
 			}
 			return true;
-		}
-		if (type != YYJSON_TYPE_ARR && unsafe_yyjson_get_type(needle) == YYJSON_TYPE_ARR) {
-			if (unsafe_yyjson_get_len(needle) > 0) {
-				return false;
-			}
-			auto rhs = unsafe_yyjson_get_first(needle);
-			if (unsafe_yyjson_get_type(rhs) == YYJSON_TYPE_ARR) return false;
-			return JSONFuzzyEquals(haystack, rhs);
 		}
 		return false;
 	}
@@ -92,6 +87,12 @@ static inline bool JSONFuzzyEquals(yyjson_val *haystack, yyjson_val *needle) {
         case YYJSON_TYPE_ARR: {
             idx_t lhs_len = unsafe_yyjson_get_len(haystack);
             idx_t rhs_len = unsafe_yyjson_get_len(needle);
+			if (lhs_len == 0 && rhs_len > 0) {
+				return false;
+			}
+			if (lhs_len >= 0 && rhs_len == 0) {
+				return true;
+			}
             // if (len != unsafe_yyjson_get_len(rhs)) return false;
             auto rhs = unsafe_yyjson_get_first(needle);
             while(true) {

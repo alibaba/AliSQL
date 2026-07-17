@@ -46,6 +46,7 @@
 #include "mysql/psi/mysql_thread.h"
 #include "mysql/thread_type.h"
 #include "sql/auth/sql_security_ctx.h"
+#include "sql/binlog_ext.h"  // binlog_cache_free_flush
 #include "sql/current_thd.h"
 #include "sql/debug_sync.h"  // debug_sync_set_action
 #include "sql/field.h"
@@ -148,13 +149,22 @@ bool Gtid_table_access_context::init(THD **thd, TABLE **table, bool is_write) {
     (*thd)->variables.option_bits &= ~OPTION_BIN_LOG;
   }
 
-  if (!(*thd)->get_transaction()->xid_state()->has_state(XID_STATE::XA_NOTR)) {
+  if (!(*thd)->get_transaction()->xid_state()->has_state(XID_STATE::XA_NOTR) ||
+      binlog_cache_free_flush.is_free_flushing()) {
     /*
       This type of caller of Attachable_trx_rw is deadlock-free with
       the main transaction thanks to rejection to update
       'mysql.gtid_executed' by XA main transaction.
     */
+    /*
+      Binlog cache free flush also needs an attachable_trx_rw to update
+      mysql.gtid_executed table, because the trx in current thd is prepared.
+
+      In order to avoid the deadlock, the transaction who has modified
+      mysql.gtid_executed table is not allow to use binlog cache free flush.
+    */
     assert(
+        binlog_cache_free_flush.is_free_flushing() ||
         (*thd)->get_transaction()->xid_state()->has_state(XID_STATE::XA_IDLE) ||
         (*thd)->get_transaction()->xid_state()->has_state(
             XID_STATE::XA_PREPARED));

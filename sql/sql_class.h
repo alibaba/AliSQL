@@ -357,6 +357,7 @@ class Query_arena {
   MEM_ROOT *mem_root;  // Pointer to current memroot
   /// To check whether a reprepare operation is active
   bool is_repreparing{false};
+  bool is_duckdb_cursor_disabled{false};
   /*
     The states reflects three different life cycles for three
     different types of statements:

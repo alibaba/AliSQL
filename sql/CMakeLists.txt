@@ -378,6 +378,8 @@ SET(SQL_SHARED_SOURCES
   error_handler.cc
   field.cc
   field_conv.cc
+  flashback_query/flashback_noop.cc
+  flashback_query/flashback_proc.cc
   filesort.cc
   filesort_utils.cc
   aggregate_check.cc
@@ -609,6 +611,7 @@ SET(SQL_SHARED_SOURCES
   sys_vars_resource_mgr.cc
   system_variables.cc
   table.cc
+  table_ext.cc
   table_cache.cc
   table_function.cc
   table_trigger_dispatcher.cc
@@ -1039,6 +1042,7 @@ SET(BINLOG_SOURCE
   binlog/monitoring/context.cc
   binlog/decompressing_event_object_istream.cc
   binlog.cc
+  server_redo_log.cc
   binlog_istream.cc
   binlog_ostream.cc
   binlog_reader.cc

@@ -27,6 +27,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef SQL_COMMON_COMPONENT_INCLUDED
 #define SQL_COMMON_COMPONENT_INCLUDED
 
+#include <assert.h>
 #include <list>
 #include <string>
 #include <vector>

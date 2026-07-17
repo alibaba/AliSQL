@@ -196,6 +196,13 @@ enum dberr_t {
   DB_SCHEMA_MISMATCH,
   /** System has run out of resources. */
   DB_OUT_OF_RESOURCES,
+  /** Requested flashback snapshot is outside retained undo history. */
+  DB_SNAPSHOT_OUT_OF_RANGE,
+  /** Flashback cannot reconstruct a row because a primary-key column is
+  invisible. */
+  DB_FLASHBACK_PK_INVISIBLE,
+  /** Internal flashback error. */
+  DB_FLASHBACK_INTERNAL_ERROR,
   /** Page was discarded, was not written to storage. */
   DB_PAGE_IS_STALE,
   /** Error reading the auto-increment value. */

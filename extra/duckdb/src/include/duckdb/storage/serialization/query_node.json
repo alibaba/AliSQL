@@ -21,6 +21,9 @@
         "name": "cte_map",
         "type": "CommonTableExpressionMap"
       }
+    ],
+    "finalize_deserialization": [
+        "ExtractCTENodes(result);"
     ]
   },
   {
@@ -177,6 +180,7 @@
         "name": "aliases",
         "type": "vector<string>"
       }
-    ]
+    ],
+    "custom_implementation": true
   }
 ]

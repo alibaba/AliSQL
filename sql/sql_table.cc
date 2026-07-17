@@ -18224,6 +18224,11 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
     goto err_with_mdl;
   }
 
+  DBUG_EXECUTE_IF("simulate_parallel_copy_ddl_failed_after_rename", {
+    my_error(ER_UNKNOWN_ERROR, MYF(0));
+    goto err_with_mdl;
+  });
+
   /*
     If ALTER TABLE is non-atomic and fails after this point it can add
     foreign keys and such addition won't be reverted. So we need to
@@ -18496,6 +18501,8 @@ err_with_mdl:
   /* Cleanup tmp DuckDB table. */
   if (thd->get_rds_context().is_copy_ddl_from_innodb_to_duckdb()) {
     myduck::cleanup_tmp_table(thd, alter_ctx.new_db, alter_ctx.tmp_name);
+    /* New DuckDB table may have been renamed, so cleanup it again. */
+    myduck::cleanup_tmp_table(thd, alter_ctx.new_db, alter_ctx.new_alias);
   }
 
   /*
@@ -18628,6 +18635,12 @@ static int copy_data_between_tables(
       thd->variables.duckdb_copy_ddl_threads > 1) {
     return parallel_copy_data_between_tables(thd, psi, from, to, create, copied,
                                              deleted, alter_ctx);
+  }
+
+  if (thd->get_rds_context().is_copy_ddl_from_duckdb_to_duckdb() &&
+      thd->variables.duckdb_copy_data_between_tables_use_ins_sel) {
+    return copy_data_between_duckdb_tables(thd, psi, from, to, create, copied,
+                                           deleted, alter_ctx);
   }
 
   int error;

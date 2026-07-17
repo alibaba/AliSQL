@@ -10,6 +10,7 @@
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/executor_task.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/main/client_config.hpp"
 
 #include <algorithm>
 
@@ -26,9 +27,11 @@ struct ActiveFlushGuard {
 	atomic<bool> &bool_value;
 };
 
-PhysicalBatchCopyToFile::PhysicalBatchCopyToFile(vector<LogicalType> types, CopyFunction function_p,
-                                                 unique_ptr<FunctionData> bind_data_p, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::BATCH_COPY_TO_FILE, std::move(types), estimated_cardinality),
+PhysicalBatchCopyToFile::PhysicalBatchCopyToFile(PhysicalPlan &physical_plan, vector<LogicalType> types,
+                                                 CopyFunction function_p, unique_ptr<FunctionData> bind_data_p,
+                                                 idx_t estimated_cardinality)
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::BATCH_COPY_TO_FILE, std::move(types),
+                       estimated_cardinality),
       function(std::move(function_p)), bind_data(std::move(bind_data_p)) {
 	if (!function.flush_batch || !function.prepare_batch) {
 		throw InternalException("PhysicalFixedBatchCopy created for copy function that does not have "
@@ -292,7 +295,8 @@ public:
 public:
 	void Schedule() override {
 		vector<shared_ptr<Task>> tasks;
-		for (idx_t i = 0; i < idx_t(TaskScheduler::GetScheduler(context).NumberOfThreads()); i++) {
+		auto num_threads = idx_t(TaskScheduler::GetScheduler(context).NumberOfThreads(context));
+		for (idx_t i = 0; i < num_threads; i++) {
 			auto process_task =
 			    make_uniq<ProcessRemainingBatchesTask>(pipeline->executor, shared_from_this(), gstate, context, op);
 			tasks.push_back(std::move(process_task));

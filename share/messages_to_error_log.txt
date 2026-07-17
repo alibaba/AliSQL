@@ -12383,6 +12383,18 @@ ER_DUCKDB_PARALLEL_COPY
 ER_ACCESS_DENIED_FOR_DUCKDB_CONVERT
   eng "Access denied for user '%-.48s'@'%-.64s'. DuckDB covnerting."
 
+ER_FAILED_BINLOG_CACHE_FREE_FLUSH
+  eng "Binlog cache free flush failed because %s"
+
+ER_MESSAGE_BINLOG_CACHE_FREE_FLUSH
+  eng "Binlog cache free flush message: %s"
+
+ER_SERVER_REDO_LOG_INVALID_LOG_TYPE
+  eng "Found invalid server redo log type: %d. Could not apply it"
+
+ER_RDS_FLASHBACK
+  eng "%s"
+
 #
 # End of RDS error messages intended to be logged to the server error log.
 #

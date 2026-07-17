@@ -13,6 +13,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -26,7 +27,7 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 	//
 	//		 ∏ * \ pk
 	//		 |
-	//		 Γ pk;first(P),arg_xxx(B,inequality)
+	//		 Γ pk;first(P),arg_xxx_null(B,inequality)
 	//		 |
 	//		 ∏ *,inequality
 	//		 |
@@ -87,13 +88,13 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 		case ExpressionType::COMPARE_GREATERTHAN:
 			D_ASSERT(asof_idx == op.conditions.size());
 			asof_idx = i;
-			arg_min_max = "arg_max";
+			arg_min_max = "arg_max_null";
 			break;
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 		case ExpressionType::COMPARE_LESSTHAN:
 			D_ASSERT(asof_idx == op.conditions.size());
 			asof_idx = i;
-			arg_min_max = "arg_min";
+			arg_min_max = "arg_min_null";
 			break;
 		case ExpressionType::COMPARE_EQUAL:
 		case ExpressionType::COMPARE_NOTEQUAL:
@@ -274,9 +275,10 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 	}
 	D_ASSERT(asof_idx < op.conditions.size());
 
-	auto &config = ClientConfig::GetConfig(context);
-	if (!config.force_asof_iejoin) {
-		if (op.children[0]->has_estimated_cardinality && lhs_cardinality < config.asof_loop_join_threshold) {
+	bool force_asof_join = DBConfig::GetSetting<DebugAsofIejoinSetting>(context);
+	if (!force_asof_join) {
+		idx_t asof_join_threshold = DBConfig::GetSetting<AsofLoopJoinThresholdSetting>(context);
+		if (op.children[0]->has_estimated_cardinality && lhs_cardinality < asof_join_threshold) {
 			auto result = PlanAsOfLoopJoin(op, left, right);
 			if (result) {
 				return *result;

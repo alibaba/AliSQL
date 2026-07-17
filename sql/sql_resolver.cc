@@ -107,6 +107,7 @@
 #include "sql/sql_union.h"  // Query_result_union
 #include "sql/system_variables.h"
 #include "sql/table.h"
+#include "sql/table_ext.h"
 #include "sql/thd_raii.h"
 #include "sql/thr_malloc.h"
 #include "sql/visible_fields.h"
@@ -356,6 +357,7 @@ bool Query_block::prepare(THD *thd, mem_root_deque<Item *> *insert_field_list) {
     if (m_having_cond->const_item() && !thd->lex->is_view_context_analysis() &&
         !m_having_cond->walk(&Item::is_non_const_over_literals,
                              enum_walk::POSTFIX, nullptr) &&
+        thd->lex->optimizer_rewrite_enabled &&
         simplify_const_condition(thd, &m_having_cond, false))
       return true;
   }
@@ -390,9 +392,9 @@ bool Query_block::prepare(THD *thd, mem_root_deque<Item *> *insert_field_list) {
          query involving a view is optimized, not when the view
          is created
   */
-  if (unit->item &&                           // 1)
-      !thd->lex->is_view_context_analysis())  // 2)
-  {
+  if (unit->item &&                             // 1)
+      !thd->lex->is_view_context_analysis() &&  // 2)
+      thd->lex->optimizer_rewrite_enabled) {
     if (remove_redundant_subquery_clauses(thd, hidden_group_field_count))
       return true;
   }
@@ -445,8 +447,11 @@ bool Query_block::prepare(THD *thd, mem_root_deque<Item *> *insert_field_list) {
   if (unit->item &&  // This is a subquery
                      // A real query block
                      // Not normalizing a view
-      unit->is_leaf_block(this) && !thd->lex->is_view_context_analysis()) {
-    // Query block represents a subquery within an IN/ANY/ALL/EXISTS predicate
+      unit->is_leaf_block(this) &&
+      !thd->lex->is_view_context_analysis() &&  // Query block represents a
+                                                // subquery within an
+                                                // IN/ANY/ALL/EXISTS predicate
+      thd->lex->optimizer_rewrite_enabled) {
     if (resolve_subquery(thd)) return true;
   }
 
@@ -466,6 +471,7 @@ bool Query_block::prepare(THD *thd, mem_root_deque<Item *> *insert_field_list) {
        (parent_lex->m_sql_cmd != nullptr &&
         thd->secondary_engine_optimization() ==
             Secondary_engine_optimization::SECONDARY)) &&
+      thd->lex->optimizer_rewrite_enabled &&
       transform_scalar_subqueries_to_join_with_derived(thd))
     return true; /* purecov: inspected */
 
@@ -562,7 +568,7 @@ bool Query_block::prepare(THD *thd, mem_root_deque<Item *> *insert_field_list) {
          parent_lex->sql_command == SQLCOM_END ||
          parent_lex->sql_command == SQLCOM_LOAD) &&
         outer_query_block()->outer_query_block() == nullptr)) &&
-      !skip_local_transforms) {
+      !skip_local_transforms && thd->lex->optimizer_rewrite_enabled) {
     /*
       This code is invoked in the following cases:
       - if this is not a create view statement as transformations are
@@ -717,7 +723,8 @@ bool Query_block::prepare_values(THD *thd) {
                      // A real query block
                      // Not normalizing a view
       (unit->is_simple() || this != unit->query_term()->query_block()) &&
-      !thd->lex->is_view_context_analysis()) {
+      !thd->lex->is_view_context_analysis() &&
+      thd->lex->optimizer_rewrite_enabled) {
     // Query block represents a subquery within an IN/ANY/ALL/EXISTS predicate
     if (resolve_subquery(thd)) return true;
   }
@@ -1220,6 +1227,8 @@ bool Query_block::setup_tables(THD *thd, Table_ref *tables,
       tr->opt_hints_table = opt_hints_qb->adjust_table_hints(tr);
     }
 
+    if (im::fix_snapshot_fields(thd, tr->mutable_snapshot_expr())) return true;
+
     if (table == nullptr) continue;
     assert(table->pos_in_table_list == tr);
     if (!tr->opt_hints_table ||
@@ -1310,7 +1319,8 @@ bool Query_block::resolve_placeholder_tables(THD *thd, bool apply_semijoin) {
       the current query block, if possible.
       Merging is only done once and must not be repeated for prepared execs.
     */
-    if (!thd->lex->is_view_context_analysis()) {
+    if (!thd->lex->is_view_context_analysis() &&
+        thd->lex->optimizer_rewrite_enabled) {
       if (tl->is_mergeable() && merge_derived(thd, tl))
         return true; /* purecov: inspected */
     }
@@ -1704,6 +1714,7 @@ bool Query_block::setup_conds(THD *thd) {
     if (m_where_cond->const_item() && !thd->lex->is_view_context_analysis() &&
         !m_where_cond->walk(&Item::is_non_const_over_literals,
                             enum_walk::POSTFIX, nullptr) &&
+        thd->lex->optimizer_rewrite_enabled &&
         simplify_const_condition(thd, &m_where_cond))
       return true;
 
@@ -1760,6 +1771,7 @@ bool Query_block::setup_join_cond(THD *thd, mem_root_deque<Table_ref *> *tables,
       if ((*ref)->const_item() && !thd->lex->is_view_context_analysis() &&
           !(*ref)->walk(&Item::is_non_const_over_literals, enum_walk::POSTFIX,
                         nullptr) &&
+          thd->lex->optimizer_rewrite_enabled &&
           simplify_const_condition(thd, ref, remove_cond))
         return true;
 

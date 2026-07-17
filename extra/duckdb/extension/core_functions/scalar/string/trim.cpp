@@ -86,6 +86,15 @@ static void BinaryTrimFunction(DataChunk &input, ExpressionState &state, Vector 
 		    auto str = reinterpret_cast<const utf8proc_uint8_t *>(data);
 			auto str_ignored = reinterpret_cast<const utf8proc_uint8_t *>(ignored.GetData());
 
+			// If ignored string is empty, return the original string as-is
+			if (ignored.GetSize() == 0) {
+				auto target = StringVector::EmptyString(result, size);
+				auto output = target.GetDataWriteable();
+				memcpy(output, data, size);
+				target.Finalize();
+				return target;
+			}
+
 		    // Find the first character that is not left trimmed
 		    idx_t begin = 0;
 		    if (LTRIM) {

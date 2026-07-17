@@ -14,6 +14,25 @@ SELECT id, sum(id) FROM t1 GROUP BY col1;
 SELECT id, sum(id) FROM t2 GROUP BY col1;
 SELECT col1 FROM t1 GROUP BY id;
 SELECT col1 FROM t2 GROUP BY id;
+SELECT * FROM t1 GROUP BY col1;
+SELECT * FROM t2 GROUP BY col1;
+
+# Bugfix: The select_list cannot contain a mixture of aggregate functions and non-aggregate functions.
+SELECT id + max(id) FROM t1 GROUP BY col1;
+SELECT id + max(id) FROM t2 GROUP BY col1;
+
+# Bugfix: Add the any_value function to the unexpected column.
+SELECT id + id, max(id) FROM t1 GROUP BY col1;
+SELECT id + id, max(id) FROM t2 GROUP BY col1;
+
+# Postfix: Bind having clause correctly.
+SELECT id, col1 FROM t1 GROUP BY col1 HAVING id > 1;
+SELECT id, col1 FROM t2 GROUP BY col1 HAVING id > 1;
+SELECT id, col1 FROM t1 GROUP BY col1 HAVING ANY_VALUE(id) > 1;
+SELECT id, col1 FROM t2 GROUP BY col1 HAVING ANY_VALUE(id) > 1;
+SELECT id, col1 FROM t1 GROUP BY col1 HAVING MAX(id) > 1;
+SELECT id, col1 FROM t2 GROUP BY col1 HAVING MAX(id) > 1;
+
 SET sql_mode='ONLY_FULL_GROUP_BY';
 --error ER_MIX_OF_GROUP_FUNC_AND_FIELDS
 SELECT id, sum(id) FROM t1;

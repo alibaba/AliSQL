@@ -66,9 +66,11 @@
 #include "sql/auth/sql_security_ctx.h"
 #include "sql/current_thd.h"
 #include "sql/debug_sync.h"  // DEBUG_SYNC
+#include "sql/duckdb/duckdb_context.h"
 #include "sql/enum_query_type.h"
 #include "sql/error_handler.h"  // Ignore_error_handler
 #include "sql/field.h"
+#include "sql/protocol.h"
 #include "sql/filesort.h"  // filesort_free_buffers
 #include "sql/handler.h"
 #include "sql/intrusive_list_iterator.h"
@@ -119,6 +121,7 @@
 #include "sql/sql_tmp_table.h"  // tmp tables
 #include "sql/system_variables.h"
 #include "sql/table.h"
+#include "sql/table_ext.h"
 #include "sql/temp_table_param.h"
 #include "sql/thd_raii.h"
 #include "sql/window.h"  // ignore_gaf_const_opt
@@ -558,6 +561,33 @@ bool Sql_cmd_dml::prepare(THD *thd) {
   lex->set_using_hypergraph_optimizer(
       thd->optimizer_switch_flag(OPTIMIZER_SWITCH_HYPERGRAPH_OPTIMIZER));
 
+  if (lex->sql_command == SQLCOM_SELECT) {
+    bool exist_duckdb_table = false;
+    bool exist_other_table = false;
+    Table_ref *non_duckdb_table;
+    Table_ref *duckdb_table;
+    lex->check_table_engine_type(exist_duckdb_table, exist_other_table,
+                                 &non_duckdb_table, &duckdb_table);
+    if (exist_duckdb_table && exist_other_table) {
+      char ebuff[512];
+      snprintf(
+          ebuff, sizeof(ebuff),
+          "Does not support mixed queries of duckdb engine and other engines "
+          "in SELECT Statement. The table `%s` is not a duckdb table. The "
+          "table `%s` is not a duckdb table",
+          duckdb_table->table_name, non_duckdb_table->table_name);
+      my_error(ER_DUCKDB_CLIENT, MYF(0), ebuff);
+      return true;
+    }
+
+    if (exist_duckdb_table) {
+      lex->use_duckdb_computation_engine = true;
+      if (thd->variables.duckdb_sql_normalization) {
+        lex->optimizer_rewrite_enabled = false;
+      }
+    }
+  }
+
   if (lex->set_var_list.elements && resolve_var_assignments(thd, lex))
     goto err; /* purecov: inspected */
 
@@ -784,6 +814,8 @@ bool Sql_cmd_dml::execute(THD *thd) {
     if (lock_tables(thd, lex->query_tables, lex->table_count, 0)) goto err;
   }
 
+  if (im::evaluate_snapshot(thd, lex)) goto err;
+
   // Perform statement-specific execution
   if (execute_inner(thd)) goto err;
 
@@ -999,23 +1031,30 @@ bool optimize_secondary_engine(THD *thd) {
 bool Sql_cmd_dml::execute_inner(THD *thd) {
   Query_expression *unit = lex->unit;
 
-  if (lex->sql_command == SQLCOM_SELECT) {
-    bool exist_duckdb_table = false;
-    bool exist_other_table = false;
-    lex->check_table_engine_type(exist_duckdb_table, exist_other_table);
-    if (exist_duckdb_table && exist_other_table) {
-      my_error(ER_DUCKDB_CLIENT, MYF(0),
-               "Does not support mixed queries of duckdb engine and other "
-               "engines in SELECT Statement");
-      return true;
-    }
-    if (exist_duckdb_table && lex->sql_command == SQLCOM_SELECT) {
-      thd->status_var.com_duckdb_select++;
+  if (lex->sql_command == SQLCOM_SELECT && lex->use_duckdb_computation_engine) {
+    thd->status_var.com_duckdb_select++;
+    if (thd->variables.duckdb_sql_normalization) {
+      String str;
+      if (lex->is_explain()) {
+        str.append(STRING_WITH_LEN("EXPLAIN "));
+      }
+      if (lex->is_explain_analyze) {
+        str.append(STRING_WITH_LEN("ANALYZE "));
+      }
+      lex->unit->print(
+          thd, &str,
+          enum_query_type(QT_TO_SYSTEM_CHARSET | QT_WITHOUT_INTRODUCERS |
+                          QT_IGNORE_QB_NAME | QT_HIDE_ROLLUP_FUNCTIONS |
+                          QT_NO_DEFAULT_DB | QT_DUCKDB_REWRITE));
+      std::string query(str.ptr(), str.length());
+      myduck::duckdb_query_and_send(thd, query, true, true);
+    } else {
       std::string query(thd->query().str);
       myduck::duckdb_query_and_send(thd, query, true, true);
-      if (thd->is_error()) return true;
-      return false;
     }
+
+    if (thd->is_error()) return true;
+    return false;
   } else if (lex->sql_command == SQLCOM_INSERT_SELECT) {
     bool insert_duckdb_table = false;
     bool exist_duckdb_table = false;
@@ -1023,7 +1062,8 @@ bool Sql_cmd_dml::execute_inner(THD *thd) {
     if (myduck::is_duckdb_table(lex->insert_table_leaf->table)) {
       insert_duckdb_table = true;
     }
-    lex->check_table_engine_type_in_select(exist_duckdb_table, exist_other_table);
+    lex->check_table_engine_type_in_select(exist_duckdb_table,
+                                           exist_other_table);
     /**
      Allow:
       1. insert into duckdb select from duckdb
@@ -1097,19 +1137,186 @@ bool Sql_cmd_dml::execute_inner(THD *thd) {
     bool exist_duckdb_table = false;
     bool exist_other_table = false;
 
-    lex->check_table_engine_type(exist_duckdb_table, exist_other_table);
+    Table_ref *non_duckdb_table;
+    Table_ref *duckdb_table;
+    lex->check_table_engine_type(exist_duckdb_table, exist_other_table,
+                                 &non_duckdb_table, &duckdb_table);
     if (exist_duckdb_table) {
+      char ebuff[MYSQL_ERRMSG_SIZE];
       if (lex->sql_command == SQLCOM_REPLACE_SELECT) {
-        my_error(
-            ER_DUCKDB_CLIENT, MYF(0),
-            "Does not support duckdb engine in REPLACE statement");
-        return true;
+        snprintf(ebuff, sizeof(ebuff),
+                 "Does not support duckdb engine in REPLACE statement. "
+                 "The table `%s` is a duckdb table",
+                 duckdb_table->table_name);
       } else {
-        my_error(ER_DUCKDB_CLIENT, MYF(0),
+        snprintf(ebuff, sizeof(ebuff),
                  "Does not support duckdb engine in multi-table UPDATE/DELETE "
-                 "statement");
+                 "statement. "
+                 "The table `%s` is a duckdb table",
+                 duckdb_table->table_name);
+      }
+      my_error(ER_DUCKDB_CLIENT, MYF(0), ebuff);
+    }
+  } else if (lex->sql_command == SQLCOM_DELETE) {
+    bool exist_duckdb_table = false;
+    bool exist_other_table = false;
+
+    Table_ref *non_duckdb_table;
+    Table_ref *duckdb_table;
+    lex->check_table_engine_type(exist_duckdb_table, exist_other_table,
+                                 &non_duckdb_table, &duckdb_table);
+    if (exist_duckdb_table && exist_other_table) {
+      char ebuff[MYSQL_ERRMSG_SIZE];
+      snprintf(ebuff, sizeof(ebuff),
+               "Does not support mixed queries of duckdb engine and other "
+               "engines in DELETE Statement. The table `%s` is a duckdb table. "
+               "The table `%s` is not a duckdb table",
+               duckdb_table->table_name, non_duckdb_table->table_name);
+      my_error(ER_DUCKDB_CLIENT, MYF(0), ebuff);
+      return true;
+    } else if (exist_duckdb_table) {
+      std::string query(thd->query().str);
+
+      if (lex->is_explain() && !lex->is_explain_analyze) {
+        myduck::duckdb_query_and_send(thd, query, true, true);
+        if (thd->is_error()) {
+          return true;
+        }
+        return false;
+      } else if (lex->is_explain() && lex->is_explain_analyze) {
+        /**
+         In MySQL, explain analyze UPDATE/DELETE statements do not modify data
+         or record binlogs. So, we disable EXPLAIN ANALYZE UPDATE/DELETE here.
+         */
+        my_error(ER_DUCKDB_CLIENT, MYF(0),
+                 "Does not support EXPLAIN ANALYZE UPDATE/DELETE statement");
         return true;
       }
+      thd->status_var.com_duckdb_delete++;
+      ha_rows deleted_rows = 0;
+      int error = 0;
+      std::string error_msg;
+      if (thd->get_duckdb_context()->flush_appenders(error_msg)) {
+        error = 1;
+        my_error(ER_DUCKDB_CLIENT, MYF(0), error_msg.c_str());
+        return true;
+      }
+
+      auto res = myduck::duckdb_query(thd, query);
+      if (res->HasError()) {
+        error = 1;
+        my_error(ER_DUCKDB_CLIENT, MYF(0), res->GetError().c_str());
+      } else {
+        auto chunk = res->Fetch();
+        deleted_rows = chunk->GetValue(0, 0).GetValue<int64_t>();
+        error = -1;
+      }
+
+      if (error < 0 && mysql_bin_log.is_open()) {
+        int errcode = 0;
+        errcode = query_error_code(thd, true);
+        /**
+         For insert duckdb select duckdb statements of duckdb tables, we
+         always record binlog in STATEMENT format
+        */
+        int log_result =
+            thd->binlog_query(THD::ROW_QUERY_TYPE, thd->query().str,
+                              thd->query().length, true, false, false, errcode);
+        if (log_result) {
+          return true;
+        }
+      }
+
+      if (error < 0) {
+        my_ok(thd, deleted_rows);
+        DBUG_PRINT("info", ("%ld records deleted", (long)deleted_rows));
+      }
+      return error > 0 || thd->is_error();
+    }
+  } else if (lex->sql_command == SQLCOM_UPDATE) {
+    bool exist_duckdb_table = false;
+    bool exist_other_table = false;
+
+    Table_ref *non_duckdb_table;
+    Table_ref *duckdb_table;
+    lex->check_table_engine_type(exist_duckdb_table, exist_other_table,
+                                 &non_duckdb_table, &duckdb_table);
+    if (exist_duckdb_table && exist_other_table) {
+      char ebuff[MYSQL_ERRMSG_SIZE];
+      snprintf(ebuff, sizeof(ebuff),
+               "Does not support mixed queries of duckdb engine and other "
+               "engines in UPDATE Statement. The table `%s` is a duckdb table. "
+               "The table `%s` is not a duckdb table",
+               duckdb_table->table_name, non_duckdb_table->table_name);
+      my_error(ER_DUCKDB_CLIENT, MYF(0), ebuff);
+      return true;
+    } else if (exist_duckdb_table) {
+      std::string query(thd->query().str);
+
+      if (lex->is_explain() && !lex->is_explain_analyze) {
+        myduck::duckdb_query_and_send(thd, query, true, true);
+        if (thd->is_error()) {
+          return true;
+        }
+        return false;
+      } else if (lex->is_explain() && lex->is_explain_analyze) {
+        /**
+         In MySQL, explain analyze UPDATE/DELETE statements do not modify data
+         or record binlogs. So, we disable EXPLAIN ANALYZE UPDATE/DELETE here.
+         */
+        my_error(ER_DUCKDB_CLIENT, MYF(0),
+                 "Does not support EXPLAIN ANALYZE UPDATE/DELETE statement");
+        return true;
+      }
+
+      ha_rows duckdb_update_rows = 0;
+      int error = 0;
+      std::string error_msg;
+      if (thd->get_duckdb_context()->flush_appenders(error_msg)) {
+        error = 1;
+        my_error(ER_DUCKDB_CLIENT, MYF(0), error_msg.c_str());
+        return true;
+      }
+
+      thd->status_var.com_duckdb_update++;
+      auto res = myduck::duckdb_query(thd, query);
+      if (res->HasError()) {
+        error = 1;
+        my_error(ER_DUCKDB_CLIENT, MYF(0), res->GetError().c_str());
+      } else {
+        auto chunk = res->Fetch();
+        duckdb_update_rows = chunk->GetValue(0, 0).GetValue<int64_t>();
+        error = -1;
+      }
+
+      if (error < 0 && mysql_bin_log.is_open()) {
+        int errcode = 0;
+        errcode = query_error_code(thd, true);
+        /**
+         For insert duckdb select duckdb statements of duckdb tables, we
+         always record binlog in STATEMENT format
+        */
+        int log_result =
+            thd->binlog_query(THD::ROW_QUERY_TYPE, thd->query().str,
+                              thd->query().length, true, false, false, errcode);
+        if (log_result) {
+          return true;
+        }
+      }
+
+      if (error < 0) {
+        char buff[MYSQL_ERRMSG_SIZE];
+        snprintf(buff, sizeof(buff), ER_THD(thd, ER_UPDATE_INFO),
+                 (long)duckdb_update_rows, (long)duckdb_update_rows,
+                 (long)thd->get_stmt_da()->current_statement_cond_count());
+        my_ok(thd,
+              thd->get_protocol()->has_client_capability(CLIENT_FOUND_ROWS)
+                  ? duckdb_update_rows
+                  : duckdb_update_rows,
+              0, buff);
+        DBUG_PRINT("info", ("%ld records updated", (long)duckdb_update_rows));
+      }
+      return error > 0 || thd->is_error();
     }
   }
 

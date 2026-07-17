@@ -15,7 +15,8 @@ namespace duckdb {
 //! The SELECT binder is responsible for binding an expression within the SELECT clause of a SQL statement
 class SelectBinder : public BaseSelectBinder {
 public:
-	SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info);
+	SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info,
+	             bool only_full_group_by = true);
 
 protected:
 	void ThrowIfUnnestInLambda(const ColumnBinding &column_binding) override;
@@ -27,6 +28,7 @@ protected:
 
 protected:
 	idx_t unnest_level = 0;
+	bool only_full_group_by;
 };
 
 } // namespace duckdb

@@ -42,13 +42,19 @@ std::string get_duckdb_collation(const CHARSET_INFO *cs,
   Duckdb treats posix same as binary. We cannot use binary because binary is
   a keyword, so we use POSIX instead. */
   if (strcmp(cs->csname, "utf8mb3") && strcmp(cs->csname, "utf8mb4") &&
-      strcmp(cs->csname, "ascii")) {
+      strcmp(cs->csname, "ascii") && strcmp(cs->csname, "latin1")) {
     std::ostringstream osst;
     osst << "Variable 'collation_connection' is set to " << cs->m_coll_name
          << " BINARY Collation is used for literal string in DuckDB."
-         << " Recommend using collations of 'utf8mb3', 'utf8mb4' or 'ascii'.";
+         << " Recommend using collations of 'utf8mb3', 'utf8mb4', 'latin1' or "
+            "'ascii'.";
     warn_msg = osst.str();
     return COLLATION_BINARY;
+  }
+
+  /* DuckDB store latin1 column's data as utf8mb4. */
+  if (strcmp(cs->csname, "latin1") == 0) {
+    cs = get_utf8mb4_charset_for_latin1(cs);
   }
 
   /* _bin Collation */
@@ -65,6 +71,39 @@ std::string get_duckdb_collation(const CHARSET_INFO *cs,
 
   /* _as_cs Collation */
   return COLLATION_BINARY;
+}
+
+const CHARSET_INFO *get_utf8mb4_charset_for_latin1(const CHARSET_INFO *cs) {
+  assert(!strcmp(cs->csname, "latin1"));
+
+  /*
+   * Latin1 Character Sets and Their Flags
+   * +-------------------+------------------+
+   * | Character Set     | Flags            |
+   * +-------------------+------------------+
+   * | latin1_bin        | MY_CS_BINSORT    |
+   * | latin1_danish_ci  |                  |
+   * | latin1_general_ci |                  |
+   * | latin1_general_cs | MY_CS_CSSORT     |
+   * | latin1_german1_ci |                  |
+   * | latin1_german2_ci |                  |
+   * | latin1_spanish_ci |                  |
+   * | latin1_swedish_ci | MY_CS_PRIMARY    |
+   * +-------------------+------------------+
+   */
+
+  /* latin1_bin */
+  if (cs->state & MY_CS_BINSORT) {
+    return &my_charset_utf8mb4_0900_bin;
+  }
+
+  /* latin1_general_cs */
+  if (cs->state & MY_CS_CSSORT) {
+    return &my_charset_utf8mb4_0900_as_cs;
+  }
+
+  /* others */
+  return &my_charset_utf8mb4_0900_as_ci;
 }
 
 }  // namespace myduck

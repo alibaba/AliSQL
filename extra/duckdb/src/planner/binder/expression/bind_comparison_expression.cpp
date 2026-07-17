@@ -79,6 +79,34 @@ bool BoundComparisonExpression::TryBindComparison(ClientContext &context, const 
 		is_equality = false;
 		break;
 	}
+	if (((left_type.IsNumeric() || left_type.id() == LogicalTypeId::INTEGER_LITERAL) && right_type.IsTemporal()) ||
+	    (left_type.IsTemporal() && (right_type.IsNumeric() || right_type.id() == LogicalTypeId::INTEGER_LITERAL))) {
+		result_type = LogicalType::DOUBLE;
+		return true;
+	}
+	//
+	if ((left_type.id() == LogicalTypeId::VARCHAR && right_type.id() == LogicalTypeId::BLOB_LITERAL)) {
+		result_type = left_type;
+		return true;
+	} else if (left_type.id() == LogicalTypeId::BLOB_LITERAL && right_type.id() == LogicalTypeId::VARCHAR) {
+		result_type = right_type;
+		return true;
+	} else if ((left_type.id() == LogicalTypeId::VARCHAR && right_type.id() == LogicalTypeId::BLOB) ||
+	           (right_type.id() == LogicalTypeId::VARCHAR && left_type.id() == LogicalTypeId::BLOB)) {
+		result_type = LogicalType::BLOB;
+		return true;
+	}
+	if ((left_type.id() == LogicalTypeId::BIT &&
+	     (right_type.IsNumeric() || right_type.id() == LogicalTypeId::INTEGER_LITERAL ||
+	      right_type.id() == LogicalTypeId::BLOB || right_type.id() == LogicalTypeId::BLOB_LITERAL ||
+	      right_type.id() == LogicalTypeId::BOOLEAN)) ||
+	    (right_type.id() == LogicalTypeId::BIT &&
+	     (left_type.IsNumeric() || left_type.id() == LogicalTypeId::INTEGER_LITERAL ||
+	      left_type.id() == LogicalTypeId::BLOB || left_type.id() == LogicalTypeId::BLOB_LITERAL ||
+	      left_type.id() == LogicalTypeId::BOOLEAN))) {
+		result_type = LogicalType::HUGEINT;
+		return true;
+	}
 	if (is_equality) {
 		res = LogicalType::ForceMaxLogicalType(left_type, right_type);
 	} else {
@@ -119,13 +147,13 @@ bool BoundComparisonExpression::TryBindComparison(ClientContext &context, const 
 		} else {
 			// else: check if collations are compatible
 			auto res_collation = StringType::GetCollation(res);
-			if (strcasecmp(res_collation.c_str(), "posix") || strcasecmp(res_collation.c_str(), "binary")) {
+			if (strcasecmp(res_collation.c_str(), "posix") == 0 || strcasecmp(res_collation.c_str(), "binary") == 0) {
 				break;
 			}
 			auto left_collation = StringType::GetCollation(left_type);
 			auto right_collation = StringType::GetCollation(right_type);
 			if (!left_collation.empty() && !right_collation.empty() && left_collation != right_collation &&
-			    !ClientConfig::GetConfig(context).GetSetting<ForceNoCollationSetting>(context)) {
+			    !ClientConfig::GetConfig(context).force_no_collation) {
 				throw BinderException("Cannot combine types with different collation!");
 			}
 		}
@@ -158,6 +186,9 @@ LogicalType ExpressionBinder::GetExpressionReturnType(const Expression &expr) {
 				return LogicalType::INTEGER_LITERAL(constant.value);
 			}
 		}
+	}
+	if (expr.return_type == LogicalTypeId::BLOB && expr.IsFoldable()) {
+		return LogicalTypeId::BLOB_LITERAL;
 	}
 	return expr.return_type;
 }
@@ -192,7 +223,7 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 		input_type = LogicalTypeId::TIMESTAMP;
 	}
 
-	// Aone 66336888. The rules for comparing time and timestamp(tz) in MySQL is amguity, so we do not allow comparisons.
+	// Aone 66336888. The rules for comparing time and timestamp(tz) in MySQL is ambiguity, so we do not allow comparisons.
 	if ((left_sql_type.id() == LogicalTypeId::TIME && 
 			(right_sql_type.id() == LogicalTypeId::TIMESTAMP || right_sql_type.id() == LogicalTypeId::TIMESTAMP_TZ)) ||
 		((right_sql_type.id() == LogicalTypeId::TIME) &&
@@ -232,8 +263,18 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 	}
 
 	// add casts (if necessary)
+	// In MySQL, Comparing BLOB_LITERAL and BIT requires first converting to BIT type, and then to HUGEINT type.
+	// BLOB_LITERAL -> HUGEINT: BLOB_LITERAL -> BIT ->HUGEINT
+	if (left_sql_type.id() == LogicalTypeId::BLOB_LITERAL && input_type.id() == LogicalTypeId::HUGEINT) {
+		left = BoundCastExpression::AddCastToType(context, std::move(left), LogicalType(LogicalTypeId::BIT),
+		                                          input_type.id() == LogicalTypeId::ENUM);
+	}
 	left = BoundCastExpression::AddCastToType(context, std::move(left), input_type,
 	                                          input_type.id() == LogicalTypeId::ENUM);
+	if (right_sql_type.id() == LogicalTypeId::BLOB_LITERAL && input_type.id() == LogicalTypeId::HUGEINT) {
+		right = BoundCastExpression::AddCastToType(context, std::move(right), LogicalType(LogicalTypeId::BIT),
+		                                          input_type.id() == LogicalTypeId::ENUM);
+	}
 	right = BoundCastExpression::AddCastToType(context, std::move(right), input_type,
 	                                           input_type.id() == LogicalTypeId::ENUM);
 

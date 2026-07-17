@@ -41,6 +41,8 @@ ulonglong global_max_temp_directory_size = 0;
 
 ulonglong global_max_threads = 0;
 
+ulonglong max_threads_per_query = 1000000;
+
 ulonglong global_mode = 0;
 
 bool global_use_dio = false;
@@ -53,6 +55,8 @@ ulonglong checkpoint_threshold = 268435456;
 
 bool use_double_for_decimal;
 
+ulonglong duckdb_max_threads_per_query_rpl = 1000000;
+
 bool is_disabled(const handlerton &ht) {
   return (ht.db_type == DB_TYPE_DUCKDB && global_mode != DUCKDB_ON);
 }
@@ -61,9 +65,9 @@ bool update_memory_limit(sys_var *sys_var [[maybe_unused]], THD *thd,
                          enum_var_type type [[maybe_unused]]) {
   std::ostringstream oss;
   if (global_memory_limit == 0) {
-    oss << "RESET GLOBAL memory_limit";
+    oss << "RESET memory_limit";
   } else {
-    oss << "SET GLOBAL memory_limit = '";
+    oss << "SET memory_limit = '";
     oss << BytesToHumanReadableString(global_memory_limit);
     oss << "'";
   }

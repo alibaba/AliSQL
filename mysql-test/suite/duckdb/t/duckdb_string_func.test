@@ -60,6 +60,11 @@ SELECT CHARACTER_LENGTH('MySQL'), CHARACTER_LENGTH('数据库'), CHARACTER_LENGT
 SELECT CONCAT('MySQL', '数据库'), CONCAT(col1, 'RDS') FROM t_innodb;
 SELECT CONCAT('MySQL', '数据库'), CONCAT(col1, 'RDS') FROM t_duckdb;
 
+CREATE TABLE t1 (id INT PRIMARY KEY, col1 INT, col2 INT) ENGINE=DuckDB;
+INSERT INTO t1 VALUES (1, 1, NULL), (2, 2, 2);
+SELECT CONCAT(id, 'a', col2) FROM t1;
+DROP TABLE t1;
+
 --echo --------------------------
 --echo 8. CONCAT_WS()
 --echo --------------------------
@@ -83,14 +88,66 @@ SELECT CONCAT_WS(',', 'MySQL', '数据库'), CONCAT_WS(',', col1, 'RDS') FROM t_
 --echo 11. FIELD()
 --echo --------------------------
 
-# Not support yet
+SELECT FIELD('Bb', 'Aa', 'Bb', 'Cc', 'Dd', 'Ff'), FIELD('Gg', 'Aa', 'Bb', 'Cc', 'Dd', 'Ff') FROM t_innodb;
+SELECT FIELD('Bb', 'Aa', 'Bb', 'Cc', 'Dd', 'Ff'), FIELD('Gg', 'Aa', 'Bb', 'Cc', 'Dd', 'Ff') FROM t_duckdb;
+
+CREATE TABLE t1 (
+	id INT PRIMARY KEY,
+	col1 VARCHAR(20) COLLATE utf8mb4_0900_ai_ci,
+    col2 VARCHAR(20) COLLATE utf8mb4_0900_as_cs,
+	col3 INT,
+	col4 DECIMAL(20, 10),
+	col5 DOUBLE
+) ENGINE = DuckDB;
+
+INSERT INTO t1 VALUES (1, '1.23A', '1.23a', 1, 1.23, 1.23), (2, '2.34A', '2.34a', 3, 3.45, 4.56);
+
+SET duckdb_sql_normalization = ON;
+
+SELECT FIELD(col1, col2) FROM t1;
+SELECT FIELD(col2, col1) FROM t1;
+
+SELECT FIELD(col3, col4) FROM t1;
+SELECT FIELD(col3, col3) FROM t1;
+
+SELECT FIELD(col1, col5) FROM t1;
+SELECT FIELD(col3, col5) FROM t1;
+SELECT FIELD(col4, col5) FROM t1;
+
+SET duckdb_sql_normalization = OFF;
+
+DROP TABLE t1;
 
 --echo --------------------------
 --echo 12. FIND_IN_SET()
 --echo --------------------------
 
 SELECT FIND_IN_SET('MySQL', 'MySQL,RDS'), FIND_IN_SET('数据库', 'MySQL,RDS'), FIND_IN_SET(col1, 'MySQL,RDS') FROM t_innodb;
-SELECT FIND_IN_SET('MySQL', 'MySQL,RDS'), FIND_IN_SET('数据库', 'MySQL,RDS'), FIND_IN_SET(col1, 'MySQL,RDS') FROM t_innodb;
+SELECT FIND_IN_SET('MySQL', 'MySQL,RDS'), FIND_IN_SET('数据库', 'MySQL,RDS'), FIND_IN_SET(col1, 'MySQL,RDS') FROM t_duckdb;
+
+SELECT FIND_IN_SET('MySQL', 'MySQL,MySQL'), FIND_IN_SET('数据库', 'MySQL,MySQL'), FIND_IN_SET(col1, 'MySQL,MySQL') FROM t_innodb;
+SELECT FIND_IN_SET('MySQL', 'MySQL,MySQL'), FIND_IN_SET('数据库', 'MySQL,MySQL'), FIND_IN_SET(col1, 'MySQL,MySQL') FROM t_duckdb;
+
+SET collation_connection = 'utf8mb4_0900_ai_ci';
+SELECT FIND_IN_SET('mysql', 'MySQL,mysql'), FIND_IN_SET('', ''), FIND_IN_SET('mysql', '') FROM t_duckdb;
+SET collation_connection = 'utf8mb4_0900_as_cs';
+SELECT FIND_IN_SET('mysql', 'MySQL,mysql'), FIND_IN_SET('', ''), FIND_IN_SET('mysql', '') FROM t_duckdb;
+
+CREATE TABLE t1 (
+	id INT PRIMARY KEY,
+	col1 VARCHAR(20) COLLATE utf8mb4_0900_ai_ci,
+	col2 VARCHAR(20) COLLATE utf8mb4_0900_as_cs
+) ENGINE = DuckDB;
+
+INSERT INTO t1 VALUES (1, 'MySQL', 'MySQL,mysql'), (2, 'MySQL,mysql', 'MySQL');
+--error ER_CANT_AGGREGATE_2COLLATIONS
+SELECT FIND_IN_SET(col1, col2) FROM t1;
+SET collation_connection = 'utf8mb4_0900_ai_ci';
+SELECT FIND_IN_SET('mysql', col1), FIND_IN_SET('mysql', col2) FROM t1;
+SET collation_connection = 'utf8mb4_0900_as_cs';
+SELECT FIND_IN_SET('mysql', col1), FIND_IN_SET('mysql', col2) FROM t1;
+SET collation_connection = DEFAULT;
+DROP TABLE t1;
 
 --echo --------------------------
 --echo 13. FORMAT()

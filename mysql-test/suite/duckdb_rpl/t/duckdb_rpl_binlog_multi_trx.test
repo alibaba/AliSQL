@@ -39,17 +39,44 @@ SHOW CREATE TABLE t1;
 --echo ###########################################################################
 --connection server_3
 --echo [connection server_3]
+--source include/stop_slave.inc
 SET GLOBAL duckdb_multi_trx_in_batch=off;
+--source include/start_slave.inc
 
 --let $start_id = 4
 --source duckdb_rpl_binlog_multi_trx.inc
 
 --echo ###########################################################################
---echo # 3. Check server_3's Slave Status
+--echo # 3. Test for setting log_replica_updates=off on server_3
 --echo ###########################################################################
 --connection server_3
 --echo [connection server_3]
-SET GLOBAL duckdb_multi_trx_in_batch=on;
+--source include/stop_slave.inc
+--let $rpl_server_number= 3
+--let $rpl_server_parameters= --log-slave-updates=0 --duckdb_multi_trx_in_batch=on
+--source include/rpl_restart_server.inc
+--disable_warnings
+--source include/start_slave.inc
+--enable_warnings
+
+--let $start_id = 7
+--source duckdb_rpl_binlog_multi_trx.inc
+
+--connection server_3
+--echo [connection server_3]
+--source include/stop_slave.inc
+--let $rpl_server_number= 3
+--let $rpl_server_parameters= --log-slave-updates=1
+--source include/rpl_restart_server.inc
+--disable_warnings
+--source include/start_slave.inc
+--enable_warnings
+
+--echo ###########################################################################
+--echo # 4. Check server_3's Slave Status
+--echo ###########################################################################
+--connection server_3
+--echo [connection server_3]
 --let $status_items = Retrieved_Gtid_Set, Executed_Gtid_Set
 --let $slave_field_result_replace = /$server1_uuid/SERVER1_UUID/
 --source include/show_slave_status.inc

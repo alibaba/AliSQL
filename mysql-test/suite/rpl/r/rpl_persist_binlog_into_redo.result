@@ -1,0 +1,117 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+#
+# Case: It should binlog and replicate well for basic operations
+#################################################################
+#
+SET debug = "+d,crash_after_flush_binlog";
+CREATE TABLE t1(c1_my_test INT) ENGINE=InnoDB;
+INSERT INTO t1 VALUES(1);
+FLUSH BINARY LOGS;
+INSERT INTO t1 VALUES(2);
+include/sync_slave_sql_with_master.inc
+include/rpl_reset.inc
+[connection master]
+INSERT INTO t1 VALUES(3);
+DROP TABLE t1;
+include/sync_slave_sql_with_master.inc
+#
+# Case: It should replicate well for the case more than
+#       one transactions in the buffer queue.
+########################################################
+#
+[connection master]
+CREATE TABLE t1(c1_my_test INT) ENGINE=InnoDB;
+SET debug_sync = "before_flush_binlog_cache SIGNAL insert1_ready
+                  WAIT_FOR insert1_continue";
+INSERT INTO t1 VALUES(100);
+[connection server_1]
+SET debug_sync = "now WAIT_FOR insert1_ready";
+SET debug_sync = "after_write_to_redo SIGNAL insert2_ready
+                  WAIT_FOR insert2_continue";
+INSERT INTO t1 VALUES(101);
+[connection server_1_1]
+SET debug_sync = "now WAIT_FOR insert2_ready";
+SET debug_sync = "now SIGNAL insert1_continue";
+SET debug_sync = "now SIGNAL insert2_continue";
+[connection master]
+SET debug_sync = "now SIGNAL insert2_continue";
+[connection server_1]
+include/sync_slave_sql_with_master.inc
+#
+# Case: Big transactions are not be written into redo log
+###########################################################
+#
+[connection master]
+CREATE TABLE t2(c1 INT, c2 LONGTEXT) ENGINE=InnoDB;
+FLUSH LOGS;
+SET debug_sync = "before_flush_binlog_cache SIGNAL insert1_ready
+                  WAIT_FOR insert1_continue";
+INSERT INTO t2 VALUES(1, "1");
+[connection server_1]
+SET debug_sync = "now WAIT_FOR insert1_ready";
+INSERT INTO t2 VALUES(2, repeat('2', 2000000));
+[connection server_1_1]
+SET debug = "+d,crash_after_flush_binlog";
+INSERT INTO t2 VALUES(3, "3");
+[connection default]
+SET debug_sync = "now SIGNAL insert1_continue";
+[connection master]
+[connection server_1]
+[connection server_1_1]
+SET debug = "-d,crash_after_flush_binlog";
+include/sync_slave_sql_with_master.inc
+#
+# Case: It should binlog and replicate well after a big transaction
+####################################################################
+#
+[connection master]
+SET debug = "+d,crash_commit_after_sync_to_redo";
+SET debug = "-d,crash_after_flush_binlog";
+INSERT INTO t2 VALUES(3, repeat('3', 2000000));
+SET debug = "+d,crash_after_flush_binlog";
+SET debug = "-d,crash_commit_after_sync_to_redo";
+INSERT INTO t2 VALUES(4, "4");
+INSERT INTO t2 VALUES(5, "5");
+include/sync_slave_sql_with_master.inc
+#
+# Case: It should binlog and replicate well w/o this feature
+####################################################################
+#
+[connection master]
+SET @saved_persist_binlog_to_redo = @@GLOBAL.persist_binlog_to_redo;
+SET GLOBAL persist_binlog_to_redo = OFF;
+SET debug = "-d,crash_after_flush_binlog";
+SET debug = "+d,crash_commit_after_sync_to_redo";
+INSERT INTO t2 VALUES(6, "6");
+INSERT INTO t2 VALUES(7, "7");
+SET debug = "-d,crash_commit_after_sync_to_redo";
+SET debug = "+d,crash_after_flush_binlog";
+SET GLOBAL persist_binlog_to_redo = ON;
+INSERT INTO t2 VALUES(8, "8");
+INSERT INTO t2 VALUES(9, "9");
+SET debug = "-d,crash_after_flush_binlog";
+include/sync_slave_sql_with_master.inc
+[connection master]
+#
+# Case: Lsn checkpoint should wait until binlog is flushed and synced
+#########################################################################
+#
+[connection master]
+SET GLOBAL innodb_log_checkpoint_now = TRUE;
+SET debug_sync = "after_write_to_redo SIGNAL redo_written WAIT_FOR continue";
+INSERT INTO t1 VALUES(101);
+[connection server_1]
+SET debug_sync = "now WAIT_FOR redo_written";
+SET GLOBAL innodb_log_checkpoint_now = TRUE;
+[connection default]
+SET debug_sync = "now SIGNAL continue";
+[connection server_1]
+[connection master]
+[connection master]
+DROP TABLE t1, t2;
+SET GLOBAL persist_binlog_to_redo = @saved_persist_binlog_to_redo;
+include/rpl_end.inc

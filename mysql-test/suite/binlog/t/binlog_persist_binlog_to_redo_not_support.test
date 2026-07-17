@@ -1,0 +1,60 @@
+################################################################################
+# [Feature] Persist Binlog Into Redo
+#
+# Recovering the binlog from the redo log only works when InnoDB is the single
+# storage engine taking part in the two phase commit. Therefore:
+#   - while DuckDB is off, persist_binlog_to_redo can be changed dynamically
+#   - while DuckDB is on, enabling persist_binlog_to_redo is rejected with
+#     ER_BINLOG_IN_REDO_NOT_SUPPORTED
+#
+# Note that duckdb_mode is a read only variable, so the two situations are
+# exercised by restarting the server with different options.
+################################################################################
+--source include/have_log_bin.inc
+--source include/have_binlog_format_row.inc
+--source include/have_persist_binlog_to_redo.inc
+
+CALL mtr.add_suppression("persist_binlog_to_redo is not supported.*");
+
+--echo #
+--echo # Case: DuckDB is off, persist_binlog_to_redo is dynamically settable
+--echo ###################################################################
+--echo #
+SELECT @@GLOBAL.duckdb_mode;
+
+SET GLOBAL persist_binlog_to_redo = ON;
+SELECT @@GLOBAL.persist_binlog_to_redo;
+SET GLOBAL persist_binlog_to_redo = OFF;
+SELECT @@GLOBAL.persist_binlog_to_redo;
+
+# Turning it on and off repeatedly must keep working.
+SET GLOBAL persist_binlog_to_redo = ON;
+SET GLOBAL persist_binlog_to_redo = OFF;
+SELECT @@GLOBAL.persist_binlog_to_redo;
+
+--echo #
+--echo # Case: DuckDB is on, enabling persist_binlog_to_redo is rejected
+--echo ###############################################################
+--echo #
+--let $restart_parameters = restart: --duckdb-mode=ON
+--source include/restart_mysqld.inc
+
+SELECT @@GLOBAL.duckdb_mode;
+SELECT @@GLOBAL.persist_binlog_to_redo;
+
+--error ER_BINLOG_IN_REDO_NOT_SUPPORTED
+SET GLOBAL persist_binlog_to_redo = ON;
+
+--echo # The value is unchanged after the rejected SET.
+SELECT @@GLOBAL.persist_binlog_to_redo;
+
+--echo # Turning it off is always allowed, even with DuckDB on.
+SET GLOBAL persist_binlog_to_redo = OFF;
+SELECT @@GLOBAL.persist_binlog_to_redo;
+
+--echo #
+--echo # Cleanup
+--echo #########
+--echo #
+--let $restart_parameters =
+--source include/restart_mysqld.inc

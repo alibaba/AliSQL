@@ -1,0 +1,2 @@
+--binlog-order-commits=off
+--replica-preserve-commit-order=OFF

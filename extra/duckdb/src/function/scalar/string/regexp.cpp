@@ -414,7 +414,7 @@ ScalarFunctionSet RegexpMatchesFun::GetFunctions() {
 	return (regexp_partial_match);
 }
 
-ScalarFunctionSet RegexpReplaceFun::GetFunctions() {
+ScalarFunctionSet RegexpReplaceDuckdbFun::GetFunctions() {
 	ScalarFunctionSet regexp_replace("regexp_replace_duckdb");
 	regexp_replace.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
 	                                          LogicalType::VARCHAR, RegexReplaceFunction, RegexReplaceBind, nullptr,

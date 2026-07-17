@@ -25,6 +25,7 @@
 #include "sql/table.h"
 
 #include "my_config.h"
+#include "sql/sql_table_ext.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -117,6 +118,7 @@
 #include "sql/strfunc.h"         // find_type
 #include "sql/system_variables.h"
 #include "sql/table_cache.h"               // table_cache_manager
+#include "sql/table_ext.h"
 #include "sql/table_trigger_dispatcher.h"  // Table_trigger_dispatcher
 #include "sql/thd_raii.h"
 #include "sql/thr_malloc.h"
@@ -2577,11 +2579,16 @@ void Value_generator::dup_expr_str(MEM_ROOT *root, const char *src,
   expr_str.length = len;
 }
 
-void Value_generator::print_expr(THD *thd, String *out) {
+void Value_generator::print_expr(THD *thd, String *out, bool duckdb_rewrite) {
   out->length(0);
   Sql_mode_parse_guard parse_guard(thd);
   // Printing db and table name is useless
   auto flags = enum_query_type(QT_NO_DB | QT_NO_TABLE | QT_FORCE_INTRODUCERS);
+  if (duckdb_rewrite) {
+    flags = static_cast<enum_query_type>(flags | QT_DUCKDB_REWRITE);
+    flags = static_cast<enum_query_type>(flags & ~QT_FORCE_INTRODUCERS);
+    flags = static_cast<enum_query_type>(flags | QT_WITHOUT_INTRODUCERS);
+  }
   expr_item->print(thd, out, flags);
 }
 
@@ -4218,6 +4225,8 @@ void TABLE::init(THD *thd, Table_ref *tl) {
   if (!pos_in_table_list->prelocking_placeholder) {
     bind_value_generators_to_fields();
   }
+
+  im::init_table_snapshot(this, thd);
 }
 
 /**
@@ -6469,6 +6478,19 @@ bool Table_ref::process_index_hints(const THD *thd, TABLE *tbl) {
           (!tbl->s->key_info[pos - 1].is_visible &&
            !thd->optimizer_switch_flag(
                OPTIMIZER_SWITCH_USE_INVISIBLE_INDEXES))) {
+        /*
+          In sentence like 'select ... force/ignore/use index/key', ignore
+          the index/key part and print an warning message when the index
+          does not exist.
+        */
+        if (ignore_index_hint_error || !thd->lex->optimizer_rewrite_enabled) {
+          push_warning_printf(
+              const_cast<THD *>(thd), Sql_condition::SL_WARNING,
+              ER_KEY_DOES_NOT_EXITS,
+              ER_THD(thd, ER_KEY_DOES_NOT_EXITS), hint->key_name.str, alias);
+          continue;
+        }
+
         my_error(ER_KEY_DOES_NOT_EXITS, MYF(0), hint->key_name.str, alias);
         return true;
       }

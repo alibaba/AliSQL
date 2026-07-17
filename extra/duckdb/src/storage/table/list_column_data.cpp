@@ -57,7 +57,7 @@ void ListColumnData::InitializeScan(ColumnScanState &state) {
 uint64_t ListColumnData::FetchListOffset(idx_t row_idx) {
 	auto segment = data.GetSegment(row_idx);
 	ColumnFetchState fetch_state;
-	Vector result(type, 1);
+	Vector result(LogicalType::UBIGINT, 1);
 	segment->FetchRow(fetch_state, UnsafeNumericCast<row_t>(row_idx), result, 0U);
 
 	// initialize the child scan with the required offset
@@ -235,6 +235,7 @@ void ListColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vec
 	UnifiedVectorFormat vdata;
 	vdata.sel = FlatVector::IncrementalSelectionVector();
 	vdata.data = data_ptr_cast(append_offsets.get());
+	vdata.physical_type = PhysicalType::UINT64;
 
 	// append the child vector
 	if (child_count > 0) {
@@ -262,13 +263,14 @@ idx_t ListColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result
 	throw NotImplementedException("List Fetch");
 }
 
-void ListColumnData::Update(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
-                            idx_t update_count) {
+void ListColumnData::Update(TransactionData transaction, DataTable &data_table, idx_t column_index,
+                            Vector &update_vector, row_t *row_ids, idx_t update_count) {
 	throw NotImplementedException("List Update is not supported.");
 }
 
-void ListColumnData::UpdateColumn(TransactionData transaction, const vector<column_t> &column_path,
-                                  Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth) {
+void ListColumnData::UpdateColumn(TransactionData transaction, DataTable &data_table,
+                                  const vector<column_t> &column_path, Vector &update_vector, row_t *row_ids,
+                                  idx_t update_count, idx_t depth) {
 	throw NotImplementedException("List Update Column is not supported");
 }
 
@@ -370,6 +372,10 @@ unique_ptr<ColumnCheckpointState> ListColumnData::Checkpoint(RowGroup &row_group
 
 bool ListColumnData::IsPersistent() {
 	return ColumnData::IsPersistent() && validity.IsPersistent() && child_column->IsPersistent();
+}
+
+bool ListColumnData::HasAnyChanges() const {
+	return ColumnData::HasAnyChanges() || validity.HasAnyChanges() || child_column->HasAnyChanges();
 }
 
 PersistentColumnData ListColumnData::Serialize() {

@@ -1,0 +1,114 @@
+# This test case is to verify the repair of two bugs about the free flush function.
+# 1. Since immediate_commit_ts is defined as bool type, it will cause implicit 
+#    conversion from unsigned long long int type to bool type, causing the 
+#    original_committed_timestamp and immediate_commit_timestamp of gitd event to 
+#    always be 1.
+# 2. The LogErr function is used incorrectly, resulting in the inability to print 
+#    the correct error message in the error log.
+
+
+--echo #
+--echo # Prepare.
+--echo ########################################################
+--echo #
+--source include/have_binlog_format_row.inc
+--source include/have_debug.inc
+
+--let $gtid_event= Gtid
+--let $gtid_mode_on= `SELECT @@GLOBAL.GTID_MODE = 'ON'`
+if (!$gtid_mode_on)
+{
+  --let $gtid_event= Anonymous_Gtid
+}
+
+--echo #
+--echo # 1. Make test data.
+--echo ########################################################
+--echo #
+CREATE DATABASE rpl_test;
+CREATE TABLE rpl_test.t1 (s LONGTEXT);
+CREATE TABLE rpl_test.t2 (s LONGTEXT);
+
+--disable_query_log
+--let $i=0
+while ($i < 2)
+{
+  --eval INSERT INTO rpl_test.t1 values(repeat("1", 5242880))
+  --inc $i
+}
+--enable_query_log
+
+FLUSH BINARY LOGS;
+
+--echo #
+--echo # 2 Execute transaction with binlog cache free flush.
+--echo ########################################################
+--echo #
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+COMMIT;
+
+--echo # Check binlog and data. Expect 4 binlog files and ignorable event exist in the third binlog.
+--replace_column 2 # 3 #
+SHOW BINARY LOGS;
+
+--let $event_sequence= Format_desc # Previous_gtids # Ignorable # $gtid_event # !Begin # !Insert # Write_rows # !Commit # Rotate
+--let $binlog_file = query_get_value(SHOW BINARY LOGS, Log_name, 3)
+--echo $binlog_file 
+--let $include_header_events= 1
+--source include/assert_binlog_events.inc
+
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--let $prefix=`SELECT UUID()`
+--let $MYSQLD_DATADIR= `SELECT @@datadir`
+--let $binlog_uuid_filename= $MYSQLTEST_VARDIR/tmp/$prefix-bin.log
+--let $mysqlbinlog_output= $MYSQLTEST_VARDIR/tmp/mysqlbinlog_output
+--copy_file $MYSQLD_DATADIR/$binlog_file $binlog_uuid_filename
+--append_file $mysqlbinlog_output
+EOF
+
+--echo #
+--echo # 3 Check immediate_commit_timestamp and original_committed_timestamp of Gtid_log_event.
+--echo # 3.1 Check immediate_commit_timestamp of Gtid_log_event.
+--echo ########################################################
+--echo #
+--let $mysqlbinlog_parameters= -v $binlog_uuid_filename
+--let $mysqlbinlog_pipe= > $mysqlbinlog_output
+--source include/mysqlbinlog.inc
+--let $assert_text = Test immediate_commit_timestamp of Gtid_log_event is correct.
+--let $assert_file = $mysqlbinlog_output
+--let $assert_select = immediate_commit_timestamp=\d{16}
+--let $assert_count = 2
+--source include/assert_grep.inc
+
+--echo #
+--echo # 3.2 Check original_committed_timestamp of Gtid_log_event.
+--echo ########################################################
+--echo #
+--let $assert_text = Test original_committed_timestamp of Gtid_log_event is correct.
+--let $assert_file = $mysqlbinlog_output
+--let $assert_select = original_committed_timestamp=\d{16}
+--let $assert_count = 1
+--source include/assert_grep.inc
+
+--echo #
+--echo # 4 Check that the correct error message will be printed in the error log.
+--echo ########################################################
+--echo #
+CALL mtr.add_suppression("\\[ERROR\\] .*MY-\\d+.* \\[Server\\] Binlog cache free flush message.*");
+SET DEBUG = "+d,simulate_reserve_size_not_enough";
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_count = 1
+--let $assert_select = .* \[ERROR\] \[MY-[0-9]+] \[Server\] Binlog cache free flush message: check reserve space for front events is not enough, go back to original logic. reserve size = .*, front event size = .*
+--let $assert_text = Test correct error message will be printed in the error log.
+--source include/assert_grep.inc
+
+--echo #
+--echo # 5 Cleanup
+--echo ########################################################
+--echo #
+DROP DATABASE rpl_test;
+--remove_file $binlog_uuid_filename
+--remove_file $mysqlbinlog_output

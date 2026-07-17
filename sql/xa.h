@@ -292,6 +292,27 @@ typedef struct st_xarecover_txn {
   List<st_handler_tablename> *mod_tables;
 } XA_recover_txn;
 
+/**
+  Per-transaction context used by the persist-binlog-into-redo feature to
+  track whether an external XA transaction increased m_atomic_prep_xids and
+  whether it still owes a binlog rotation. It replaces the RDS xa_ext.h
+  XID_context (which is not ported).
+*/
+class XID_context {
+ public:
+  bool increased_prep_xp_xids() { return m_increased_prep_xids; }
+  void set_increased_prep_xids() { m_increased_prep_xids = true; }
+  void reset_increased_prep_xids() { m_increased_prep_xids = false; }
+
+  bool do_binlog_rotate() { return m_do_binlog_rotate; }
+  void set_do_binlog_rotate() { m_do_binlog_rotate = true; }
+  void reset_do_binlog_rotate() { m_do_binlog_rotate = false; }
+
+ private:
+  bool m_increased_prep_xids = {false};
+  bool m_do_binlog_rotate = {false};
+};
+
 class XID_STATE {
  public:
   enum xa_states {
@@ -301,6 +322,9 @@ class XID_STATE {
     XA_PREPARED,
     XA_ROLLBACK_ONLY
   };
+
+  /** Context for the persist-binlog-into-redo external XA handling. */
+  XID_context m_ctx;
 
   /**
      Transaction identifier.

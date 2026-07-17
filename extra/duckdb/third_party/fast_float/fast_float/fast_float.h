@@ -513,7 +513,13 @@ parsed_number_string parse_number_string(const char *p, const char *pend, const 
   bool skip_one_underscore = false;
   if (*p == '-') { // C++17 20.19.3.(7.1) explicitly forbids '+' sign here
     ++p;
+    // In MySQL, '-' should be casted as 0.
     if (p == pend) {
+      answer.valid = true;
+      answer.mantissa = 0;
+      answer.exponent = 0;
+      answer.too_many_digits = false;
+      answer.negative = false;
       return answer;
     }
     if (!is_integer(*p) && (*p != decimal_separator)) { // a  sign must be followed by an integer or the dot

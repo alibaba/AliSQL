@@ -50,7 +50,7 @@ SHOW CREATE TABLE t1;
 --let diagnose_option = DUCKDB_QUERY_RESULT
 --let $assert_text = Check DuckDB query result log
 --let $assert_select = my_duckdb: Success
---let $assert_count_on = 5
+--let $assert_count_on = 16
 --source ha_duckdb_rpl_batch_multi_trx_diagnose.inc
 
 --echo ###########################################################################

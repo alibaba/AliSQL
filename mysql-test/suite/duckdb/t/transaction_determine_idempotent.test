@@ -12,19 +12,15 @@ CREATE TABLE t1 (
     PRIMARY KEY(id)
 ) ENGINE=InnoDB;
 
-# Currently, the DuckDB(v1.22) will crash when replay WAL log if we add this line
-#INSERT INTO t1 VALUES (1,1),(2,2),(3,3),(4,4);
-
 --source include/rpl_sync.inc
 --source include/rpl_connection_slave.inc
 ALTER TABLE t1 ENGINE=DuckDB;
---sorted_result
-SELECT * FROM t1;
 --source include/stop_slave_sql.inc
 
 --echo ###########################################################################
---echo # 1. The Master executes 4 transactions, make sure the Slave receives all.
+--echo # 1. Test for duckdb_dml_in_batch = off
 --echo ###########################################################################
+--echo # 1.1 The Master executes 4 transactions, make sure the Slave receives all.
 --source include/rpl_connection_master.inc
 BEGIN;
 INSERT INTO t1 VALUES (5, 5);
@@ -42,6 +38,8 @@ INSERT INTO t1 VALUES (8, 8);
 UPDATE t1 SET id = 9 WHERE id = 5;
 COMMIT;
 
+FLUSH LOGS;
+
 BEGIN;
 UPDATE t1 SET id = 10 WHERE id = 6;
 UPDATE t1 SET id = 11 WHERE id = 8;
@@ -51,9 +49,7 @@ COMMIT;
 --let $rpl_only_running_threads=1
 --source include/rpl_sync.inc
 
---echo ###########################################################################
---echo # 2. Let the Slave skip executes the 2nd transaction, and Crash when replay
---echo ###########################################################################
+--echo # 1.2 Let the Slave skip executes the 2nd transaction, and Crash when replay
 --source include/rpl_connection_slave.inc
 SET GTID_NEXT= 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:2';
 BEGIN;
@@ -63,85 +59,77 @@ SET GTID_NEXT = 'AUTOMATIC';
 
 SET GLOBAL debug="+d,crash_after_duckdb_commit";
 --source include/expect_crash.inc
-START REPLICA SQL_THREAD;
+--source include/start_slave_sql.inc
 
 --enable_reconnect
 --source include/wait_until_disconnected.inc
 
 --let $rpl_server_number= 2
---let $rpl_server_parameters= --debug=+d,duckdb_print_dml,duckdb_idempotent_2trx
+--let $rpl_server_parameters= --debug=+d,duckdb_print_dml
 --source include/rpl_start_server.inc
 --disable_reconnect
-START REPLICA;
+--source include/start_slave_sql.inc
 
---echo ###########################################################################
---echo # 3. After Crash Recovery, check Data and SQLs send to DuckDB, the 1st and
---echo #    3rd transactions should be replayed idempotently, the 4th transaction
---echo #    should not be replayed idempotently.
---echo ###########################################################################
---source include/rpl_connection_master.inc
---sorted_result
-SELECT * FROM t1;
-
---source include/rpl_connection_slave.inc
+--echo # 1.3 After Crash Recovery, check Data and SQLs send to DuckDB, the 1st and
+--echo #     3rd transactions should be replayed idempotently, the 4th transaction
+--echo #     should not be replayed idempotently.
 --source include/rpl_sync.inc
---sorted_result
-SELECT * FROM t1;
+--let $rpl_diff_statement=SELECT * FROM t1 ORDER BY id
+--source include/rpl_diff.inc
 
 --let $grep_file=$MYSQLTEST_VARDIR/log/mysqld.2.err
 --let $grep_pattern=duckdb_print_dml: .*
 --source include/grep_pattern.inc
 
 --echo ###########################################################################
---echo # 4. The Master executes the 5th transaction, make sure the Slave receives
---echo #    the transaction and then restart the Slave. After restart, the Slave
---echo #    should replay it idempotently, but the Slave should not replay the 6th
---echo #    transaction idempotently.
+--echo # 2. Test for duckdb_dml_in_batch = on
 --echo ###########################################################################
+--source include/rpl_connection_slave.inc
 --source include/stop_slave_sql.inc
 
+--echo # 2.1 The Master executes 2 Insert-only transactions, make sure the Slave receives all.
 --source include/rpl_connection_master.inc
 # the 5th transaction
-BEGIN;
-UPDATE t1 SET id = 13 WHERE id = 9;
 INSERT INTO t1 VALUES (14, 14);
-COMMIT;
+
+FLUSH LOGS;
+
+# the 6th transaction
+INSERT INTO t1 VALUES (16, 16);
 
 --let $rpl_only_running_threads=1
 --source include/rpl_sync.inc
 
+--echo # 2.2 After restart, the Slaved should replay the 5th transaction idempotently,
+--echo #     but should not replay the 6th transaction idempotently.
+--enable_reconnect
 --let $rpl_server_number= 2
---let $rpl_server_parameters= --debug=+d,duckdb_print_dml
+--let $rpl_server_parameters= --duckdb_dml_in_batch=on
 --source include/rpl_stop_server.inc
 --exec rm $MYSQLTEST_VARDIR/log/mysqld.2.err
 --source include/rpl_start_server.inc
-
---echo ###########################################################################
---echo # 5. After restart, the Slaved should replay the 5th transaction idempotently,
---echo #    but should not replay the 6th transaction idempotently.
---echo ###########################################################################
 --source include/rpl_connection_slave.inc
-START REPLICA;
---source include/rpl_sync.inc
-
---source include/rpl_connection_master.inc
-# the 6th transaction
-BEGIN;
-UPDATE t1 SET id = 15 WHERE id = 11;
-INSERT INTO t1 VALUES (16, 16);
-COMMIT;
-
---sorted_result
-SELECT * FROM t1;
+--disable_reconnect
+--source include/start_slave.inc
 
 --source include/rpl_sync.inc
---source include/rpl_connection_slave.inc
---sorted_result
-SELECT * FROM t1;
+--let $rpl_diff_statement=SELECT * FROM t1 ORDER BY id
+--source include/rpl_diff.inc
 
---let $grep_file=$MYSQLTEST_VARDIR/log/mysqld.2.err
---let $grep_pattern=duckdb_print_dml: .*
---source include/grep_pattern.inc
+--let $assert_file = $MYSQLTEST_VARDIR/log/mysqld.2.err
+--let $assert_text = Check 1 Delete Batch SQL after Restart
+--let $assert_select = DELETE.*rds_buf
+--let $assert_count = 1
+--source include/assert_grep.inc
+
+--let $assert_file = $MYSQLTEST_VARDIR/log/mysqld.2.err
+--let $assert_text = Check 2 INSERT Batch SQL after Restart
+--let $assert_select = INSERT.*rds_buf
+--let $assert_count = 2
+--source include/assert_grep.inc
+
+--source include/rpl_connection_slave.inc
+SET GLOBAL duckdb_dml_in_batch=off;
 
 --echo ###########################################################################
 --echo # Cleanup

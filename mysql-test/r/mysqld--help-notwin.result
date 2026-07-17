@@ -99,6 +99,14 @@ The following options may be given as the first argument:
  System. Attempt to specify a network namespace for a
  platform that doesn't support it results in error during
  socket creation.
+ --binlog-buffer-size=# 
+ Size of the buffer for write binlog asynchronously
+ --binlog-cache-free-flush 
+ Move binlog cache tmp file directly to binlog file, to
+ avoid high IO during commit.
+ --binlog-cache-free-flush-limit-size=# 
+ Move binlog cache tmp file directly to binlog file when
+ binlog cache size bigger than this variable.
  --binlog-cache-size=# 
  The size of the transactional cache for updates to
  transactional engines for the binary log. If you often
@@ -157,6 +165,12 @@ The following options may be given as the first argument:
  be enqueued (as set using
  --binlog-group-commit-sync-delay), the commit procedure
  resumes.
+ --binlog-group-delay=# 
+ Nanoseconds how long the group leader sleeps to wait more
+ transactions to join the group
+ --binlog-group-delay-running-threads=# 
+ The group leader will sleep if running threads is more
+ than the given number
  --binlog-gtid-simple-recovery 
  If this option is enabled, the server does not open more
  than two binary logs when initializing GTID_PURGED and
@@ -355,6 +369,10 @@ The following options may be given as the first argument:
  --duckdb-appender-allocator-flush-threshold=# 
  Peak allocation threshold at which to flush the allocator
  when DuckDB appender flushs chunk.
+ --duckdb-batch-max-row-count=# 
+ To avoid out-of-memory errors, DuckDB needs to split
+ large batch, which limits the number of rows in a batch;
+ 0 means no limit.
  --duckdb-checkpoint-threshold=# 
  The WAL size threshold at which to automatically trigger
  a checkpoint (e.g. 1GB)
@@ -382,6 +400,13 @@ The following options may be given as the first argument:
  startup.
  --duckdb-convert-all-skip-mtr-db 
  Whether convert database 'mtr' to DuckDB at startup.
+ --duckdb-convert-tables-with-generated-columns 
+ Whether to allow converting tables with generated columns
+ to the DuckDB storage engine.
+ (Defaults to on; use --skip-duckdb-convert-tables-with-generated-columns to disable.)
+ --duckdb-copy-data-between-tables-use-ins-sel 
+ Whether to use 'INSERT ... SELECT ...' when copying data
+ between DuckDB tables.
  --duckdb-copy-ddl-in-batch 
  Use batch insert to speed up copy ddl
  (Defaults to on; use --skip-duckdb-copy-ddl-in-batch to disable.)
@@ -413,6 +438,10 @@ The following options may be given as the first argument:
  The maximum amount of duckdb data stored inside the
  'duckdb_temp_directory', 0 means '90% of available disk
  space'
+ --duckdb-max-threads-per-query=# 
+ Max threads for a single query.
+ --duckdb-max-threads-per-query-rpl=# 
+ Max threads for replication query.
  --duckdb-memory-limit=# 
  The maximum memory duckdb can use, 0 means auto.
  --duckdb-merge-join-threshold=# 
@@ -427,6 +456,14 @@ The following options may be given as the first argument:
  Byte)
  --duckdb-multi-trx-timeout[=#] 
  DuckDB delays transaction commit timeout (in ms)
+ --duckdb-prefer-high-precision 
+ Prefer high precision calculation in DuckDB.
+ --duckdb-psmt-cursor-send-extra-eof 
+ Send extra EOF packet to client whenexecute prepared
+ statement with cursor request and return empty result
+ set.Needs to be ON when using JDBC and version less than
+ 9.5.0.
+ (Defaults to on; use --skip-duckdb-psmt-cursor-send-extra-eof to disable.)
  --duckdb-require-primary-key 
  Whether to require a primary key for Duckdb tables
  (Defaults to on; use --skip-duckdb-require-primary-key to disable.)
@@ -437,6 +474,8 @@ The following options may be given as the first argument:
  --duckdb-source-set-insert-only-to-binlog 
  Whether set insert_only flag to Binlog when a transaction
  only contains Insert.
+ --duckdb-sql-normalization 
+ Normalize SQL before sending to DuckDB.
  --duckdb-temp-directory=name 
  Set the directory to which duckdb write temp files
  --duckdb-threads=#  The number of total threads used by duckdb, 0 means
@@ -582,6 +621,9 @@ The following options may be given as the first argument:
  Maximum amount of memory available for generating
  histograms
  --host-cache-size=# How many host names should be cached to avoid resolving.
+ --ignore-index-hint-error 
+ When this option is enabled,using inexistent index in
+ index hint would be allowed
  --information-schema-stats-expiry=# 
  The number of seconds after which mysqld server will
  fetch data from storage engine and replace the data in
@@ -1147,6 +1189,12 @@ The following options may be given as the first argument:
  --performance-schema-users-size=# 
  Maximum number of instrumented users. Use 0 to disable,
  -1 for automated scaling.
+ --persist-binlog-to-redo 
+ Persists transaction's binlog events into redo to reduce
+ io
+ --persist-binlog-to-redo-size-limit=# 
+ Only persists the transactions smaller than this variable
+ to redo
  --persist-only-admin-x509-subject[=name] 
  The client peer certificate name required to enable
  setting all system variables via SET PERSIST[_ONLY]
@@ -1616,6 +1664,7 @@ The following options may be given as the first argument:
  When set, tables must be created with a primary key, and
  an existing primary key cannot be removed with 'ALTER
  TABLE'. Attempts to do so will result in an error.
+ --sql-safe-updates  Set default value for sql_safe_updates (0 or 1)
  --stored-program-cache=# 
  The soft upper limit for number of cached stored routines
  for one connection.
@@ -1630,6 +1679,9 @@ The following options may be given as the first argument:
  removed in a future release).
  --sync-binlog=#     Synchronously flush binary log to disk after every #th
  write to the file. Use 0 to disable synchronous flushing
+ --sync-binlog-interval=# 
+ Sync binlog to file every sync_binlog_interval
+ microsecond
  --sync-master-info=# 
  This option is deprecated. Use sync_source_info instead.
  --sync-relay-log=#  Synchronously flush relay log to disk after every #th
@@ -1740,6 +1792,26 @@ The following options may be given as the first argument:
  (Defaults to on; use --skip-validate-user-plugins to disable.)
  -v, --verbose       Used with --help option for detailed help.
  -V, --version       Output version information and exit.
+ --vidx-default-distance=name 
+ Distance function to build the vector index for
+ --vidx-disabled     Whether to enable vector index feature
+ (Defaults to on; use --skip-vidx-disabled to disable.)
+ --vidx-hnsw-cache-size=# 
+ Upper limit for one HNSW vector index cache
+ --vidx-hnsw-default-m=# 
+ Larger values mean slower SELECTs and INSERTs, larger
+ index size and higher memory consumption but more
+ accurate results
+ --vidx-hnsw-ef-search=# 
+ Larger values mean slower SELECTs but more accurate
+ results. Defines the minimal number of result candidates
+ to look for in the vector index for ORDER BY ... LIMIT N
+ queries. The search will never search for less rows than
+ that, even if LIMIT is smaller
+ --wait-binlog-flush Commit will not return until its binlog is written into
+ binlog file if both persist_binlog_to_redo and
+ wait_binlog_flush are on.
+ (Defaults to on; use --skip-wait-binlog-flush to disable.)
  --wait-timeout=#    The number of seconds the server waits for activity on a
  connection before closing it
  --windowing-use-high-precision 
@@ -1784,6 +1856,9 @@ avoid-temporal-upgrade FALSE
 back-log 151
 big-tables FALSE
 bind-address *
+binlog-buffer-size 20971520
+binlog-cache-free-flush FALSE
+binlog-cache-free-flush-limit-size 268435456
 binlog-cache-size 32768
 binlog-checksum CRC32
 binlog-direct-non-transactional-updates FALSE
@@ -1794,6 +1869,8 @@ binlog-expire-logs-seconds 2592000
 binlog-format ROW
 binlog-group-commit-sync-delay 0
 binlog-group-commit-sync-no-delay-count 0
+binlog-group-delay 100
+binlog-group-delay-running-threads 100
 binlog-gtid-simple-recovery TRUE
 binlog-max-flush-queue-time 0
 binlog-order-commits TRUE
@@ -1846,6 +1923,7 @@ disconnect-on-expired-password TRUE
 disconnect-slave-event-count 0
 div-precision-increment 4
 duckdb-appender-allocator-flush-threshold 67108864
+duckdb-batch-max-row-count 0
 duckdb-checkpoint-threshold 268435456
 duckdb-commit-multi-trx-due-to-reader TRUE
 duckdb-commit-multi-trx-due-to-rotate TRUE
@@ -1854,6 +1932,8 @@ duckdb-convert-all-at-startup FALSE
 duckdb-convert-all-at-startup-ignore-error FALSE
 duckdb-convert-all-at-startup-threads 4
 duckdb-convert-all-skip-mtr-db FALSE
+duckdb-convert-tables-with-generated-columns TRUE
+duckdb-copy-data-between-tables-use-ins-sel FALSE
 duckdb-copy-ddl-in-batch TRUE
 duckdb-copy-ddl-threads 4
 duckdb-data-import-mode FALSE
@@ -1864,15 +1944,20 @@ duckdb-force-no-collation FALSE
 duckdb-idempotent-data-import-enabled FALSE
 duckdb-log-options 
 duckdb-max-temp-directory-size 0
+duckdb-max-threads-per-query 1000000
+duckdb-max-threads-per-query-rpl 1000000
 duckdb-memory-limit 0
 duckdb-merge-join-threshold 4611686018427387904
 duckdb-mode ON
 duckdb-multi-trx-in-batch FALSE
 duckdb-multi-trx-max-batch-length 268435456
 duckdb-multi-trx-timeout 5000
+duckdb-prefer-high-precision FALSE
+duckdb-psmt-cursor-send-extra-eof TRUE
 duckdb-require-primary-key TRUE
 duckdb-scheduler-process-partial TRUE
 duckdb-source-set-insert-only-to-binlog FALSE
+duckdb-sql-normalization FALSE
 duckdb-temp-directory (No default value)
 duckdb-threads 0
 duckdb-update-modified-column-only TRUE
@@ -1906,6 +1991,7 @@ gtid-mode OFF
 help TRUE
 histogram-generation-max-mem-size 20000000
 host-cache-size 279
+ignore-index-hint-error FALSE
 information-schema-stats-expiry 86400
 init-connect 
 init-file (No default value)
@@ -2083,6 +2169,8 @@ performance-schema-setup-actors-size -1
 performance-schema-setup-objects-size -1
 performance-schema-show-processlist FALSE
 performance-schema-users-size -1
+persist-binlog-to-redo FALSE
+persist-binlog-to-redo-size-limit 1048576
 persist-only-admin-x509-subject 
 persist-sensitive-variables-in-plaintext TRUE
 persisted-globals-load TRUE
@@ -2183,11 +2271,13 @@ sporadic-binlog-dump-fail FALSE
 sql-generate-invisible-primary-key FALSE
 sql-mode ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
 sql-require-primary-key FALSE
+sql-safe-updates FALSE
 stored-program-cache 256
 stored-program-definition-cache 256
 super-read-only FALSE
 symbolic-links FALSE
 sync-binlog 1
+sync-binlog-interval 50000
 sync-master-info 10000
 sync-relay-log 10000
 sync-relay-log-info 10000
@@ -2216,6 +2306,12 @@ upgrade AUTO
 validate-config FALSE
 validate-user-plugins TRUE
 verbose TRUE
+vidx-default-distance EUCLIDEAN
+vidx-disabled TRUE
+vidx-hnsw-cache-size 16777216
+vidx-hnsw-default-m 6
+vidx-hnsw-ef-search 20
+wait-binlog-flush TRUE
 wait-timeout 28800
 windowing-use-high-precision TRUE
 xa-detach-on-prepare TRUE

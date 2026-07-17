@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/common/types/string_type.hpp"
@@ -85,12 +84,17 @@ struct date_t { // NOLINT
 
 enum class DateCastResult : uint8_t { SUCCESS, ERROR_INCORRECT_FORMAT, ERROR_RANGE };
 
+struct DateSpecial {
+	const char *str;  // The full string
+	const idx_t abbr; // The abbreviation length
+};
+
 //! The Date class is a static class that holds helper functions for the Date type.
 class Date {
 public:
-	static const char *PINF;  // NOLINT
-	static const char *NINF;  // NOLINT
-	static const char *EPOCH; // NOLINT
+	static const DateSpecial PINF;  // NOLINT
+	static const DateSpecial NINF;  // NOLINT
+	static const DateSpecial EPOCH; // NOLINT
 
 	static const string_t MONTH_NAMES[12];
 	static const string_t MONTH_NAMES_ABBREVIATED[12];
@@ -126,7 +130,7 @@ public:
 	DUCKDB_API static string ToString(date_t date);
 	//! Try to convert the string as a give "special" date (e.g, PINF, ...)
 	//! Returns true if it was successful and updates the scan pos.
-	DUCKDB_API static bool TryConvertDateSpecial(const char *buf, idx_t len, idx_t &pos, const char *special);
+	DUCKDB_API static bool TryConvertDateSpecial(const char *buf, idx_t len, idx_t &pos, const DateSpecial &special);
 	//! Try to convert text in a buffer to a date; returns true if parsing was successful
 	//! If the date was a "special" value, the special flag will be set.
 	DUCKDB_API static DateCastResult TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result,
@@ -191,7 +195,7 @@ public:
 	//! In the ISO week-numbering system, it is possible for early-January dates
 	//! to be part of the 52nd or 53rd week of the previous year.
 	DUCKDB_API static void ExtractISOYearWeek(date_t date, int32_t &year, int32_t &week);
-	//! Extract the yearweek as Mysql handles it.
+	//! Extract the yearweek as MySQL handles it.
 	DUCKDB_API static void ExtractYearWeekMysql(date_t date, int32_t &year, int32_t &week, bool monday_first = false, bool iso = false);
 	DUCKDB_API static int32_t ExtractISOWeekNumber(date_t date);
 	DUCKDB_API static int32_t ExtractISOYearNumber(date_t date);
@@ -200,7 +204,7 @@ public:
 	//! and any date before the first Monday/Sunday returns week 0
 	//! This is a bit more consistent because week numbers in a year are always incrementing
 	DUCKDB_API static int32_t ExtractWeekNumberRegular(date_t date, bool monday_first = true);
-	//! Extract the week number as Mysql handles it.
+	//! Extract the week number as MySQL handles it.
 	DUCKDB_API static int32_t ExtractWeekNumberMysql(date_t date, bool monday_first = false, bool zero_first = true, bool iso = false);
 	//! Returns the date of the monday of the current week.
 	DUCKDB_API static date_t GetMondayOfCurrentWeek(date_t date);

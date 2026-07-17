@@ -3014,6 +3014,11 @@ bool open_table(THD *thd, Table_ref *table_list, Open_table_context *ot_ctx) {
         if (table_list->open_strategy == Table_ref::OPEN_FOR_CREATE)
           return add_view_place_holder(thd, table_list);
 
+        if (table_list->has_snapshot()) {
+          my_error(ER_AS_OF_NOT_INNODB_TABLE, MYF(0), table_list->table_name);
+          return true;
+        }
+
         if (!tdc_open_view(thd, table_list, key, key_length)) {
           assert(table_list->is_view());
           return false;  // VIEW
@@ -3258,6 +3263,13 @@ retry_share : {
     do for regular tables, because view shares are always up to date.
   */
   if (table_list->is_view() || share->is_view) {
+    if (table_list->has_snapshot()) {
+      release_table_share(share);
+      mysql_mutex_unlock(&LOCK_open);
+      my_error(ER_AS_OF_NOT_INNODB_TABLE, MYF(0), table_list->table_name);
+      return true;
+    }
+
     bool view_open_result = true;
     /*
       If parent_l of the table_list is non null then a merge table
@@ -7398,6 +7410,11 @@ bool open_temporary_table(THD *thd, Table_ref *tl) {
     return false;
   }
 
+  if (tl->has_snapshot()) {
+    my_error(ER_AS_OF_NOT_INNODB_TABLE, MYF(0), tl->table_name);
+    return true;
+  }
+
   if (tl->partition_names) {
     /* Partitioned temporary tables is not supported. */
     assert(!table->part_info);
@@ -8237,11 +8254,14 @@ bool find_item_in_list(THD *thd, Item *find, mem_root_deque<Item *> *items,
       }
     } else if (find_ident == nullptr || find_ident->table_name == nullptr ||
                is_rollup_group_wrapper(item)) {
+      bool is_rollup = is_rollup_group_wrapper(item);
       // Unwrap rollup wrappers, if any
       item = unwrap_rollup_group(item);
       find = unwrap_rollup_group(find);
 
-      if (find_ident != nullptr && item->item_name.eq_safe(find->item_name)) {
+      if (find_ident != nullptr &&
+          (!is_rollup || find_ident->table_name == nullptr) &&
+          item->item_name.eq_safe(find->item_name)) {
         *found = &*it;
         *counter = i;
         *resolution = RESOLVED_AGAINST_ALIAS;

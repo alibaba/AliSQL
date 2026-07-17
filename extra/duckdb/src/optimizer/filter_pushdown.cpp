@@ -160,6 +160,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownJoin(unique_ptr<LogicalOpera
 
 	unique_ptr<LogicalOperator> result;
 	switch (join.join_type) {
+	case JoinType::OUTER:
+		result = PushdownOuterJoin(std::move(op), left_bindings, right_bindings);
+		break;
 	case JoinType::INNER:
 		//	AsOf joins can't push anything into the RHS, so treat it as a left join
 		if (op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
@@ -204,17 +207,23 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownJoin(unique_ptr<LogicalOpera
 	}
 	return result;
 }
-void FilterPushdown::PushFilters() {
+FilterResult FilterPushdown::PushFilters() {
 	for (auto &f : filters) {
 		auto result = combiner.AddFilter(std::move(f->filter));
 		D_ASSERT(result != FilterResult::UNSUPPORTED);
-		(void)result;
+		if (result == FilterResult::UNSATISFIABLE) {
+			// one of the filters is unsatisfiable - abort filter pushdown
+			return FilterResult::UNSATISFIABLE;
+		}
 	}
 	filters.clear();
+	return FilterResult::SUCCESS;
 }
 
 FilterResult FilterPushdown::AddFilter(unique_ptr<Expression> expr) {
-	PushFilters();
+	if (PushFilters() == FilterResult::UNSATISFIABLE) {
+		return FilterResult::UNSATISFIABLE;
+	}
 	// split up the filters by AND predicate
 	vector<unique_ptr<Expression>> expressions;
 	expressions.push_back(std::move(expr));

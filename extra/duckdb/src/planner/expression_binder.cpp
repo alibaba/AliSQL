@@ -1,6 +1,5 @@
 #include "duckdb/planner/expression_binder.hpp"
 
-#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/parser/expression/list.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -103,7 +102,9 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 	case ExpressionClass::STAR:
 		return BindResult(BinderException::Unsupported(expr_ref, "STAR expression is not supported here"));
 	default:
-		throw NotImplementedException("Unimplemented expression class");
+		return BindResult(
+		    NotImplementedException("Unimplemented expression class in ExpressionBinder::BindExpression: %s",
+		                            EnumUtil::ToString(expr_ref.GetExpressionClass())));
 	}
 }
 
@@ -164,7 +165,7 @@ static bool CombineMissingColumns(ErrorData &current, ErrorData new_error) {
 		}
 		auto score = StringUtil::SimilarityRating(candidate_column, column_name);
 		candidates.insert(candidate);
-		scores.emplace_back(make_pair(std::move(candidate), score));
+		scores.emplace_back(std::move(candidate), score);
 	}
 	// get a new top-n
 	auto top_candidates = StringUtil::TopNStrings(scores);

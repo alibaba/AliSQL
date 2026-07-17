@@ -35,6 +35,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #define read0types_h
 
 #include <algorithm>
+#include "sql/dd/string_type.h"
 #include "dict0mem.h"
 
 #include "trx0types.h"
@@ -317,6 +318,29 @@ class ReadView {
   /** List of read views in trx_sys */
   byte pad1[64 - sizeof(node_t)];
   node_t m_view_list;
+
+ public:
+  /** List of read views in flashback_sys. */
+  node_t m_flashback_list;
+
+  /** Whether the read view was recovered from innodb_flashback_snapshot. */
+  bool m_flashback_flag;
+
+  /** Timestamp in seconds represented by this flashback read view. */
+  ulonglong m_utc;
+
+  /** Number of AS OF queries using this read view. */
+  uint m_ref_count;
+
+ public:
+  /** Encode the read view into a properties string. */
+  dd::String_type encode_to_dd_properties();
+
+  /** Decode the read view from a properties string. */
+  void decode_from_dd_properties(const char *memo);
+
+  /** Copy state from another view and complete the copied view. */
+  void copy_complete(const ReadView &other);
 };
 
 #endif

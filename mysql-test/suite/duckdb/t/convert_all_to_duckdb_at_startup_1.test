@@ -49,15 +49,9 @@ INSERT INTO t2 VALUES (1, 'one');
 # INVISIBLE COLUMN
 CREATE TABLE t3 (id INT, name VARCHAR(255), age INT INVISIBLE, PRIMARY KEY (id)) ENGINE = InnoDB;
 INSERT INTO t3 VALUES (1, 'one');
-# GENERATION EXPRESSION
-CREATE TABLE t4(id INT PRIMARY KEY, a INT, b INT GENERATED ALWAYS AS (a - 1) STORED) ENGINE = InnoDB;
-INSERT INTO t4(id, a) VALUES (1, 1);
-# VIRTUAL COLUMN
-CREATE TABLE t5(id INT PRIMARY KEY, a INT, b INT GENERATED ALWAYS AS (a - 1) VIRTUAL) ENGINE = InnoDB;
-INSERT INTO t5(id, a) VALUES (1, 1);
 # GEOMETRY COLUMN
-CREATE TABLE t6 (fid INT PRIMARY KEY, g POINT) ENGINE = InnoDB;
-INSERT INTO t6 VALUES (101, ST_PointFromText('POINT(10 10)'));
+CREATE TABLE t4 (fid INT PRIMARY KEY, g POINT) ENGINE = InnoDB;
+INSERT INTO t4 VALUES (101, ST_PointFromText('POINT(10 10)'));
 
 
 --echo #
@@ -86,16 +80,6 @@ SHOW GLOBAL STATUS LIKE 'DuckDB_convert_stage_at_startup';
 --let $assert_count = 1
 --source include/assert_grep.inc
 
---let $assert_text = Found generation expression error.
---let $assert_select = generation expression is not supported
---let $assert_count = 1
---source include/assert_grep.inc
-
---let $assert_text = Found virtual column error.
---let $assert_select = virtual column is not supported
---let $assert_count = 1
---source include/assert_grep.inc
-
 --let $assert_text = Found geometry column error.
 --let $assert_select = geometry column is not supported
 --let $assert_count = 1
@@ -118,7 +102,7 @@ SHOW GLOBAL STATUS LIKE 'DuckDB_convert_stage_at_startup';
 --echo #
 --echo # 6) CLEANUP
 --echo #
-DROP TABLE t1, t2, t3, t4, t5, t6;
+DROP TABLE t1, t2, t3, t4;
 --disable_query_log
 # IGNORE ERROR ABOUT DUCKDB DDL.
 call mtr.add_suppression("\\[ERROR\\] \\[MY-013140\\] \\[Server\\] .*");

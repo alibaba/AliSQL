@@ -1,0 +1,58 @@
+include/rpl_init.inc [topology=1->2->3]
+###########################################################################
+# 0. Prepare, InnoDB (server_1) -> DuckDB (server_2) -> DuckDB (server_3)
+###########################################################################
+[connection server_1]
+CREATE TABLE t1 (
+id BIGINT NOT NULL,
+c0 VARCHAR(20) NOT NULL,
+PRIMARY KEY(id)
+) ENGINE=InnoDB;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` bigint NOT NULL,
+  `c0` varchar(20) NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+include/rpl_sync.inc
+[connection server_2]
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` bigint NOT NULL,
+  `c0` varchar(20) NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=DUCKDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+[connection server_3]
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` bigint NOT NULL,
+  `c0` varchar(20) NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=DUCKDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+###########################################################################
+# 1. Test server_2 Commit Error
+###########################################################################
+[connection server_2]
+include/stop_slave_sql.inc
+[connection server_1]
+INSERT INTO t1 VALUES (1, 'xxx'), (2, 'yyy');
+UPDATE t1 SET c0 = 'zzz' WHERE id = 1;
+include/rpl_sync.inc
+[connection server_2]
+SET GLOBAL debug = "+d,simulate_duckdb_commit_failed";
+include/start_slave_sql.inc
+include/wait_for_slave_sql_error.inc [errno=13121]
+SET GLOBAL debug = "-d,simulate_duckdb_commit_failed";
+include/start_slave_sql.inc
+include/rpl_sync.inc
+include/rpl_diff.inc
+###########################################################################
+# Cleanup
+###########################################################################
+[connection server_1]
+DROP TABLE t1;
+include/rpl_sync.inc
+include/rpl_end.inc

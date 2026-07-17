@@ -51,7 +51,6 @@
 #include "mysql/thread_type.h"
 #include "prealloced_array.h"  // Prealloced_array
 #include "sql/binlog.h"        // MYSQL_BIN_LOG
-#include "sql/duckdb/duckdb_config.h"
 #include "sql/log_event.h"     //Gtid_log_event
 #include "sql/psi_memory_key.h"
 #include "sql/query_options.h"
@@ -674,23 +673,21 @@ class Relay_log_info : public Rpl_info {
   */
   bool is_applier_source_position_info_invalid() const;
 
-  void set_duckdb_idempotent_cnt(int duckdb_idempotent_cnt) {
-    m_duckdb_idempotent_cnt = duckdb_idempotent_cnt;
+  void set_global_duckdb_idempotent_flag(bool duckdb_idempotent_flag) {
+    m_global_duckdb_idempotent_flag = duckdb_idempotent_flag;
   }
 
-  int get_duckdb_idempotent_cnt() { return m_duckdb_idempotent_cnt; }
-
-  void set_duckdb_idempotent_flag(bool duckdb_idempotent_flag) {
-    m_duckdb_idempotent_flag = duckdb_idempotent_flag;
+  bool get_global_duckdb_idempotent_flag() const {
+    return m_global_duckdb_idempotent_flag;
   }
 
-  bool get_duckdb_idempotent_flag() const { return m_duckdb_idempotent_flag; }
-
-  void set_duckdb_idempotent_batch(bool duckdb_idempotent_batch) {
-    m_duckdb_idempotent_batch = duckdb_idempotent_batch;
+  void set_local_duckdb_idempotent_flag(bool duckdb_idempotent_flag) {
+    m_local_duckdb_idempotent_flag = duckdb_idempotent_flag;
   }
 
-  bool get_duckdb_idempotent_batch() const { return m_duckdb_idempotent_batch; }
+  bool get_local_duckdb_idempotent_flag() const {
+    return m_local_duckdb_idempotent_flag;
+  }
 
   void set_duckdb_insert_only_flag(bool duckdb_insert_only_flag) {
     m_duckdb_insert_only_flag = duckdb_insert_only_flag;
@@ -872,35 +869,17 @@ class Relay_log_info : public Rpl_info {
   */
   bool m_is_applier_source_position_info_invalid;
 
-  /*
-    In non-batch mode:
-    The number of transactions that have been replayed idempotently.
-    When it is set to MTS_MAX_WORKERS, the Coodinator thread will stop
-    replaying transactions idempotently.
-  */
-  int m_duckdb_idempotent_cnt;
+  /* Used by SQL Thread, set to true when Start SQL Thread. */
+  bool m_global_duckdb_idempotent_flag;
 
-  /*
-    In non-batch mode:
-    Set to True only when the Slave Worker need to replay idempotently.
-  */
-  bool m_duckdb_idempotent_flag;
-
-  /*
-    In batch mode:
-    The SQL Thread will stop replaying transactions idempotently when it
-    encounters the first Rotate Event (From Master).
-  */
-  bool m_duckdb_idempotent_batch;
+  /* Set to True only when the worker need to replay idempotently */
+  bool m_local_duckdb_idempotent_flag;
 
   /* Set to True when the transaction only has inserts */
   bool m_duckdb_insert_only_flag;
 
   /* Length in Bytes of current transaction */
   ulonglong m_transaction_length;
-
-  /* Whether parallel replay is possible, disabled for Multi-Trx Batch */
-  bool parallel_for_duckdb = true;
 
  public:
   uint m_duckdb_skip_commit_due_to_rotate_cnt;
@@ -1455,24 +1434,11 @@ class Relay_log_info : public Rpl_info {
     }
   }
 
-  inline void decide_parallel_for_duckdb() {
-    if (!myduck::global_mode_on() || !info_thd) {
-      parallel_for_duckdb = true;
-    } else if (info_thd->multi_trx_in_batch()) {
-      // Multi-Trx Batch has started
-      parallel_for_duckdb = false;
-    } else {
-      // Multi-Trx Batch cannot be parallelized
-      parallel_for_duckdb = !duckdb_multi_trx_in_batch;
-    }
-  }
-
   /**
      returns true if events are to be executed in parallel
   */
   inline bool is_parallel_exec() const {
-    bool ret = parallel_for_duckdb && (replica_parallel_workers > 0) &&
-               !is_mts_recovery();
+    bool ret = (replica_parallel_workers > 0) && !is_mts_recovery();
 
     assert(!ret || !workers.empty());
 

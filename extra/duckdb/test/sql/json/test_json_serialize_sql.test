@@ -41,6 +41,11 @@ SELECT json_deserialize_sql(json_serialize_sql('SELECT * FROM (SELECT 1 + 2)'));
 ----
 SELECT * FROM (SELECT (1 + 2))
 
+query I
+SELECT json_deserialize_sql(json_serialize_sql('SELECT * FROM t1 JOIN t2 USING("$id")'));
+----
+SELECT * FROM t1 INNER JOIN t2 USING ("$id")
+
 statement error
 SELECT json_deserialize_sql(json_serialize_sql('SELECT AND LAUNCH ROCKETS WHERE 1 = 1'));
 ----
@@ -80,6 +85,12 @@ PRAGMA json_execute_serialized_sql(
 6
 15
 24
+
+# Test execute json serialized sql with multiple nested type tags
+query I
+select json_serialize_sql($$select '10'::blob$$);
+----
+<!REGEX>:.*query_location:.*11
 
 # TODO: We should add an option for the deserializer to allow missing properties in the JSON if they can be default constructed
 # Alternatively, make them optional for all the Deserializer's.

@@ -53,7 +53,7 @@ physical_plan
 │             id            │
 │            name           │
 │                           │
-│          ~12 Rows         │
+│          ~12 rows         │
 └───────────────────────────┘
 
 explain analyze select * from tt;
@@ -76,7 +76,7 @@ explain analyze select * from tt
 ┌─────────────┴─────────────┐
 │      EXPLAIN_ANALYZE      │
 │    ────────────────────   │
-│           0 Rows          │
+│           0 rows          │
 │          (0.00s)          │
 └─────────────┬─────────────┘
 ┌─────────────┴─────────────┐
@@ -89,7 +89,7 @@ explain analyze select * from tt
 │             id            │
 │            name           │
 │                           │
-│          12 Rows          │
+│          12 rows          │
 │          (0.00s)          │
 └───────────────────────────┘
 
@@ -107,7 +107,7 @@ logical_opt
 │             id            │
 │            name           │
 │                           │
-│          ~12 Rows         │
+│          ~12 rows         │
 └─────────────┬─────────────┘
 ┌─────────────┴─────────────┐
 │          SEQ_SCAN         │
@@ -115,7 +115,7 @@ logical_opt
 │         Table: tt         │
 │   Type: Sequential Scan   │
 │                           │
-│          ~12 Rows         │
+│          ~12 rows         │
 └───────────────────────────┘
 
 explain analyze select * from tt;
@@ -138,7 +138,7 @@ explain analyze select * from tt
 ┌─────────────┴─────────────┐
 │      EXPLAIN_ANALYZE      │
 │    ────────────────────   │
-│           0 Rows          │
+│           0 rows          │
 │          (0.00s)          │
 └─────────────┬─────────────┘
 ┌─────────────┴─────────────┐
@@ -151,7 +151,7 @@ explain analyze select * from tt
 │             id            │
 │            name           │
 │                           │
-│          12 Rows          │
+│          12 rows          │
 │          (0.00s)          │
 └───────────────────────────┘
 
@@ -183,7 +183,7 @@ logical_opt
 │             id            │
 │            name           │
 │                           │
-│          ~12 Rows         │
+│          ~12 rows         │
 └─────────────┬─────────────┘
 ┌─────────────┴─────────────┐
 │          SEQ_SCAN         │
@@ -191,7 +191,7 @@ logical_opt
 │         Table: tt         │
 │   Type: Sequential Scan   │
 │                           │
-│          ~12 Rows         │
+│          ~12 rows         │
 └───────────────────────────┘
 physical_plan
 ┌───────────────────────────┐
@@ -204,7 +204,7 @@ physical_plan
 │             id            │
 │            name           │
 │                           │
-│          ~12 Rows         │
+│          ~12 rows         │
 └───────────────────────────┘
 
 explain analyze select * from tt;
@@ -227,7 +227,7 @@ explain analyze select * from tt
 ┌─────────────┴─────────────┐
 │      EXPLAIN_ANALYZE      │
 │    ────────────────────   │
-│           0 Rows          │
+│           0 rows          │
 │          (0.00s)          │
 └─────────────┬─────────────┘
 ┌─────────────┴─────────────┐
@@ -240,7 +240,7 @@ explain analyze select * from tt
 │             id            │
 │            name           │
 │                           │
-│          12 Rows          │
+│          12 rows          │
 │          (0.00s)          │
 └───────────────────────────┘
 

@@ -49,6 +49,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "dict0boot.h"
 #include "dict0dd.h"
 #include "dict0dict.h"
+#include "dict0flashback.h"
 #include "eval0eval.h"
 #include "gis0rtree.h"
 #include "ha_innodb.h"
@@ -4469,6 +4470,7 @@ dberr_t row_search_mvcc(byte *buf, page_cur_mode_t mode,
   byte *next_buf = nullptr;
   bool spatial_search = false;
   ulint end_loop = 0;
+  im::ReadView_guard read_view_guard(trx);
 
   rec_offs_init(offsets_);
 
@@ -4649,7 +4651,9 @@ dberr_t row_search_mvcc(byte *buf, page_cur_mode_t mode,
   if (UNIV_UNLIKELY(direction == 0) && unique_search && btr_search_enabled &&
       index->is_clustered() && !prebuilt->templ_contains_blob &&
       !prebuilt->used_in_HANDLER &&
-      (prebuilt->mysql_row_len < UNIV_PAGE_SIZE / 8) && !prebuilt->innodb_api) {
+      (prebuilt->mysql_row_len < UNIV_PAGE_SIZE / 8) && !prebuilt->innodb_api &&
+      (prebuilt->m_mysql_table == nullptr ||
+       !prebuilt->m_mysql_table->snapshot.valid())) {
     mode = PAGE_CUR_GE;
 
     if (trx->mysql_n_tables_locked == 0 && !prebuilt->ins_sel_stmt &&
@@ -4842,6 +4846,12 @@ dberr_t row_search_mvcc(byte *buf, page_cur_mode_t mode,
     }
     prebuilt->sql_stat_start = false;
   }
+
+  err = read_view_guard.bind_snapshot(prebuilt, trx->read_view);
+  if (err != DB_SUCCESS) {
+    goto flashback_error;
+  }
+  DEBUG_SYNC_C("after_bind_snapshot_readview");
 
   /* Open or restore index cursor position */
 
@@ -5939,6 +5949,8 @@ lock_table_wait:
 
   thr->lock_state = QUE_THR_LOCK_ROW;
 
+  read_view_guard.restore_readview();
+
   if (row_mysql_handle_errors(&err, trx, thr, nullptr)) {
     /* It was a lock wait, and it ended */
 
@@ -5985,6 +5997,15 @@ lock_table_wait:
   }
 
   thr->lock_state = QUE_THR_LOCK_NOLOCK;
+
+  goto func_exit;
+
+flashback_error:
+  /*-------------------------------------------------------------*/
+  ut_ad(err != DB_SUCCESS);
+  que_thr_stop_for_mysql_no_error(thr, trx);
+
+  mtr_commit(&mtr);
 
   goto func_exit;
 

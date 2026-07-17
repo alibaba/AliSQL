@@ -336,6 +336,7 @@ public:
 struct CompressionFunctionSet {
 	StorageLock lock;
 	map<CompressionType, map<PhysicalType, CompressionFunction>> functions;
+	map<CompressionType, set<PhysicalType>> functions_unsupported;
 };
 
 } // namespace duckdb

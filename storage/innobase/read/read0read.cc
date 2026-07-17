@@ -34,6 +34,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "read0read.h"
 #include "clone0clone.h"
 
+#include <memory>
+#include <string>
+
+#include "sql/dd/properties.h"
 #include "srv0srv.h"
 #include "trx0sys.h"
 
@@ -317,7 +321,10 @@ ReadView::ReadView()
       m_up_limit_id(),
       m_creator_trx_id(),
       m_ids(),
-      m_low_limit_no() {
+      m_low_limit_no(),
+      m_flashback_flag(false),
+      m_utc(0),
+      m_ref_count(0) {
   ut_d(::memset(&m_view_list, 0x0, sizeof(m_view_list)));
   ut_d(m_view_low_limit_no = 0);
 }
@@ -468,6 +475,69 @@ void ReadView::prepare(trx_id_t id) {
 
   ut_d(m_view_low_limit_no = m_low_limit_no);
   m_closed = false;
+}
+
+dd::String_type ReadView::encode_to_dd_properties() {
+  std::unique_ptr<dd::Properties> read_view_props(
+      dd::Properties::parse_properties(""));
+
+  read_view_props->set("m_low_limit_id", m_low_limit_id);
+  read_view_props->set("m_up_limit_id", m_up_limit_id);
+  read_view_props->set("m_low_limit_no", m_low_limit_no);
+#ifdef UNIV_DEBUG
+  DBUG_EXECUTE_IF("scn_encode_extra_info", {
+    read_view_props->set("m_creator_trx_id", m_creator_trx_id);
+    read_view_props->set("m_view_low_limit_no", m_view_low_limit_no);
+  });
+#endif /* UNIV_DEBUG */
+
+  std::string ids;
+  if (!m_ids.empty()) {
+    trx_id_t *ptr = m_ids.data();
+    for (uint i = 0; i < m_ids.size(); i++) {
+      if (i > 0) ids += ",";
+      ids += std::to_string(ptr[i]);
+    }
+  }
+  read_view_props->set("m_ids", dd::String_type(ids.c_str(), ids.size()));
+
+  dd::String_type read_view_str = read_view_props->raw_string();
+
+#ifdef UNIV_DEBUG
+  const char *memo = read_view_str.c_str();
+  DBUG_EXECUTE_IF("scn_debug_info",
+                  { fprintf(stderr, "Memo info_1: %s\n", memo); });
+  if (!m_ids.empty()) decode_from_dd_properties(memo);
+#endif /* UNIV_DEBUG */
+
+  return read_view_str;
+}
+
+void ReadView::decode_from_dd_properties(const char *memo) {
+  std::unique_ptr<dd::Properties> read_view_props(
+      dd::Properties::parse_properties(memo));
+
+  read_view_props->get("m_low_limit_id", &m_low_limit_id);
+  read_view_props->get("m_up_limit_id", &m_up_limit_id);
+  read_view_props->get("m_low_limit_no", &m_low_limit_no);
+#ifdef UNIV_DEBUG
+  DBUG_EXECUTE_IF("scn_decode_extra_info", {
+    read_view_props->get("m_creator_trx_id", &m_creator_trx_id);
+    read_view_props->get("m_view_low_limit_no", &m_view_low_limit_no);
+  });
+#endif /* UNIV_DEBUG */
+
+  m_ids.clear();
+  dd::String_type ids;
+  read_view_props->get("m_ids", &ids);
+  uint pos1 = 0;
+  uint pos2 = ids.find(',');
+  while (ids.length() > pos2) {
+    m_ids.insert(std::stoull(ids.substr(pos1, pos2 - pos1).c_str()));
+    pos1 = pos2 + 1;
+    pos2 = ids.find(',', pos1);
+  }
+  if (pos1 != ids.length()) m_ids.insert(std::stoull(ids.substr(pos1).c_str()));
 }
 
 /**
@@ -641,6 +711,8 @@ void ReadView::copy_prepare(const ReadView &other) {
   m_low_limit_id = other.m_low_limit_id;
 
   m_creator_trx_id = other.m_creator_trx_id;
+
+  m_flashback_flag = other.m_flashback_flag;
 }
 
 /**
@@ -663,6 +735,11 @@ void ReadView::copy_complete() {
 
   /* We added the creator transaction ID to the m_ids. */
   m_creator_trx_id = 0;
+}
+
+void ReadView::copy_complete(const ReadView &other) {
+  copy_prepare(other);
+  copy_complete();
 }
 
 /** Clones the oldest view and stores it in view. No need to

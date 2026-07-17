@@ -475,9 +475,15 @@ DELETE FROM t_range PARTITION(p0) WHERE id=1 AND sale_date='1990-01-01';
 ERROR HY000: [DuckDB] Parser Error: syntax error at or near "PARTITION"
 
 LINE 1: DELETE FROM t_range PARTITION(p0) WHERE id=1 AND sale_date='1990-01-01'
+                            ^
+
+LINE 1: DELETE FROM t_range PARTITION(p0) WHERE id=1 AND sale_date='1990-01-01'
                             ^.
 UPDATE t_range PARTITION (p0) SET amount = 999.00 WHERE id = 1;
 ERROR HY000: [DuckDB] Parser Error: syntax error at or near "PARTITION"
+
+LINE 1: UPDATE t_range PARTITION (p0) SET amount = 999.00 WHERE id = 1
+                       ^
 
 LINE 1: UPDATE t_range PARTITION (p0) SET amount = 999.00 WHERE id = 1
                        ^.
@@ -505,9 +511,15 @@ DELETE FROM t_range PARTITION(p0) WHERE id=1 AND sale_date='1990-01-01';
 ERROR HY000: [DuckDB] Parser Error: syntax error at or near "PARTITION"
 
 LINE 1: DELETE FROM t_range PARTITION(p0) WHERE id=1 AND sale_date='1990-01-01'
+                            ^
+
+LINE 1: DELETE FROM t_range PARTITION(p0) WHERE id=1 AND sale_date='1990-01-01'
                             ^.
 UPDATE t_range PARTITION (p0) SET amount = 999.00 WHERE id = 1;
 ERROR HY000: [DuckDB] Parser Error: syntax error at or near "PARTITION"
+
+LINE 1: UPDATE t_range PARTITION (p0) SET amount = 999.00 WHERE id = 1
+                       ^
 
 LINE 1: UPDATE t_range PARTITION (p0) SET amount = 999.00 WHERE id = 1
                        ^.

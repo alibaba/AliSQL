@@ -13,7 +13,6 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/catalog/catalog_entry.hpp"
-#include "duckdb/storage/storage_options.hpp"
 
 namespace duckdb {
 class Catalog;
@@ -24,6 +23,7 @@ class StorageExtension;
 class DatabaseManager;
 
 struct AttachInfo;
+struct StoredDatabasePath;
 
 enum class AttachedDatabaseType {
 	READ_WRITE_DATABASE,
@@ -32,13 +32,27 @@ enum class AttachedDatabaseType {
 	TEMP_DATABASE,
 };
 
+class DatabaseFilePathManager;
+
+struct StoredDatabasePath {
+	StoredDatabasePath(DatabaseManager &db_manager, DatabaseFilePathManager &manager, string path, const string &name);
+	~StoredDatabasePath();
+
+	DatabaseManager &db_manager;
+	DatabaseFilePathManager &manager;
+	string path;
+
+public:
+	void OnDetach();
+};
+
 //! AttachOptions holds information about a database we plan to attach. These options are generalized, i.e.,
 //! they have to apply to any database file type (duckdb, sqlite, etc.).
 struct AttachOptions {
 	//! Constructor for databases we attach outside of the ATTACH DATABASE statement.
 	explicit AttachOptions(const DBConfigOptions &options);
 	//! Constructor for databases we attach when using ATTACH DATABASE.
-	AttachOptions(const unique_ptr<AttachInfo> &info, const AccessMode default_access_mode);
+	AttachOptions(const unordered_map<string, Value> &options, const AccessMode default_access_mode);
 
 	//! Defaults to the access mode configured in the DBConfig, unless specified otherwise.
 	AccessMode access_mode;
@@ -48,10 +62,12 @@ struct AttachOptions {
 	unordered_map<string, Value> options;
 	//! (optionally) a catalog can be provided with a default table
 	QualifiedName default_table;
+	//! The stored database path (in the path manager)
+	unique_ptr<StoredDatabasePath> stored_database_path;
 };
 
 //! The AttachedDatabase represents an attached database instance.
-class AttachedDatabase : public CatalogEntry {
+class AttachedDatabase : public CatalogEntry, public enable_shared_from_this<AttachedDatabase> {
 public:
 	//! Create the built-in system database (without storage).
 	explicit AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType type = AttachedDatabaseType::SYSTEM_DATABASE);
@@ -63,12 +79,13 @@ public:
 	~AttachedDatabase() override;
 
 	//! Initializes the catalog and storage of the attached database.
-	void Initialize(optional_ptr<ClientContext> context = nullptr, StorageOptions options = StorageOptions());
+	void Initialize(optional_ptr<ClientContext> context = nullptr);
 	void FinalizeLoad(optional_ptr<ClientContext> context);
 	void Close();
 
 	Catalog &ParentCatalog() override;
 	const Catalog &ParentCatalog() const override;
+	bool HasStorageManager() const;
 	StorageManager &GetStorageManager();
 	Catalog &GetCatalog();
 	TransactionManager &GetTransactionManager();
@@ -90,12 +107,14 @@ public:
 	void SetInitialDatabase();
 	void SetReadOnlyDatabase();
 	void OnDetach(ClientContext &context);
+	string StoredPath() const;
 
 	static bool NameIsReserved(const string &name);
 	static string ExtractDatabaseName(const string &dbpath, FileSystem &fs);
 
 private:
 	DatabaseInstance &db;
+	unique_ptr<StoredDatabasePath> stored_database_path;
 	unique_ptr<StorageManager> storage;
 	unique_ptr<Catalog> catalog;
 	unique_ptr<TransactionManager> transaction_manager;

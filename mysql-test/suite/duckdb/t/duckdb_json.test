@@ -62,6 +62,12 @@ SELECT JSON_CONTAINS('{"a": 1, "b": 2, "c": {"d": 4, "e":[1, 2, 3]}}', '1', '$.c
 SELECT JSON_CONTAINS('{"a": [1], "b": 2, "c": {"d": 4, "e":[1, 2, 3]}}', '1', '$.a') FROM t1_innodb;
 SELECT JSON_CONTAINS('{"a": [1], "b": 2, "c": {"d": 4, "e":[1, 2, 3]}}', '1', '$.a') FROM t1_duckdb;
 
+SELECT JSON_CONTAINS('[]', '1') FROM t1_innodb;
+SELECT JSON_CONTAINS('[]', '1') FROM t1_duckdb;
+
+SELECT JSON_CONTAINS('[]', '[1, 2]') FROM t1_innodb;
+SELECT JSON_CONTAINS('[]', '[1, 2]') FROM t1_duckdb;
+
 --echo
 --echo 5. JSON_CONTAINS_PATH()
 --echo
@@ -288,6 +294,13 @@ SELECT JSON_UNQUOTE('[1, 2, 3]') FROM t1_duckdb;
 
 SELECT JSON_UNQUOTE('{"a": 1}') FROM t1_innodb;
 SELECT JSON_UNQUOTE('{"a": 1}') FROM t1_duckdb;
+
+CREATE TABLE t1 (id INT PRIMARY KEY, col1 VARCHAR(20)) ENGINE=DuckDB;
+INSERT INTO t1 VALUES (1, 'aaa'), (2, 'bbb'), (3, 'ccc');
+
+SELECT JSON_UNQUOTE(col1) FROM t1 WHERE id = 1;
+
+DROP TABLE t1;
 
 --echo
 --echo 29. JSON_VALID()

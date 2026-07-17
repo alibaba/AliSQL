@@ -18,6 +18,8 @@ static int64_t TargetTypeCost(const LogicalType &type) {
 		return 104;
 	case LogicalTypeId::DECIMAL:
 		return 105;
+	case LogicalTypeId::BIGNUM:
+		return 106;
 	case LogicalTypeId::TIMESTAMP_NS:
 		return 119;
 	case LogicalTypeId::TIMESTAMP:
@@ -38,6 +40,9 @@ static int64_t TargetTypeCost(const LogicalType &type) {
 		return 160;
 	case LogicalTypeId::ANY:
 		return int64_t(AnyType::GetCastScore(type));
+	case LogicalTypeId::TEMPLATE:
+		// we can cast anything to a template type, but prefer to cast to anything else!
+		return 1000000;
 	default:
 		return 110;
 	}
@@ -53,6 +58,7 @@ static int64_t ImplicitCastTinyint(const LogicalType &to) {
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL:
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BIGNUM:
 		return TargetTypeCost(to);
 	default:
 		return -1;
@@ -68,6 +74,7 @@ static int64_t ImplicitCastSmallint(const LogicalType &to) {
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL:
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BIGNUM:
 		return TargetTypeCost(to);
 	default:
 		return -1;
@@ -82,6 +89,7 @@ static int64_t ImplicitCastInteger(const LogicalType &to) {
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL:
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BIGNUM:
 		return TargetTypeCost(to);
 	default:
 		return -1;
@@ -95,6 +103,7 @@ static int64_t ImplicitCastBigint(const LogicalType &to) {
 	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::DECIMAL:
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BIGNUM:
 		return TargetTypeCost(to);
 	default:
 		return -1;
@@ -115,6 +124,7 @@ static int64_t ImplicitCastUTinyint(const LogicalType &to) {
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL:
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BIGNUM:
 		return TargetTypeCost(to);
 	default:
 		return -1;
@@ -133,6 +143,7 @@ static int64_t ImplicitCastUSmallint(const LogicalType &to) {
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL:
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BIGNUM:
 		return TargetTypeCost(to);
 	default:
 		return -1;
@@ -150,6 +161,7 @@ static int64_t ImplicitCastUInteger(const LogicalType &to) {
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL:
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BIGNUM:
 		return TargetTypeCost(to);
 	default:
 		return -1;
@@ -164,6 +176,7 @@ static int64_t ImplicitCastUBigint(const LogicalType &to) {
 	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::DECIMAL:
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BIGNUM:
 		return TargetTypeCost(to);
 	default:
 		return -1;
@@ -172,6 +185,7 @@ static int64_t ImplicitCastUBigint(const LogicalType &to) {
 
 static int64_t ImplicitCastFloat(const LogicalType &to) {
 	switch (to.id()) {
+	case LogicalTypeId::BIGNUM:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::VARCHAR:
 		return TargetTypeCost(to);
@@ -188,6 +202,9 @@ static int64_t ImplicitCastDouble(const LogicalType &to) {
 		return TargetTypeCost(to);
 	case LogicalTypeId::BIGINT:
 		return 200;
+
+	case LogicalTypeId::BIGNUM:
+		return TargetTypeCost(to);
 	default:
 		return -1;
 	}
@@ -212,6 +229,7 @@ static int64_t ImplicitCastHugeint(const LogicalType &to) {
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL:
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BIGNUM:
 		return TargetTypeCost(to);
 	default:
 		return -1;
@@ -224,6 +242,7 @@ static int64_t ImplicitCastUhugeint(const LogicalType &to) {
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL:
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BIGNUM:
 		return TargetTypeCost(to);
 	default:
 		return -1;
@@ -316,7 +335,7 @@ static int64_t ImplicitCastTimestamptz(const LogicalType &to) {
 	}
 }
 
-static int64_t ImplicitCastVarint(const LogicalType &to) {
+static int64_t ImplicitCastBignum(const LogicalType &to) {
 	switch (to.id()) {
 	case LogicalTypeId::DOUBLE:
 		return TargetTypeCost(to);
@@ -347,11 +366,28 @@ static int64_t ImplicitCastVarchar(const LogicalType &to) {
 	}
 }
 
+static int64_t ImplicitCastBit(const LogicalType &to) {
+	switch (to.id()) {
+	case LogicalTypeId::UBIGINT:
+		return 101;
+	case LogicalTypeId::BLOB:
+		return 102;
+	case LogicalTypeId::BOOLEAN:
+		return 103;
+	default:
+		return -1;
+	}
+}
+
+static int64_t ImplicitCastVariant(const LogicalType &to) {
+	return TargetTypeCost(to);
+}
 
 bool LogicalTypeIsValid(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::STRUCT:
 	case LogicalTypeId::UNION:
+	case LogicalTypeId::VARIANT:
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::ARRAY:
@@ -398,8 +434,16 @@ bool LogicalTypeIsValid(const LogicalType &type) {
 }
 
 int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) {
-	if (from.id() == LogicalTypeId::SQLNULL || to.id() == LogicalTypeId::ANY) {
+	if (from.id() == LogicalTypeId::SQLNULL && to.id() == LogicalTypeId::TEMPLATE) {
+		// Prefer the TEMPLATE type for NULL casts, as it is the most generic
+		return 5;
+	}
+	if (from.id() == LogicalTypeId::SQLNULL || to.id() == LogicalTypeId::ANY || to.id() == LogicalTypeId::TEMPLATE) {
 		// NULL expression can be cast to anything
+		return TargetTypeCost(to);
+	}
+	if (from.id() == LogicalTypeId::ANY && to.IsTemplated()) {
+		// This can happen when changing a function from using ANY to using TEMPLATE.
 		return TargetTypeCost(to);
 	}
 	if (from.id() == LogicalTypeId::UNKNOWN) {
@@ -437,6 +481,15 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		}
 		// in any other case we use the casting rules of the preferred type of the literal
 		return CastRules::ImplicitCast(IntegerLiteral::GetType(from), to);
+	}
+	if (from.id() == LogicalTypeId::BLOB_LITERAL) {
+		if (!LogicalTypeIsValid(to)) {
+			return -1;
+		}
+		if (to.id() == LogicalTypeId::BLOB) {
+			return 1;
+		}
+		return CastRules::ImplicitCast(LogicalType{LogicalTypeId::BLOB}, to);
 	}
 	if (from.GetAlias() != to.GetAlias()) {
 		// if aliases are different, an implicit cast is not possible
@@ -643,8 +696,10 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		return ImplicitCastTimestampNS(to);
 	case LogicalTypeId::TIMESTAMP:
 		return ImplicitCastTimestamp(to);
-	case LogicalTypeId::VARINT:
-		return ImplicitCastVarint(to);
+	case LogicalTypeId::BIGNUM:
+		return ImplicitCastBignum(to);
+	case LogicalTypeId::VARIANT:
+		return ImplicitCastVariant(to);
 	case LogicalTypeId::TIME:
 		return ImplicitCastTime(to);
 	case LogicalTypeId::VARCHAR:
@@ -652,6 +707,8 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 	// unequal comparison between timestamp_tz and varchar
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return ImplicitCastTimestamptz(to);
+	case LogicalTypeId::BIT:
+		return ImplicitCastBit(to);
 	default:
 		return -1;
 	}

@@ -4,7 +4,7 @@
 
 ## Overview
 
-AliSQL natively supports storage and computation of up to 16,383 dimensional vector data, integrates mainstream vector operation functions such as cosine similarity (COSINE) and Euclidean distance (EUCLIDEAN), and builds efficient nearest neighbor search capabilities based on deeply optimized HNSW (Hierarchical Navigable Small World) algorithm, supporting indexing of full-dimensional vector columns.
+AliSQL natively supports storage and computation of up to 16,383 dimensional vector data, integrates mainstream vector operation functions such as cosine distance (COSINE) and Euclidean distance (EUCLIDEAN), and builds efficient nearest neighbor search capabilities based on deeply optimized HNSW (Hierarchical Navigable Small World) algorithm, supporting indexing of full-dimensional vector columns.
 
 AliSQL's vector capabilities can provide out-of-the-box vectorized solutions for large-scale semantic retrieval, intelligent recommendation, multimodal analysis and other scenarios. Users can seamlessly achieve high-precision vector matching and complex business logic fusion computing through standard SQL interfaces.
 
@@ -24,15 +24,27 @@ AliSQL's vector capabilities can provide out-of-the-box vectorized solutions for
 
 ## Usage
 
+Vector features are disabled by default. Enable them globally and use `READ COMMITTED` before creating or querying a vector index:
+
+```sql
+SET GLOBAL vidx_disabled = OFF;
+SET SESSION transaction_isolation = 'READ-COMMITTED';
+```
+
 ### Vector Field Definition
 
-Vector fields use a special [Field_vector](../../include/vidx/vidx_func.h#L43-L65) type definition, inheriting from [Field_varstring](../../include/field.h#L793-L798), using binary character set to store floating-point arrays.
+Vector fields use a special [Field_vector](../../include/vidx/vidx_field.h#L30) type definition, inheriting from [Field_varstring](../../sql/field.h#L3522), using binary character set to store floating-point arrays.
 
 ```sql
 CREATE TABLE table_name (
     id INT PRIMARY KEY,
-    vector_col VECTOR(128)  -- 128-dimensional vector
-);
+    vector_col VECTOR(3)
+) ENGINE=InnoDB;
+
+INSERT INTO table_name VALUES
+    (1, VEC_FROMTEXT('[1,2,3]')),
+    (2, VEC_FROMTEXT('[2,3,4]')),
+    (3, NULL);
 ```
 
 ### Creating Vector Index
@@ -48,9 +60,9 @@ Or specify directly in table definition:
 ```sql
 CREATE TABLE table_name (
     id INT PRIMARY KEY,
-    vector_col VECTOR(128),
+    vector_col VECTOR(3),
     VECTOR INDEX vidx_name (vector_col) M=6 DISTANCE=COSINE  -- Specifying parameters
-);
+) ENGINE=InnoDB;
 ```
 
 ### Function Support
@@ -73,11 +85,17 @@ Usage examples:
 
 ```sql
 -- Sort using vector distance
-SELECT * FROM table_name ORDER BY VEC_DISTANCE(vector_col, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 10;
+SELECT *
+FROM table_name
+ORDER BY VEC_DISTANCE(vector_col, VEC_FROMTEXT('[1,2,3]'))
+LIMIT 10;
 
 -- Display distance value in results
-SELECT id, VEC_DISTANCE(vector_col, VEC_FROMTEXT("[1,2,3,4,5]")) AS distance 
-FROM table_name ORDER BY distance LIMIT 10;
+SELECT id,
+       VEC_DISTANCE_COSINE(vector_col, VEC_FROMTEXT('[1,2,3]')) AS distance
+FROM table_name
+ORDER BY distance
+LIMIT 10;
 ```
 
 ### Parameter Introduction
@@ -87,10 +105,10 @@ FROM table_name ORDER BY distance LIMIT 10;
 | Variable Name | Description | Type | Default Value | Range |
 |---------------|-------------|------|---------------|-------|
 | vidx_disabled | Disable creation of vector columns and vector indexes | global | ON | ON, OFF |
-| vidx_default_distance | Default vector distance type | session | EUCLIDEAN | EUCLIDEAN, COSINE |
-| vidx_hnsw_default_m | HNSW algorithm default m | session | 6 | [3, 200] |
-| vidx_hnsw_ef_search | HNSW algorithm default ef_search | session | 20 | [1, 10000] |
-| vidx_hnsw_cache_size | HNSW algorithm default memory usage limit | global | 1024 * 1024 | [1048576,18446744073709551615] |
+| vidx_default_distance | Default vector distance type | global, session | EUCLIDEAN | EUCLIDEAN, COSINE |
+| vidx_hnsw_default_m | HNSW algorithm default m | global, session | 6 | [3, 200] |
+| vidx_hnsw_ef_search | HNSW algorithm default ef_search | global, session | 20 | [1, 10000] |
+| vidx_hnsw_cache_size | HNSW node-cache memory limit in bytes | global | 16 MiB (16777216) | [1048576,18446744073709551615] |
 
 #### Index Parameters
 
@@ -99,12 +117,14 @@ FROM table_name ORDER BY distance LIMIT 10;
 
 ### Notes
 
-1. Current version only supports RC (READ COMMITTED) transaction isolation level
-2. Only supports creating vector indexes on InnoDB engine tables.
-3. Creating, modifying, and deleting vector indexes cannot use inplace syntax.
-4. Vector indexes cannot be set to INVISIBLE.
-5. Vector fields cannot be NULL.
-6. Creating and maintaining vector indexes consumes additional storage space and computational resources
+1. Vector-index operations require the `READ COMMITTED` transaction isolation level.
+2. Vector indexes are supported only on InnoDB tables.
+3. Creating, modifying, and deleting vector indexes cannot use `ALGORITHM=INPLACE`.
+4. Vector indexes cannot be set to `INVISIBLE`.
+5. Vector columns may be nullable. Rows whose vector value is `NULL` are omitted from the vector index; scalar distance evaluation returns `NULL` and places those rows last in ascending distance order.
+6. Query vectors must have the same dimension as the indexed column.
+7. Creating and maintaining vector indexes consumes additional storage and compute resources.
+8. HNSW layer assignment and neighbor selection use randomized and heuristic steps. Replicas built from the same rows are not guaranteed to have byte-identical graph topology.
 
 ### Error Handling
 
@@ -148,6 +168,8 @@ AliSQL introduces a public cache (MHNSW Share) and transaction cache (MHNSW Trx)
 - [Precomputation Strategy] During the node cache loading phase, the system precomputes vector distances and caches the results, thus avoiding repeated calculations for frequently accessed nodes.
 - [SIMD Instruction Set Acceleration] At the computation optimization level, modern CPU SIMD instruction sets (such as AVX512) are utilized to accelerate vector distance calculations. Through Bloom filters, the system can batch-process multiple vectors, converting scalar operations that originally required multiple executions into parallelized vector operations. This optimization significantly reduces CPU instruction cycle consumption.
 
-## RDS MySQL Out-of-the-Box Vector Capabilities
+## Alibaba Cloud RDS MySQL Commercial Offering
 
-Welcome to visit [Alibaba Cloud RDS MySQL Vector Capabilities](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/vector-storage-1), open-source ecosystem, ready to use out-of-the-box.
+Alibaba Cloud RDS MySQL packages vector storage as a managed feature with product-side enablement and integrations for data synchronization, management, backup, and recovery. RDS eligibility, console workflows, and parameter defaults are service-specific and must not be applied to this source branch without verification.
+
+- Official vector storage documentation: [English](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/vector-storage-1) / [中文](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/vector-storage-1)

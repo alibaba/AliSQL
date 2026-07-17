@@ -41,6 +41,7 @@
 #include "mysql/psi/mysql_file.h"  // mysql_file_open
 #include "mysql_com.h"
 #include "mysqld_error.h"
+#include "sql/binlog_ext.h"
 #include "sql/dd/cache/dictionary_client.h"  // Auto_releaser
 #include "sql/dd/dd_schema.h"                // Schema_MDL_locker
 #include "sql/dd/impl/utils.h"               // is_string_in_lowercase
@@ -209,7 +210,8 @@ bool find_schema_from_datadir(std::vector<String_type> *db_name) {
 
     if (MY_S_ISDIR(a->dir_entry[i].mystat->st_mode) &&
         strcmp(a->dir_entry[i].name, "#innodb_temp") != 0 &&
-        strcmp(a->dir_entry[i].name, "#innodb_redo") != 0) {
+        strcmp(a->dir_entry[i].name, "#innodb_redo") != 0 &&
+        strcmp(a->dir_entry[i].name, BINLOG_CACHE_DIR) != 0) {
       db_name->push_back(a->dir_entry[i].name);
       continue;
     }

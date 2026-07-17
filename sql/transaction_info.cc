@@ -49,6 +49,7 @@ Transaction_ctx::Transaction_ctx()
       sequence_number(0),
       m_rpl_transaction_ctx(),
       m_transaction_write_set_ctx(),
+      m_rds_transaction_ctx(),
       trans_begin_hook_invoked(false) {
   memset(&m_scope_info, 0, sizeof(m_scope_info));
 }

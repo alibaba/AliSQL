@@ -433,9 +433,15 @@ DELETE FROM t_list PARTITION(p0) WHERE id = 0;
 ERROR HY000: [DuckDB] Parser Error: syntax error at or near "PARTITION"
 
 LINE 1: DELETE FROM t_list PARTITION(p0) WHERE id = 0
+                           ^
+
+LINE 1: DELETE FROM t_list PARTITION(p0) WHERE id = 0
                            ^.
 UPDATE t_list PARTITION (p0) SET id = 50 WHERE id = 0;
 ERROR HY000: [DuckDB] Parser Error: syntax error at or near "PARTITION"
+
+LINE 1: UPDATE t_list PARTITION (p0) SET id = 50 WHERE id = 0
+                      ^
 
 LINE 1: UPDATE t_list PARTITION (p0) SET id = 50 WHERE id = 0
                       ^.
@@ -463,9 +469,15 @@ DELETE FROM t_list PARTITION(p0) WHERE id = 0;
 ERROR HY000: [DuckDB] Parser Error: syntax error at or near "PARTITION"
 
 LINE 1: DELETE FROM t_list PARTITION(p0) WHERE id = 0
+                           ^
+
+LINE 1: DELETE FROM t_list PARTITION(p0) WHERE id = 0
                            ^.
 UPDATE t_list PARTITION (p0) SET id = 50 WHERE id = 0;
 ERROR HY000: [DuckDB] Parser Error: syntax error at or near "PARTITION"
+
+LINE 1: UPDATE t_list PARTITION (p0) SET id = 50 WHERE id = 0
+                      ^
 
 LINE 1: UPDATE t_list PARTITION (p0) SET id = 50 WHERE id = 0
                       ^.

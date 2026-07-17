@@ -1,0 +1,454 @@
+# ==== Purpose ====
+#
+# Shared body for the "Persist Binlog Into Redo" crash recovery tests.
+#
+# Binlog events of transactions are written into both the binlog file and the
+# redo log when they commit. Thus the binlog fsync can be relaxed, since the
+# lost binlog events can be recovered from the redo log.
+#
+# This verifies that the lost binlog events are recovered correctly when the
+# server restarts, and that the recovered binlog replicates correctly.
+#
+# ==== Usage ====
+#
+# The caller sets binlog_checksum and sources this file between
+# master-slave.inc and rpl_end.inc.
+
+SET GLOBAL persist_binlog_to_redo = ON;
+CREATE TABLE t1(c1_my_test INT) ENGINE=InnoDB;
+--source include/sync_slave_sql_with_master.inc
+--source include/stop_slave_io.inc
+
+--echo #
+--echo # Case: All binlog events are lost.
+--echo ########################################################
+--echo #
+--source include/rpl_connection_master.inc
+# The variable exists only in debug version.
+# It guarantees the binlog redo will be read when doing redo recovery
+SET GLOBAL innodb_checkpoint_disabled = ON;
+
+--let $datadir = `SELECT @@datadir`
+--let $binlog_file = query_get_value(SHOW MASTER STATUS, File, 1)
+--copy_file $datadir/$binlog_file $datadir/binlog_for_recovery
+INSERT INTO t1 VALUES(1);
+
+# Verify the redo log which have different sizes can be write/read correctly
+# It will generate a redo record size of which is smaller than 255
+CREATE TABLE t2(c1 int, c2 TEXT) ENGINE=InnoDB;
+
+# It will generate a redo record size of which is large than 255.
+BEGIN;
+INSERT INTO t2 VALUES(1, repeat("1", 500));
+INSERT INTO t2 VALUES(2, repeat("2", 500));
+COMMIT;
+
+# It will generate a redo record size of which is large than 65535
+BEGIN;
+INSERT INTO t2 VALUES(4, repeat('4', 50000));
+INSERT INTO t2 VALUES(5, repeat('5', 50000));
+COMMIT;
+
+DROP TABLE t2;
+
+--source include/expect_crash.inc
+SET debug = "d,crash_commit_after_sync_to_redo";
+--error 2013
+INSERT INTO t1 VALUES(2);
+
+# Roll the binlog file back, so that the events only live in the redo log.
+--move_file $datadir/binlog_for_recovery $datadir/$binlog_file
+
+--let $rpl_server_number = 1
+--source include/rpl_start_server.inc
+
+--let $assert_text = there are two rows in the table
+--let $assert_cond = count(*) = 2 FROM t1
+--source include/assert.inc
+
+--source include/rpl_connection_slave.inc
+--source include/start_slave_io.inc
+
+--let $rpl_diff_statement = SELECT * FROM t1 ORDER BY 1
+--source include/rpl_diff.inc
+--source include/stop_slave_io.inc
+
+--echo #
+--echo # Case: Some binlog events are lost.
+--echo ########################################################
+--echo #
+--source include/rpl_connection_master.inc
+SET GLOBAL innodb_checkpoint_disabled = ON;
+TRUNCATE t1;
+INSERT INTO t1 VALUES(3);
+INSERT INTO t1 VALUES(4);
+
+--let $binlog_file = query_get_value(SHOW MASTER STATUS, File, 1)
+--copy_file $datadir/$binlog_file $datadir/binlog_for_recovery
+INSERT INTO t1 VALUES(5);
+
+--source include/expect_crash.inc
+SET debug = "d,crash_commit_after_sync_to_redo";
+--error 2013
+INSERT INTO t1 VALUES(6);
+
+--move_file $datadir/binlog_for_recovery $datadir/$binlog_file
+
+--let $rpl_server_number = 1
+--source include/rpl_start_server.inc
+
+--let $assert_text = there are 4 rows in the table
+--let $assert_cond = count(*) = 4 FROM t1
+--source include/assert.inc
+
+--source include/rpl_connection_slave.inc
+--source include/start_slave_io.inc
+
+--let $rpl_diff_statement= SELECT * FROM t1 ORDER BY 1
+--source include/rpl_diff.inc
+--source include/stop_slave_io.inc
+
+--echo #
+--echo # Case: Binlog lost in the middle of an event
+--echo #############################################
+--echo #
+--source include/rpl_connection_master.inc
+SET GLOBAL innodb_checkpoint_disabled = ON;
+TRUNCATE t1;
+INSERT INTO t1 VALUES(7);
+
+--let $binlog_file = query_get_value(SHOW MASTER STATUS, File, 1)
+--let $truncate_pos= query_get_value(SHOW MASTER STATUS, Position, 1)
+--let $truncate_pos= `SELECT $truncate_pos-50`
+
+--source include/expect_crash.inc
+SET debug = "d,crash_commit_after_sync_to_redo";
+--error 2013
+INSERT INTO t1 VALUES(8);
+
+# Cut the binlog file in the middle of the last event. The events must be
+# rewritten from the redo log during recovery.
+--exec truncate -s $truncate_pos $datadir/$binlog_file
+
+--let $rpl_server_number = 1
+--source include/rpl_start_server.inc
+--let $assert_text = there are two rows in the table
+--let $assert_cond = count(*) = 2 FROM t1
+--source include/assert.inc
+
+--source include/rpl_connection_slave.inc
+--source include/start_slave_io.inc
+
+--let $rpl_diff_statement= SELECT * FROM t1 ORDER BY 1
+--source include/rpl_diff.inc
+
+--echo #
+--echo # Case: It can recovered correctly when binlog is disordered in redo
+--echo ####################################################################
+--echo #
+
+# binlog order         redo order
+# ------------         ----------
+# insert1              insert2
+# insert2              insert4
+# insert3              insert1
+# insert4              insert3
+# insert5(lost)        insert6
+# insert6              insert7
+# insert7
+
+--source include/stop_slave_io.inc
+--source include/rpl_connection_master.inc
+
+--let $binlog_file = query_get_value(SHOW MASTER STATUS, File, 1)
+--copy_file $datadir/$binlog_file $datadir/binlog_for_recovery
+
+SET GLOBAL innodb_checkpoint_disabled = ON;
+DROP TABLE t1;
+CREATE TABLE t1(c1 varchar(20)) ENGINE=InnoDB;
+
+SET debug_sync = "before_flush_binlog_cache SIGNAL insert1_before_flush
+                  WAIT_FOR insert1_continue";
+send INSERT INTO t1 VALUES("insert1");
+
+--let $rpl_connection_name = server_1
+--source include/rpl_connection.inc
+SET debug_sync = "now WAIT_FOR insert1_before_flush";
+SET debug_sync = "after_write_to_redo SIGNAL insert2_written_to_redo";
+send INSERT INTO t1 VALUES("insert2");
+
+--let $rpl_connection_name = server_1_1
+--source include/rpl_connection.inc
+SET debug_sync = "now WAIT_FOR insert2_written_to_redo";
+SET debug_sync = "before_flush_binlog_cache SIGNAL insert3_before_flush
+                  WAIT_FOR insert3_continue";
+send INSERT INTO t1 VALUES("insert3");
+
+--connect(server_1_2, 127.0.0.1, root,,)
+
+SET debug_sync = "now WAIT_FOR insert3_before_flush";
+SET debug_sync = "after_write_to_redo SIGNAL insert1_continue";
+send INSERT INTO t1 VALUES("insert4");
+
+# insert1 finished
+--source include/rpl_connection_master.inc
+--reap
+SET debug_sync = "now SIGNAL insert3_continue";
+
+# insert2 finished
+--let $rpl_connection_name = server_1
+--source include/rpl_connection.inc
+--reap
+
+# insert4 finished
+--let $rpl_connection_name = server_1_2
+--source include/rpl_connection.inc
+--reap
+--disconnect server_1_2
+
+# insert3 finished
+--let $rpl_connection_name = server_1_1
+--source include/rpl_connection.inc
+--reap
+
+SET debug_sync = "before_flush_binlog_cache SIGNAL insert5_before_flush
+                  WAIT_FOR insert5_continue";
+send INSERT INTO t1 VALUES("insert5");
+
+--source include/rpl_connection_master.inc
+SET debug_sync = "now WAIT_FOR insert5_before_flush";
+SET debug_sync = "after_write_to_redo SIGNAL insert6_written_to_redo";
+send INSERT INTO t1 VALUES("insert6");
+
+--let $rpl_connection_name = server_1
+--source include/rpl_connection.inc
+SET debug_sync = "now WAIT_FOR insert6_written_to_redo";
+
+--source include/expect_crash.inc
+SET debug = "d,crash_commit_after_sync_to_redo";
+--error 2013
+INSERT INTO t1 VALUES("insert7");
+
+--let $rpl_connection_name = server_1_1
+--source include/rpl_connection.inc
+--error 2013
+--reap
+
+--source include/rpl_connection_master.inc
+--error 2013
+--reap
+
+--move_file $datadir/binlog_for_recovery $datadir/$binlog_file
+
+--let $rpl_server_number = 1
+# Set the buffer to 50MB for next test
+--let $rpl_server_parameters=--binlog-buffer-size=50000000
+--source include/rpl_start_server.inc
+
+--let $assert_text = there are 6 rows in the table
+--let $assert_cond = count(*) = 6 FROM t1
+--source include/assert.inc
+
+--source include/rpl_connection_slave.inc
+--source include/start_slave_io.inc
+
+--let $rpl_diff_statement= SELECT * FROM t1 ORDER BY 1
+--source include/rpl_diff.inc
+
+--echo #
+--echo # Case: It should increase binlog buffer automatically if it is
+--echo # too small.
+--echo ################################################################
+--echo #
+
+# binlog order         redo order
+# ------------         ----------
+# insert1              insert2 9M
+# insert2              insert3 9M
+# insert3              insert4 9M
+# insert4              insert5 9M
+# insert5              insert6 9M
+# insert6              insert1
+# Insert1 is disordered, thus buffer will be used to store other transactions
+# following it.
+
+--source include/stop_slave_io.inc
+--source include/rpl_connection_master.inc
+
+SET GLOBAL persist_binlog_to_redo_size_limit = 10000000;
+SELECT @@GLOBAL.persist_binlog_to_redo_size_limit;
+SET GLOBAL wait_binlog_flush = OFF;
+SET GLOBAL innodb_checkpoint_disabled = ON;
+
+DROP TABLE t1;
+CREATE TABLE t1(c1 varchar(20), c2 LONGTEXT) ENGINE=InnoDB;
+--let $binlog_file = query_get_value(SHOW MASTER STATUS, File, 1)
+--let $binlog_start = query_get_value(SHOW MASTER STATUS, Position, 1)
+
+SET debug_sync = "before_flush_binlog_cache SIGNAL insert1_before_flush
+                  WAIT_FOR insert1_continue";
+SET debug = "+d,crash_commit_after_sync_to_redo";
+--send INSERT INTO t1 VALUES("insert1", "insert1")
+
+--let $rpl_connection_name = server_1
+--source include/rpl_connection.inc
+SET debug_sync = "now WAIT_FOR insert1_before_flush";
+INSERT INTO t1 VALUES("insert2", repeat("A", 9000000));
+INSERT INTO t1 VALUES("insert3", repeat("B", 9000000));
+INSERT INTO t1 VALUES("insert4", repeat("C", 9000000));
+INSERT INTO t1 VALUES("insert5", repeat("D", 9000000));
+INSERT INTO t1 VALUES("insert6", repeat("E", 9000000));
+
+# Since insert1 is not written to binlog buffer, thus none of the following
+# inserts is logged
+--source include/show_binlog_events.inc
+
+--source include/expect_crash.inc
+SET debug_sync = "now SIGNAL insert1_continue";
+
+--source include/rpl_connection_master.inc
+# insert1 crashs the server
+--error 2013
+--reap
+
+--let $rpl_server_number = 1
+--let $rpl_server_parameters=
+--source include/rpl_start_server.inc
+
+# Note: the number of "Increase binlog recovery buffer" messages is not
+# asserted here. Whether (and how often) the recovery buffer has to grow
+# depends on how many of the ~45MB of binlog events the flush thread managed to
+# write into the binlog file before insert1 crashed the server. That is a race,
+# so the count varies between runs (it is 0 when the flush thread wins). What
+# must always hold is that all six transactions are recovered and replicate,
+# which is asserted below.
+
+--let $assert_text = there are 6 rows in the table
+--let $assert_cond = count(*) = 6 FROM t1
+--source include/assert.inc
+
+--source include/rpl_connection_slave.inc
+--source include/start_slave_io.inc
+
+--let $rpl_diff_statement= SELECT * FROM t1 ORDER BY 1
+--source include/rpl_diff.inc
+
+--echo #
+--echo # Case: It should recovery correctly when event header is split by
+--echo #       buffer end
+--echo ################################################################
+--echo #
+--source include/stop_slave_io.inc
+--source include/rpl_connection_master.inc
+--let $rpl_server_number = 1
+--source include/rpl_restart_server.inc
+
+SET GLOBAL innodb_checkpoint_disabled = ON;
+--let $binlog_file = query_get_value(SHOW MASTER STATUS, File, 1)
+--copy_file $datadir/$binlog_file $datadir/binlog_for_recovery
+TRUNCATE t1;
+
+--source include/expect_crash.inc
+SET debug_sync = "before_flush_binlog_cache SIGNAL insert1_before_flush
+                  WAIT_FOR insert1_continue";
+SET debug = "d,crash_commit_after_sync_to_redo";
+send INSERT INTO t1 VALUES("insert1", "insert1");
+
+--let $rpl_connection_name = server_1
+--source include/rpl_connection.inc
+SET debug_sync = "now WAIT_FOR insert1_before_flush";
+
+# Simulate binlog events start from (binlog_buffer_size - 8), thus the header
+# of the event will split to two part by the circular buffer.
+SET debug = "d,simulate_event_header_split";
+SET debug_sync = "after_write_to_redo SIGNAL insert1_continue";
+# The server will crash when this session is waiting for its binlog to be
+# written. It is a race between the crash of insert1 and this session
+# finishing, so accept both a lost connection and a successful commit.
+--error 0,2013
+INSERT INTO t1 VALUES("insert2", "insert2");
+
+--source include/rpl_connection_master.inc
+--error 2013
+--reap
+
+--move_file $datadir/binlog_for_recovery $datadir/$binlog_file
+--let $rpl_server_number = 1
+--source include/rpl_start_server.inc
+
+--let $assert_text = there are 2 rows in the table
+--let $assert_cond = count(*) = 2 FROM t1
+--source include/assert.inc
+
+--let $assert_text = Find message: event header is split
+--let $assert_file = $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_select = event header is split
+--let $assert_count = 1
+--source include/assert_grep.inc
+
+--source include/rpl_connection_slave.inc
+--source include/start_slave_io.inc
+
+--let $rpl_diff_statement= SELECT * FROM t1 ORDER BY 1
+--source include/rpl_diff.inc
+
+--echo #
+--echo # Case: It should recovery correctly when event checksum is split by
+--echo #       buffer end
+--echo #####################################################################
+--echo #
+--source include/rpl_connection_master.inc
+--source include/rpl_connection_slave.inc
+--source include/stop_slave_io.inc
+--source include/rpl_connection_master.inc
+SET GLOBAL innodb_checkpoint_disabled = ON;
+--let $binlog_file = query_get_value(SHOW MASTER STATUS, File, 1)
+--copy_file $datadir/$binlog_file $datadir/binlog_for_recovery
+TRUNCATE t1;
+
+--source include/expect_crash.inc
+SET debug_sync = "before_flush_binlog_cache SIGNAL insert1_before_flush
+                  WAIT_FOR insert1_continue";
+SET debug = "d,crash_commit_after_sync_to_redo";
+send INSERT INTO t1 VALUES("insert1", "insert1");
+
+--let $rpl_connection_name = server_1
+--source include/rpl_connection.inc
+SET debug_sync = "now WAIT_FOR insert1_before_flush";
+
+# Simulate binlog events start from (binlog_buffer_size - event_len + 2), thus
+# the checksum of the event will be split to two part by the circular buffer.
+SET debug = "d,simulate_event_checksum_split";
+SET debug_sync = "after_write_to_redo SIGNAL insert1_continue";
+# Same race as in the event-header-split case above.
+--error 0,2013
+INSERT INTO t1 VALUES("insert2", "insert2");
+
+--source include/rpl_connection_master.inc
+--error 2013
+--reap
+
+--move_file $datadir/binlog_for_recovery $datadir/$binlog_file
+
+--let $rpl_server_number = 1
+--source include/rpl_start_server.inc
+
+--let $assert_text = there are 2 rows in the table
+--let $assert_cond = count(*) = 2 FROM t1
+--source include/assert.inc
+
+if (`SELECT @@GLOBAL.binlog_checksum <> "NONE"`) {
+  --let $assert_text = Find message: event checksum is split
+  --let $assert_file = $MYSQLTEST_VARDIR/log/mysqld.1.err
+  --let $assert_select = event checksum is split
+  --let $assert_count = 1
+  --source include/assert_grep.inc
+}
+
+--source include/rpl_connection_slave.inc
+--source include/start_slave_io.inc
+
+--let $rpl_diff_statement= SELECT * FROM t1 ORDER BY 1
+--source include/rpl_diff.inc
+--source include/rpl_connection_master.inc
+DROP TABLE t1;

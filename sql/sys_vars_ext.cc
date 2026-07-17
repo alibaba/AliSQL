@@ -24,8 +24,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 *****************************************************************************/
 
+#include "sql/binlog_ext.h"
 #include "sql/duckdb/duckdb_config.h"
-#include "sql/duckdb/log.h"
+#include "sql/duckdb/duckdb_log.h"
+#include "sql/handler.h"  // total_ha_2pc
 #include "sql/rpl_applier_reader.h"
 #include "sql/rpl_rli.h"
 #include "sql/sql_table_ext.h"
@@ -149,7 +151,7 @@ static Sys_var_bool Sys_duckdb_multi_trx_in_batch(
     "duckdb_multi_trx_in_batch",
     "Whether commit multiple transactions in a single batch.",
     GLOBAL_VAR(duckdb_multi_trx_in_batch), CMD_LINE(OPT_ARG), DEFAULT(false),
-    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(check_slave_stopped), ON_UPDATE(0));
 
 static Sys_var_ulonglong Sys_duckdb_multi_trx_timeout(
     "duckdb_multi_trx_timeout",
@@ -266,6 +268,13 @@ static Sys_var_bool Sys_duckdb_idempotent_data_import_enabled(
     GLOBAL_VAR(duckdb_idempotent_data_import_enabled), CMD_LINE(OPT_ARG),
     DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 
+static Sys_var_bool Sys_duckdb_copy_data_between_tables_use_ins_sel(
+    "duckdb_copy_data_between_tables_use_ins_sel",
+    "Whether to use 'INSERT ... SELECT ...' when copying data "
+    "between DuckDB tables.",
+    SESSION_VAR(duckdb_copy_data_between_tables_use_ins_sel), CMD_LINE(OPT_ARG),
+    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
 bool duckdb_disabled_optimizers_string_representation(
     THD *thd, ulonglong duckdb_disabled_optimizers, LEX_STRING *ls) {
   set_to_string(thd, ls, duckdb_disabled_optimizers,
@@ -283,6 +292,45 @@ static Sys_var_ulonglong Sys_duckdb_appender_allocator_flush_threshold(
     ON_CHECK(nullptr),
     ON_UPDATE(myduck::update_appender_allocator_flush_threshold));
 
+static Sys_var_bool Sys_duckdb_sql_normalization(
+    "duckdb_sql_normalization", "Normalize SQL before sending to DuckDB.",
+    SESSION_VAR(duckdb_sql_normalization), CMD_LINE(OPT_ARG), DEFAULT(false),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
+static Sys_var_ulonglong Sys_duckdb_max_threads_per_query(
+    "duckdb_max_threads_per_query", "Max threads for a single query.",
+    SESSION_VAR(duckdb_max_threads_per_query), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(1, 4611686018427387904), DEFAULT(1000000), BLOCK_SIZE(1),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(nullptr), ON_UPDATE(nullptr));
+
+static Sys_var_ulonglong Sys_duckdb_max_threads_per_query_rpl(
+    "duckdb_max_threads_per_query_rpl", "Max threads for replication query.",
+    GLOBAL_VAR(myduck::duckdb_max_threads_per_query_rpl), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(1, 4611686018427387904), DEFAULT(1000000), BLOCK_SIZE(1),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(nullptr), ON_UPDATE(nullptr));
+
+static Sys_var_bool Sys_duckdb_psmt_cursor_send_extra_eof(
+    "duckdb_psmt_cursor_send_extra_eof", "Send extra EOF packet to client when"
+    "execute prepared statement with cursor request and return empty result set."
+    "Needs to be ON when using JDBC and version less than 9.5.0.",
+    SESSION_VAR(duckdb_psmt_cursor_send_extra_eof), CMD_LINE(OPT_ARG),
+    DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
+static Sys_var_bool Sys_duckdb_prefer_high_precision(
+    "duckdb_prefer_high_precision",
+    "Prefer high precision calculation in DuckDB.",
+    SESSION_VAR(duckdb_prefer_high_precision), CMD_LINE(OPT_ARG),
+    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
+static Sys_var_bool Sys_duckdb_convert_tables_with_generated_columns(
+    "duckdb_convert_tables_with_generated_columns",
+    "Whether to allow "
+    "converting tables with generated columns to the DuckDB storage engine.",
+    GLOBAL_VAR(duckdb_convert_tables_with_generated_columns), CMD_LINE(OPT_ARG),
+    DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
+/* DuckDB related variables end. */
+
 static Sys_var_set Sys_duckdb_log_options(
     "duckdb_log_options", "Specify DuckDB operation types that need to be recorded",
     GLOBAL_VAR(myduck::duckdb_log_options), CMD_LINE(OPT_ARG),
@@ -292,4 +340,128 @@ static Sys_var_bool Sys_force_innodb_to_duckdb(
     "force_innodb_to_duckdb", "innodb storage converted to duckdb.",
     GLOBAL_VAR(force_innodb_to_duckdb), CMD_LINE(OPT_ARG), DEFAULT(false),
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
+static Sys_var_bool Sys_ignore_index_hint_error(
+    "ignore_index_hint_error",
+    "When this option is enabled,"
+    "using inexistent index in index hint would be allowed",
+    GLOBAL_VAR(ignore_index_hint_error), CMD_LINE(OPT_ARG), DEFAULT(false));
 /* DuckDB related variables end. */
+
+static bool check_binlog_cache_free_flush(sys_var *, THD *, set_var *var) {
+  bool new_value = static_cast<uint>(var->save_result.ulonglong_value);
+
+  if (new_value && !binlog_cache_free_flush.is_dir_initialized()) {
+    my_error(ER_FAILED_BINLOG_CACHE_FREE_FLUSH, MYF(0),
+             "can not enable binlog_cache_free_flush when binlog cache dir is "
+             "not initialized.");
+
+    return true;
+  }
+
+  return false;
+}
+
+static Sys_var_bool Sys_binlog_cache_free_flush(
+    "binlog_cache_free_flush",
+    "Move binlog cache tmp file directly to binlog file, to avoid high IO "
+    "during commit.",
+    GLOBAL_VAR(binlog_cache_free_flush.get_enabled_var()), CMD_LINE(OPT_ARG),
+    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG,
+    ON_CHECK(check_binlog_cache_free_flush), ON_UPDATE(0));
+
+static Sys_var_ulonglong Sys_binlog_cache_free_flush_limit_size(
+    "binlog_cache_free_flush_limit_size",
+    "Move binlog cache tmp file directly to binlog file when binlog cache size "
+    "bigger than this variable.",
+    GLOBAL_VAR(binlog_cache_free_flush.get_limit_size_var()),
+    CMD_LINE(REQUIRED_ARG), VALID_RANGE(10 * 1024 * 1024, ULLONG_MAX),
+    DEFAULT(256 * 1024 * 1024), BLOCK_SIZE(1));
+
+/* Persist Binlog Into Redo related variables. */
+static bool check_persist_binlog_to_redo(sys_var *, THD *, set_var *var) {
+  // Only checked when enabling; disabling is always allowed.
+  if (!var->save_result.ulonglong_value || !opt_bin_log) return false;
+
+  /*
+    Binlog-in-redo recovery supports only a single 2PC storage engine (InnoDB).
+    total_ha_2pc counts every registered 2PC participant: the binlog handlerton,
+    InnoDB, and the DuckDB handlerton (AliSQL always registers it). DuckDB only
+    takes part in 2PC when its global mode is on; while it is off it needs no
+    recovery of its own, so persist_binlog_to_redo can be enabled/disabled
+    dynamically. Discount the binlog handlerton, and the DuckDB handlerton while
+    DuckDB is off; reject only if more than one storage engine would still
+    participate in 2PC.
+  */
+  ulong engines = total_ha_2pc;
+  if (engines > 0) --engines;                               // binlog handlerton
+  if (!myduck::global_mode_on() && engines > 0) --engines;  // DuckDB is idle
+  if (engines > 1) {
+    my_error(ER_BINLOG_IN_REDO_NOT_SUPPORTED, MYF(0), 0);
+    return true;
+  }
+  return false;
+}
+
+extern bool opt_persist_binlog_to_redo;
+static Sys_var_bool Sys_persist_binlog_to_redo(
+    "persist_binlog_to_redo",
+    "Persists transaction's binlog events into redo to reduce io",
+    GLOBAL_VAR(opt_persist_binlog_to_redo), CMD_LINE(OPT_ARG), DEFAULT(false),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(check_persist_binlog_to_redo),
+    ON_UPDATE(0));
+
+extern uint opt_persist_binlog_to_redo_size_limit;
+static Sys_var_uint Sys_persist_binlog_to_redo_size(
+    "persist_binlog_to_redo_size_limit",
+    "Only persists the transactions smaller than this variable to redo",
+    GLOBAL_VAR(opt_persist_binlog_to_redo_size_limit), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(0, (10 * 1024 * 1024)), DEFAULT(1024 * 1024), BLOCK_SIZE(1));
+
+extern uint opt_sync_binlog_interval;
+extern bool update_sync_binlog_interval(sys_var *, THD *, enum_var_type);
+static Sys_var_uint Sys_sync_binlog_interval(
+    "sync_binlog_interval",
+    "Sync binlog to file every sync_binlog_interval microsecond",
+    GLOBAL_VAR(opt_sync_binlog_interval), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(1, 100000000), DEFAULT(50000), BLOCK_SIZE(1), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(update_sync_binlog_interval));
+
+/*
+  The minimum size of binlog buffer is 20MB which is far larger than
+  maximum persist_binlog_to_redo_size_limit. Thus the real binlog size of
+  a transaction will never be larger than binlog_buffer_size if
+  its binlog cache size is smaller than or equal to
+  persist_binlog_to_redo_size_limit.
+*/
+extern uint opt_binlog_buffer_size;
+static Sys_var_uint Sys_binlog_buffer_size(
+    "binlog_buffer_size", "Size of the buffer for write binlog asynchronously",
+    READ_ONLY GLOBAL_VAR(opt_binlog_buffer_size), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(20 * 1024 * 1024, (1024 * 1024 * 1024)),
+    DEFAULT(20 * 1024 * 1024), BLOCK_SIZE(1));
+
+extern bool opt_wait_binlog_flush;
+static Sys_var_bool Sys_wait_binlog_flush(
+    "wait_binlog_flush",
+    "Commit will not return until its binlog is written into binlog file if "
+    "both persist_binlog_to_redo and wait_binlog_flush are on.",
+    GLOBAL_VAR(opt_wait_binlog_flush), CMD_LINE(OPT_ARG), DEFAULT(true),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
+extern uint opt_binlog_group_delay;
+static Sys_var_uint Sys_binlog_group_delay(
+    "binlog_group_delay",
+    "Nanoseconds how long the group leader sleeps to wait more transactions "
+    "to join the group",
+    GLOBAL_VAR(opt_binlog_group_delay), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(0, (1000000000)), DEFAULT(100), BLOCK_SIZE(1));
+
+extern uint opt_binlog_group_delay_running_threads;
+static Sys_var_uint Sys_binlog_group_delay_running_threads(
+    "binlog_group_delay_running_threads",
+    "The group leader will sleep if running threads is more than the "
+    "given number",
+    GLOBAL_VAR(opt_binlog_group_delay_running_threads), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(0, (100000)), DEFAULT(100), BLOCK_SIZE(1));
+/* Persist Binlog Into Redo related variables end. */

@@ -370,6 +370,7 @@ ERROR HY000: [DuckDB] Binder Error: No function matches the given name and argum
 	sum(BIGINT) -> HUGEINT
 	sum(HUGEINT) -> HUGEINT
 	sum(DOUBLE) -> DOUBLE
+	sum(BIGNUM) -> BIGNUM
 
 
 LINE 1: SELECT SUM(col11)

@@ -155,12 +155,12 @@ COMMIT;
 SELECT id, c0, c1, c2, c3, c4, HEX(c5) FROM t1;
 
 --let $assert_text = Find delete action in log
---let $assert_select = DELETE FROM `test`.`t1`
+--let $assert_select = DELETE FROM `t1`
 --let $assert_count = 1
 --source include/assert_grep.inc
 
 --let $assert_text = Find insert action in log
---let $assert_select = INSERT INTO `test`.`t1`
+--let $assert_select = INSERT INTO `t1`
 --let $assert_count = 1
 --source include/assert_grep.inc
 
@@ -176,12 +176,12 @@ COMMIT;
 SELECT id, c0, c1, c2, c3, c4, HEX(c5) FROM t1;
 
 --let $assert_text = Not find delete action in log
---let $assert_select = DELETE FROM `test`.`t1`
+--let $assert_select = DELETE FROM `t1`
 --let $assert_count = 0
 --source include/assert_grep.inc
 
 --let $assert_text = Find insert action in log
---let $assert_select = INSERT INTO `test`.`t1`
+--let $assert_select = INSERT INTO `t1`
 --let $assert_count = 1
 --source include/assert_grep.inc
 

@@ -78,7 +78,7 @@ ERROR HY000: Variable 'duckdb_temp_directory' is a read only variable
 #
 SELECT @@global.duckdb_max_temp_directory_size;
 @@global.duckdb_max_temp_directory_size
-0
+107374182400
 SELECT @@session.duckdb_max_temp_directory_size;
 ERROR HY000: Variable 'duckdb_max_temp_directory_size' is a GLOBAL variable
 call dbms_duckdb.query("SELECT current_setting('max_temp_directory_size') AS max_temp_directory_size");
@@ -86,7 +86,7 @@ RESULT
 max_temp_directory_size	
 VARCHAR	
 [ Rows: 1]
-90% of available disk space
+100.0 GiB
 
 
 SET GLOBAL duckdb_max_temp_directory_size = '1GB';
@@ -103,12 +103,7 @@ VARCHAR
 SET GLOBAL duckdb_max_temp_directory_size = 0;
 call dbms_duckdb.query("SELECT current_setting('max_temp_directory_size') AS max_temp_directory_size");
 RESULT
-max_temp_directory_size	
-VARCHAR	
-[ Rows: 1]
-90% of available disk space
-
-
+MAX_TEMP_DIRECTORY_SIZE
 SET GLOBAL duckdb_max_temp_directory_size = 1048576*1024*1024;
 call dbms_duckdb.query("SELECT current_setting('max_temp_directory_size') AS max_temp_directory_size");
 RESULT
@@ -119,14 +114,6 @@ VARCHAR
 
 
 SET GLOBAL duckdb_max_temp_directory_size = DEFAULT;
-call dbms_duckdb.query("SELECT current_setting('max_temp_directory_size') AS max_temp_directory_size");
-RESULT
-max_temp_directory_size	
-VARCHAR	
-[ Rows: 1]
-90% of available disk space
-
-
 #
 # 5) duckdb_threads
 #
@@ -354,22 +341,71 @@ VARCHAR
 
 SET GLOBAL duckdb_checkpoint_threshold = DEFAULT;
 #
+# 12) duckdb_max_threads_per_query
+#
+CREATE TABLE t1 (id int primary key) engine=duckdb;
+CALL dbms_duckdb.query("SELECT current_setting('max_threads_per_query')");
+RESULT
+current_setting('max_threads_per_query')	
+UBIGINT	
+[ Rows: 1]
+1000000
+
+
+SET duckdb_max_threads_per_query = 1000;
+SELECT * FROM t1;
+id
+CALL dbms_duckdb.query("SELECT current_setting('max_threads_per_query')");
+RESULT
+current_setting('max_threads_per_query')	
+UBIGINT	
+[ Rows: 1]
+1000
+
+
+SET duckdb_max_threads_per_query = 0;
+Warnings:
+Warning	1292	Truncated incorrect duckdb_max_threads_per_query value: '0'
+SELECT * FROM t1;
+id
+CALL dbms_duckdb.query("SELECT current_setting('max_threads_per_query')");
+RESULT
+current_setting('max_threads_per_query')	
+UBIGINT	
+[ Rows: 1]
+1
+
+
+SET GLOBAL duckdb_max_threads_per_query = 8192;
+# restart: --duckdb_max_threads_per_query=1024
+SELECT @@session.duckdb_max_threads_per_query;
+@@session.duckdb_max_threads_per_query
+1024
+SELECT * FROM t1;
+id
+CALL dbms_duckdb.query("SELECT current_setting('max_threads_per_query')");
+RESULT
+current_setting('max_threads_per_query')	
+UBIGINT	
+[ Rows: 1]
+1024
+
+
+SET duckdb_max_threads_per_query = default;
+DROP TABLE t1;
+#
 # print all duckdb queries
 #
 Matching lines are:
---TIME-- [Note] [MY-025000] [Server] my_duckdb: SET GLOBAL memory_limit = '1.0 MiB'
---TIME-- [Note] [MY-025000] [Server] my_duckdb: RESET GLOBAL memory_limit
---TIME-- [Note] [MY-025000] [Server] my_duckdb: SET GLOBAL memory_limit = '1.0 TiB'
---TIME-- [Note] [MY-025000] [Server] my_duckdb: RESET GLOBAL memory_limit
---TIME-- [Note] [MY-025000] [Server] my_duckdb: SET GLOBAL max_temp_directory_size = '1.0 MiB'
+--TIME-- [Note] [MY-025000] [Server] my_duckdb: SET GLOBAL max_temp_directory_size = '1.0MiB'
 --TIME-- [Note] [MY-025000] [Server] my_duckdb: RESET GLOBAL max_temp_directory_size
---TIME-- [Note] [MY-025000] [Server] my_duckdb: SET GLOBAL max_temp_directory_size = '1.0 TiB'
+--TIME-- [Note] [MY-025000] [Server] my_duckdb: SET GLOBAL max_temp_directory_size = '1.0TiB'
 --TIME-- [Note] [MY-025000] [Server] my_duckdb: RESET GLOBAL max_temp_directory_size
 --TIME-- [Note] [MY-025000] [Server] my_duckdb: SET GLOBAL threads = 16
 --TIME-- [Note] [MY-025000] [Server] my_duckdb: RESET GLOBAL threads
 --TIME-- [Note] [MY-025000] [Server] my_duckdb: SET GLOBAL threads = 1024
 --TIME-- [Note] [MY-025000] [Server] my_duckdb: RESET GLOBAL threads
---TIME-- [Note] [MY-025000] [Server] my_duckdb: SET GLOBAL checkpoint_threshold = '8.0 KiB'
---TIME-- [Note] [MY-025000] [Server] my_duckdb: SET GLOBAL checkpoint_threshold = '0 bytes'
---TIME-- [Note] [MY-025000] [Server] my_duckdb: SET GLOBAL checkpoint_threshold = '256.0 MiB'
-Occurrences of 'my_duckdb:.*SET GLOBAL.*' in the input file: 15
+--TIME-- [Note] [MY-025000] [Server] my_duckdb: SET GLOBAL checkpoint_threshold = '8.0KiB'
+--TIME-- [Note] [MY-025000] [Server] my_duckdb: SET GLOBAL checkpoint_threshold = '0bytes'
+--TIME-- [Note] [MY-025000] [Server] my_duckdb: SET GLOBAL checkpoint_threshold = '256.0MiB'
+Occurrences of 'my_duckdb:.*SET GLOBAL.*' in the input file: 11

@@ -30,21 +30,21 @@ template <bool IS_UPPER>
 static idx_t GetResultLength(const char *input_data, idx_t input_length) {
 	idx_t output_length = 0;
 	for (idx_t i = 0; i < input_length;) {
-		if (input_data[i] & 0x80) {
-			// unicode
-			int sz = 0;
-			auto codepoint = Utf8Proc::UTF8ToCodepoint(input_data + i, sz);
-			auto converted_codepoint =
-			    IS_UPPER ? Utf8Proc::CodepointToUpper(codepoint) : Utf8Proc::CodepointToLower(codepoint);
-			auto new_sz = Utf8Proc::CodepointLength(converted_codepoint);
-			D_ASSERT(new_sz >= 0);
-			output_length += UnsafeNumericCast<idx_t>(new_sz);
-			i += UnsafeNumericCast<idx_t>(sz);
-		} else {
-			// ascii
+		if (!(input_data[i] & 0x80)) {
+			// ASCII.
 			output_length++;
 			i++;
+			continue;
 		}
+
+		// UTF-8.
+		int sz = 0;
+		auto codepoint = Utf8Proc::UTF8ToCodepoint(input_data + i, sz);
+		auto converted = IS_UPPER ? Utf8Proc::CodepointToUpper(codepoint) : Utf8Proc::CodepointToLower(codepoint);
+		auto new_sz = Utf8Proc::CodepointLength(converted);
+		output_length += UnsafeNumericCast<idx_t>(new_sz);
+		D_ASSERT(sz != 0);
+		i += UnsafeNumericCast<idx_t>(sz);
 	}
 	return output_length;
 }
@@ -93,6 +93,7 @@ static string_t UnicodeCaseConvert(Vector &result, const char *input_data, idx_t
 	return result_str;
 }
 
+namespace {
 template <bool IS_UPPER>
 struct CaseConvertOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
@@ -102,12 +103,14 @@ struct CaseConvertOperator {
 		return UnicodeCaseConvert<IS_UPPER>(result, input_data, input_length);
 	}
 };
+} // namespace
 
 template <bool IS_UPPER>
 static void CaseConvertFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	UnaryExecutor::ExecuteString<string_t, string_t, CaseConvertOperator<IS_UPPER>>(args.data[0], result, args.size());
 }
 
+namespace {
 template <bool IS_UPPER>
 struct CaseConvertOperatorASCII {
 	template <class INPUT_TYPE, class RESULT_TYPE>
@@ -117,6 +120,7 @@ struct CaseConvertOperatorASCII {
 		return ASCIICaseConvert<IS_UPPER>(result, input_data, input_length);
 	}
 };
+} // namespace
 
 template <bool IS_UPPER>
 static void CaseConvertFunctionASCII(DataChunk &args, ExpressionState &state, Vector &result) {

@@ -1009,8 +1009,14 @@ Information in the data-dictionary needs to be updated. */
 #define HA_DUCKDB_SPECIFY_PARTITION_ERROR 219
 /* Duckdb errors end */
 
+/** Requested flashback snapshot is out of range */
+#define HA_SNAPSHOT_OUT_OF_RANGE 220
+/** Table definition required by flashback has changed */
+#define HA_FLASHBACK_PK_INVISIBLE 221
+/** Internal flashback error */
+#define HA_FLASHBACK_INTERNAL_ERROR 222
 /** Copy of last error number */
-#define HA_ERR_LAST 219
+#define HA_ERR_LAST 222
 
 /* Number of different errors */
 #define HA_ERR_ERRORS (HA_ERR_LAST - HA_ERR_FIRST + 1)

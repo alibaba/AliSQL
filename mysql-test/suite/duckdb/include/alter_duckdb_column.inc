@@ -304,14 +304,30 @@ if ($copy_ddl == 0)
 }
 
 # GENERATED COLUMN
---error ER_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN # 'Specified storage engine' is not supported for generated columns.
 CREATE TABLE t1(id INT PRIMARY KEY, a INT, b INT GENERATED ALWAYS AS (a - 1) STORED) ENGINE = DuckDB;
---error ER_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN # 'Specified storage engine' is not supported for generated columns.
-eval ALTER TABLE t ADD COLUMN d INT GENERATED ALWAYS AS (a - 1) STORED, ALGORITHM = $algorithm;
---error ER_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN # 'Specified storage engine' is not supported for generated columns.
-eval ALTER TABLE t ADD COLUMN d INT GENERATED ALWAYS AS (b + 1) VIRTUAL, ALGORITHM = $algorithm;
---error ER_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN # 'Specified storage engine' is not supported for generated columns.
-eval ALTER TABLE t MODIFY COLUMN b INT GENERATED ALWAYS AS (a+1) STORED, ALGORITHM = $algorithm;
+INSERT INTO t1(id, a) VALUES(1, 1);
+if ($copy_ddl == 0)
+{
+  --error ER_ALTER_OPERATION_NOT_SUPPORTED
+  eval ALTER TABLE t1 ADD COLUMN c INT GENERATED ALWAYS AS (a + 1) STORED, ALGORITHM = $algorithm;
+  --error ER_ALTER_OPERATION_NOT_SUPPORTED
+  eval ALTER TABLE t1 ADD COLUMN d INT GENERATED ALWAYS AS (a * 5) VIRTUAL, ALGORITHM = $algorithm;
+  --error ER_ALTER_OPERATION_NOT_SUPPORTED
+  eval ALTER TABLE t1 MODIFY COLUMN b INT GENERATED ALWAYS AS (2 * a + 1) STORED, ALGORITHM = $algorithm;
+}
+if ($copy_ddl == 1) {
+  eval ALTER TABLE t1 ADD COLUMN c INT GENERATED ALWAYS AS (a + 1) STORED, ALGORITHM = $algorithm;
+  INSERT INTO t1(id, a) VALUES(2, 2);
+  SELECT * FROM t1;
+  eval ALTER TABLE t1 ADD COLUMN d INT GENERATED ALWAYS AS (a * 5) VIRTUAL, ALGORITHM = $algorithm;
+  INSERT INTO t1(id, a) VALUES(3, 3);
+  SELECT * FROM t1;
+  eval ALTER TABLE t1 MODIFY COLUMN b INT GENERATED ALWAYS AS (2 * a + 1) STORED, ALGORITHM = $algorithm;
+  INSERT INTO t1(id, a) VALUES(4, 4);
+}
+
+SELECT * FROM t1;
+DROP TABLE t1;
 
 
 --echo #

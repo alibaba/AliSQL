@@ -161,9 +161,8 @@ Relay_log_info::Relay_log_info(bool is_slave_recovery,
       m_require_row_format(false),
       m_require_table_primary_key_check(PK_CHECK_STREAM),
       m_is_applier_source_position_info_invalid(false),
-      m_duckdb_idempotent_cnt(0),
-      m_duckdb_idempotent_flag(false),
-      m_duckdb_idempotent_batch(true),
+      m_global_duckdb_idempotent_flag(false),
+      m_local_duckdb_idempotent_flag(false),
       m_duckdb_insert_only_flag(false),
       m_duckdb_skip_commit_due_to_rotate_cnt(0),
       is_group_master_log_pos_invalid(false),
@@ -1313,7 +1312,12 @@ void Relay_log_info::cleanup_context(THD *thd, bool error) {
   */
   if (error) {
     if (thd->multi_trx_in_batch()) {
-      thd->get_duckdb_context()->commit_partial_batch();
+      if (thd->get_duckdb_context()->commit_partial_batch()) {
+        trans_rollback(thd);
+        my_error(ER_DUCKDB_COMMIT_ERROR, MYF(0),
+                 "Commit partial batch failed!");
+        thd->is_slave_error = true;
+      }
     } else {
       trans_rollback_stmt(thd);  // if a "statement transaction"
       trans_rollback(thd);       // if a "real transaction"

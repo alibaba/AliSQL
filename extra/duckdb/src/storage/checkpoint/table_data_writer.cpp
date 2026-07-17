@@ -2,16 +2,21 @@
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
+#include "duckdb/storage/checkpoint/table_data_reader.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/table_statistics.hpp"
+#include "duckdb/storage/metadata/metadata_reader.hpp"
 
 namespace duckdb {
 
-TableDataWriter::TableDataWriter(TableCatalogEntry &table_p, optional_ptr<ClientContext> client_context_p)
-    : table(table_p.Cast<DuckTableEntry>()), client_context(client_context_p) {
+TableDataWriter::TableDataWriter(TableCatalogEntry &table_p, QueryContext context)
+    : table(table_p.Cast<DuckTableEntry>()), context(context.GetClientContext()) {
 	D_ASSERT(table_p.IsDuckTable());
 }
 
@@ -23,10 +28,6 @@ void TableDataWriter::WriteTableData(Serializer &metadata_serializer) {
 	table.GetStorage().Checkpoint(*this, metadata_serializer);
 }
 
-CompressionType TableDataWriter::GetColumnCompressionType(idx_t i) {
-	return table.GetColumn(LogicalIndex(i)).CompressionType();
-}
-
 void TableDataWriter::AddRowGroup(RowGroupPointer &&row_group_pointer, unique_ptr<RowGroupWriter> writer) {
 	row_group_pointers.push_back(std::move(row_group_pointer));
 }
@@ -36,8 +37,8 @@ DatabaseInstance &TableDataWriter::GetDatabase() {
 }
 
 unique_ptr<TaskExecutor> TableDataWriter::CreateTaskExecutor() {
-	if (client_context) {
-		return make_uniq<TaskExecutor>(*client_context);
+	if (context) {
+		return make_uniq<TaskExecutor>(*context);
 	}
 	return make_uniq<TaskExecutor>(TaskScheduler::GetScheduler(GetDatabase()));
 }
@@ -57,33 +58,99 @@ CheckpointType SingleFileTableDataWriter::GetCheckpointType() const {
 	return checkpoint_manager.GetCheckpointType();
 }
 
-void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stats, DataTableInfo *info,
-                                              Serializer &serializer) {
+MetadataManager &SingleFileTableDataWriter::GetMetadataManager() {
+	return checkpoint_manager.GetMetadataManager();
+}
 
-	// store the current position in the metadata writer
-	// this is where the row groups for this table start
-	auto pointer = table_data_writer.GetMetaBlockPointer();
+void SingleFileTableDataWriter::WriteUnchangedTable(MetaBlockPointer pointer,
+                                                    const vector<MetaBlockPointer> &metadata_pointers,
+                                                    idx_t total_rows) {
+	existing_pointer = pointer;
+	existing_pointers = metadata_pointers;
+	existing_rows = total_rows;
+}
 
-	// Serialize statistics as a single unit
-	BinarySerializer stats_serializer(table_data_writer, serializer.GetOptions());
-	stats_serializer.Begin();
-	global_stats.Serialize(stats_serializer);
-	stats_serializer.End();
+void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stats, DataTableInfo &info,
+                                              RowGroupCollection &collection, Serializer &serializer) {
+	MetaBlockPointer pointer;
+	idx_t total_rows;
+	auto debug_verify_blocks = DBConfig::GetSetting<DebugVerifyBlocksSetting>(GetDatabase());
+	if (!existing_pointer.IsValid()) {
+		// write the metadata
+		// store the current position in the metadata writer
+		// this is where the row groups for this table start
+		pointer = table_data_writer.GetMetaBlockPointer();
+		vector<MetaBlockPointer> written_pointers;
+		table_data_writer.SetWrittenPointers(written_pointers);
 
-	// now start writing the row group pointers to disk
-	table_data_writer.Write<uint64_t>(row_group_pointers.size());
-	idx_t total_rows = 0;
-	for (auto &row_group_pointer : row_group_pointers) {
-		auto row_group_count = row_group_pointer.row_start + row_group_pointer.tuple_count;
-		if (row_group_count > total_rows) {
-			total_rows = row_group_count;
+		// Serialize statistics as a single unit
+		BinarySerializer stats_serializer(table_data_writer, serializer.GetOptions());
+		stats_serializer.Begin();
+		global_stats.Serialize(stats_serializer);
+		stats_serializer.End();
+
+		// now start writing the row group pointers to disk
+		table_data_writer.Write<uint64_t>(row_group_pointers.size());
+		total_rows = 0;
+		for (auto &row_group_pointer : row_group_pointers) {
+			auto row_group_count = row_group_pointer.row_start + row_group_pointer.tuple_count;
+			if (row_group_count > total_rows) {
+				total_rows = row_group_count;
+			}
+
+			// Each RowGroup is its own unit
+			BinarySerializer row_group_serializer(table_data_writer, serializer.GetOptions());
+			row_group_serializer.Begin();
+			RowGroup::Serialize(row_group_pointer, row_group_serializer);
+			row_group_serializer.End();
 		}
+		table_data_writer.SetWrittenPointers(nullptr);
+		collection.FinalizeCheckpoint(pointer, written_pointers);
+	} else {
+		// we have existing metadata and the table is unchanged - write a pointer to the existing metadata
+		pointer = existing_pointer;
+		total_rows = existing_rows.GetIndex();
 
-		// Each RowGroup is its own unit
-		BinarySerializer row_group_serializer(table_data_writer, serializer.GetOptions());
-		row_group_serializer.Begin();
-		RowGroup::Serialize(row_group_pointer, row_group_serializer);
-		row_group_serializer.End();
+		// label the blocks as used again to prevent them from being freed
+		auto &metadata_manager = checkpoint_manager.GetMetadataManager();
+		metadata_manager.ClearModifiedBlocks(existing_pointers);
+
+		// verify that existing_pointers indeed corresponds to the metadata blocks
+		if (debug_verify_blocks) {
+			vector<MetaBlockPointer> read_pointers;
+			MetadataReader reader(metadata_manager, pointer, read_pointers);
+			auto bound_info = Binder::BindCreateTableCheckpoint(table.GetInfo(), table.schema);
+			TableDataReader data_reader(reader, *bound_info, pointer);
+			data_reader.ReadTableData();
+			for (idx_t row_group = 0; row_group < bound_info->data->row_group_count; ++row_group) {
+				BinaryDeserializer deserializer(reader);
+				deserializer.Begin();
+				auto row_group_pointer = RowGroup::Deserialize(deserializer);
+				deserializer.End();
+			}
+			set<idx_t> existing_block_ids;
+			for (auto &ptr : existing_pointers) {
+				existing_block_ids.insert(ptr.block_pointer);
+			}
+			set<idx_t> all_read_block_ids;
+			for (auto &ptr : read_pointers) {
+				all_read_block_ids.insert(ptr.block_pointer);
+			}
+			if (existing_block_ids != all_read_block_ids) {
+				std::stringstream oss;
+				oss << "Existing: ";
+				for (auto &block : existing_pointers) {
+					oss << block << ", ";
+				}
+				oss << "\n";
+				oss << "Read: ";
+				for (auto &block : read_pointers) {
+					oss << block << ", ";
+				}
+				oss << "\n";
+				throw InternalException("Reading existing blocks does not yield same blocks: " + oss.str());
+			}
+		}
 	}
 
 	// Now begin the metadata as a unit
@@ -96,17 +163,26 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	if (!v1_0_0_storage) {
 		options.emplace("v1_0_0_storage", v1_0_0_storage);
 	}
-	auto index_storage_infos = info->GetIndexes().GetStorageInfos(options);
 
-#ifdef DUCKDB_BLOCK_VERIFICATION
-	for (auto &entry : index_storage_infos) {
-		for (auto &allocator : entry.allocator_infos) {
-			for (auto &block : allocator.block_pointers) {
-				checkpoint_manager.verify_block_usage_count[block.block_id]++;
+	// If there is a context available, bind indexes before serialization.
+	// This is necessary so that buffered index operations are replayed before we checkpoint, otherwise
+	// we would lose them if there was a restart after this.
+	if (context && context->transaction.HasActiveTransaction()) {
+		info.BindIndexes(*context);
+	}
+	// FIXME: If we do not have a context, however, the unbound indexes have to be serialized to disk.
+
+	auto index_storage_infos = info.GetIndexes().SerializeToDisk(context, options);
+
+	if (debug_verify_blocks) {
+		for (auto &entry : index_storage_infos) {
+			for (auto &allocator : entry.allocator_infos) {
+				for (auto &block : allocator.block_pointers) {
+					checkpoint_manager.verify_block_usage_count[block.block_id]++;
+				}
 			}
 		}
 	}
-#endif
 
 	// write empty block pointers for forwards compatibility
 	vector<BlockPointer> compat_block_pointers;

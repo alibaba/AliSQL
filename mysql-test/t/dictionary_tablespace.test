@@ -19,7 +19,7 @@ eval SELECT tables1.name, mysql.tablespaces.name INTO OUTFILE '$OUTFILE1' FROM
   (SELECT * FROM mysql.tables WHERE schema_id IN
     (SELECT id FROM mysql.schemata WHERE name='mysql')) AS tables1 LEFT JOIN
   mysql.tablespaces ON tables1.tablespace_id = tablespaces.id
-  WHERE tables1.name NOT IN ('ndb_binlog_index') ORDER BY tables1.name;
+  WHERE tables1.name NOT IN ('ndb_binlog_index', 'innodb_flashback_snapshot') ORDER BY tables1.name;
 --cat_file $OUTFILE1
 
 # Display table names from mysql.tables that belong to mysql schema
@@ -28,7 +28,7 @@ let $OUTFILE2 = $MYSQLTEST_VARDIR/tmp/mysql_tablespace.out;
 --replace_result $OUTFILE2 <OUTFILE2>
 eval SELECT name INTO OUTFILE '$OUTFILE2' FROM mysql.tables WHERE
   tablespace_id IN (SELECT id FROM mysql.tablespaces WHERE name='mysql') AND
-  name NOT IN ('ndb_binlog_index')
+  name NOT IN ('ndb_binlog_index', 'innodb_flashback_snapshot')
   ORDER BY name ASC;
 --cat_file $OUTFILE2
 
@@ -106,7 +106,7 @@ eval SELECT tables1.name, mysql.tablespaces.name INTO OUTFILE '$OUTFILE3' FROM
   (SELECT * FROM mysql.tables WHERE schema_id IN
     (SELECT id FROM mysql.schemata WHERE name='mysql')) AS tables1 LEFT JOIN
   mysql.tablespaces ON tables1.tablespace_id = tablespaces.id
-  WHERE tables1.name NOT IN ('ndb_binlog_index') ORDER BY tables1.name;
+  WHERE tables1.name NOT IN ('ndb_binlog_index', 'innodb_flashback_snapshot') ORDER BY tables1.name;
 
 # Display table names from mysql.tables that belong to mysql schema
 # and mysql tablespace. It should be as same as displayed by upgrade.
@@ -114,7 +114,7 @@ let $OUTFILE4 = $MYSQLTEST_VARDIR/tmp/mysql_tablespace_upgrade.out;
 --replace_result $OUTFILE4 <OUTFILE4>
 eval SELECT name INTO OUTFILE '$OUTFILE4' FROM mysql.tables WHERE
   tablespace_id IN (SELECT id FROM mysql.tablespaces WHERE name='mysql') AND
-  name NOT IN ('ndb_binlog_index')
+  name NOT IN ('ndb_binlog_index', 'innodb_flashback_snapshot')
   ORDER BY name ASC;
 
 # The contents of the files should be identical

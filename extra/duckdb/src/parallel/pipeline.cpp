@@ -12,6 +12,7 @@
 #include "duckdb/parallel/pipeline_event.hpp"
 #include "duckdb/parallel/pipeline_executor.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -120,7 +121,7 @@ bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
 	}
 	auto max_threads = source_state->MaxThreads();
 	auto &scheduler = TaskScheduler::GetScheduler(executor.context);
-	auto active_threads = NumericCast<idx_t>(scheduler.NumberOfThreads());
+	auto active_threads = NumericCast<idx_t>(scheduler.NumberOfThreads(executor.context));
 	if (max_threads > active_threads) {
 		max_threads = active_threads;
 	}
@@ -130,11 +131,11 @@ bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
 	if (max_threads > active_threads) {
 		max_threads = active_threads;
 	}
+	max_threads = MinValue<idx_t>(max_threads, ClientConfig::GetConfig(executor.context).max_threads_per_query);
 	return LaunchScanTasks(event, max_threads);
 }
 
 bool Pipeline::IsOrderDependent() const {
-	auto &config = DBConfig::GetConfig(executor.context);
 	if (source) {
 		auto source_order = source->SourceOrder();
 		if (source_order == OrderPreservationType::FIXED_ORDER) {
@@ -153,7 +154,7 @@ bool Pipeline::IsOrderDependent() const {
 			return true;
 		}
 	}
-	if (!config.options.preserve_insertion_order) {
+	if (!DBConfig::GetSetting<PreserveInsertionOrderSetting>(executor.context)) {
 		return false;
 	}
 	if (sink && sink->SinkOrderDependent()) {

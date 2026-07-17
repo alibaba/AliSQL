@@ -1,0 +1,155 @@
+#
+# Test binlog rotate in free flush process will not case crash.
+# Step 1: Execute a non innodb transaction who will not write gitd_executed table after commit.
+# Step 2: Execute a transaction using binlog cache free flush, crash should not happen during first rotate.
+# Step 3: Execute a big transaction with gtid_executed table modified, should not use binlog cache free flush.
+# Step 4: Execute a big transaction in the same session of step 3, it should use binlog cache free flush.
+#
+--source include/master-slave.inc
+--source include/have_binlog_format_row.inc
+--source include/have_debug.inc
+--let $gtid_event= Gtid
+if (!$gtid_mode_on)
+{
+  --let $gtid_event= Anonymous_Gtid
+}
+call mtr.add_suppression("trx has modified gtid_executed table.");
+
+--echo #
+--echo # 1. Make test data.
+--echo ########################################################
+--echo #
+CREATE DATABASE rpl_test;
+CREATE TABLE rpl_test.t1 (s LONGTEXT);
+CREATE TABLE rpl_test.t2 (s LONGTEXT);
+
+--disable_query_log
+--let $i=0
+while ($i < 2)
+{
+  --eval INSERT INTO rpl_test.t1 values(repeat("1", 5242880))
+  --inc $i
+}
+--enable_query_log
+
+FLUSH BINARY LOGS;
+--source include/rpl_sync.inc
+--source include/rpl_connection_slave.inc
+FLUSH BINARY LOGS;
+
+--echo #
+--echo # 2.1 Execute a non innodb trx, which will not update mysql.gtid_executed during commit.
+--echo ########################################################
+--echo #
+--source include/rpl_connection_master.inc
+TRUNCATE TABLE mysql.slow_log;
+
+--echo #
+--echo # 2.2 Execute transaction with binlog cache free flush. Server will crash without this bugfix.
+--echo ########################################################
+--echo #
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+--replace_column 2 # 3 #
+SHOW BINARY LOGS;
+
+--let $event_sequence= Format_desc # Previous_gtids # $gtid_event # !Q(TRUNCATE TABLE mysql.slow_log) # Rotate
+--let $binlog_file = query_get_value(SHOW BINARY LOGS, Log_name, 2)
+--let $include_header_events= 1
+--source include/assert_binlog_events.inc
+
+--let $event_sequence= Format_desc # Previous_gtids # Ignorable # $gtid_event # !Begin # !Insert # Write_rows # !Commit # Rotate
+--let $binlog_file = query_get_value(SHOW BINARY LOGS, Log_name, 3)
+--let $include_header_events= 1
+--source include/assert_binlog_events.inc
+
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--source include/rpl_sync.inc
+--source include/rpl_connection_slave.inc
+--replace_column 2 # 3 #
+SHOW BINARY LOGS;
+
+--let $event_sequence= Format_desc # Previous_gtids # $gtid_event # !Q(TRUNCATE TABLE mysql.slow_log) # Rotate
+--let $binlog_file = query_get_value(SHOW BINARY LOGS, Log_name, 2)
+--let $include_header_events= 1
+--source include/assert_binlog_events.inc
+
+--let $event_sequence= Format_desc # Previous_gtids # Ignorable # $gtid_event # !Begin # !Insert # Write_rows # !Commit # Rotate
+--let $binlog_file = query_get_value(SHOW BINARY LOGS, Log_name, 3)
+--let $include_header_events= 1
+--source include/assert_binlog_events.inc
+
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--echo #
+--echo # 2.3 Transaction modified mysql.gtid_executed table will not use binlog cache free flush.
+--echo ########################################################
+--echo #
+--source include/rpl_connection_master.inc
+BEGIN;
+INSERT INTO mysql.gtid_executed values("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", 100000, 100000);
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+COMMIT;
+
+DELETE FROM mysql.gtid_executed WHERE source_uuid = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" AND interval_start = 100000;
+
+--replace_column 2 # 3 #
+SHOW BINARY LOGS;
+
+--let $event_sequence= Format_desc # Previous_gtids # $gtid_event # !Begin # !Insert # Write_rows # !Commit
+--let $binlog_file = query_get_value(SHOW BINARY LOGS, Log_name, 4)
+--let $include_header_events= 1
+--source include/assert_binlog_events.inc
+
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--source include/rpl_sync.inc
+--source include/rpl_connection_slave.inc
+--replace_column 2 # 3 #
+SHOW BINARY LOGS;
+
+--let $event_sequence= Format_desc # Previous_gtids # Ignorable # $gtid_event # !Begin # !Insert # Write_rows # !Commit # Rotate
+--let $binlog_file = query_get_value(SHOW BINARY LOGS, Log_name, 5)
+--let $include_header_events= 1
+--source include/assert_binlog_events.inc
+
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--echo #
+--echo # 2.4 Big transaction in same session of last step should use binlog cache free flush.
+--echo ########################################################
+--echo #
+--source include/rpl_connection_master.inc
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+--replace_column 2 # 3 #
+SHOW BINARY LOGS;
+
+--let $event_sequence= Format_desc # Previous_gtids # Ignorable # $gtid_event # !Begin # !Insert # Write_rows # !Commit # Rotate
+--let $binlog_file = query_get_value(SHOW BINARY LOGS, Log_name, 5)
+--let $include_header_events= 1
+--source include/assert_binlog_events.inc
+
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--source include/rpl_sync.inc
+--source include/rpl_connection_slave.inc
+--replace_column 2 # 3 #
+SHOW BINARY LOGS;
+
+--let $event_sequence= Format_desc # Previous_gtids # Ignorable # $gtid_event # !Begin # !Insert # Write_rows # !Commit # Rotate
+--let $binlog_file = query_get_value(SHOW BINARY LOGS, Log_name, 7)
+--let $include_header_events= 1
+--source include/assert_binlog_events.inc
+
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--echo #
+--echo # 3. Cleanup.
+--echo ########################################################
+--echo #
+--source include/rpl_connection_master.inc
+DROP DATABASE rpl_test;
+--source include/rpl_sync.inc
+--source include/rpl_end.inc

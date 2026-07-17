@@ -709,6 +709,10 @@ union YYSTYPE {
     Create_col_name_list *column_list;
   } insert_update_values_reference;
   my_thread_id query_id;
+  struct {
+    LEX_CSTRING alias;
+    Item *ts;
+  } table_snapshot_and_alias;
   Bipartite_name bipartite_name;
   Set_operator query_operator;
   PT_install_component_set_element *install_component_set_element;

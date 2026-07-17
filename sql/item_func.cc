@@ -145,6 +145,8 @@
 #include "template_utils.h"  // pointer_cast
 #include "thr_mutex.h"
 
+#include "sql/parse_tree_items.h"
+
 using std::max;
 using std::min;
 
@@ -746,6 +748,42 @@ void Item_func::update_used_tables() {
 
 void Item_func::print(const THD *thd, String *str,
                       enum_query_type query_type) const {
+  if (query_type & QT_DUCKDB_REWRITE) {
+    if (arg_count > 0 && (args[0]->data_type() == MYSQL_TYPE_VARCHAR ||
+                          args[0]->data_type() == MYSQL_TYPE_VAR_STRING ||
+                          args[0]->data_type() == MYSQL_TYPE_STRING)) {
+      if (functype() == HOUR_FUNC || functype() == MINUTE_FUNC ||
+          functype() == SECOND_FUNC || functype() == MICROSECOND_FUNC) {
+        str->append(func_name());
+        str->append(STRING_WITH_LEN("(CAST("));
+        args[0]->print(thd, str, query_type);
+        str->append(STRING_WITH_LEN(" AS TIME)"));
+        if (arg_count > 1) {
+          str->append(',');
+        }
+        print_args(thd, str, 1, query_type);
+        str->append(')');
+        return;
+      } else if (functype() == DAYNAME_FUNC || functype() == DAY_FUNC ||
+                 functype() == WEEK_FUNC || functype() == DAYOFYEAR_FUNC ||
+                 functype() == LAST_DAY_FUNC || functype() == MONTHNAME_FUNC ||
+                 functype() == QUARTER_FUNC || functype() == WEEKDAY_FUNC ||
+                 functype() == YEAR_FUNC || functype() == YEARWEEK_FUNC ||
+                 functype() == CONVERT_TZ_FUNC || functype() == MONTH_FUNC ||
+                 functype() == UNIX_TIMESTAMP_FUNC) {
+        str->append(func_name());
+        str->append(STRING_WITH_LEN("(CAST("));
+        args[0]->print(thd, str, query_type);
+        str->append(STRING_WITH_LEN(" AS TIMESTAMP)"));
+        if (arg_count > 1) {
+          str->append(',');
+        }
+        print_args(thd, str, 1, query_type);
+        str->append(')');
+        return;
+      }
+    }
+  }
   str->append(func_name());
   str->append('(');
   print_args(thd, str, 0, query_type);
@@ -1859,9 +1897,23 @@ bool Item_func_numhybrid::get_time(MYSQL_TIME *ltime) {
 
 void Item_typecast_signed::print(const THD *thd, String *str,
                                  enum_query_type query_type) const {
-  str->append(STRING_WITH_LEN("cast("));
-  args[0]->print(thd, str, query_type);
-  str->append(STRING_WITH_LEN(" as signed)"));
+  if (query_type & QT_DUCKDB_REWRITE) {
+    if (args[0]->data_type() == MYSQL_TYPE_VARCHAR ||
+        args[0]->data_type() == MYSQL_TYPE_VAR_STRING ||
+        args[0]->data_type() == MYSQL_TYPE_STRING) {
+      str->append(STRING_WITH_LEN("cast(split("));
+      args[0]->print(thd, str, query_type);
+      str->append(STRING_WITH_LEN(", '.')[1] as bigint)"));
+    } else {
+      str->append(STRING_WITH_LEN("cast("));
+      args[0]->print(thd, str, query_type);
+      str->append(STRING_WITH_LEN(" as bigint)"));
+    }
+  } else {
+    str->append(STRING_WITH_LEN("cast("));
+    args[0]->print(thd, str, query_type);
+    str->append(STRING_WITH_LEN(" as signed)"));
+  }
 }
 
 bool Item_typecast_signed::resolve_type(THD *thd) {
@@ -2901,6 +2953,25 @@ double Item_func_atan::val_real() {
     return check_float_overflow(atan2(value, val2));
   }
   return atan(value);
+}
+
+void Item_func_atan::print(const THD *thd, String *str,
+                           enum_query_type query_type) const {
+  if (query_type & QT_DUCKDB_REWRITE) {
+    if (arg_count == 2) {
+      str->append("atan2");
+      str->append('(');
+      print_args(thd, str, 0, query_type);
+      str->append(')');
+    } else {
+      str->append("atan");
+      str->append('(');
+      print_args(thd, str, 0, query_type);
+      str->append(')');
+    }
+  } else {
+    Item_dec_func::print(thd, str, query_type);
+  }
 }
 
 double Item_func_cos::val_real() {
@@ -4265,6 +4336,43 @@ bool Item_func_field::resolve_type(THD *thd) {
       return true;
   }
   return false;
+}
+
+void Item_func_field::print(const THD *thd, String *str,
+                            enum_query_type query_type) const {
+  if (query_type & QT_DUCKDB_REWRITE) {
+    String to_type;
+    bool need_cast = true;
+    switch (cmp_type) {
+      case STRING_RESULT:
+        to_type.append(STRING_WITH_LEN("VARCHAR"));
+        break;
+      case INT_RESULT:
+        to_type.append(STRING_WITH_LEN("BIGINT"));
+        break;
+      case REAL_RESULT:
+        to_type.append(STRING_WITH_LEN("DOUBLE"));
+        break;
+      default:
+        need_cast = false;
+        break;
+    }
+    str->append(func_name());
+    str->append('(');
+    for (uint i = 0; i < arg_count; i++) {
+      if (i != 0) str->append(',');
+      if(need_cast) str->append(STRING_WITH_LEN("CAST("));
+      args[i]->print(thd, str, query_type);
+      if (need_cast) {
+        str->append(STRING_WITH_LEN(" AS "));
+        str->append(to_type);
+        str->append(')');
+      }
+    }
+    str->append(')');
+  } else {
+    Item_int_func::print(thd, str, query_type);
+  }
 }
 
 longlong Item_func_ascii::val_int() {
@@ -6908,9 +7016,17 @@ enum Item_result Item_func_get_user_var::result_type() const {
 }
 
 void Item_func_get_user_var::print(const THD *thd, String *str,
-                                   enum_query_type) const {
+                                   enum_query_type query_type) const {
   str->append(STRING_WITH_LEN("(@"));
-  append_identifier(thd, str, name.ptr(), name.length());
+  /* TODO: val_str is not a const function, so it cannot be evaluated and
+   rewrited here directly. It is recommended to replace it with the actual
+   value in the future.
+  */
+  if (query_type & QT_DUCKDB_REWRITE) {
+    str->append(name.ptr(), name.length());
+  } else {
+    append_identifier(thd, str, name.ptr(), name.length());
+  }
   str->append(')');
 }
 

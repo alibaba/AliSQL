@@ -75,6 +75,27 @@ CALL dbms_duckdb.query("SELECT COUNT(*) FROM information_schema.tables WHERE tab
 --let $assert_count = 1
 --source include/assert_grep.inc
 
+--exec echo "" > $assert_file
+SET SESSION DEBUG = 'reset';
+SET SESSION DEBUG = '+d, simulate_parallel_copy_ddl_failed_after_rename';
+--error ER_UNKNOWN_ERROR
+ALTER TABLE t1 ENGINE = DuckDB;
+
+# t1 is still InnoDB table
+SHOW CREATE TABLE t1;
+CALL dbms_duckdb.query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema != 'mysql'");
+
+# Check error log
+--let $assert_file = $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_text = Found drop committed tmp table.
+--let $assert_select = DROP TABLE IF EXISTS `#sql.*
+--let $assert_count = 1
+--source include/assert_grep.inc
+--let $assert_text = Found drop committed t1 table.
+--let $assert_select = DROP TABLE IF EXISTS `t1`
+--let $assert_count = 1
+--source include/assert_grep.inc
+
 
 --echo #
 --echo # 3. Simulate crash when execute parallel COPY DDL, tmp table will be committed and left in DuckDB.

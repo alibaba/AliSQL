@@ -12,7 +12,7 @@ WITH tmp AS (SELECT MAX(col1) FROM duckdb_table) SELECT * FROM tmp, duckdb_table
 MAX(col1)	id	col1
 1	1	1
 WITH tmp AS (SELECT MAX(col1) FROM duckdb_table) SELECT * FROM tmp, innodb_table;
-ERROR HY000: [DuckDB] Does not support mixed queries of duckdb engine and other engines in SELECT Statement.
+ERROR HY000: [DuckDB] Does not support mixed queries of duckdb engine and other engines in SELECT Statement. The table `duckdb_table` is not a duckdb table. The table `innodb_table` is not a duckdb table.
 
 (2) Recursive CTE
 
@@ -41,6 +41,6 @@ UNION ALL
 SELECT n + 1 FROM tmp, innodb_table WHERE n = innodb_table.col1
 )
 SELECT * FROM duckdb_table, tmp;
-ERROR HY000: [DuckDB] Does not support mixed queries of duckdb engine and other engines in SELECT Statement.
+ERROR HY000: [DuckDB] Does not support mixed queries of duckdb engine and other engines in SELECT Statement. The table `duckdb_table` is not a duckdb table. The table `innodb_table` is not a duckdb table.
 DROP TABLE duckdb_table;
 DROP TABLE innodb_table;

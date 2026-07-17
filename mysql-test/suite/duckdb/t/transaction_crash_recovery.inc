@@ -18,4 +18,3 @@ START REPLICA;
 START REPLICA;
 
 --source include/rpl_sync.inc
-eval $result_query;

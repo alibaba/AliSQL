@@ -1,0 +1,272 @@
+#
+# Prepare.
+########################################################
+#
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+include/install_semisync.inc
+[connection master]
+SET GLOBAL rpl_semi_sync_source_timeout= 6000000;
+FLUSH STATUS;
+call mtr.add_suppression("Semi-sync master failed on net_flush.. before waiting for replica reply");
+#
+# 1. Make test data.
+########################################################
+#
+CREATE DATABASE rpl_test;
+CREATE TABLE rpl_test.t1 (s LONGTEXT);
+CREATE TABLE rpl_test.t2 (s LONGTEXT);
+FLUSH BINARY LOGS;
+include/rpl_sync.inc
+[connection slave]
+FLUSH BINARY LOGS;
+#
+# 2.1 Execute transaction without binlog cache temp file and free flush.
+########################################################
+#
+[connection master]
+INSERT INTO rpl_test.t2 values(repeat("1", 255));
+# Check binlog and data. Expect 2 binlog files and no ignorable event exist in binlog.
+SHOW BINARY LOGS;
+Log_name	File_size	Encrypted
+master-bin.000001	#	#
+master-bin.000002	#	#
+include/assert_binlog_events.inc [Format_desc # Previous_gtids # Gtid # !Begin # !Insert # !Commit]
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+1
+include/rpl_sync.inc
+[connection slave]
+SHOW BINARY LOGS;
+Log_name	File_size	Encrypted
+slave-bin.000001	#	#
+slave-bin.000002	#	#
+include/assert_binlog_events.inc [Format_desc # Previous_gtids # Gtid # !Begin # !Insert # !Commit]
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+1
+#
+# 2.2 Execute transaction with binlog cache free flush.
+########################################################
+#
+[connection master]
+# Stop slave io to simulate semi sync wait on master will cause net_flush() error.
+[connection slave]
+include/stop_slave_io.inc
+[connection master]
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+COMMIT;
+# Test transaction commit should wait for semi-sync ack.
+[connection master1]
+[connection slave]
+include/start_slave_io.inc
+[connection master]
+# Check binlog and data. Expect 4 binlog files and ignorable event exist in the third binlog.
+SHOW BINARY LOGS;
+Log_name	File_size	Encrypted
+master-bin.000001	#	#
+master-bin.000002	#	#
+master-bin.000003	#	#
+master-bin.000004	#	#
+include/assert_binlog_events.inc [Format_desc # Previous_gtids # Gtid # !Begin # !Insert # !Commit # Rotate]
+include/assert_binlog_events.inc [Format_desc # Previous_gtids # Ignorable # Gtid # !Begin # !Insert # Write_rows # !Commit # Rotate]
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+3
+include/rpl_sync.inc
+[connection slave]
+SHOW BINARY LOGS;
+Log_name	File_size	Encrypted
+slave-bin.000001	#	#
+slave-bin.000002	#	#
+slave-bin.000003	#	#
+slave-bin.000004	#	#
+include/assert_binlog_events.inc [Format_desc # Previous_gtids # Gtid # !Begin # !Insert # !Commit # Rotate]
+include/assert_binlog_events.inc [Format_desc # Previous_gtids # Ignorable # Gtid # !Begin # !Insert # Write_rows # !Commit # Rotate]
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+3
+#
+# 2.3 Execute transaction with binlog cache temp file but without free flush.
+########################################################
+#
+[connection master]
+# 2.3.1 RDS Binlog cache is enabled for this transaction.
+########################################################
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+# Check tmp file exist in binlog cache tmp file dir.
+ML.####
+[connection slave]
+SET GLOBAL binlog_cache_free_flush = OFF;
+[connection master]
+SET GLOBAL binlog_cache_free_flush = OFF;
+COMMIT;
+# 2.3.2 RDS Binlog cache is disabled for this transaction.
+########################################################
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+# Check no tmp file exist in binlog cache tmp file dir.
+COMMIT;
+include/rpl_sync.inc
+SHOW STATUS LIKE "Binlog_cache_disk_use";
+Variable_name	Value
+Binlog_cache_disk_use	5
+# Check binlog and data. Expect 4 binlog files and no ignorable event exist in the 4th binlog.
+SHOW BINARY LOGS;
+Log_name	File_size	Encrypted
+master-bin.000001	#	#
+master-bin.000002	#	#
+master-bin.000003	#	#
+master-bin.000004	#	#
+include/assert_binlog_events.inc [Format_desc # Previous_gtids # Gtid # !Begin # !Insert # Write_rows # !Commit # Gtid # !Begin # !Insert # Write_rows # !Commit]
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+7
+include/rpl_sync.inc
+[connection slave]
+SHOW BINARY LOGS;
+Log_name	File_size	Encrypted
+slave-bin.000001	#	#
+slave-bin.000002	#	#
+slave-bin.000003	#	#
+slave-bin.000004	#	#
+include/assert_binlog_events.inc [Format_desc # Previous_gtids # Gtid # !Begin # !Insert # Write_rows # !Commit # Gtid # !Begin # !Insert # Write_rows # !Commit]
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+7
+#
+# 2.4 Test change binlog_cache_free_flush_limit_size.
+########################################################
+#
+SET GLOBAL binlog_cache_free_flush = ON;
+SET GLOBAL binlog_cache_free_flush_limit_size = 100000000;
+[connection master]
+SET GLOBAL binlog_cache_free_flush = ON;
+SET GLOBAL binlog_cache_free_flush_limit_size = 100000000;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+include/rpl_sync.inc
+SHOW STATUS LIKE "Binlog_cache_disk_use";
+Variable_name	Value
+Binlog_cache_disk_use	6
+# Check binlog and data. Expect 4 binlog files and no ignorable event exist in the 4th binlog.
+SHOW BINARY LOGS;
+Log_name	File_size	Encrypted
+master-bin.000001	#	#
+master-bin.000002	#	#
+master-bin.000003	#	#
+master-bin.000004	#	#
+include/assert_binlog_events.inc [Format_desc # Previous_gtids # Gtid # !Begin # !Insert # Write_rows # !Commit # Gtid # !Begin # !Insert # Write_rows # !Commit # Gtid # !Begin # !Insert # Write_rows # !Commit]
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+9
+include/rpl_sync.inc
+[connection slave]
+SHOW BINARY LOGS;
+Log_name	File_size	Encrypted
+slave-bin.000001	#	#
+slave-bin.000002	#	#
+slave-bin.000003	#	#
+slave-bin.000004	#	#
+include/assert_binlog_events.inc [Format_desc # Previous_gtids # Gtid # !Begin # !Insert # Write_rows # !Commit # Gtid # !Begin # !Insert # Write_rows # !Commit # Gtid # !Begin # !Insert # Write_rows # !Commit]
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+9
+SET GLOBAL binlog_cache_free_flush_limit_size = 10485760;
+[connection master]
+SET GLOBAL binlog_cache_free_flush_limit_size = 10485760;
+#
+# 2.5 Test XA transaction.
+########################################################
+#
+XA BEGIN "test_xa_trx";
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+XA END "test_xa_trx";
+XA PREPARE "test_xa_trx";
+XA COMMIT "test_xa_trx";
+SHOW STATUS LIKE "Binlog_cache_disk_use";
+Variable_name	Value
+Binlog_cache_disk_use	7
+# Check binlog and data. Expect 6 binlog files and ignorable event exist in the 5th binlog, query event(XA commit) exist in 6th binlog.
+SHOW BINARY LOGS;
+Log_name	File_size	Encrypted
+master-bin.000001	#	#
+master-bin.000002	#	#
+master-bin.000003	#	#
+master-bin.000004	#	#
+master-bin.000005	#	#
+master-bin.000006	#	#
+include/assert_binlog_events.inc [Format_desc # Previous_gtids # Ignorable # Gtid # Query # !Insert # Write_rows # Query # XA_prepare # Rotate]
+include/assert_binlog_events.inc [Format_desc # Previous_gtids # Gtid # Query]
+include/rpl_sync.inc
+[connection slave]
+SHOW BINARY LOGS;
+Log_name	File_size	Encrypted
+slave-bin.000001	#	#
+slave-bin.000002	#	#
+slave-bin.000003	#	#
+slave-bin.000004	#	#
+slave-bin.000005	#	#
+slave-bin.000006	#	#
+include/assert_binlog_events.inc [Format_desc # Previous_gtids # Ignorable # Gtid # Query # !Insert # Write_rows # Query # XA_prepare # Rotate]
+include/assert_binlog_events.inc [Format_desc # Previous_gtids # Gtid # Query]
+#
+# 3. Test free flush is not support for binlog encryption.
+########################################################
+#
+# 3.1 Restarting the master with "--binlog_encryption=ON" and keyring installed.
+include/rpl_restart_server.inc [server_number=1]
+include/assert.inc [binlog_encryption option shall be ON]
+include/assert.inc [7nd binary log is encrypted on master]
+# 3.2 Test free flush is not support for binlog encryption.
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+# Check binlog and data. Expect 4 binlog files and ignorable event exist in the third binlog.
+SHOW BINARY LOGS;
+Log_name	File_size	Encrypted
+master-bin.000001	#	#
+master-bin.000002	#	#
+master-bin.000003	#	#
+master-bin.000004	#	#
+master-bin.000005	#	#
+master-bin.000006	#	#
+master-bin.000007	#	#
+include/assert_binlog_events.inc [Format_desc # Previous_gtids # Gtid # !Begin # !Insert # Write_rows # !Commit]
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+13
+include/rpl_sync.inc
+[connection slave]
+SHOW BINARY LOGS;
+Log_name	File_size	Encrypted
+slave-bin.000001	#	#
+slave-bin.000002	#	#
+slave-bin.000003	#	#
+slave-bin.000004	#	#
+slave-bin.000005	#	#
+slave-bin.000006	#	#
+slave-bin.000007	#	#
+slave-bin.000008	#	#
+include/assert_binlog_events.inc [Format_desc # Previous_gtids # Ignorable # Gtid # !Begin # !Insert # Write_rows # !Commit # Rotate]
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+13
+# 3.3 Restarting the master with "--binlog_encryption=OFF" and keyring uninstalled.
+[connection master]
+SET GLOBAL binlog_encryption = OFF;
+UNINSTALL PLUGIN keyring_file;
+include/rpl_restart_server.inc [server_number=1]
+#
+# 4. Cleanup
+########################################################
+#
+[connection master]
+DROP DATABASE rpl_test;
+include/rpl_sync.inc
+SET GLOBAL rpl_semi_sync_source_timeout= @@rpl_semi_sync_source_timeout;;
+include/uninstall_semisync.inc
+[connection master]
+include/rpl_end.inc

@@ -109,6 +109,12 @@ public:
 	inline bool MustWriteToTemporaryFile() const {
 		return destroy_buffer_upon == DestroyBufferUpon::BLOCK;
 	}
+	inline bool HasWrittenToTemporaryBlock() const {
+		return written_temporary_block;
+	}
+	inline void SetWrittenToTemporaryBlock(bool input) {
+		written_temporary_block = input;
+	}
 
 	inline idx_t GetMemoryUsage() const {
 		return memory_usage;
@@ -162,7 +168,9 @@ public:
 
 	//! Resize the actual buffer
 	void ResizeBuffer(BlockLock &, idx_t block_size, int64_t memory_delta);
-	BufferHandle Load(unique_ptr<FileBuffer> buffer = nullptr);
+
+	BufferHandle Load(QueryContext context, unique_ptr<FileBuffer> buffer = nullptr);
+
 	BufferHandle LoadFromBuffer(BlockLock &l, data_ptr_t data, unique_ptr<FileBuffer> reusable_buffer,
 	                            BufferPoolReservation reservation);
 	unique_ptr<FileBuffer> UnloadAndTakeBlock(BlockLock &);
@@ -208,6 +216,8 @@ private:
 	const char *unswizzled;
 	//! Index for eviction queue (FileBufferType::MANAGED_BUFFER only, for now)
 	atomic<idx_t> eviction_queue_idx;
+	//! Has the block been written to a temporary block file
+	atomic<bool> written_temporary_block{false};
 };
 
 } // namespace duckdb

@@ -1629,7 +1629,7 @@ std::pair<int, bool> commit_owned_gtids(THD *thd, bool all) {
   }
 
   if (ending_trans(thd, all) && thd->multi_trx_in_batch()) {
-    if (opt_bin_log) {
+    if (opt_bin_log && (!thd->slave_thread || opt_log_replica_updates)) {
       thd->get_duckdb_context()->prepare_gtids_for_binlog_commit();
     }
     error = thd->get_duckdb_context()->save_batch_gtid_set();
@@ -5245,8 +5245,6 @@ int handler::index_next_same(uchar *buf, const uchar *key, uint keylen) {
                              be saved to the data-dictionary by this call.
   @param last_key            key info of last index if table_def is created
                              instead of loaded from dd. Otherwise nullptr
-  @param recycled            Whether create table came from recycling the
-                             truncated operation
 
   @retval
    0  ok
@@ -5256,7 +5254,7 @@ int handler::index_next_same(uchar *buf, const uchar *key, uint keylen) {
 int ha_create_table(THD *thd, const char *path, const char *db,
                     const char *table_name, HA_CREATE_INFO *create_info,
                     bool update_create_info, bool is_temp_table,
-                    dd::Table *table_def, KEY *last_key, bool recycled) {
+                    dd::Table *table_def, KEY *last_key) {
   int error = 1;
   TABLE table;
   char name_buff[FN_REFLEN];

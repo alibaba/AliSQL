@@ -358,6 +358,7 @@ extern bool duckdb_convert_all_at_startup_ignore_error;
 extern uint duckdb_convert_all_at_startup_threads;
 extern bool duckdb_convert_all_skip_mtr_db;
 extern std::atomic<bool> on_duckdb_convert_progress;
+extern bool duckdb_convert_tables_with_generated_columns;
 
 enum enum_binlog_error_action {
   /// Ignore the error and let server continue without binlogging
