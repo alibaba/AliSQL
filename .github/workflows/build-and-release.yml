@@ -9,6 +9,10 @@ on:
 permissions:
   contents: write
 
+env:
+  DOCKER_IMAGE: songhuaxiong/alisql
+  DOCKER_REPOSITORY: p1p1bear/alisql-docker
+
 jobs:
   parse:
     runs-on: ubuntu-latest
@@ -154,6 +158,13 @@ jobs:
     needs: [parse, build]
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout release changelog
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: wiki/changes/changes-in-alisql-8.0.44.2026-06-30-en.md
+          sparse-checkout-cone-mode: false
+
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
@@ -162,24 +173,96 @@ jobs:
       - name: List artifacts
         run: ls -lh artifacts/
 
-      - name: Create release with tarballs
+      - name: Create or update release with tarballs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG:      ${{ github.ref_name }}
           VERSION:  ${{ needs.parse.outputs.version }}
         run: |
-          NOTES="Auto-built AliSQL ${VERSION} (oraclelinux:7, glibc 2.17). x86_64 and aarch64 binaries attached."
+          set -euo pipefail
 
+          X86_PACKAGE="alisql-${VERSION}-linux-glibc2.17-x86_64.tar.xz"
+          ARM_PACKAGE="alisql-${VERSION}-linux-glibc2.17-aarch64.tar.xz"
+          CHANGELOG_FILE="wiki/changes/changes-in-alisql-8.0.44.2026-06-30-en.md"
+          NOTES_FILE="${RUNNER_TEMP}/release-notes.md"
+
+          test -f "artifacts/${X86_PACKAGE}"
+          test -f "artifacts/${ARM_PACKAGE}"
           if [[ "$VERSION" == 8.0.44-* ]]; then
-            NOTES="${NOTES}
-
-          Release details / 发布详情:
-          - [English changes](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/wiki/changes/changes-in-alisql-8.0.44.2026-06-30-en.md)
-          - [中文变更说明](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/wiki/changes/changes-in-alisql-8.0.44.2026-06-30-zh.md)"
+            test -f "$CHANGELOG_FILE"
           fi
 
-          gh release create "$TAG" \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "$TAG" \
-            --notes "$NOTES" \
-            artifacts/*.tar.xz
+          {
+            printf '# AliSQL %s\n\n' "$VERSION"
+            printf 'Prebuilt AliSQL binaries and Docker images for this release. / 本次发布提供 AliSQL 预编译二进制包和 Docker 镜像。\n\n'
+            printf '## Binary packages / 二进制包\n\n'
+            printf '| Platform | Package |\n'
+            printf '| --- | --- |\n'
+            printf '| Linux x86_64 (glibc 2.17) | [%s](https://github.com/%s/releases/download/%s/%s) |\n' "$X86_PACKAGE" "$GITHUB_REPOSITORY" "$TAG" "$X86_PACKAGE"
+            printf '| Linux aarch64 (glibc 2.17) | [%s](https://github.com/%s/releases/download/%s/%s) |\n\n' "$ARM_PACKAGE" "$GITHUB_REPOSITORY" "$TAG" "$ARM_PACKAGE"
+            printf '## Docker image / Docker 镜像\n\n'
+            printf 'The multi-architecture image supports linux/amd64 and linux/arm64. It is published after the binary packages are available.\n\n'
+            printf -- '- Image: [%s:%s](https://hub.docker.com/r/%s/tags?name=%s)\n' "$DOCKER_IMAGE" "$VERSION" "$DOCKER_IMAGE" "$VERSION"
+            printf -- '- Build: [GitHub Actions](https://github.com/%s/actions/workflows/build.yml)\n\n' "$DOCKER_REPOSITORY"
+            printf '    docker pull %s:%s\n' "$DOCKER_IMAGE" "$VERSION"
+
+            if [[ "$VERSION" == 8.0.44-* ]]; then
+              printf '\n## English changelog\n\n'
+              printf '[Standalone English changelog](https://github.com/%s/blob/%s/%s) | [中文变更说明](https://github.com/%s/blob/%s/wiki/changes/changes-in-alisql-8.0.44.2026-06-30-zh.md)\n\n' "$GITHUB_REPOSITORY" "$TAG" "$CHANGELOG_FILE" "$GITHUB_REPOSITORY" "$TAG"
+              sed -n '5,$ { s/^### /#### /; s/^## /### /; p; }' "$CHANGELOG_FILE"
+            fi
+          } > "$NOTES_FILE"
+
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber \
+              "artifacts/${X86_PACKAGE}" \
+              "artifacts/${ARM_PACKAGE}"
+            gh release edit "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$TAG" \
+              --notes-file "$NOTES_FILE"
+          else
+            gh release create "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --title "$TAG" \
+              --notes-file "$NOTES_FILE" \
+              "artifacts/${X86_PACKAGE}" \
+              "artifacts/${ARM_PACKAGE}"
+          fi
+
+  # The Docker build downloads these release assets, so it must run afterwards.
+  trigger-docker:
+    needs: [parse, release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Push release tag to the Docker repository
+        env:
+          PAT: ${{ secrets.DOCKER_REPO_PAT }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$PAT" ]]; then
+            echo "DOCKER_REPO_PAT is not configured." >&2
+            exit 1
+          fi
+
+          REPOSITORY_URL="https://x-access-token:${PAT}@github.com/${DOCKER_REPOSITORY}.git"
+          git clone --depth 1 "$REPOSITORY_URL" docker-repository
+          cd docker-repository
+
+          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "Tag ${TAG} already exists in ${DOCKER_REPOSITORY}; skipping."
+            exit 0
+          fi
+
+          git tag "$TAG"
+          git push origin "refs/tags/${TAG}"
+
+          {
+            echo "Docker build triggered for ${DOCKER_IMAGE}:${TAG#AliSQL-}."
+            echo "https://github.com/${DOCKER_REPOSITORY}/actions/workflows/build.yml"
+          } >> "$GITHUB_STEP_SUMMARY"
