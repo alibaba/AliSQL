@@ -1,12 +1,12 @@
 # AliSQL 8.0.44 Feature Release Notes
 
-AliSQL 8.0.44 is based on MySQL 8.0.44 and adds native analytical, vector-search, transaction, binlog-durability, and historical-query capabilities. Most features are opt-in so that existing MySQL workloads retain their previous behavior after upgrade.
+AliSQL 8.0.44 is based on MySQL 8.0.44. This release adds the DuckDB storage engine, native vector indexes, two binlog commit optimizations, and Native Flashback. Most new execution paths are disabled by default.
 
 | Area | Feature | Default |
 |------|---------|---------|
 | Analytics | DuckDB storage engine and 8.0.44 enhancements | `duckdb_mode=NONE` |
 | Vector search | Native `VECTOR` type and HNSW vector indexes | `vidx_disabled=ON` |
-| Large transactions | Binlog Cache Free Flush | `OFF`; optimized path inactive in the standard DuckDB build |
+| Large transactions | Binlog Cache Free Flush | `OFF` |
 | Binlog durability | Persist Binlog Into Redo V2 | `persist_binlog_to_redo=OFF` |
 | Historical queries | Native Flashback with `AS OF TIMESTAMP` | Snapshot task `OFF` |
 
@@ -14,9 +14,9 @@ AliSQL 8.0.44 is based on MySQL 8.0.44 and adds native analytical, vector-search
 
 AliSQL integrates DuckDB as a native analytical storage engine while preserving the MySQL client protocol and SQL entry point. The 8.0.44 update includes the following improvements.
 
-> **Alibaba Cloud RDS MySQL:** RDS offers managed DuckDB analytical primary and read-only instance products with product-specific topology, synchronization, DDL handling, and resource isolation. See the official [English](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/duckdb-analysis-instance) and [Chinese](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/duckdb-analysis-instance) documentation. These managed product capabilities are not supplied by the source tree alone.
+> **RDS MySQL:** Managed DuckDB analytical primary and read-only instances include service-side topology, synchronization, DDL handling, and resource isolation. See the official [English](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/duckdb-analysis-instance) and [Chinese](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/duckdb-analysis-instance) documentation. Those service features are not part of this source tree.
 
-### New Capabilities
+### New Features
 
 - Upgraded the embedded DuckDB core to v1.4.4.
 - Added optional SQL normalization for cross-database queries, temporal expressions, additional MySQL functions, and prepared-statement reprepare.
@@ -107,15 +107,15 @@ LIMIT 10;
 
 See the [Vector Index guide](./vidx/vidx_readme.md) for architecture and tuning details.
 
-> **Alibaba Cloud RDS MySQL:** RDS packages vector storage as a managed feature with product-specific enablement, lifecycle integration, and eligibility. See the official [English](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/vector-storage-1) and [Chinese](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/vector-storage-1) documentation. RDS version requirements and parameter defaults are not the defaults of this source branch.
+> **RDS MySQL:** Managed vector storage includes service-side enablement, data synchronization, backup, and recovery. See the official [English](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/vector-storage-1) and [Chinese](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/vector-storage-1) documentation. Supported versions and defaults may differ from this source tree.
 
 ## Large TX Optimization: Binlog Cache Free Flush
 
 Large transactions normally spill their transaction binlog cache to a temporary file and then copy that data into the binlog again during commit. Binlog Cache Free Flush reserves the required binlog header space in that temporary file, finalizes it, and renames it as the next binlog file. This removes the second large copy and reduces commit-time I/O amplification.
 
-> **Current availability:** The implementation and variables are present, but the optimized path is inactive in the standard DuckDB-enabled build. When binlog is enabled, DuckDB registers a 2PC `prepare` callback even if `duckdb_mode=NONE`, so every transaction selects normal binlog group commit. A build with no additional registered 2PC engine is required to enter Free Flush.
+Free Flush supports large InnoDB transactions when the registered 2PC participants are the binlog and InnoDB. The current DuckDB integration registers another 2PC participant, so builds that include DuckDB use normal binlog group commit. Large-transaction optimization for DuckDB will be added in the next release.
 
-> **Alibaba Cloud RDS MySQL:** RDS provides a commercially supported Free Flush rollout with product-specific kernel eligibility and parameter management. See the official [English](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/binlog-cache-free-flush) and [Chinese](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/binlog-cache-free-flush) documentation. The RDS `loose_binlog_cache_free_flush*` names and threshold range must not be substituted for the open-source variables below.
+> **RDS MySQL:** Supported versions and the RDS `loose_binlog_cache_free_flush*` parameters are listed in the official [English](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/binlog-cache-free-flush) and [Chinese](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/binlog-cache-free-flush) documentation. The RDS names and ranges do not apply to the source variables below.
 
 ```sql
 SET GLOBAL binlog_cache_free_flush_limit_size = 268435456;
@@ -127,9 +127,9 @@ SET GLOBAL binlog_cache_free_flush = ON;
 | `binlog_cache_free_flush` | Global, dynamic | `OFF` | `ON`, `OFF` | Enables the optimized commit path |
 | `binlog_cache_free_flush_limit_size` | Global, dynamic | 256 MiB | 10 MiB to `ULLONG_MAX` bytes | Minimum transaction cache size for Free Flush |
 
-The server uses Free Flush only when all safety checks pass. The transaction cache must exceed the configured limit, have spilled to a finalized unencrypted temporary file, contain no statement-cache events or incidents, and must not modify `mysql.gtid_executed`. The binlog must be open and the current 2PC configuration must contain only one non-binlog storage engine. If any condition is not met, AliSQL transparently uses the normal binlog group-commit path.
+The server uses Free Flush only when all safety checks pass. The transaction cache must exceed the configured limit, have spilled to a finalized unencrypted temporary file, contain no statement-cache events or incidents, and must not modify `mysql.gtid_executed`. The binlog must be open, and InnoDB must be the only registered non-binlog 2PC engine. If any condition is not met, the transaction uses normal binlog group commit.
 
-Binlog encryption uses a different file key from the cache file and therefore always triggers the normal fallback. An additional registered 2PC engine also forces fallback to avoid an unrecoverable prepared-transaction state. Because DuckDB is such a registered participant in the standard build regardless of its mode, this limitation currently applies even when DuckDB execution is disabled.
+Binlog encryption also forces normal group commit because the cache file and final binlog use different keys. See the Free Flush guide for the crash-recovery reason behind the 2PC restriction.
 
 For the full mechanism, eligibility checks, build boundary, and open-source/RDS differences, see the [Binlog Cache Free Flush guide](./binlog-cache-free-flush/binlog-cache-free-flush-en.md) or its [Chinese version](./binlog-cache-free-flush/binlog-cache-free-flush-zh.md).
 
@@ -150,7 +150,7 @@ persist_binlog_to_redo=ON
 
 `innodb_flush_log_at_trx_commit=1` preserves the intended commit-durability baseline by synchronizing the redo that carries eligible binlog events. It is a durability recommendation rather than an enablement guard in the current implementation.
 
-> **Alibaba Cloud RDS MySQL:** The managed Binlog in Redo product includes RDS-specific replication-mode prerequisites, backup guidance, and product benchmarks. See the official [English](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/binlog-in-redo) and [Chinese](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/binlog-in-redo) documentation. Self-managed AliSQL must use the variables and fallback rules documented in this section.
+> **RDS MySQL:** Replication prerequisites, backup behavior, parameters, and performance references are listed in the official [English](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/binlog-in-redo) and [Chinese](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/binlog-in-redo) documentation. Self-managed AliSQL uses the variables and fallback rules below.
 
 ### Variables
 
@@ -179,7 +179,7 @@ For configuration, sizing, durability semantics, and open-source/RDS differences
 
 Native Flashback reconstructs an InnoDB consistent read view from retained undo and exposes it through `AS OF TIMESTAMP`. It supports historical reads without restoring a backup or replaying binlogs into another instance.
 
-> **Alibaba Cloud RDS MySQL:** RDS provides managed Native Flashback eligibility and retention controls. See the official [English](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/native-flashback) and [Chinese](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/native-flashback) documentation. The open-source branch exposes additional snapshot and query controls, so use the parameter table below for self-managed instances.
+> **RDS MySQL:** Managed Native Flashback has its own supported versions and retention controls. See the official [English](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/native-flashback) and [Chinese](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/native-flashback) documentation. Self-managed AliSQL uses the snapshot and query controls below.
 
 ### Startup Configuration
 
@@ -252,11 +252,11 @@ For complete enablement rules, recovery workflow, procedures, and open-source/RD
 - All major new execution paths are disabled by default except the Native Flashback query gate; snapshot generation and undo retention remain disabled by default.
 - Validate DuckDB SQL compatibility and vector recall/performance with production-shaped workloads before migration.
 - Size `binlog_buffer_size`, undo retention, and HNSW cache limits against peak concurrency rather than average load.
-- Keep the normal binlog path available. Persist Binlog Into Redo V2 falls back when a transaction fails its safety checks; the Free Flush optimized path is inactive in the standard DuckDB-enabled build.
+- Keep the normal binlog path available. Binlog in Redo falls back when a transaction fails its checks. Free Flush currently requires InnoDB to be the only non-binlog 2PC engine; large-transaction optimization for DuckDB will be added in the next release.
 
 Release history:
 
 - 2026-06-30 complete feature release: [English](./changes/changes-in-alisql-8.0.44.2026-06-30-en.md) / [中文](./changes/changes-in-alisql-8.0.44.2026-06-30-zh.md)
 - [2025-12-31 DuckDB baseline](./changes/changes-in-alisql-8.0.44.2025-12-31.md)
 
-Each feature guide above links to the corresponding Alibaba Cloud RDS MySQL documentation and identifies product-specific behavior that does not apply to this source branch.
+Each feature guide links to the corresponding RDS MySQL documentation and notes differences from the source build.

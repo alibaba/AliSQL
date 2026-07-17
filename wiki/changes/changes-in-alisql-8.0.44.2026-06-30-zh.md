@@ -2,7 +2,7 @@
 
 [ [Release Notes](../changes-in-alisql-8.0.44.md) | [English](./changes-in-alisql-8.0.44.2026-06-30-en.md) | [中文](./changes-in-alisql-8.0.44.2026-06-30-zh.md) ]
 
-本文档面向 AliSQL 8.0.44 的对外发布，汇总 DuckDB 分析引擎增强、原生向量索引、Binlog Cache Free Flush、Persist Binlog Into Redo V2 和 Native Flashback。AliSQL 以 MySQL 8.0.44 为基础；大多数新增执行路径默认关闭。Native Flashback 查询入口默认开启，但快照生成和 Undo Retention 默认关闭。
+AliSQL 8.0.44 基于 MySQL 8.0.44。本次发布更新了 DuckDB 集成，并增加原生向量索引、Binlog Cache Free Flush、Persist Binlog Into Redo V2 和 Native Flashback。大多数新执行路径默认关闭；Flashback 查询入口默认开启，但快照生成和 Undo Retention 默认关闭。
 
 ## 功能概览
 
@@ -10,7 +10,7 @@
 |------|------|----------|
 | 分析引擎 | DuckDB 存储引擎及 8.0.44 增强 | `duckdb_mode=NONE` |
 | 向量检索 | 原生 `VECTOR` 类型与 HNSW 向量索引 | `vidx_disabled=ON` |
-| 大事务优化 | Binlog Cache Free Flush | `OFF`；标准 DuckDB 构建中优化路径不生效 |
+| 大事务优化 | Binlog Cache Free Flush | `OFF` |
 | Binlog 持久化 | Persist Binlog Into Redo V2 | `persist_binlog_to_redo=OFF` |
 | 历史数据查询 | Native Flashback `AS OF TIMESTAMP` | 快照任务默认 `OFF` |
 
@@ -129,7 +129,7 @@ LIMIT 10;
 
 普通大事务提交时，事务 Binlog Cache 会先落到临时文件，再复制到正式 Binlog，产生第二次大文件写入。Free Flush 在临时文件中预留 Binlog 头部空间，提交时完成文件并将其 Rename 为新的 Binlog 文件，从而减少提交阶段的 I/O 放大和延迟。
 
-> **当前可用性：** 参数和实现已经提供，但标准 DuckDB 构建中优化路径不生效。开启 Binlog 后，DuckDB 即使处于 `duckdb_mode=NONE` 也会注册 2PC `prepare` 回调，因此所有事务都会选择普通 Binlog Group Commit。只有没有额外注册 2PC 引擎的构建才可能进入 Free Flush。
+Free Flush 已支持 InnoDB 大事务，要求服务端注册的 2PC 参与者为 Binlog 和 InnoDB。当前 DuckDB 集成会额外注册一个 2PC 参与者，因此包含 DuckDB 的 AliSQL 使用普通 Binlog Group Commit；下一版本将支持 DuckDB 场景的大事务优化。
 
 ```sql
 SET GLOBAL binlog_cache_free_flush_limit_size = 268435456;
@@ -147,7 +147,7 @@ SET GLOBAL binlog_cache_free_flush = ON;
 
 事务 Cache 必须超过阈值、已经写入磁盘临时文件并完成 Finalize；Statement Cache 必须为空；事务不能包含 Incident，也不能修改 `mysql.gtid_executed`；Binlog 必须处于打开状态。Binlog 加密场景下，临时文件与正式 Binlog 使用不同密钥，因此自动回退到普通提交路径。
 
-Free Flush 的崩溃恢复只支持一个非 Binlog 2PC 存储引擎。存在额外注册的 2PC 引擎时，AliSQL 会自动使用原 Binlog Group Commit，避免产生无法恢复的 Prepared Transaction 状态。标准构建中的 DuckDB 始终属于这一额外注册参与者，与 `duckdb_mode` 是否开启无关。任何安全检查不满足都只影响当前事务，不会导致提交失败。
+InnoDB 必须是唯一注册的非 Binlog 2PC 引擎。存在其他 2PC 引擎或任一安全检查不满足时，事务使用普通 Binlog Group Commit，提交本身不受影响。
 
 ## 4. Persist Binlog Into Redo V2
 
@@ -217,7 +217,7 @@ FROM orders AS OF TIMESTAMP '2026-07-16 10:00:00';
 
 时间表达式必须在单次执行中为常量，并可转换为 TIMESTAMP。
 
-返回的 Read View 来自已保留的快照历史，不保证与请求的墙上时间完全一致。`innodb_rds_flashback_allow_gap` 限制允许的时间差，`innodb_rds_flashback_print_warning` 控制非精确匹配时的 Warning。
+返回的 Read View 来自已保留的快照历史，不一定与请求的时间点完全一致。`innodb_rds_flashback_allow_gap` 限制允许的时间差，`innodb_rds_flashback_print_warning` 控制非精确匹配时是否输出告警。
 
 使用 Flashback 恢复数据时，应先写入独立表并核对结果。若需通过 `RENAME TABLE` 替换原表，应先停止业务读写，并保留原表备份名直到恢复结果验证完成。
 
@@ -258,14 +258,14 @@ FROM orders AS OF TIMESTAMP '2026-07-16 10:00:00';
 - 除 Flashback 查询入口外，新执行路径均默认关闭；Flashback 快照生成和 Undo Retention 同样默认关闭。
 - DuckDB 兼容率较高但并非完全等同 MySQL，应使用真实业务 SQL 验证语法、函数、Collation 和 DDL。
 - VIDX 的 HNSW 参数需要结合数据规模、召回率和延迟测试调整。
-- Binlog in Redo V2 会在事务不满足安全检查时回退；Free Flush 优化路径在标准 DuckDB 构建中不生效。
+- Binlog in Redo V2 会在事务不满足检查条件时使用普通提交路径。Free Flush 当前要求 InnoDB 是唯一的非 Binlog 2PC 引擎，下一版本将支持 DuckDB 场景的大事务优化。
 - 按峰值并发而不是平均负载规划 Binlog Buffer、Undo Retention 和 HNSW Cache。
 
-## 阿里云 RDS MySQL 商业版
+## 阿里云 RDS MySQL
 
-阿里云 RDS MySQL 将这些内核能力产品化，并提供服务侧版本发布、参数管理、产品拓扑、数据同步、备份、监控与支持。RDS 参数名称、默认值、范围和适用条件可能与本开源分支不同，使用 RDS 实例时应以官方产品文档为准。
+RDS MySQL 提供这些功能的托管版本，并负责产品拓扑、数据同步、备份、监控与支持。RDS 支持版本、参数名、默认值和范围可能与本源码不同，使用 RDS 实例时应以产品文档为准。
 
-| 能力 | 官方文档 |
+| 功能 | 官方文档 |
 |------|----------|
 | DuckDB 分析实例 | [中文](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/duckdb-analysis-instance) / [English](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/duckdb-analysis-instance) |
 | 向量存储 | [中文](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/vector-storage-1) / [English](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/vector-storage-1) |

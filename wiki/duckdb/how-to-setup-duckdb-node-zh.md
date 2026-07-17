@@ -284,4 +284,4 @@ START REPLICA;
 
 ## RDS 托管方案
 
-阿里云 RDS MySQL 提供托管的 DuckDB 分析主实例和分析只读实例产品，其开通流程、产品拓扑、数据同步和适用条件属于 RDS 专属能力。使用托管方案时，请以官方[中文文档](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/duckdb-analysis-instance)或[英文文档](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/duckdb-analysis-instance)为准，不应沿用本文的自建初始化流程。
+RDS MySQL 提供托管的 DuckDB 分析主实例和分析只读实例。开通流程、产品拓扑、数据同步和支持版本参见官方[中文文档](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/duckdb-analysis-instance)和[英文文档](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/duckdb-analysis-instance)。本文的初始化流程只适用于自建 AliSQL。

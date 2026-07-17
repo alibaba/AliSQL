@@ -167,7 +167,7 @@ ALTER TABLE t RENAME TO t_new;
 
 ## 2. Startup Conversion from an Existing InnoDB Instance
 
-Use this when you want to migrate existing InnoDB tables to DuckDB to boost analytical performance.
+Use this to migrate existing InnoDB tables to DuckDB for analytical queries.
 
 ### Steps
 
@@ -272,4 +272,4 @@ Route analytics/reporting queries to the DuckDB replica.
 
 ## Managed RDS Alternative
 
-Alibaba Cloud RDS MySQL offers managed DuckDB analytical primary and read-only instance products. Their provisioning, topology, synchronization, and eligibility are product-specific; use the official [English](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/duckdb-analysis-instance) or [Chinese](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/duckdb-analysis-instance) documentation instead of this self-managed bootstrap procedure.
+RDS MySQL provides managed DuckDB analytical primary and read-only instances. Provisioning, topology, synchronization, and supported versions are described in the official [English](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/duckdb-analysis-instance) and [Chinese](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/duckdb-analysis-instance) documentation. The bootstrap procedure on this page is for self-managed AliSQL.

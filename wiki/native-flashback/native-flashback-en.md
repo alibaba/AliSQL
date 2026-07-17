@@ -4,7 +4,7 @@
 
 Native Flashback lets an InnoDB query read retained historical data with `AS OF TIMESTAMP`. It builds a consistent historical read view from snapshot records and retained undo, so accidental data changes can be investigated or recovered without first restoring a backup and replaying binlogs on another server.
 
-This document describes the open-source AliSQL 8.0.44 branch. For the managed RDS MySQL product, see [Alibaba Cloud RDS MySQL](#alibaba-cloud-rds-mysql).
+The settings below apply to self-managed AliSQL 8.0.44. For RDS MySQL versions and parameters, see [Alibaba Cloud RDS MySQL](#alibaba-cloud-rds-mysql).
 
 ## How It Works
 
@@ -99,6 +99,6 @@ All variables below are global, dynamic InnoDB plugin variables. Startup configu
 
 ## Alibaba Cloud RDS MySQL
 
-Alibaba Cloud RDS for MySQL productizes Native Flashback with managed kernel rollout and product-level eligibility and retention controls. See the official [English documentation](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/native-flashback) or [Chinese documentation](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/native-flashback).
+RDS MySQL also provides Native Flashback, with managed enablement and retention settings. See the official [English documentation](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/native-flashback) and [Chinese documentation](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/native-flashback).
 
-The RDS page is authoritative for supported RDS engine versions, console operations, service lifecycle, and RDS parameter policy. For a self-managed build from this repository, use the startup rules, defaults, ranges, and SQL boundaries in this guide; similarly named RDS controls do not override the source behavior.
+RDS versions, console operations, and parameter policy are product-specific. For a source build, use the startup rules, defaults, ranges, and SQL restrictions on this page.

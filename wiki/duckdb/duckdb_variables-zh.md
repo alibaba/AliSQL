@@ -2,7 +2,7 @@
 
 [ [DuckDB Engine Variables in AliSQL](./duckdb_variables-en.md) | [AliSQL DuckDB 引擎参数](./duckdb_variables-zh.md) ]
 
-> 本文记录自建 AliSQL 源码分支的参数。阿里云 RDS MySQL DuckDB 分析实例具有产品专属的适用条件和托管配置，RDS 实例请参见官方[中文文档](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/duckdb-analysis-instance)或[英文文档](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/duckdb-analysis-instance)。
+> 本文列出自建 AliSQL 源码中的参数。RDS MySQL 有单独的支持版本和托管配置，RDS 实例请参见官方[中文文档](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/duckdb-analysis-instance)或[英文文档](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/duckdb-analysis-instance)。
 
 ## AliSQL 8.0.44 DuckDB 增强新增参数
 
@@ -173,7 +173,7 @@
 - **参数类型**: 布尔类型
 - **默认值**: OFF
 - **取值范围**: ON \| OFF
-- **含义**: 是否在实例启动时，自动将所有 InnoDB 引擎的表转换为 DuckDB 表。使用此参数可以简单地完成数据从 InnoDB 到 DuckDB 的全量迁移。该参数为只读参数，只能在实例启动前配置。
+- **含义**: 是否在实例启动时自动将所有 InnoDB 表转换为 DuckDB。该参数为只读参数，只能在实例启动前配置；转换前应按部署指南完成备份和容量检查。
 
 ### `duckdb_convert_all_at_startup_ignore_error`
 - **参数范围**: 全局参数
@@ -205,7 +205,7 @@
 - **参数类型**: 布尔类型
 - **默认值**: OFF
 - **取值范围**: ON \| OFF
-- **含义**: 是否禁用排序规则的下推优化，强制使用二进制比较。当 DuckDB 的查询并不关心数据的排序顺序和大小写时，可以设置此参数为 `ON`，以提升性能。
+- **含义**: 是否禁用排序规则下推并强制使用二进制比较。仅当查询不依赖排序规则或大小写语义时使用；这样可以减少相应的 Collation 处理开销。
 
 ### `duckdb_source_set_insert_only_to_binlog`
 - **参数范围**: 全局参数
@@ -368,7 +368,7 @@
 - **参数类型**: 布尔类型
 - **默认值**: ON
 - **取值范围**: ON \| OFF
-- **含义**: 是否使用批量插入方式加速将 InnoDB 表转为 DuckDB 引擎的 DDL 过程。开启后可显著提升从 InnoDB 向 DuckDB 数据转换的性能。
+- **含义**: 是否在 InnoDB 到 DuckDB 的 DDL 转换中使用批量插入，以减少受支持转换路径中的逐行传输开销。
 
 ### `duckdb_dml_in_batch`
 - **参数范围**: 全局参数

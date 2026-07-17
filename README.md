@@ -5,18 +5,18 @@
 <h1 align="center">AliSQL</h1>
 
 <p align="center">
-  <strong>Alibaba's Enterprise MySQL Branch with DuckDB OLAP & Native Vector Search</strong>
+  <strong>Alibaba's MySQL Branch with DuckDB Analytics and Native Vector Search</strong>
 </p>
 
 <p align="center">
-  <em>Battle-tested in Alibaba's production environment, powering millions of databases</em>
+  <em>Based on MySQL 8.0.44 and maintained by Alibaba Cloud Database Team</em>
 </p>
 
 <p align="center">
   <a href="https://github.com/alibaba/AliSQL/stargazers"><img src="https://img.shields.io/github/stars/alibaba/AliSQL?style=for-the-badge&logo=github&color=ffca28" alt="GitHub Stars"></a>
   <a href="https://github.com/alibaba/AliSQL/network/members"><img src="https://img.shields.io/github/forks/alibaba/AliSQL?style=for-the-badge&logo=github&color=8bc34a" alt="GitHub Forks"></a>
   <a href="https://github.com/alibaba/AliSQL/blob/master/LICENSE"><img src="https://img.shields.io/badge/License-GPL%202.0-blue?style=for-the-badge" alt="License"></a>
-  <a href="https://github.com/alibaba/AliSQL/releases"><img src="https://img.shields.io/badge/MySQL-8.0.44%20LTS-orange?style=for-the-badge&logo=mysql&logoColor=white" alt="MySQL Version"></a>
+  <a href="https://github.com/alibaba/AliSQL/releases"><img src="https://img.shields.io/badge/MySQL-8.0.44-orange?style=for-the-badge&logo=mysql&logoColor=white" alt="MySQL Version"></a>
 </p>
 
 <p align="center">
@@ -31,31 +31,31 @@
   <a href="./README_zh.md">简体中文</a> | <a href="./README.md">English</a>
 </p>
 
-## Why AliSQL?
+## About AliSQL
 
-AliSQL brings enterprise-grade capabilities to MySQL, combining the reliability of InnoDB OLTP with DuckDB's blazing-fast analytics and native vector search — all through familiar MySQL interfaces.
+AliSQL is an open-source MySQL branch maintained by Alibaba Cloud Database Team. This release is based on MySQL 8.0.44 and adds a DuckDB analytical storage engine, HNSW vector indexes, Native Flashback, and binlog optimizations while retaining the MySQL client protocol.
 
 <table>
 <tr>
 <td width="33%" align="center">
 
-### 200x+ Speedups in Reference Tests
+### Analytics Reference Results
 
-The included [TPC-H SF100 reference results](./wiki/duckdb/duckdb-en.md#performance-benchmarks) show more than **200x speedups** over InnoDB on multiple queries
-
-</td>
-<td width="33%" align="center">
-
-### Native Vector Search
-
-Built-in HNSW algorithm supporting up to **16,383 dimensions** for AI/ML workloads
+The included [TPC-H SF100 results](./wiki/duckdb/duckdb-en.md#performance-benchmarks) show more than **200x speedup** over InnoDB for several queries in that test environment
 
 </td>
 <td width="33%" align="center">
 
-### MySQL-Compatible Interfaces
+### Native Vector Indexes
 
-Keep using familiar MySQL tools, drivers, and SQL while adopting AliSQL extensions
+The `VECTOR(N)` type and HNSW indexes support vectors with up to **16,383 dimensions**
+
+</td>
+<td width="33%" align="center">
+
+### MySQL Client Compatibility
+
+Applications connect through the MySQL protocol and continue to use MySQL clients and drivers
 
 </td>
 </tr>
@@ -65,13 +65,15 @@ Keep using familiar MySQL tools, drivers, and SQL while adopting AliSQL extensio
 
 | Feature | Description | Status |
 |---------|-------------|--------|
-| **DuckDB Storage Engine** | Columnar OLAP engine with automatic compression, perfect for analytics workloads | Available |
+| **DuckDB Storage Engine** | Columnar execution and storage for analytical tables, with automatic compression | Available |
 | **Vector Index (VIDX)** | Native vector storage & ANN search with HNSW, supports COSINE & EUCLIDEAN distance | Available |
 | **Native Flashback** | Query historical InnoDB data with `AS OF TIMESTAMP` and retained undo snapshots | Available |
-| **Large TX Optimization** | Binlog Cache Free Flush is implemented, but its optimized path is inactive in the standard DuckDB-enabled build | Inactive in standard build |
+| **Large TX Optimization** | Binlog Cache Free Flush reduces commit-time I/O amplification for large InnoDB transactions | Available* |
 | **Binlog Durability** | Persist Binlog Into Redo V2 reduces synchronous binlog I/O while retaining crash recovery | Available |
 | **DDL Optimization** | Instant DDL, parallel B+tree construction, non-blocking locks | Planned |
 | **RTO Optimization** | Accelerated crash recovery for faster instance startup | Planned |
+
+`*` Free Flush supports large InnoDB transactions. In this release, DuckDB registers an additional 2PC participant, so AliSQL builds that include DuckDB use normal binlog group commit. Large-transaction optimization for DuckDB will be added in the next release.
 
 ## Quick Start
 
@@ -177,20 +179,18 @@ Q4 2025  ━━━━━━━━━━━━━━━━━━━━━━━�
 2026     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
          [x] Native Flashback       [x] Transaction & Binlog   [ ] DDL / RTO
              - AS OF TIMESTAMP          - Binlog in Redo V2       - Instant DDL
-             - Undo snapshots           - Free Flush*              - Fast Crash Recovery
+             - Undo snapshots           - Free Flush               - Fast Crash Recovery
 ```
-
-`*` The Free Flush implementation is present, but its optimized path is inactive in the standard DuckDB-enabled build.
 
 ## Documentation
 
 | Document | Description |
 |----------|-------------|
-| [DuckDB Integration Guide](./wiki/duckdb/duckdb-en.md) | Complete guide for DuckDB storage engine |
+| [DuckDB Integration Guide](./wiki/duckdb/duckdb-en.md) | Architecture, compatibility, replication, and performance reference |
 | [Vector Index Guide](./wiki/vidx/vidx_readme.md) | Native vector storage and ANN search |
 | [Native Flashback Guide](./wiki/native-flashback/native-flashback-en.md) | Historical InnoDB queries and recovery |
 | [Binlog in Redo Guide](./wiki/binlog-in-redo/binlog-in-redo-en.md) | Redo-backed binlog persistence and fallback rules |
-| [Binlog Cache Free Flush Guide](./wiki/binlog-cache-free-flush/binlog-cache-free-flush-en.md) | Large-transaction optimization and current availability |
+| [Binlog Cache Free Flush Guide](./wiki/binlog-cache-free-flush/binlog-cache-free-flush-en.md) | Large-transaction commit path, configuration, and restrictions |
 | [Release Notes](./wiki/changes-in-alisql-8.0.44.md) | What's new in AliSQL 8.0.44 |
 | [Setup DuckDB Node](./wiki/duckdb/how-to-setup-duckdb-node-en.md) | Quick setup guide for analytics |
 
@@ -201,9 +201,9 @@ Q4 2025  ━━━━━━━━━━━━━━━━━━━━━━━�
 
 ## Alibaba Cloud RDS MySQL
 
-For managed production deployments, Alibaba Cloud RDS MySQL productizes selected AliSQL capabilities with service-managed kernel rollout, topology, synchronization, backup, monitoring, and support. RDS product requirements and parameter defaults can differ from this source branch; use the official product documentation for RDS instances.
+Alibaba Cloud RDS MySQL provides managed versions of several AliSQL features. RDS manages engine releases, topology, data synchronization, backup, monitoring, and support. Supported versions and parameter defaults can differ from this repository; use the product documentation when operating an RDS instance.
 
-| Capability | RDS MySQL product documentation |
+| Feature | RDS MySQL product documentation |
 |------------|---------------------------------|
 | DuckDB analytical instances | [English](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/duckdb-analysis-instance) / [中文](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/duckdb-analysis-instance) |
 | Vector storage | [English](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/vector-storage-1) / [中文](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/vector-storage-1) |
@@ -211,32 +211,32 @@ For managed production deployments, Alibaba Cloud RDS MySQL productizes selected
 | Binlog Cache Free Flush | [English](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/binlog-cache-free-flush) / [中文](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/binlog-cache-free-flush) |
 | Binlog in Redo | [English](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/binlog-in-redo) / [中文](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/binlog-in-redo) |
 
-Each local feature guide documents the boundary between this source branch and its corresponding RDS commercial capability.
+The local feature guides note behavior that differs between this source tree and RDS MySQL.
 
 ## Contributing
 
 AliSQL has been open source since August 2016 and is actively maintained by Alibaba Cloud Database Team. The current 8.0.44 feature release continues that open-source line.
 
-We welcome contributions of all kinds!
+Bug reports, documentation fixes, and code changes are welcome.
 
-1. **Fork** the repository
-2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
-3. **Commit** your changes (`git commit -m 'Add amazing feature'`)
-4. **Push** to the branch (`git push origin feature/amazing-feature`)
-5. **Open** a Pull Request
+1. Fork the repository.
+2. Create a feature branch (`git checkout -b feature/my-change`).
+3. Commit the change (`git commit -m 'Describe the change'`).
+4. Push the branch (`git push origin feature/my-change`).
+5. Open a pull request.
 
 For bugs and feature requests, please use [GitHub Issues](https://github.com/alibaba/AliSQL/issues).
 
 ## Related Tools
 
-### RDSAI CLI — AI-Powered Database Assistant
+### RDSAI CLI
 
 <p>
   <a href="https://github.com/aliyun/rdsai-cli"><img src="https://img.shields.io/badge/GitHub-rdsai--cli-blue?style=flat-square&logo=github" alt="RDSAI CLI"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.13+-blue.svg?style=flat-square" alt="Python 3.13+"></a>
 </p>
 
-[RDSAI CLI](https://github.com/aliyun/rdsai-cli) is a next-generation, AI-powered CLI that transforms how you interact with AliSQL and MySQL databases. Describe your intent in **natural language**, and the AI agent handles the rest.
+[RDSAI CLI](https://github.com/aliyun/rdsai-cli) is a command-line client for AliSQL and MySQL. It accepts natural-language requests for SQL generation, execution-plan analysis, and query diagnosis.
 
 ```bash
 # Install
@@ -249,14 +249,15 @@ mysql> show me slow queries from the last hour
 mysql> why this query is slow: SELECT * FROM users WHERE name LIKE '%john%'
 ```
 
-**Key Features:**
+Key features:
+
 - Natural language to SQL conversion (English/中文)
-- AI-powered query optimization and diagnostics
+- Query optimization and diagnostics
 - Execution plan analysis with `Ctrl+E`
 - Multi-model LLM support (Qwen, OpenAI, DeepSeek, Anthropic, etc.)
 - Performance benchmarking with automated analysis
 
-👉 **[Get Started with RDSAI CLI](https://github.com/aliyun/rdsai-cli)**
+[Project and installation instructions](https://github.com/aliyun/rdsai-cli)
 
 ## Community & Support
 
@@ -298,7 +299,7 @@ See the [LICENSE](LICENSE) file for details.
 </p>
 
 <p align="center">
-  Made with care by <a href="https://www.alibabacloud.com/product/apsaradb-for-rds-mysql">Alibaba Cloud Database Team</a>
+  Maintained by <a href="https://www.alibabacloud.com/product/apsaradb-for-rds-mysql">Alibaba Cloud Database Team</a>
 </p>
 
 <p align="center">

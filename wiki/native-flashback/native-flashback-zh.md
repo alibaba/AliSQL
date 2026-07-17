@@ -4,7 +4,7 @@
 
 Native Flashback 允许 InnoDB 查询通过 `AS OF TIMESTAMP` 读取保留的历史数据。它基于快照记录和 Undo 构造一致性历史读视图，适合在误更新、误删除后快速核查或恢复数据，无需先在其他实例上恢复备份并重放 Binlog。
 
-本文描述 AliSQL 8.0.44 开源分支。阿里云 RDS MySQL 托管产品的信息参见[阿里云 RDS MySQL](#阿里云-rds-mysql)。
+下文配置适用于自建 AliSQL 8.0.44。RDS MySQL 的支持版本和参数参见[阿里云 RDS MySQL](#阿里云-rds-mysql)。
 
 ## 工作原理
 
@@ -99,6 +99,6 @@ FROM orders AS OF TIMESTAMP '2026-07-16 10:00:00';
 
 ## 阿里云 RDS MySQL
 
-阿里云 RDS MySQL 将 Native Flashback 产品化，并提供托管内核发布、产品适用条件和保留策略管理。请参见官方[中文文档](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/native-flashback)或[英文文档](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/native-flashback)。
+RDS MySQL 也提供 Native Flashback，并由服务侧管理功能开通和保留策略。参见官方[中文文档](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/native-flashback)和[英文文档](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/native-flashback)。
 
-RDS 的支持版本、控制台操作、服务生命周期和参数策略以官方产品文档为准。自建本仓库版本时，应以本指南中的启动条件、默认值、范围和 SQL 边界为准；RDS 中的同名或相近配置不会改变开源代码的实际行为。
+RDS 的支持版本、控制台操作和参数策略属于产品配置。自建版本应使用本页的启动条件、默认值、范围和 SQL 限制。

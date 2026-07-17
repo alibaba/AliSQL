@@ -1,12 +1,12 @@
-# AliSQL Vector Index (vidx) Feature Introduction
+# AliSQL Vector Index (VIDX)
 
 [ [AliSQL](../../README.md) | [Vector Index](./vidx_readme.md) | [向量索引](./vidx_readme_zh.md) ]
 
 ## Overview
 
-AliSQL natively supports storage and computation of up to 16,383 dimensional vector data, integrates mainstream vector operation functions such as cosine distance (COSINE) and Euclidean distance (EUCLIDEAN), and builds efficient nearest neighbor search capabilities based on deeply optimized HNSW (Hierarchical Navigable Small World) algorithm, supporting indexing of full-dimensional vector columns.
+AliSQL adds a `VECTOR(N)` column type for floating-point vectors with up to 16,383 dimensions. It provides Euclidean and cosine distance functions and an HNSW (Hierarchical Navigable Small World) index for approximate nearest-neighbor search.
 
-AliSQL's vector capabilities can provide out-of-the-box vectorized solutions for large-scale semantic retrieval, intelligent recommendation, multimodal analysis and other scenarios. Users can seamlessly achieve high-precision vector matching and complex business logic fusion computing through standard SQL interfaces.
+Vector distance expressions and ordering can be combined with scalar predicates in standard SQL. Typical uses include semantic retrieval, recommendation, and multimodal search.
 
 ### Core Features
 
@@ -14,13 +14,13 @@ AliSQL's vector capabilities can provide out-of-the-box vectorized solutions for
 <img src="./pic/vidx_core_features.png" alt="vidx Core Features" style="width:75%; height:auto;">
 </div>
 
-- **High-Dimensional Support**: Supports up to 16,383 dimensional floating-point vector data storage
-- **High Performance Retrieval**: Uses HNSW (Hierarchical Navigable Small World) graph algorithm to achieve high-performance similarity search
-- **Multiple Distance Metrics**: Supports distance calculation methods such as EUCLIDEAN and COSINE
-- **SIMD Hardware Acceleration**: Based on SIMD instruction set optimization to improve vector operation efficiency
-- **Search Pruning Option**: Optimizes search process through techniques like Bloom filters
-- **Configurable Parameters**: Supports adjusting index parameters to balance retrieval accuracy and performance
-- **Hybrid Query**: Supports joint queries of vector data and scalar data
+- **Vector dimensions**: up to 16,383 floating-point values
+- **ANN index**: HNSW graph stored in an InnoDB auxiliary table
+- **Distance metrics**: `EUCLIDEAN` and `COSINE`
+- **CPU paths**: SIMD implementations for supported processors
+- **Search pruning**: Bloom-filter-assisted batching in the search path
+- **Tuning**: configurable graph degree, search width, and cache size
+- **SQL integration**: vector distance expressions can be used with scalar predicates
 
 ## Usage
 
@@ -33,7 +33,7 @@ SET SESSION transaction_isolation = 'READ-COMMITTED';
 
 ### Vector Field Definition
 
-Vector fields use a special [Field_vector](../../include/vidx/vidx_field.h#L30) type definition, inheriting from [Field_varstring](../../sql/field.h#L3522), using binary character set to store floating-point arrays.
+`VECTOR(N)` is implemented by [Field_vector](../../include/vidx/vidx_field.h#L30), which derives from [Field_varstring](../../sql/field.h#L3522). Vector values are stored as binary floating-point arrays.
 
 ```sql
 CREATE TABLE table_name (
@@ -137,21 +137,22 @@ LIMIT 10;
 
 ### Overall Architecture of Vector Search
 
-As one of the most popular ANN algorithms, HNSW has gained widespread recognition and validation in institutional evaluations and engineering implementations. Currently, AliSQL prioritizes support for vector indexes based on the HNSW algorithm. The overall architecture of vector search is shown in the following diagram.
+AliSQL currently implements approximate nearest-neighbor indexes with HNSW. The diagram below shows the SQL, plugin, cache, and storage components used by a vector query.
 
 <div style="text-align: center;">
 <img src="./pic/vidx_architecture.png" alt="vidx Overall Architecture" style="width:75%; height:auto;">
 </div>
 
-- ANN queries choose suitable indexes for searching after cost estimation, or can specify vector indexes for searching using hints such as FORCE INDEX.
-- Logically, there is a complete HNSW graph. The information of this graph is organized as an auxiliary table and persistently stored on disk. Each row of data in this table represents a node in the HNSW graph. On this graph, the HNSW algorithm can be executed to achieve vector insertion and retrieval.
-- Unlike ordinary indexes that directly access the storage engine, a vector index plugin is introduced. A node cache of the HNSW graph is maintained in memory to improve query efficiency.
+- The optimizer can select a vector index by cost, or the query can select one with an index hint such as `FORCE INDEX`.
+- The HNSW graph is persisted in an InnoDB auxiliary table, with one row for each graph node.
+- The vector-index plugin loads graph nodes into an in-memory cache and runs HNSW insertion and search over those nodes.
 
 ### HNSW Algorithm
 
-HNSW (Hierarchical Navigable Small World) is an efficient approximate nearest neighbor (ANN) search algorithm based on multi-layer graph structure. Its design can be summarized as:
-- [Hierarchical Skip List] The 0th layer of the graph contains information of all points. From low to high, higher layers are abridged versions of lower layers containing only some points from lower layers. The top layer is used for quick jumps, and the bottom layer is used for precise searches.
-- [Connecting Neighbors] Each layer is a proximity graph connected by vector distances, where each point records its closest few points as neighbors.
+HNSW is an approximate nearest-neighbor algorithm built on a multilayer proximity graph:
+
+- **Layers**: layer 0 contains every node; each higher layer contains a subset used for coarse navigation.
+- **Neighbors**: nodes store a bounded set of nearby nodes, selected by vector distance and HNSW heuristics.
 
 <div style="text-align: center;">
 <img src="./pic/hnsw.png" alt="hnsw" style="width:50%; height:auto;">
@@ -159,17 +160,18 @@ HNSW (Hierarchical Navigable Small World) is an efficient approximate nearest ne
 
 ### Data Structure
 
-AliSQL introduces a public cache (MHNSW Share) and transaction cache (MHNSW Trx) for vector data to accelerate vector query performance and ensure transaction safety for vector updates, achieving a balance between resource isolation and performance optimization. Public and transaction caches are accessed by different operations and have different design goals:
-- [Public Cache] MHNSW Share is accessed by read-only transactions and mounted on the auxiliary table's TABLE_SHARE. Its core goal is to reduce the overhead of repeatedly loading vector nodes through shared caching, thereby improving query efficiency.
-- [Transaction Cache] MHNSW Trx inherits from MHNSW Share and is used by read-write transactions. Each read-write transaction creates an independent MHNSW Trx instance, caching the nodes it accesses including those it modifies, avoiding contamination of the public cache, and only updating the public cache upon commit.
+AliSQL uses two node caches with different lifetimes:
+
+- **MHNSW Share** is attached to the auxiliary table's `TABLE_SHARE` and is shared by read-only transactions. It avoids loading the same graph nodes from the table for every query.
+- **MHNSW Trx** is attached to the session through `thd_set_ha_data`. A read-write transaction keeps accessed and modified nodes in its own cache, then updates the shared cache at commit.
 
 ### Vector Computation Optimization
 
-- [Precomputation Strategy] During the node cache loading phase, the system precomputes vector distances and caches the results, thus avoiding repeated calculations for frequently accessed nodes.
-- [SIMD Instruction Set Acceleration] At the computation optimization level, modern CPU SIMD instruction sets (such as AVX512) are utilized to accelerate vector distance calculations. Through Bloom filters, the system can batch-process multiple vectors, converting scalar operations that originally required multiple executions into parallelized vector operations. This optimization significantly reduces CPU instruction cycle consumption.
+- **Precomputation**: the node-loading path caches distance data used repeatedly during graph traversal.
+- **SIMD**: supported CPU paths use SIMD instructions, including AVX-512, for batched distance calculations. Bloom filters group candidate checks before these calculations.
 
-## Alibaba Cloud RDS MySQL Commercial Offering
+## Alibaba Cloud RDS MySQL
 
-Alibaba Cloud RDS MySQL packages vector storage as a managed feature with product-side enablement and integrations for data synchronization, management, backup, and recovery. RDS eligibility, console workflows, and parameter defaults are service-specific and must not be applied to this source branch without verification.
+RDS MySQL provides managed vector storage with service-side enablement, data synchronization, backup, and recovery. Supported versions, console operations, and parameter defaults are specific to RDS and may differ from this source tree.
 
 - Official vector storage documentation: [English](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/vector-storage-1) / [中文](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/vector-storage-1)

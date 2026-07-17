@@ -4,9 +4,9 @@
 
 Persist Binlog Into Redo V2, also called Binlog in Redo, stores eligible transaction binlog events in InnoDB redo during commit. Background writer and synchronization threads then persist the binlog file. If a crash leaves the binlog tail behind committed redo, recovery reconstructs the missing tail from redo before normal binlog recovery continues.
 
-This document describes the open-source AliSQL 8.0.44 branch. For the managed RDS MySQL product, see [Alibaba Cloud RDS MySQL](#alibaba-cloud-rds-mysql).
+The settings below apply to self-managed AliSQL 8.0.44. For RDS MySQL versions and parameters, see [Alibaba Cloud RDS MySQL](#alibaba-cloud-rds-mysql).
 
-## Why It Helps
+## Commit Path
 
 With the normal durable configuration, a foreground commit may synchronize both InnoDB redo and the binlog. Binlog in Redo carries eligible binlog data in the redo durability boundary and moves binlog write and synchronization work out of the foreground path. Unsupported transactions retain the normal binlog group-commit path.
 
@@ -52,7 +52,7 @@ An individual transaction uses Binlog in Redo only when all applicable checks pa
 
 The standard AliSQL build can use Binlog in Redo while `duckdb_mode=NONE`: the enablement check discounts the idle DuckDB 2PC registration. Enabling the feature is rejected while DuckDB mode is active.
 
-When a transaction fails an eligibility check, it transparently uses normal binlog group commit. This is expected behavior and does not disable the feature globally.
+When a transaction fails an eligibility check, it uses normal binlog group commit. Other eligible transactions can continue to use Binlog in Redo.
 
 ## Variables
 
@@ -80,6 +80,6 @@ When a transaction fails an eligibility check, it transparently uses normal binl
 
 ## Alibaba Cloud RDS MySQL
 
-Alibaba Cloud RDS for MySQL provides a managed Binlog in Redo rollout with product-specific replication-mode requirements, backup guidance, parameter policy, and performance data. See the official [English documentation](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/binlog-in-redo) or [Chinese documentation](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/binlog-in-redo).
+RDS MySQL also supports Binlog in Redo. Its supported versions, replication requirements, backup behavior, parameters, and performance data are documented in the official [English documentation](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/binlog-in-redo) and [Chinese documentation](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/binlog-in-redo).
 
-The RDS page is authoritative for RDS engine versions, product prerequisites, console workflows, and managed backup behavior. Those requirements and benchmark results must not be treated as guarantees for a self-managed build. Use this guide and the compiled server's variables for this source branch.
+Those details are specific to RDS. For a source build, use the prerequisites and variables on this page rather than copying the RDS configuration.

@@ -1,7 +1,7 @@
 # DuckDB Engine Variables in AliSQL
 [ [AliSQL DuckDB 引擎参数](./duckdb_variables-zh.md) | [DuckDB Engine Variables in AliSQL](./duckdb_variables-en.md) ]
 
-> This page documents the self-managed AliSQL source branch. Alibaba Cloud RDS MySQL DuckDB analytical instances have product-specific eligibility and managed settings; see the official [English](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/duckdb-analysis-instance) or [Chinese](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/duckdb-analysis-instance) documentation for RDS instances.
+> This page lists variables in the self-managed AliSQL source tree. RDS MySQL exposes its own supported versions and managed settings; see the official [English](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/duckdb-analysis-instance) or [Chinese](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/duckdb-analysis-instance) documentation for an RDS instance.
 
 ## Variables Added with the AliSQL 8.0.44 DuckDB Enhancements
 
@@ -453,7 +453,7 @@ All variables in this section are dynamic. Variables marked `Global, Session` ha
 - **Data type**: Boolean  
 - **Default**: `ON`  
 - **Valid values**: `ON` \| `OFF`  
-- **Description**: Whether to use batch inserts to accelerate DDL conversion from InnoDB to DuckDB. Enabling this can significantly improve conversion performance.
+- **Description**: Whether to use batch inserts during DDL conversion from InnoDB to DuckDB. This reduces per-row transfer overhead for supported conversions.
 
 ---
 

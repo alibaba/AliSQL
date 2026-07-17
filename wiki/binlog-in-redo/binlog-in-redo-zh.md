@@ -4,7 +4,7 @@
 
 Persist Binlog Into Redo V2 也称 Binlog in Redo。它在事务提交时把符合条件的 Binlog Event 写入 InnoDB Redo，再由后台写线程和同步线程持久化 Binlog 文件。如果崩溃时 Binlog 尾部落后于已经提交的 Redo，恢复阶段会先从 Redo 重建缺失的 Binlog 尾部，再继续正常的 Binlog 恢复。
 
-本文描述 AliSQL 8.0.44 开源分支。阿里云 RDS MySQL 托管产品的信息参见[阿里云 RDS MySQL](#阿里云-rds-mysql)。
+下文配置适用于自建 AliSQL 8.0.44。RDS MySQL 的支持版本和参数参见[阿里云 RDS MySQL](#阿里云-rds-mysql)。
 
 ## 优化目标
 
@@ -52,7 +52,7 @@ SHOW GLOBAL VARIABLES WHERE Variable_name IN (
 
 标准 AliSQL 构建在 `duckdb_mode=NONE` 时可以使用 Binlog in Redo：启用检查会扣除未激活的 DuckDB 2PC 注册。DuckDB 模式处于激活状态时，开启 Binlog in Redo 会被拒绝。
 
-某个事务不满足准入条件时，会透明回退到普通 Binlog Group Commit。这是预期行为，不会关闭全局功能。
+某个事务不满足准入条件时，会使用普通 Binlog Group Commit；其他符合条件的事务仍可使用 Binlog in Redo。
 
 ## 参数
 
@@ -80,6 +80,6 @@ SHOW GLOBAL VARIABLES WHERE Variable_name IN (
 
 ## 阿里云 RDS MySQL
 
-阿里云 RDS MySQL 提供托管的 Binlog in Redo 能力，并包含产品专用的复制模式要求、备份指引、参数策略和性能数据。请参见官方[中文文档](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/binlog-in-redo)或[英文文档](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/binlog-in-redo)。
+RDS MySQL 也支持 Binlog in Redo。支持版本、复制要求、备份行为、参数和性能数据参见官方[中文文档](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/binlog-in-redo)和[英文文档](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/binlog-in-redo)。
 
-RDS 的内核版本、产品前置条件、控制台流程和托管备份行为以官方产品文档为准。不能把其中的要求和测试结果直接当作自建版本的保证；本源码分支应以本指南和实际编译出的服务端参数为准。
+这些内容属于 RDS 产品配置。自建版本应使用本页的前置条件和参数，不要直接照搬 RDS 配置。

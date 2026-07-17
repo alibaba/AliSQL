@@ -2,7 +2,7 @@
 
 [ [Release Notes](../changes-in-alisql-8.0.44.md) | [English](./changes-in-alisql-8.0.44.2026-06-30-en.md) | [中文](./changes-in-alisql-8.0.44.2026-06-30-zh.md) ]
 
-This document summarizes the public AliSQL 8.0.44 feature release: DuckDB enhancements, native vector indexing, Binlog Cache Free Flush, Persist Binlog Into Redo V2, and Native Flashback. AliSQL is based on MySQL 8.0.44, and most new execution paths are disabled by default. The Native Flashback query gate is enabled by default, while snapshot generation and undo retention remain disabled.
+AliSQL 8.0.44 is based on MySQL 8.0.44. This release updates the DuckDB integration and adds native vector indexes, Binlog Cache Free Flush, Persist Binlog Into Redo V2, and Native Flashback. Most new execution paths are disabled by default. The Flashback query gate is enabled, but snapshot generation and undo retention are not.
 
 ## Overview
 
@@ -10,7 +10,7 @@ This document summarizes the public AliSQL 8.0.44 feature release: DuckDB enhanc
 |------|---------|---------|
 | Analytics | DuckDB storage engine enhancements | `duckdb_mode=NONE` |
 | Vector search | Native `VECTOR` type and HNSW index | `vidx_disabled=ON` |
-| Large transactions | Binlog Cache Free Flush | `OFF`; optimized path inactive in the standard DuckDB build |
+| Large transactions | Binlog Cache Free Flush | `OFF` |
 | Binlog durability | Persist Binlog Into Redo V2 | `persist_binlog_to_redo=OFF` |
 | Historical queries | Native Flashback `AS OF TIMESTAMP` | Snapshot task `OFF` |
 
@@ -91,14 +91,14 @@ Vector indexes require InnoDB and `READ COMMITTED`. They do not support `ALGORIT
 
 Free Flush finalizes a spilled transaction binlog-cache file and renames it as the next binlog instead of copying the large cache again during commit. This reduces commit I/O amplification.
 
-> **Current availability:** The variables and implementation are present, but the optimized path is inactive in the standard DuckDB-enabled build. When binlog is enabled, DuckDB registers a 2PC `prepare` callback even with `duckdb_mode=NONE`, so every transaction selects normal binlog group commit. A build with no additional registered 2PC engine is required to enter Free Flush.
+Free Flush supports large InnoDB transactions when the registered 2PC participants are the binlog and InnoDB. The current DuckDB integration registers another 2PC participant, so builds that include DuckDB use normal binlog group commit. Large-transaction optimization for DuckDB will be added in the next release.
 
 | Variable | Scope | Default | Range |
 |----------|-------|---------|-------|
 | `binlog_cache_free_flush` | Global, dynamic | `OFF` | `ON`, `OFF` |
 | `binlog_cache_free_flush_limit_size` | Global, dynamic | 256 MiB | 10 MiB to `ULLONG_MAX` bytes |
 
-The cache must exceed the threshold, be spilled and finalized, contain no statement-cache event or incident, remain unencrypted, and not modify `mysql.gtid_executed`. The path supports one non-binlog 2PC engine. Any additional registered engine transparently forces normal binlog group commit. DuckDB is always such a registered participant in the standard build, regardless of `duckdb_mode`.
+The cache must exceed the threshold, be spilled and finalized, contain no statement-cache event or incident, remain unencrypted, and not modify `mysql.gtid_executed`. InnoDB must be the only registered non-binlog 2PC engine. If any check fails, the transaction uses normal binlog group commit.
 
 ## 4. Persist Binlog Into Redo V2
 
@@ -116,7 +116,7 @@ The implementation guards require `sync_binlog=1`, `binlog_order_commits=OFF`, a
 | `binlog_group_delay` | Global, dynamic | 100 ns | 0 to 1000000000 ns |
 | `binlog_group_delay_running_threads` | Global, dynamic | `100` | 0 to 100000 |
 
-Only one active non-binlog 2PC engine is supported. Enabling is rejected while DuckDB mode is active. Transactions using nontransactional tables, the statement binlog cache, or a cache above the size limit transparently use normal group commit.
+Only one active non-binlog 2PC engine is supported. Enabling is rejected while DuckDB mode is active. Transactions using nontransactional tables, the statement binlog cache, or a cache above the size limit use normal group commit.
 
 ## 5. Native Flashback
 
@@ -154,9 +154,9 @@ Administrative procedures are `dbms_admin.analyze_flashback_snapshots()`, `dbms_
 
 Flashback supports SELECT references to InnoDB base tables. Temporary tables, views, locking reads, and historical reads across incompatible DDL are not supported. The effective history window is constrained by both retention time and undo-space pressure.
 
-## Alibaba Cloud RDS MySQL Commercial Offering
+## Alibaba Cloud RDS MySQL
 
-Alibaba Cloud RDS MySQL productizes these kernel capabilities with service-managed rollout, parameter management, product topologies, synchronization, backup, monitoring, and support. RDS parameter names, defaults, ranges, and eligibility can differ from this open-source branch; use the official product documentation for RDS instances.
+RDS MySQL provides managed versions of these features, together with product topology, data synchronization, backup, monitoring, and support. Supported versions, parameter names, defaults, and ranges can differ from this source tree; use the product documentation for an RDS instance.
 
 | Capability | Official documentation |
 |------------|------------------------|
