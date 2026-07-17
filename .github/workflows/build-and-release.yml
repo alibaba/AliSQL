@@ -1,13 +1,24 @@
 name: build-and-release
+run-name: AliSQL release ${{ inputs.tag || github.ref_name }}
 
 on:
   push:
     tags:
       - 'AliSQL-8.0.*'
       - 'AliSQL-5.7.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing AliSQL tag to build or retry'
+        required: true
+        type: string
 
 permissions:
   contents: write
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
 
 env:
   DOCKER_IMAGE: songhuaxiong/alisql
@@ -17,6 +28,7 @@ jobs:
   parse:
     runs-on: ubuntu-latest
     outputs:
+      tag:     ${{ steps.p.outputs.tag }}
       version: ${{ steps.p.outputs.version }}
       major:   ${{ steps.p.outputs.major }}
       minor:   ${{ steps.p.outputs.minor }}
@@ -24,17 +36,38 @@ jobs:
       extra:   ${{ steps.p.outputs.extra }}
     steps:
       - id: p
+        env:
+          REQUESTED_TAG: ${{ inputs.tag }}
         run: |
-          set -eu
-          TAG="${GITHUB_REF_NAME}"
+          set -euo pipefail
+
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            TAG="$REQUESTED_TAG"
+          else
+            TAG="$GITHUB_REF_NAME"
+          fi
+
+          if [[ "$TAG" =~ ^AliSQL-([0-9]+)\.([0-9]+)\.([0-9]+)-([0-9A-Za-z][0-9A-Za-z._-]*)$ ]]; then
+            MAJOR="${BASH_REMATCH[1]}"
+            MINOR="${BASH_REMATCH[2]}"
+            PATCH="${BASH_REMATCH[3]}"
+            EXTRA="${BASH_REMATCH[4]}"
+          else
+            echo "Invalid tag: ${TAG}" >&2
+            exit 1
+          fi
+
+          case "${MAJOR}.${MINOR}" in
+            8.0|5.7) ;;
+            *)
+              echo "Unsupported AliSQL series: ${MAJOR}.${MINOR}" >&2
+              exit 1
+              ;;
+          esac
+
           VERSION="${TAG#AliSQL-}"
-          MAJOR="${VERSION%%.*}"
-          REST="${VERSION#*.}"
-          MINOR="${REST%%.*}"
-          REST="${REST#*.}"
-          PATCH="${REST%%-*}"
-          EXTRA="${REST#*-}"
           {
+            echo "tag=$TAG"
             echo "version=$VERSION"
             echo "major=$MAJOR"
             echo "minor=$MINOR"
@@ -60,6 +93,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ needs.parse.outputs.tag }}
           fetch-depth: 1
 
       - name: Build inside oraclelinux:7
@@ -117,13 +151,13 @@ jobs:
             -e "s/^MYSQL_VERSION_MAJOR=.*/MYSQL_VERSION_MAJOR=${MAJOR}/" \
             -e "s/^MYSQL_VERSION_MINOR=.*/MYSQL_VERSION_MINOR=${MINOR}/" \
             -e "s/^MYSQL_VERSION_PATCH=.*/MYSQL_VERSION_PATCH=${PATCH}/" \
-            -e "s/^MYSQL_VERSION_EXTRA=.*/MYSQL_VERSION_EXTRA=${EXTRA}/" \
+            -e "s/^MYSQL_VERSION_EXTRA=.*/MYSQL_VERSION_EXTRA=-${EXTRA}/" \
             "$VERSION_FILE"
           echo "--- ${VERSION_FILE} after injection ---"
           cat "$VERSION_FILE"
 
           # ---- Build & install ----
-          source scl_source enable devtoolset-10
+          source /opt/rh/devtoolset-10/enable
           sh build.sh -t release -d /opt/alisql
           make install
 
@@ -161,6 +195,7 @@ jobs:
       - name: Checkout release changelog
         uses: actions/checkout@v4
         with:
+          ref: ${{ needs.parse.outputs.tag }}
           persist-credentials: false
           sparse-checkout: wiki/changes/changes-in-alisql-8.0.44.2026-06-30-en.md
           sparse-checkout-cone-mode: false
@@ -176,7 +211,7 @@ jobs:
       - name: Create or update release with tarballs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG:      ${{ github.ref_name }}
+          TAG:      ${{ needs.parse.outputs.tag }}
           VERSION:  ${{ needs.parse.outputs.version }}
         run: |
           set -euo pipefail
@@ -241,7 +276,7 @@ jobs:
       - name: Push release tag to the Docker repository
         env:
           PAT: ${{ secrets.DOCKER_REPO_PAT }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ needs.parse.outputs.tag }}
         run: |
           set -euo pipefail
 
