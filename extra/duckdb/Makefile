@@ -19,6 +19,7 @@ EXTENSION_STATIC_BUILD = 1
 BUILD_JEMALLOC = 0
 
 GENERATOR ?=
+MAX_JOBS ?= 32
 FORCE_COLOR ?=
 WARNINGS_AS_ERRORS ?=
 FORCE_WARN_UNUSED_FLAG ?=
@@ -357,7 +358,7 @@ release: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/release && \
 	cd build/release && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DCMAKE_BUILD_TYPE=Release ../.. && \
-	cmake --build . --config Release -j 32
+	cmake --build . --config Release -j $(MAX_JOBS)
 
 wasm_mvp: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/wasm_mvp && \

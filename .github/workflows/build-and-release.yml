@@ -139,6 +139,19 @@ jobs:
           # ---- Inject version from tag ----
           # 8.0 branch uses MYSQL_VERSION; 5.7 branch uses VERSION; same internal format.
           cd /AliSQL
+          MAX_JOBS="$(nproc 2>/dev/null || true)"
+          if [ -z "$MAX_JOBS" ]; then
+            MAX_JOBS="$(grep -c '^processor[[:space:]]*:' /proc/cpuinfo 2>/dev/null || true)"
+          fi
+          if ! [[ "$MAX_JOBS" =~ ^[1-9][0-9]*$ ]]; then
+            MAX_JOBS=2
+          fi
+          if [ "$MAX_JOBS" -gt 32 ]; then
+            MAX_JOBS=32
+          fi
+          export MAX_JOBS
+          echo "DuckDB build jobs: ${MAX_JOBS}"
+
           VERSION_FILE=""
           for f in MYSQL_VERSION VERSION; do
             [ -f "$f" ] && VERSION_FILE="$f" && break
@@ -155,6 +168,22 @@ jobs:
             "$VERSION_FILE"
           echo "--- ${VERSION_FILE} after injection ---"
           cat "$VERSION_FILE"
+
+          # Older tags hard-code 32 parallel DuckDB compiler jobs. Limit the
+          # checked-out build tree so release retries fit hosted runners.
+          if [ -f extra/duckdb/Makefile ] && \
+             grep -Eq '^[[:space:]]*cmake --build \. --config Release -j ' \
+               extra/duckdb/Makefile; then
+            sed -i -E \
+              "s#(^[[:space:]]*cmake --build \\. --config Release -j) .+#\\1 ${MAX_JOBS}#" \
+              extra/duckdb/Makefile
+            if ! grep -Eq \
+              "^[[:space:]]*cmake --build \\. --config Release -j ${MAX_JOBS}[[:space:]]*$" \
+              extra/duckdb/Makefile; then
+              echo "ERROR: failed to limit DuckDB release build parallelism" >&2
+              exit 1
+            fi
+          fi
 
           # ---- Build & install ----
           source /opt/rh/devtoolset-10/enable
