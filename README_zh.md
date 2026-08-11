@@ -293,8 +293,8 @@ AliSQL 采用 **GPL-2.0** 协议开源，与 MySQL 保持一致。
 ## Star 趋势
 
 <p align="center">
-  <a href="https://star-history.com/#alibaba/AliSQL&Date">
-    <img src="https://api.star-history.com/svg?repos=alibaba/AliSQL&type=Date" alt="Star History Chart" width="600">
+  <a href="https://star-history.dera.page/#alibaba/AliSQL&Date">
+    <img src="https://star-history.dera.page/svg?repos=alibaba/AliSQL&type=Date" alt="Star History Chart" width="600">
   </a>
 </p>
 
