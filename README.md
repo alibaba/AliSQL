@@ -293,8 +293,8 @@ See the [LICENSE](LICENSE) file for details.
 ## Star History
 
 <p align="center">
-  <a href="https://star-history.com/#alibaba/AliSQL&Date">
-    <img src="https://api.star-history.com/svg?repos=alibaba/AliSQL&type=Date" alt="Star History Chart" width="600">
+  <a href="https://star-history.dera.page/#alibaba/AliSQL&Date">
+    <img src="https://star-history.dera.page/svg?repos=alibaba/AliSQL&type=Date" alt="Star History Chart" width="600">
   </a>
 </p>
 
