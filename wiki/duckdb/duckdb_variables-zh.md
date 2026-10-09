@@ -125,6 +125,24 @@
 - **默认值**:
 - **含义**: 指定 DuckDB 写入临时文件的目录路径。该参数为只读参数，只能在实例启动前配置。
 
+### `duckdb_config_options`
+- **参数范围**: 全局参数
+- **修改形式**: 静态修改
+- **参数类型**: 字符串
+- **默认值**:
+- **含义**: 创建 DuckDB 实例时额外应用的 DuckDB 设置，格式为以 `;` 分隔的 `name=value` 列表。适用于 DuckDB 只允许在数据库打开前设置的参数（如 `allow_unsigned_extensions`），以及 AliSQL 没有对应参数的 DuckDB 设置。该参数为只读参数，只能在实例启动前配置。
+
+  ```ini
+  [mysqld]
+  duckdb_config_options = allow_unsigned_extensions=true;preserve_insertion_order=false
+  ```
+
+  - 名称使用 DuckDB 设置名，支持别名。布尔类型的设置取值为 `ON`/`OFF`、`TRUE`/`FALSE` 或 `1`/`0`，其他取值由 DuckDB 转换为对应类型。
+  - 已有专门参数的设置不能在此指定：`memory_limit`、`threads`、`temp_directory`、`max_temp_directory_size`、`checkpoint_threshold`、`scheduler_process_partial`、`appender_allocator_flush_threshold`，请改用 `duckdb_memory_limit`、`duckdb_threads` 等 `duckdb_*` 参数。
+  - 如果某一项不是 `name=value` 格式、设置名不存在或取值被 DuckDB 拒绝，实例将无法启动，原因会写入错误日志；每个生效的设置也会记录在错误日志中。
+  - 取值中不能包含 `;`。
+  - 可通过 `CALL dbms_duckdb.query("SELECT current_setting('<name>')")` 查看取值。DuckDB 允许在运行时修改的设置，之后仍可通过 `CALL dbms_duckdb.query("SET ...")` 修改。
+
 ### `duckdb_max_temp_directory_size`
 - **参数范围**: 全局参数
 - **修改形式**: 动态修改

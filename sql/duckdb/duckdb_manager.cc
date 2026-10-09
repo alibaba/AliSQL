@@ -92,6 +92,8 @@ bool DuckdbManager::Initialize() {
 
   config.options.checkpoint_wal_size = checkpoint_threshold;
 
+  if (apply_config_options(config)) return true;
+
   // For now, we store all tables in one file
   char path[FN_REFLEN];
   fn_format(path, DUCKDB_FILE_NAME, mysql_real_data_home, "", MYF(0));

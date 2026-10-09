@@ -60,6 +60,15 @@ static Sys_var_charptr Sys_duckdb_temp_directory(
     READ_ONLY GLOBAL_VAR(myduck::global_duckdb_temp_directory),
     CMD_LINE(REQUIRED_ARG), IN_FS_CHARSET, DEFAULT(nullptr));
 
+static Sys_var_charptr Sys_duckdb_config_options(
+    "duckdb_config_options",
+    "Extra DuckDB settings applied when the DuckDB instance is created, as "
+    "'name=value' pairs separated by ';', "
+    "e.g. 'allow_unsigned_extensions=true;preserve_insertion_order=false'. "
+    "Settings that have their own duckdb_* variable are not accepted",
+    READ_ONLY GLOBAL_VAR(myduck::global_config_options),
+    CMD_LINE(REQUIRED_ARG), IN_FS_CHARSET, DEFAULT(nullptr));
+
 static Sys_var_ulonglong Sys_duckdb_max_temp_directory_size(
     "duckdb_max_temp_directory_size",
     "The maximum amount of duckdb data stored "

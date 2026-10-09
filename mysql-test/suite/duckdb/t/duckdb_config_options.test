@@ -1,0 +1,91 @@
+#
+# duckdb_config_options: DuckDB settings applied when the DuckDB instance is
+# created, for settings DuckDB refuses to change once it is running.
+#
+
+--echo #
+--echo # 1) Read-only global variable, unset by default
+--echo #
+SELECT @@global.duckdb_config_options;
+
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SELECT @@session.duckdb_config_options;
+
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SET GLOBAL duckdb_config_options = 'allow_unsigned_extensions=true';
+
+CALL dbms_duckdb.query("SELECT current_setting('allow_unsigned_extensions') AS allow_unsigned_extensions");
+
+--echo # DuckDB itself refuses this once the instance is running
+CALL dbms_duckdb.query("SET GLOBAL allow_unsigned_extensions = true");
+CALL dbms_duckdb.query("SELECT current_setting('allow_unsigned_extensions') AS allow_unsigned_extensions");
+
+--echo #
+--echo # 2) Settings are applied at startup
+--echo #
+# Unquoted: restart_mysqld.inc echoes this through the shell, and ';' must stay inside its quotes.
+--let $restart_parameters = restart: --duckdb_config_options=allow_unsigned_extensions=true;preserve_insertion_order=OFF;
+--source include/restart_mysqld.inc
+
+SELECT @@global.duckdb_config_options;
+CALL dbms_duckdb.query("SELECT current_setting('allow_unsigned_extensions') AS allow_unsigned_extensions");
+CALL dbms_duckdb.query("SELECT current_setting('preserve_insertion_order') AS preserve_insertion_order");
+
+--echo # Aliases resolve to the DuckDB setting name
+--let restart_parameters="restart: --duckdb_config_options=null_order=nulls_last"
+--source include/restart_mysqld.inc
+CALL dbms_duckdb.query("SELECT current_setting('default_null_order') AS default_null_order");
+
+--echo #
+--echo # 3) Invalid lists stop the server from starting
+--echo #
+# DuckDB is initialized before the error log file is opened, so these
+# messages go to stderr.
+--source include/shutdown_mysqld.inc
+--let $error_log = $MYSQLTEST_VARDIR/log/duckdb_config_options.err
+
+--echo # Not a name=value pair
+--error 1
+--exec $MYSQLD_CMD --duckdb_config_options="allow_unsigned_extensions" > $error_log 2>&1
+--let SEARCH_FILE = $error_log
+--let SEARCH_PATTERN = duckdb_config_options: expected name=value, got 'allow_unsigned_extensions'
+--source include/search_pattern.inc
+--remove_file $error_log
+
+--echo # Unknown setting; surrounding spaces are trimmed
+--error 1
+--exec $MYSQLD_CMD --duckdb_config_options=" no_such_setting = 1 " > $error_log 2>&1
+--let SEARCH_PATTERN = duckdb_config_options: unknown DuckDB setting 'no_such_setting'
+--source include/search_pattern.inc
+--remove_file $error_log
+
+--echo # Boolean that is not ON/OFF, TRUE/FALSE or 1/0
+--error 1
+--exec $MYSQLD_CMD --duckdb_config_options="allow_unsigned_extensions=maybe" > $error_log 2>&1
+--let SEARCH_PATTERN = duckdb_config_options: 'allow_unsigned_extensions' expects ON/OFF, TRUE/FALSE or 1/0, got 'maybe'
+--source include/search_pattern.inc
+--remove_file $error_log
+
+--echo # Value DuckDB rejects
+--error 1
+--exec $MYSQLD_CMD --duckdb_config_options="default_order=sideways" > $error_log 2>&1
+--let SEARCH_PATTERN = duckdb_config_options: cannot set 'default_order'
+--source include/search_pattern.inc
+--remove_file $error_log
+
+--echo # Settings with their own duckdb_* variable, by name and by alias
+--error 1
+--exec $MYSQLD_CMD --duckdb_config_options="threads=4" > $error_log 2>&1
+--let SEARCH_PATTERN = duckdb_config_options: 'threads' is controlled by duckdb_threads
+--source include/search_pattern.inc
+--remove_file $error_log
+
+--error 1
+--exec $MYSQLD_CMD --duckdb_config_options="memory_limit=1GB" > $error_log 2>&1
+--let SEARCH_PATTERN = duckdb_config_options: 'memory_limit' is controlled by duckdb_memory_limit
+--source include/search_pattern.inc
+--remove_file $error_log
+
+--let restart_parameters="restart:"
+--source include/start_mysqld.inc
+SELECT @@global.duckdb_config_options;

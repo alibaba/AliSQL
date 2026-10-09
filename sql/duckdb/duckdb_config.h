@@ -42,6 +42,7 @@ enum enum_modes { DUCKDB_NONE = 0, DUCKDB_ON = 1 };
 
 extern ulonglong global_memory_limit;
 extern const char *global_duckdb_temp_directory;
+extern const char *global_config_options;
 extern ulonglong global_max_temp_directory_size;
 extern ulonglong global_max_threads;
 extern ulonglong max_threads_per_query;
@@ -79,4 +80,14 @@ bool update_appender_allocator_flush_threshold(sys_var *sys_var
                                                [[maybe_unused]]);
 bool update_checkpoint_threshold(sys_var *sys_var [[maybe_unused]], THD *thd,
                                  enum_var_type type [[maybe_unused]]);
+
+/**
+  Apply the settings listed in duckdb_config_options to the DBConfig the
+  instance is created from. The list is "name=value" pairs separated by ';'.
+
+  @retval false  all settings applied (or none given)
+  @retval true   a setting is malformed, unknown, has a dedicated duckdb_*
+                 variable, or was rejected by DuckDB; the reason is logged
+*/
+bool apply_config_options(duckdb::DBConfig &config);
 }  // namespace myduck
