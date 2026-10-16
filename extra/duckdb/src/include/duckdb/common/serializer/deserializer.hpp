@@ -15,6 +15,7 @@
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 
 namespace duckdb {
@@ -51,6 +52,8 @@ public:
 	};
 
 public:
+	virtual bool CanDeserializeProperty(const field_id_t field_id, const char *tag) = 0;
+
 	// Read into an existing value
 	template <typename T>
 	inline void ReadProperty(const field_id_t field_id, const char *tag, T &ret) {

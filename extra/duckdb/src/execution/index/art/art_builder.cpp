@@ -36,7 +36,7 @@ ARTConflictType ARTBuilder::Build() {
 			}
 
 			reference<Node> ref(entry.node);
-			auto count = UnsafeNumericCast<uint8_t>(start.len - prefix_depth);
+			auto count = UnsafeNumericCast<idx_t>(start.len - prefix_depth);
 			Prefix::New(art, ref, start, prefix_depth, count);
 
 			// Inline the row ID.
@@ -49,7 +49,7 @@ ARTConflictType ARTBuilder::Build() {
 			// We cannot iterate into the nested leaf with the builder
 			// because row IDs are not sorted.
 			for (idx_t i = entry.start; i < entry.start + row_id_count; i++) {
-				ARTOperator::Insert(arena, art, ref, row_ids[i], 0, row_ids[i], GateStatus::GATE_SET, nullptr,
+				ARTOperator::Insert(arena, art, ref, row_ids[i], 0, row_ids[i], GateStatus::GATE_SET, DeleteIndexInfo(),
 				                    IndexAppendMode::DEFAULT);
 			}
 			ref.get().SetGateStatus(GateStatus::GATE_SET);

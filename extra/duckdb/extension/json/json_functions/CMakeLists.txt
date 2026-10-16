@@ -10,6 +10,7 @@ add_library_unity(
   json_keys.cpp
   json_member_of.cpp
   json_merge_patch.cpp
+  json_objectagg.cpp
   json_pretty.cpp
   json_structure.cpp
   json_table_in_out.cpp

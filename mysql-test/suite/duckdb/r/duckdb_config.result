@@ -193,6 +193,17 @@ VARCHAR
 join_order,build_side_probe_side
 
 
+SET duckdb_disabled_optimizers = 'CTE_INLINING,ROW_GROUP_PRUNER,TOP_N_WINDOW_ELIMINATION,COMMON_SUBPLAN,JOIN_ELIMINATION,WINDOW_SELF_JOIN';
+SELECT * FROM t1;
+id
+CALL dbms_duckdb.query('SELECT current_setting(\'disabled_optimizers\');');
+RESULT
+current_setting('disabled_optimizers')	
+VARCHAR	
+[ Rows: 1]
+cte_inlining,row_group_pruner,top_n_window_elimination,common_subplan,join_elimination,window_self_join
+
+
 SET duckdb_disabled_optimizers = '';
 SELECT * FROM t1;
 id

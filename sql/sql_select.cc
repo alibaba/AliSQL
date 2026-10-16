@@ -573,7 +573,7 @@ bool Sql_cmd_dml::prepare(THD *thd) {
       snprintf(
           ebuff, sizeof(ebuff),
           "Does not support mixed queries of duckdb engine and other engines "
-          "in SELECT Statement. The table `%s` is not a duckdb table. The "
+          "in SELECT Statement. The table `%s` is a duckdb table. The "
           "table `%s` is not a duckdb table",
           duckdb_table->table_name, non_duckdb_table->table_name);
       my_error(ER_DUCKDB_CLIENT, MYF(0), ebuff);

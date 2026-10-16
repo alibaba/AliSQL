@@ -17,6 +17,7 @@
 #include "duckdb/main/extension_manager.hpp"
 
 namespace duckdb {
+
 class BufferManager;
 class DatabaseManager;
 class StorageManager;
@@ -33,6 +34,7 @@ class DatabaseFileSystem;
 struct DatabaseCacheEntry;
 class LogManager;
 class ExternalFileCache;
+class ResultSetManager;
 
 class DatabaseInstance : public enable_shared_from_this<DatabaseInstance> {
 	friend class DuckDB;
@@ -51,6 +53,7 @@ public:
 	DUCKDB_API DatabaseManager &GetDatabaseManager();
 	DUCKDB_API FileSystem &GetFileSystem();
 	DUCKDB_API ExternalFileCache &GetExternalFileCache();
+	DUCKDB_API ResultSetManager &GetResultSetManager();
 	DUCKDB_API TaskScheduler &GetScheduler();
 	DUCKDB_API ObjectCache &GetObjectCache();
 	DUCKDB_API ConnectionManager &GetConnectionManager();
@@ -69,7 +72,8 @@ public:
 
 	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) const;
 
-	DUCKDB_API shared_ptr<EncryptionUtil> GetEncryptionUtil();
+	DUCKDB_API shared_ptr<EncryptionUtil> GetEncryptionUtil(bool read_only = false);
+	shared_ptr<EncryptionUtil> GetMbedTLSUtil(bool force_mbedtls) const;
 
 	shared_ptr<AttachedDatabase> CreateAttachedDatabase(ClientContext &context, AttachInfo &info,
 	                                                    AttachOptions &options);
@@ -92,6 +96,7 @@ private:
 	unique_ptr<DatabaseFileSystem> db_file_system;
 	unique_ptr<LogManager> log_manager;
 	unique_ptr<ExternalFileCache> external_file_cache;
+	unique_ptr<ResultSetManager> result_set_manager;
 
 	duckdb_ext_api_v1 (*create_api_v1)();
 };
@@ -115,14 +120,14 @@ public:
 	void LoadStaticExtension() {
 		T extension;
 		auto &manager = ExtensionManager::Get(*instance);
-		auto info = manager.BeginLoad(extension.Name());
-		if (!info) {
+		auto load_info = manager.BeginLoad(extension.Name());
+		if (!load_info) {
 			// already loaded - return
 			return;
 		}
 
 		// Instantiate a new loader
-		ExtensionLoader loader(*instance, extension.Name());
+		ExtensionLoader loader(*load_info);
 
 		// Call the Load method of the extension
 		extension.Load(loader);
@@ -133,7 +138,7 @@ public:
 		ExtensionInstallInfo install_info;
 		install_info.mode = ExtensionInstallMode::STATICALLY_LINKED;
 		install_info.version = extension.Version();
-		info->FinishLoad(install_info);
+		load_info->FinishLoad(install_info);
 	}
 
 	DUCKDB_API FileSystem &GetFileSystem();

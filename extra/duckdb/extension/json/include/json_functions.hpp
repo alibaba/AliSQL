@@ -79,6 +79,9 @@ public:
 	static void RegisterJSONCreateCastFunctions(ExtensionLoader &loader);
 	static void RegisterJSONTransformCastFunctions(ExtensionLoader &loader);
 
+	// Aggregate functions
+	static AggregateFunctionSet GetObjectAggFunction();
+
 private:
 	// Scalar functions
 	static ScalarFunctionSet GetExtractFunction();

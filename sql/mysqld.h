@@ -359,6 +359,7 @@ extern uint duckdb_convert_all_at_startup_threads;
 extern bool duckdb_convert_all_skip_mtr_db;
 extern std::atomic<bool> on_duckdb_convert_progress;
 extern bool duckdb_convert_tables_with_generated_columns;
+extern bool duckdb_support_auto_increment;
 
 enum enum_binlog_error_action {
   /// Ignore the error and let server continue without binlogging
@@ -424,6 +425,32 @@ extern ulong opt_keyring_migration_port;
 
 extern ulonglong global_conn_mem_limit;
 extern ulonglong global_conn_mem_counter;
+
+extern std::atomic<uint> source_brr_sender_count;
+extern std::atomic<ulonglong> source_brr_trx_count;
+extern std::atomic<ulonglong> source_brr_reader_count;
+extern std::atomic<ulonglong> source_sent_brr_events_count;
+extern std::atomic<ulonglong> source_brr_exceed_max_send_size_count;
+
+extern std::atomic<uint> replica_brr_io_thread_count;
+extern std::atomic<ulonglong> replica_brr_cache_count;
+extern std::atomic<ulonglong> replica_received_brr_events_count;
+
+extern std::atomic<uint> replica_brr_worker_size;
+extern std::atomic<bool> replica_brr_enabled;
+extern std::atomic<ulonglong> replica_brr_ddl_received;
+extern std::atomic<ulonglong> replica_brr_long_trx_received;
+extern std::atomic<ulonglong> replica_brr_ddl_need_rollback;
+extern std::atomic<ulonglong> replica_brr_ddl_need_commit;
+extern std::atomic<ulonglong> replica_brr_ddl_commit_by_brr_worker;
+extern std::atomic<ulonglong> replica_brr_ddl_rollback_by_brr_worker;
+extern std::atomic<ulonglong> replica_brr_trx_assigned_to_brr_worker;
+extern std::atomic<ulonglong> replica_brr_trx_not_assigned_to_brr_worker;
+extern std::atomic<ulonglong> replica_brr_long_trx_need_rollback;
+extern std::atomic<ulonglong> replica_brr_long_trx_need_commit;
+extern std::atomic<ulonglong> replica_brr_long_trx_commit_by_brr_worker;
+extern std::atomic<ulonglong> replica_brr_long_trx_rollback_by_brr_worker;
+
 /**
   Variable to check if connection related options are set
   as part of keyring migration.
@@ -628,6 +655,7 @@ extern PSI_stage_info stage_replica_waiting_worker_queue;
 extern PSI_stage_info stage_replica_waiting_worker_to_free_events;
 extern PSI_stage_info stage_replica_waiting_worker_to_release_partition;
 extern PSI_stage_info stage_replica_waiting_workers_to_exit;
+extern PSI_stage_info stage_replica_waiting_brr_workers_to_exit;
 extern PSI_stage_info stage_rpl_apply_row_evt_write;
 extern PSI_stage_info stage_rpl_apply_row_evt_update;
 extern PSI_stage_info stage_rpl_apply_row_evt_delete;

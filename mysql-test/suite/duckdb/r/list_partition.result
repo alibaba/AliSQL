@@ -423,6 +423,11 @@ test_partition.t_list	repair	note	The storage engine for the table doesn't suppo
 #
 # 11) DML which specify partition
 #
+DELETE FROM t_list PARTITION(p0) WHERE id = 0;
+ERROR HY000: [DuckDB] Parser Error: syntax error at or near "PARTITION"
+
+LINE 1: DELETE FROM t_list PARTITION(p0) WHERE id = 0
+                           ^.
 SELECT * FROM t_list PARTITION(p0);
 ERROR HY000: [DuckDB] Parser Error: errhint NOT IMPLEMENTED.
 SET GLOBAL duckdb_dml_in_batch = OFF;
@@ -433,15 +438,9 @@ DELETE FROM t_list PARTITION(p0) WHERE id = 0;
 ERROR HY000: [DuckDB] Parser Error: syntax error at or near "PARTITION"
 
 LINE 1: DELETE FROM t_list PARTITION(p0) WHERE id = 0
-                           ^
-
-LINE 1: DELETE FROM t_list PARTITION(p0) WHERE id = 0
                            ^.
 UPDATE t_list PARTITION (p0) SET id = 50 WHERE id = 0;
 ERROR HY000: [DuckDB] Parser Error: syntax error at or near "PARTITION"
-
-LINE 1: UPDATE t_list PARTITION (p0) SET id = 50 WHERE id = 0
-                      ^
 
 LINE 1: UPDATE t_list PARTITION (p0) SET id = 50 WHERE id = 0
                       ^.
@@ -469,15 +468,9 @@ DELETE FROM t_list PARTITION(p0) WHERE id = 0;
 ERROR HY000: [DuckDB] Parser Error: syntax error at or near "PARTITION"
 
 LINE 1: DELETE FROM t_list PARTITION(p0) WHERE id = 0
-                           ^
-
-LINE 1: DELETE FROM t_list PARTITION(p0) WHERE id = 0
                            ^.
 UPDATE t_list PARTITION (p0) SET id = 50 WHERE id = 0;
 ERROR HY000: [DuckDB] Parser Error: syntax error at or near "PARTITION"
-
-LINE 1: UPDATE t_list PARTITION (p0) SET id = 50 WHERE id = 0
-                      ^
 
 LINE 1: UPDATE t_list PARTITION (p0) SET id = 50 WHERE id = 0
                       ^.

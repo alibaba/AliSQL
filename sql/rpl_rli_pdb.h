@@ -967,5 +967,6 @@ inline Slave_worker *get_thd_worker(const THD *thd) {
 }
 
 int slave_worker_exec_job_group(Slave_worker *w, Relay_log_info *rli);
+int slave_brr_worker_exec_job_group(Relay_log_info *rli);
 
 #endif

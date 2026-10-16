@@ -1,0 +1,156 @@
+# ==== Purpose ====
+# This test case is to test when execute optimize table write binlog just after
+# recreate table succeed.
+# ==== Implementation ===
+# 0) Prepare data.
+# 1) Write binlog after recreate table succeed and brr worker can work normally.
+# 2) Test that optimize multiple tables can work normally.
+# 3) Test that optimize multiple tables failed when set gtid_next = 'xxxx'.
+# 4) Cleanup.
+
+--let $rpl_require_row_format=2:1
+--source include/master-slave.inc
+--source include/have_binlog_format_row.inc
+--source include/have_debug.inc
+
+--echo 
+--echo #
+--echo # 0. Prepare data.
+--echo ##################
+--echo #
+connection master;
+SET GLOBAL debug='+d,ignore_brr_ddl_time_limit';
+CREATE DATABASE rpl_test1;
+CREATE DATABASE rpl_test2;
+CREATE TABLE rpl_test1.t1 (s LONGTEXT);
+--disable_query_log
+--let $i=0
+while ($i < 2)
+{
+  --eval INSERT INTO rpl_test1.t1 values(repeat("1", 5242))
+  --inc $i
+}
+--enable_query_log
+
+CREATE TABLE rpl_test2.t2 LIKE rpl_test1.t1;
+INSERT INTO rpl_test2.t2 SELECT * FROM rpl_test1.t1;
+--source include/rpl_sync.inc
+flush binary logs;
+
+--echo 
+--echo #
+--echo # 1. Write binlog after recreate table succeed and brr worker can work normally.
+--echo ################################################################################
+--echo #
+connection master;
+SET SESSION DEBUG = '+d,optimize_after_recreate_succeed';
+--send OPTIMIZE TABLE rpl_test1.t1
+
+--echo
+--echo ## wait for recreate table and write binlog succeed and signal optimize table to continue
+connection master1;
+let $wait_condition= SELECT count(*) = 1 FROM INFORMATION_SCHEMA.PROCESSLIST WHERE State = 'debug sync point: now';
+--source include/wait_condition.inc
+
+--let $keep_gtid_events= 1
+--let $binlog_file=master-bin.000002
+--source include/show_binlog_events.inc
+
+--echo
+--echo ## ensure optimize is applied by brr worker
+connection slave;
+--let $status_var= replica_brr_trx_assigned_to_brr_worker
+--let $status_var_value= 1
+--source include/wait_for_status_var.inc
+
+connection master1;
+SET SESSION DEBUG_SYNC = 'alter_table_inplace_after_lock_downgrade SIGNAL optimize_continue WAIT_FOR go';
+--send ALTER TABLE rpl_test1.t1 ADD COLUMN id_1 INT, ALGORITHM=INPLACE
+
+--echo
+--echo ## ensure alter DDL is applied by brr worker
+connection slave;
+--let $status_var= replica_brr_trx_assigned_to_brr_worker
+--let $status_var_value= 2
+--source include/wait_for_status_var.inc
+
+--echo
+--echo ## signal alter table continue
+connection master;
+--reap
+SET SESSION DEBUG = '-d,optimize_after_recreate_succeed';
+SET SESSION DEBUG_SYNC = 'now SIGNAL go';
+
+connection master1;
+--reap
+
+--echo
+--echo ## ensure brr DDL applied by brr worker and optimize table applied by brr worker will not wait each other.
+--source include/rpl_sync.inc
+
+connection slave;
+--let $assert_text= replica_brr_ddl_commit_by_brr_worker should be 1
+--let $assert_status_name= replica_brr_ddl_commit_by_brr_worker
+--let $assert_status_value=2
+--source include/assert_status.inc
+
+--echo
+--echo ## ensure that the contents of the binlog are correct
+connection master;
+--source include/show_binlog_events.inc
+
+FLUSH BINARY LOGS;
+
+--echo 
+--echo #
+--echo # 2. Test that optimize multiple tables can work normally.
+--echo #########################################################
+--echo #
+--echo
+--echo ## optimize multiple tables succeed.
+connection master;
+OPTIMIZE TABLE rpl_test1.t1, rpl_test2.t2;
+--let $binlog_file=master-bin.000003
+--source include/show_binlog_events.inc
+
+FLUSH BINARY LOGS;
+
+--echo
+--echo ## optimize multiple tables, some table succeed.
+connection master;
+OPTIMIZE TABLE rpl_test1.t3, rpl_test2.t2;
+--let $binlog_file=master-bin.000004
+--source include/show_binlog_events.inc
+
+--echo 
+--echo #
+--echo # 3. Test that optimize multiple tables failed when set gtid_next = 'xxxx'.
+--echo ###########################################################################
+--echo #
+--echo
+--echo ## optimize multiple tables failed when set gtid_next = 'xxxx'.
+connection master;
+SET gtid_next = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1';
+--error ER_OPTIMIZE_MUTI_TABLES_WITH_SET_GTID_NEXT
+OPTIMIZE TABLE rpl_test1.t1, rpl_test2.t2;
+--let $binlog_file=master-bin.000004
+--source include/show_binlog_events.inc
+
+--echo
+--echo ## optimize one table succeed when set gtid_next = 'xxxx'.
+SET gtid_next = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1';
+OPTIMIZE TABLE rpl_test1.t1;
+--source include/show_binlog_events.inc
+SET GTID_NEXT = 'AUTOMATIC';
+
+--echo 
+--echo #
+--echo # 4. Cleanup.
+--echo #############
+--echo #
+connection master;
+SET GLOBAL debug='-d,ignore_brr_ddl_time_limit';
+DROP DATABASE rpl_test1;
+DROP DATABASE rpl_test2;
+--source include/rpl_sync.inc
+--source include/rpl_end.inc

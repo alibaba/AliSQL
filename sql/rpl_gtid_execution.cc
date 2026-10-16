@@ -443,6 +443,14 @@ static bool is_stmt_innocent(const THD *thd) {
 enum_gtid_statement_status gtid_pre_statement_checks(THD *thd) {
   DBUG_TRACE;
 
+  /*
+    For brr we need to skip the checks, so that brr worker can
+    replay the binlog events before received gtid_log_event.
+  */
+  if (thd->rli_slave && thd->rli_slave->get_brr_cache()) {
+    return GTID_STATEMENT_EXECUTE;
+  }
+
   Gtid_specification *gtid_next = &thd->variables.gtid_next;
 
   DBUG_PRINT("info",

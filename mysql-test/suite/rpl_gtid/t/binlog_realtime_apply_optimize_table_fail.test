@@ -1,0 +1,210 @@
+# ==== Purpose ====
+# This test verifies that when OPTIMIZE TABLE fails on the source,
+# the failed DDL is not written to binlog, so the replica BRR workers
+# do not hang.
+#
+# ==== Background ====
+# When optimize_table_write_binlog_advance is enabled, each successful
+# OPTIMIZE TABLE writes a separate binlog event via write_binlog_in_advance().
+# Previously, write_binlog_in_advance() was called unconditionally even when
+# mysql_recreate_table() failed. This caused the failed DDL to be written to
+# binlog and assigned a GTID on the source.
+#
+# When a long transaction on the same table is executed concurrently with
+# the failing OPTIMIZE TABLE, the long trx is transmitted to the replica
+# via BRR and starts realtime apply, acquiring MDL on the table. After the
+# OPTIMIZE TABLE fails (ha_inplace_alter_table returns error, goes to
+# rollback without upgrading MDL to EXCLUSIVE), its binlog event (GTID N)
+# is committed on the source. The long trx then commits, and its
+# Gtid_executed_log_event carries gtid_executed including GTID N. On the
+# replica, the long trx BRR worker's dep-check waits for GTID N to be
+# committed. Meanwhile, the OPTIMIZE TABLE event arrives via relay log and
+# needs MDL EXCLUSIVE on the table, which is held by the long trx BRR
+# worker. This forms a circular wait and permanent hang.
+#
+# Deadlock sequence (assume gtid_executed = UUID:1-(N-1) before bug):
+#
+#   Source (binlog order)                  Replica (parallel apply)
+#   =====================                 ========================
+#
+#   OPTIMIZE  Long trx                    BRR worker      MTS worker
+#      |         |                            |               |
+#      |      BEGIN;INSERT                    |               |
+#      |      BRR transmit ----------------->|               |
+#      |         |                        realtime apply      |
+#      |         |                        INSERT INTO t2      |
+#      |         |                        holds MDL_SW(t2)    |
+#      |         |                            |               |
+#    fails       |                            |               |
+#    (no MDL     |                            |               |
+#    upgrade)    |                            |               |
+#    but writes  |                            |               |
+#    binlog      |                            |               |
+#    GTID N      |                            |               |
+#      |      COMMIT                          |               |
+#      |      Gtid_executed_log_event         |               |
+#      |      (gtid_executed=UUID:1-N)        |               |
+#      |         |                            |               |
+#      |         +--------------------------->|               |
+#      |                                  dep-check:          |
+#      |                                  wait UUID:1-N       |
+#      |                                  GTID N not committed|
+#      |                                  WAITING             |
+#      |                                      |               |
+#      +--------------------------------------------->OPTIMIZE TABLE
+#                                             |          (GTID N)
+#                                             |          needs MDL_X(t2)
+#                                             |          BLOCKED
+#                                             |<- - - - - - - |
+#                                             |               |
+#   CIRCULAR WAIT:
+#     MTS worker ---[waits MDL_X(t2)]---> BRR worker
+#     BRR worker ---[waits GTID N]------> MTS worker
+#
+# Fix: skip write_binlog_in_advance() when result_code != 0 (recreate failed).
+#
+# ==== Implementation ====
+# 0) Prepare data.
+# 1) OPTIMIZE TABLE and long trx run concurrently. OPTIMIZE TABLE is paused
+#    during inplace alter, long trx starts and gets BRR-applied on replica.
+#    OPTIMIZE TABLE resumes and fails (abort_after_inplace_alter_table, no MDL
+#    upgrade). Long trx commits after OPTIMIZE fails. Verify the failed DDL
+#    is not in binlog, and BRR worker commits the long trx successfully.
+# 2) Multi-table OPTIMIZE TABLE t2, t3: t2 fails, t3 succeeds.
+#    Verify only t2's binlog is skipped, t3's binlog is written.
+# 3) Cleanup.
+
+--source include/master-slave.inc
+--source include/have_binlog_format_row.inc
+--source include/have_debug.inc
+
+CALL mtr.add_suppression("\\[Warning\\] .*MY-\\d+.* \\[RDS Diagnose\\] .*");
+CALL mtr.add_suppression("\\[ERROR\\] .*MY-\\d+.* \\[Repl\\] Brr Worker failed executing transaction .*");
+
+--echo
+--echo #
+--echo # 0. Prepare data.
+--echo ########################################################
+--echo #
+--source include/rpl_connection_master.inc
+CREATE DATABASE rpl_test;
+CREATE TABLE rpl_test.t1 (s LONGTEXT);
+CREATE TABLE rpl_test.t2 (s LONGTEXT);
+CREATE TABLE rpl_test.t3 (s LONGTEXT);
+--disable_query_log
+--let $i=0
+while ($i < 3)
+{
+  --eval INSERT INTO rpl_test.t1 values(repeat("1", 5242880))
+  --inc $i
+}
+--enable_query_log
+--source include/rpl_sync.inc
+
+--echo
+--echo #
+--echo # 1. OPTIMIZE TABLE and long trx run concurrently.
+--echo #    OPTIMIZE fails before MDL upgrade, long trx stays open.
+--echo #    Verify no binlog for failed DDL and BRR commits long trx.
+--echo #############################################################
+--echo #
+
+--echo
+--echo ## Save binlog position before OPTIMIZE TABLE.
+--source include/rpl_connection_master.inc
+--let $binlog_file= query_get_value(SHOW MASTER STATUS, File, 1)
+--let $binlog_start= query_get_value(SHOW MASTER STATUS, Position, 1)
+
+--echo
+--echo ## Start OPTIMIZE TABLE in background, paused during inplace alter.
+SET GLOBAL debug = '+d,abort_after_inplace_alter_table';
+SET DEBUG_SYNC = 'alter_table_inplace_after_lock_downgrade SIGNAL optimize_paused WAIT_FOR optimize_continue';
+--send OPTIMIZE TABLE rpl_test.t2
+
+--echo
+--echo ## Wait for OPTIMIZE TABLE to pause, then start long trx concurrently.
+--source include/rpl_connection_master1.inc
+SET DEBUG_SYNC = 'now WAIT_FOR optimize_paused';
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+--echo
+--echo ## Confirmed that brr worker gets the long trx and starts realtime apply.
+--source include/rpl_connection_slave.inc
+--let $status_var= replica_brr_trx_assigned_to_brr_worker
+--let $status_var_value= 1
+--source include/wait_for_status_var.inc
+
+--let $wait_condition= SELECT COUNT(*)=3 FROM rpl_test.t2
+--source include/wait_condition.inc
+
+--echo
+--echo ## Signal OPTIMIZE TABLE to continue. It fails via
+--echo ## abort_after_inplace_alter_table (goto rollback, no MDL upgrade),
+--echo ## so long trx keeps holding MDL_SHARED_WRITE on t2.
+--source include/rpl_connection_master1.inc
+SET DEBUG_SYNC = 'now SIGNAL optimize_continue';
+
+--echo
+--echo ## Reap OPTIMIZE TABLE (failed before MDL upgrade).
+--source include/rpl_connection_master.inc
+--reap
+
+SET DEBUG_SYNC = 'RESET';
+SET GLOBAL debug = '';
+
+--echo
+--echo ## Now commit long trx. With the fix, OPTIMIZE TABLE did not write
+--echo ## binlog, so no spurious GTID N exists.
+--source include/rpl_connection_master1.inc
+COMMIT;
+
+--echo
+--echo ## Confirmed that brr worker commits the long trx successfully.
+--source include/rpl_connection_slave.inc
+--let $status_var= replica_brr_long_trx_commit_by_brr_worker
+--let $status_var_value= 1
+--source include/wait_for_status_var.inc
+
+--echo
+--echo ## Verify binlog: no OPTIMIZE TABLE event should be present.
+--source include/rpl_connection_master.inc
+--source include/show_binlog_events.inc
+
+--source include/rpl_sync.inc
+
+--echo
+--echo #
+--echo # 2. Multi-table OPTIMIZE: t2 fails, t3 succeeds.
+--echo #    Verify only t2's binlog is skipped, t3's binlog is written.
+--echo ###############################################################
+--echo #
+
+--echo
+--echo ## Save binlog position.
+--source include/rpl_connection_master.inc
+--let $binlog_file= query_get_value(SHOW MASTER STATUS, File, 1)
+--let $binlog_start= query_get_value(SHOW MASTER STATUS, Position, 1)
+
+--echo
+--echo ## abort_after_inplace_alter_table clears itself after first trigger,
+--echo ## so only the first table (t2) fails, the second table (t3) succeeds.
+SET debug = '+d,abort_after_inplace_alter_table';
+OPTIMIZE TABLE rpl_test.t2, rpl_test.t3;
+SET debug = '';
+
+--echo
+--echo ## Verify binlog: only t3's OPTIMIZE TABLE event should be present.
+--source include/show_binlog_events.inc
+
+--source include/rpl_sync.inc
+
+--echo
+--echo #
+--echo # 3. Cleanup.
+--echo #############
+--echo #
+--source include/rpl_connection_master.inc
+DROP DATABASE rpl_test;
+--source include/rpl_sync.inc
+--source include/rpl_end.inc

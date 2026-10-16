@@ -161,8 +161,10 @@ class Basic_binlog_ifile : public Basic_seekable_istream {
                                   Binlog_read_error. So the caller should
                                   provide one to it. When error happens,
                                   the error type will be set into 'error'.
+     @param[in] skip_check_binlog_magic Whether skip check the binlog magic.
    */
-  Basic_binlog_ifile(Binlog_read_error *binlog_read_error);
+  Basic_binlog_ifile(Binlog_read_error *binlog_read_error,
+                     bool skip_check_binlog_magic = false);
   Basic_binlog_ifile(const Basic_binlog_ifile &) = delete;
   Basic_binlog_ifile &operator=(const Basic_binlog_ifile &) = delete;
   ~Basic_binlog_ifile() override;
@@ -219,6 +221,9 @@ class Basic_binlog_ifile : public Basic_seekable_istream {
   std::unique_ptr<Basic_seekable_istream> m_istream;
   /** Name of the file opened */
   std::string m_file_name;
+
+  /** Whether skip check the binlog magic. Used by binlog cache reader. */
+  bool m_skip_check_binlog_magic;
   /**
      Read binlog magic from binlog file and check if it is valid binlog magic.
 

@@ -636,8 +636,8 @@ struct ICUDatePart : public ICUDateFunc {
 			arguments.erase(arguments.begin());
 			bound_function.arguments.erase(bound_function.arguments.begin());
 			bound_function.name = part_name;
-			bound_function.return_type = LogicalType::DOUBLE;
-			bound_function.function = UnaryTimestampFunction<timestamp_t, double>;
+			bound_function.SetReturnType(LogicalType::DOUBLE);
+			bound_function.SetFunctionCallback(UnaryTimestampFunction<timestamp_t, double>);
 
 			return BindUnaryDatePart(context, bound_function, arguments);
 		} while (false);
@@ -690,7 +690,7 @@ struct ICUDatePart : public ICUDateFunc {
 		}
 
 		Function::EraseArgument(bound_function, arguments, 0);
-		bound_function.return_type = LogicalType::STRUCT(std::move(struct_children));
+		bound_function.SetReturnType(LogicalType::STRUCT(std::move(struct_children)));
 		return make_uniq<BindStructData>(context, std::move(part_codes));
 	}
 
@@ -737,8 +737,8 @@ struct ICUDatePart : public ICUDateFunc {
 		auto part_type = LogicalType::LIST(LogicalType::VARCHAR);
 		auto result_type = LogicalType::STRUCT({});
 		ScalarFunction result({part_type, temporal_type}, result_type, StructFunction<INPUT_TYPE>, BindStruct);
-		result.serialize = SerializeStructFunction;
-		result.deserialize = DeserializeStructFunction;
+		result.SetSerializeCallback(SerializeStructFunction);
+		result.SetDeserializeCallback(DeserializeStructFunction);
 		return result;
 	}
 
@@ -747,7 +747,7 @@ struct ICUDatePart : public ICUDateFunc {
 		set.AddFunction(GetBinaryPartCodeFunction<timestamp_t, int64_t>(LogicalType::TIMESTAMP_TZ));
 		set.AddFunction(GetStructFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
 		for (auto &func : set.functions) {
-			BaseScalarFunction::SetReturnsError(func);
+			func.SetFallible();
 		}
 		loader.RegisterFunction(set);
 	}

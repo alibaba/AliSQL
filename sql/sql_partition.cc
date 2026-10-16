@@ -74,6 +74,7 @@
 #include "sql/current_thd.h"
 #include "sql/debug_sync.h"  // DEBUG_SYNC
 #include "sql/derror.h"      // ER_THD
+#include "sql/duckdb/duckdb_sql_quote.h"  // myduck::quote_duckdb_ident
 #include "sql/enum_query_type.h"
 #include "sql/field.h"
 #include "sql/handler.h"
@@ -6291,8 +6292,9 @@ char *generate_partition_syntax_for_delete(
   std::string schema_name(share->db.str, share->db.length);
   std::string table_name(share->table_name.str, share->table_name.length);
 
-  std::string use_str = "USE `" + schema_name + "`;";
-  std::string delete_str = "DELETE FROM `" + table_name + "` WHERE ";
+  std::string use_str = "USE " + myduck::quote_duckdb_ident(schema_name) + ";";
+  std::string delete_str =
+      "DELETE FROM " + myduck::quote_duckdb_ident(table_name) + " WHERE ";
   std::string item_str;
 
   if (!(fptr = mysql_tmpfile("psyfd"))) {

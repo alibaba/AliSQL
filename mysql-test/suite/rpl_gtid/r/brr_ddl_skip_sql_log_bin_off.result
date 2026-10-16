@@ -1,0 +1,42 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+CALL mtr.add_suppression("\\[Warning\\] .*MY-\\d+.* \\[Repl\\] \\[RDS Diagnose\\] .*");
+CALL mtr.add_suppression("\\[Warning\\] .*MY-\\d+.* \\[Server\\] \\[RDS Diagnose\\] optimize .*");
+
+# 0. Prepare data.
+[connection master]
+CREATE TABLE t1 (a INT PRIMARY KEY, b INT);
+INSERT INTO t1 VALUES (1, 1);
+include/rpl_sync.inc
+
+# 1. With sql_log_bin=1, OPTIMIZE TABLE should trigger BRR DDL.
+[connection master]
+SET GLOBAL debug='+d,ignore_brr_ddl_time_limit';
+OPTIMIZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	optimize	note	Table does not support optimize, doing recreate + analyze instead
+test.t1	optimize	status	OK
+SET GLOBAL debug='-d,ignore_brr_ddl_time_limit';
+include/assert_grep.inc [OPTIMIZE TABLE with sql_log_bin=1 should trigger BRR DDL.]
+include/rpl_sync.inc
+
+# 2. With sql_log_bin=0, OPTIMIZE TABLE should NOT trigger BRR DDL.
+[connection master]
+SET GLOBAL debug='+d,ignore_brr_ddl_time_limit';
+SET sql_log_bin = 0;
+OPTIMIZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	optimize	note	Table does not support optimize, doing recreate + analyze instead
+test.t1	optimize	status	OK
+SET sql_log_bin = 1;
+SET GLOBAL debug='-d,ignore_brr_ddl_time_limit';
+include/assert_grep.inc [OPTIMIZE TABLE with sql_log_bin=0 should NOT trigger additional BRR DDL.]
+
+# Cleanup.
+[connection master]
+DROP TABLE t1;
+include/rpl_sync.inc
+include/rpl_end.inc

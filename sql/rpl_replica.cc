@@ -32,6 +32,7 @@
 */
 
 #include "sql/rpl_replica.h"
+#include "sql/rpl_replica_ext.h"
 
 #include "my_config.h"
 
@@ -416,7 +417,8 @@ static void set_replica_max_allowed_packet(THD *thd, MYSQL *mysql) {
 static PSI_memory_key key_memory_rli_mta_coor;
 
 static PSI_thread_key key_thread_replica_io, key_thread_replica_sql,
-    key_thread_replica_worker, key_thread_replica_monitor_io;
+    key_thread_replica_worker, key_thread_replica_monitor_io,
+    key_thread_brr_extra_worker;
 
 static PSI_thread_info all_slave_threads[] = {
     {&key_thread_replica_io, "replica_io", "rpl_rca_io", PSI_FLAG_THREAD_SYSTEM,
@@ -426,7 +428,9 @@ static PSI_thread_info all_slave_threads[] = {
     {&key_thread_replica_worker, "replica_worker", "rpl_rca_wkr",
      PSI_FLAG_THREAD_SYSTEM, 0, PSI_DOCUMENT_ME},
     {&key_thread_replica_monitor_io, "replica_monitor", "rpl_rca_mon",
-     PSI_FLAG_SINGLETON | PSI_FLAG_THREAD_SYSTEM, 0, PSI_DOCUMENT_ME}};
+     PSI_FLAG_SINGLETON | PSI_FLAG_THREAD_SYSTEM, 0, PSI_DOCUMENT_ME},
+    {&key_thread_brr_extra_worker, "brr_worker", "brr_wkr",
+     PSI_FLAG_THREAD_SYSTEM, 0, PSI_DOCUMENT_ME}};
 
 static PSI_memory_info all_slave_memory[] = {{&key_memory_rli_mta_coor,
                                               "Relay_log_info::mta_coor", 0, 0,
@@ -521,6 +525,7 @@ void ReplicaInitializer::start_threads() {
       /* same as in start_slave() cache the global var values into rli's
        * members */
       mi->rli->opt_replica_parallel_workers = opt_mts_replica_parallel_workers;
+      mi->rli->replica_brr_workers = binlog_realtime_apply_workers;
       mi->rli->checkpoint_group = opt_mta_checkpoint_group;
       if (mts_parallel_option == MTS_PARALLEL_TYPE_DB_NAME)
         mi->rli->channel_mts_submode = MTS_PARALLEL_TYPE_DB_NAME;
@@ -2491,6 +2496,41 @@ static enum_command_status io_thread_init_command(
   return COMMAND_STATUS_OK;
 }
 
+bool binlog_realtime_transmit_replica_enabled;
+
+/**
+  Check whether master and slave have the same rds release date.
+
+  @param  mysql MYSQL to request uuid from master.
+
+  @return true if master and slave have the same release date, false otherwise.
+*/
+static bool check_rds_brr_version(MYSQL *mysql) {
+  DBUG_EXECUTE_IF("simulate_slave_check_rds_brr_version_error", return false;);
+
+  MYSQL_RES *res = nullptr;
+  MYSQL_ROW row = nullptr;
+  bool ret = false;
+  if (!mysql_real_query(
+          mysql,
+          STRING_WITH_LEN(
+              "SELECT VARIABLE_VALUE FROM performance_schema.global_status "
+              "WHERE VARIABLE_NAME = 'brr_version'")) &&
+      (res = mysql_store_result(mysql)) && (row = mysql_fetch_row(res))) {
+    if (!strcmp(row[0], RDS_BRR_VERSION)) ret = true;
+  }
+
+  if (res) mysql_free_result(res);
+
+  if (!ret)
+    LOG_BRR_WARNING(
+        "Binlog realtime transmit disabled because of source and replica has "
+        "different brr_version. Source brr_version: %s, replica brr_version: "
+        "%s",
+        (row && row[0]) ? row[0] : "NULL", RDS_BRR_VERSION);
+  return ret;
+}
+
 /**
   Set user variables after connecting to the master.
 
@@ -2513,6 +2553,42 @@ int io_thread_init_commands(MYSQL *mysql, Master_info *mi) {
     goto err;
 
   mysql_free_result(mysql_store_result(mysql));
+
+  if (DBUG_EVALUATE_IF("simulate_no_rds_replication_flag", false, true)) {
+    /* Set this flag to mark that this replication is created by rds. */
+    sprintf(query, "SET @alisql_rds_replication_flag = true");
+    if (mysql_real_query(mysql, query, static_cast<ulong>(strlen(query))) &&
+        !check_io_slave_killed(mi->info_thd, mi, nullptr))
+      goto err;
+    mysql_free_result(mysql_store_result(mysql));
+  }
+
+  if (mi->is_realtime_transmit_enabled()) {
+    /* This may happen in reconnection. */
+    brr_rpl_info.clear_realtime_transmit(mi);
+  }
+  /*
+    Binlog realtime transmit can be enabled if satisfy the following conditions.
+
+    1. Variable binlog_realtime_transmit_replica_enabled is ON.
+    2. Master has the same brr version with the slave.
+    3. The replication channel is default channel.
+  */
+  if (binlog_realtime_transmit_replica_enabled &&
+      check_rds_brr_version(mysql) &&
+      !strcmp(mi->get_channel(), channel_map.get_default_channel())) {
+    mi->enable_realtime_transmit();
+
+    sprintf(query, "SET @replica_brr_enable = true");
+    if (mysql_real_query(mysql, query, static_cast<ulong>(strlen(query))) &&
+        !check_io_slave_killed(mi->info_thd, mi, nullptr))
+      goto err;
+
+    mysql_free_result(mysql_store_result(mysql));
+    replica_brr_io_thread_count++;
+    LOG_BRR_MESSAGE("Binlog realtime transmit initialized");
+  }
+
   return ret;
 
 err:
@@ -4968,6 +5044,14 @@ static int exec_relay_log_event(THD *thd, Relay_log_info *rli,
           ev->server_id == 0)) {
       rli->last_master_timestamp =
           ev->common_header->when.tv_sec + (time_t)ev->exec_time;
+
+      if (DBUG_EVALUATE_IF("not_set_relay_flag_to_ignore_event", true, false)) {
+        if (ev->get_type_code() == binary_log::IGNORABLE_LOG_EVENT) {
+          LOG_BRR_MESSAGE(
+              "use Ignorable_log_event when field to set "
+              "last_master_timestamp");
+        }
+      }
       assert(rli->last_master_timestamp >= 0);
     }
 
@@ -5615,12 +5699,32 @@ extern "C" void *handle_slave_io(void *arg) {
         retry_count = 0;  // ok event, reset retry counter
         THD_STAGE_INFO(thd, stage_queueing_source_event_to_the_relay_log);
         event_buf = (const char *)mysql->net.read_pos + 1;
+
+        uint packet_header_size = 1;
+
+        /* Process brr magic number if brr is enabled in this IO thread. */
+        if (mi->is_realtime_transmit_enabled()) {
+          assert(event_buf[0] == BRR_MAGIC_NUM);
+          if (event_buf[1] != Brr_magic_type::NORMAL_EVENT) {
+            if (brr_rpl_info.queue_brr_event(mi, event_buf, event_len))
+              goto err;
+
+            thd->mem_root->ClearForReuse();
+            continue;
+          }
+
+          packet_header_size += BRR_HEADER_MAGIC_SIZE;
+          event_buf += BRR_HEADER_MAGIC_SIZE;
+          event_len -= BRR_HEADER_MAGIC_SIZE;
+        }
+
         DBUG_PRINT("info", ("IO thread received event of type %s",
                             Log_event::get_type_str(
                                 (Log_event_type)event_buf[EVENT_TYPE_OFFSET])));
         if (RUN_HOOK(binlog_relay_io, after_read_event,
-                     (thd, mi, (const char *)mysql->net.read_pos + 1, event_len,
-                      &event_buf, &event_len))) {
+                     (thd, mi,
+                      (const char *)mysql->net.read_pos + packet_header_size,
+                      event_len, &event_buf, &event_len))) {
           mi->report(ERROR_LEVEL, ER_REPLICA_FATAL_ERROR,
                      ER_THD(thd, ER_REPLICA_FATAL_ERROR),
                      "Failed to run 'after_read_event' hook");
@@ -5899,6 +6003,9 @@ extern "C" void *handle_slave_io(void *arg) {
     THD_CHECK_SENTRY(thd);
     if (thd_added) thd_manager->remove_thd(thd);
 
+    /* Clear binlog realtime transmit resource before IO thread stopped. */
+    if (mi->is_realtime_transmit_enabled())
+      brr_rpl_info.clear_realtime_transmit(mi);
     mi->abort_slave = false;
     mi->slave_running = 0;
     mi->atomic_is_stopping = false;
@@ -5989,6 +6096,187 @@ static int check_temp_dir(char *tmp_file, const char *channel_name) {
   my_free(unique_tmp_file_name);
   return 0;
 }
+
+/*
+  Extra Worker thread for the binlog realtime apply.
+*/
+extern "C" {
+static void *handle_slave_brr_worker(void *arg) {
+  THD *thd; /* needs to be first for thread_stack */
+  int error = 0;
+  Relay_log_info *brr_worker_info = (Relay_log_info *)arg;
+#ifdef HAVE_PSI_THREAD_INTERFACE
+  struct PSI_thread *psi;
+#endif
+
+  my_thread_init();
+  DBUG_TRACE;
+  thd = new THD;
+  if (!thd) {
+    LogErr(ERROR_LEVEL, ER_BINLOG_REALTIME_REPLICA_FAILED,
+           "Brr worker failed to create THD");
+    goto err;
+  }
+  mysql_mutex_lock(&brr_worker_info->info_thd_lock);
+  brr_worker_info->info_thd = thd;
+  mysql_mutex_unlock(&brr_worker_info->info_thd_lock);
+  thd->thread_stack = (char *)&thd;
+
+  /*
+    Brr worker must use Nonblock DDL to avoid the following circular wait
+    scenario:
+
+    DDL, trx1, and trx2 operate on the same table, and they all use the realtime
+    apply feature. Their start and end times on the source are as follows:
+
+                               -DDL-
+     -TRX1-                      |
+        |         -TRX2-         |
+        |           |            |
+        |           |            |
+        |         ------         |
+        |                        |
+     ------                      |
+                               -----
+
+    trx1 is first transmitted to the replica (because the DDL execution time
+    needs to exceed binlog_realtime_ddl_time_limit before it's transmitted to
+    the replica). Brr worker1 acquires the MDL lock and applies trx1.
+
+    Next, the DDL is transmitted to the replica, and Brr worker2 applies it,
+    waiting for the MDL lock to be released.
+
+    Next, trx2 is transmitted to the replica, and Brr worker3 replays trx2,
+    being blocked by Brr worker2.
+
+    Brr worker1 commit trx1 requires waiting for trx2 to commit because trx2 was
+    committed before trx1 was committed on the primary.
+    A circular wait is formed.
+  */
+  thd->get_rds_context().nonblock_ddl_lock_wait_timeout =
+      BRR_NONBLOCK_DDL_LOCK_WAIT_TIMEOUT;
+  thd->get_rds_context().nonblock_ddl_retry_interval =
+      BRR_NONBLOCK_DDL_RETRY_INTERVAL;
+
+#ifdef HAVE_PSI_THREAD_INTERFACE
+  // save the instrumentation for worker thread in w->info_thd
+  psi = PSI_THREAD_CALL(get_thread)();
+  thd_set_psi(brr_worker_info->info_thd, psi);
+#endif
+  mysql_thread_set_psi_THD(thd);
+
+  if (init_replica_thread(thd, SLAVE_THD_WORKER)) {
+    LOG_BRR_ERROR("Brr worker failed to initialize");
+    goto err;
+  }
+
+  thd->rli_slave = brr_worker_info;
+  thd->init_query_mem_roots();
+
+  /* Realtime apply can only be enabled on STANDARD channels */
+  assert(!channel_map.is_group_replication_channel_name(
+      brr_worker_info->get_channel()));
+  thd->rpl_thd_ctx.set_rpl_channel_type(RPL_STANDARD_CHANNEL);
+  
+  /* Set applier thread InnoDB priority */
+  set_thd_tx_priority(thd, brr_worker_info->get_thd_tx_priority());
+
+  /* Set write set related options */
+  set_thd_write_set_options(
+      thd, brr_worker_info->get_ignore_write_set_memory_limit(),
+      brr_worker_info->get_allow_drop_write_set());
+  thd->variables.require_row_format =
+      brr_worker_info->is_row_format_required();
+  
+  /* Filter is not set in slave_start_single_worker. */
+  assert(!brr_worker_info->rpl_filter->is_on());
+  
+  /*
+    Relay_log_info does not initialize this variable and needs to be
+    explicitly set to false. Otherwise, it will cause a crash in
+    Deferred_log_events::is_empty because deferred_events_collecting
+    is not false and deferred_events is nullptr.
+  */
+  brr_worker_info->deferred_events_collecting = false;
+
+  assert(Relay_log_info::PK_CHECK_STREAM ==
+         brr_worker_info->get_require_table_primary_key_check());
+  thd->variables.sql_generate_invisible_primary_key = false;
+  assert(!(thd->rpl_thd_ctx.get_rpl_channel_type() != GR_APPLIER_CHANNEL &&
+           thd->rpl_thd_ctx.get_rpl_channel_type() != GR_RECOVERY_CHANNEL &&
+           Relay_log_info::PK_CHECK_GENERATE ==
+               brr_worker_info->get_require_table_primary_key_check()));
+  assert(!brr_worker_info->get_commit_order_manager());
+  assert(thd->is_slave_error == 0);
+
+  /* We need this to grant all privilegs to extra worker. */
+
+  LOG_BRR_MESSAGE("brr worker start");
+
+  assert(!brr_worker_info->check_privilege_checks_user());
+  brr_worker_info->initialize_security_context(thd);
+
+  mysql_mutex_lock(&brr_rpl_info.m_data_lock);
+  brr_rpl_info.m_brr_worker_cnt++;
+  mysql_cond_signal(&brr_rpl_info.m_data_cond);
+  mysql_mutex_unlock(&brr_rpl_info.m_data_lock);
+
+  while (!error) {
+    error = slave_brr_worker_exec_job_group(brr_worker_info);
+  }
+
+  LOG_BRR_MESSAGE("brr worker exit");
+
+  /*
+    Cleanup after an error requires clear_error() go first.
+    Otherwise assert(!all) in binlog_rollback()
+  */
+  thd->clear_error();
+  brr_worker_info->cleanup_context(thd, error);
+  if (thd->rli_slave) {
+    brr_worker_info->cleanup_after_session();
+    thd->rli_slave = nullptr;
+  }
+
+err:
+  if (thd) {
+    /*
+       The slave code is very bad. Notice that it is missing
+       several clean up calls here. I've just added what was
+       necessary to avoid valgrind errors.
+       /Alfranio
+    */
+    thd->get_protocol_classic()->end_net();
+    /*
+      to avoid close_temporary_tables() closing temp tables as those
+      are Coordinator's burden.
+    */
+    thd->system_thread = NON_SYSTEM_THREAD;
+    thd->release_resources();
+    THD_CHECK_SENTRY(thd);
+    mysql_thread_set_psi_THD(nullptr);
+    delete thd;
+    mysql_mutex_lock(&brr_worker_info->info_thd_lock);
+    brr_worker_info->info_thd = nullptr;
+    mysql_mutex_unlock(&brr_worker_info->info_thd_lock);
+  }
+
+  delete brr_worker_info;
+  replica_brr_worker_size--;
+
+  mysql_mutex_lock(&brr_rpl_info.m_data_lock);
+  brr_rpl_info.m_brr_worker_cnt--;
+  mysql_cond_signal(&brr_rpl_info.m_data_cond);
+  mysql_mutex_unlock(&brr_rpl_info.m_data_lock);
+
+  my_thread_end();
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+  ERR_remove_thread_state(0);
+#endif /* OPENSSL_VERSION_NUMBER < 0x10100000L */
+  my_thread_exit(nullptr);
+  return nullptr;
+}
+}  // extern "C"
 
 /*
   Worker thread for the parallel execution of the replication events.
@@ -6599,6 +6887,74 @@ end:
 }
 
 /**
+   Method is executed by Coordinator at Worker startup time to initialize
+   members parly with values supplied by Coordinator through rli.
+   @param  rli  Coordinator's Relay_log_info pointer
+   @param  i    identifier of the Worker
+   @return 0          success
+           non-zero   failure
+*/
+static int slave_start_single_brr_worker(Relay_log_info *rli, ulong i) {
+  int error = 0;
+  my_thread_handle th;
+  Relay_log_info *brr_worker_info = nullptr;
+
+  mysql_mutex_assert_owner(&rli->run_lock);
+
+  if (!(brr_worker_info = new Relay_log_info(
+            false,
+#ifdef HAVE_PSI_INTERFACE
+            &key_relay_log_info_run_lock, &key_relay_log_info_data_lock,
+            &key_relay_log_info_sleep_lock, &key_relay_log_info_thd_lock,
+            &key_relay_log_info_data_cond, &key_relay_log_info_start_cond,
+            &key_relay_log_info_stop_cond, &key_relay_log_info_sleep_cond,
+#endif
+            /*
+              We set the param id to MTS_MAX_WORKERS, indicating that this is an
+              extra worker and we will not get its information from the replica
+              metadata table.
+            */
+            MTS_MAX_WORKERS, rli->get_channel(), true))) {
+    LOG_BRR_ERROR("Create extra worker failed.");
+    error = 1;
+    goto err;
+  }
+
+  /* Copy necessary info from rli. */
+  brr_worker_info->mi = rli->mi;
+  brr_worker_info->set_require_row_format(rli->is_row_format_required());
+  brr_worker_info->set_thd_tx_priority(rli->get_thd_tx_priority());
+  brr_worker_info->set_ignore_write_set_memory_limit(
+      rli->get_ignore_write_set_memory_limit());
+  brr_worker_info->set_allow_drop_write_set(rli->get_allow_drop_write_set());
+  brr_worker_info->set_filter(rli->rpl_filter);
+
+  /* We assume that workers are added in sequential order here. */
+  assert(i == rli->brr_workers.size());
+  if (i >= rli->brr_workers.size()) rli->brr_workers.resize(i + 1);
+  rli->brr_workers[i] = brr_worker_info;
+  if (DBUG_EVALUATE_IF("mta_extra_worker_thread_fails", i == 1, 0) ||
+      (error = mysql_thread_create(
+           key_thread_brr_extra_worker, &th, &connection_attrib,
+           handle_slave_brr_worker, (void *)brr_worker_info))) {
+    LOG_BRR_ERROR("Create worker thread failed.");
+    error = 1;
+    goto err;
+  }
+
+err:
+  if (error && brr_worker_info) {
+    delete brr_worker_info;
+    /*
+      Any failure after array inserted must follow with deletion
+      of just created item.
+    */
+    if (rli->brr_workers.size() == i + 1) rli->brr_workers.erase(i);
+  }
+  return error;
+}
+
+/**
    Instantiation of a Slave_worker and forking out a single Worker thread.
 
    @param  rli  Coordinator's Relay_log_info pointer
@@ -6661,6 +7017,93 @@ err:
     if (rli->workers.size() == i + 1) rli->workers.erase(i);
   }
   return error;
+}
+
+/*
+  Check whether realtime apply can be enabled.
+
+  Realtime apply can be enabled if satisfy the following conditions.
+  1. Realtime tansmit is enabled.
+  2. No additional replication options are set, and only the default
+     replication channel is supported.
+
+  @param  rli  Coordinator's Relay_log_info pointer
+  @return true if realtime apply enabled, false otherwise.
+*/
+static bool check_realtime_apply_enable(Relay_log_info *rli) {
+  assert(rli);
+
+  if (rli->get_commit_order_manager()) {
+    LOG_BRR_ERROR(
+        "Can't enable realtime apply because replica_preserve_commit_order is "
+        "on");
+    return false;
+  }
+
+  if (!rli->is_privilege_checks_user_null()) {
+    LOG_BRR_ERROR(
+        "Can't enable realtime apply because PRIVILEGE_CHECKS_USER is not "
+        "NULL");
+    return false;
+  }
+
+  if (!(rli->m_assign_gtids_to_anonymous_transactions_info.get_type() ==
+        Assign_gtids_to_anonymous_transactions_info::enum_type::AGAT_OFF)) {
+    LOG_BRR_ERROR(
+        "Can't enable realtime apply because "
+        "ASSIGN_GTIDS_TO_ANONYMOUS_TRANSACTIONS is not OFF");
+    return false;
+  }
+
+  if (rli->rpl_filter->is_on()) {
+    LOG_BRR_ERROR("Can't enable realtime apply because filter is set");
+    return false;
+  }
+
+  if (!(Relay_log_info::PK_CHECK_STREAM ==
+        rli->get_require_table_primary_key_check())) {
+    LOG_BRR_ERROR(
+        "Can't enable realtime apply because REQUIRE_TABLE_PRIMARY_KEY_CHECK "
+        "is not STREAM");
+    return false;
+  }
+
+  if (strcmp(rli->get_channel(), channel_map.get_default_channel()) != 0) {
+    LOG_BRR_ERROR(
+        "Can't enable realtime apply because it's not default channel");
+    return false;
+  }
+
+  return true;
+}
+
+/**
+   Create brr worker threads.
+
+   @param rli             Pointer to Coordinator's Relay_log_info instance.
+   @param n               Number of configured Workers in the upcoming session.
+*/
+static void slave_start_brr_workers(Relay_log_info *rli, ulong n) {
+  /* Create extra worker threads. */
+  if (n && check_realtime_apply_enable(rli)) {
+    for (uint i = 0; i < n; i++) {
+      /*
+        We ignore failures in creating extra worker threads, which means the
+        number of extra worker threads may be less than the number of worker
+        threads, but that doesn't matter.
+      */
+      if (slave_start_single_brr_worker(rli, i)) {
+        break;
+        LOG_BRR_ERROR(
+            "There are some failures in creating extra worker threads.");
+      }
+      replica_brr_worker_size++;
+    }
+    replica_brr_enabled = true;
+    LOG_BRR_MESSAGE("Realtime apply enabled.");
+  } else {
+    LOG_BRR_MESSAGE("Realtime apply disabled");
+  }
 }
 
 /**
@@ -6741,6 +7184,9 @@ static int slave_start_workers(Relay_log_info *rli, ulong n, bool *mts_inited) {
     rli->replica_parallel_workers++;
   }
 
+  /* Create brr worker threads. */
+  slave_start_brr_workers(rli, rli->replica_brr_workers);
+
 end:
   /*
     Free the buffer that was being used to report worker's status through
@@ -6765,6 +7211,69 @@ end:
 err:
   if (clear_gtid_monitoring_info) rli->clear_gtid_monitoring_info();
   return error;
+}
+
+/**
+  Ending brr worker threads. When executing shutdown, SQL thread need to
+  wait for brr worker thread exit.
+
+  @param rli Pointer to Coordinator's Relay_log_info instance.
+*/
+static void wait_brr_workers_exit(Relay_log_info *rli) {
+  THD *thd = rli->info_thd;
+
+  if (connection_events_loop_aborted()) {
+    LOG_BRR_MESSAGE("shutdown brr threads begin.");
+    /* Wait until brr workers exit. */
+    PSI_stage_info old_stage;
+    mysql_mutex_lock(&brr_rpl_info.m_data_lock);
+    thd->enter_stage(&stage_replica_waiting_brr_workers_to_exit, &old_stage,
+                     __func__, __FILE__, __LINE__);
+    while (brr_rpl_info.m_brr_worker_cnt) {
+      brr_rpl_info.wait_for_update(false);
+    }
+    mysql_mutex_unlock(&brr_rpl_info.m_data_lock);
+    THD_STAGE_INFO(thd, old_stage);
+    replica_brr_enabled = false;
+    LOG_BRR_MESSAGE("shutdown brr threads finished.");
+  }
+}
+
+/**cdcd
+   This function is called by SQL thread.
+
+   Upon receiving the STOP command, SQL thread will signal brr worker
+   thread to exit by setting THD::KILL_CONNECTION.
+
+   Except for shutdown, the SQL thread does not wait for the brr worker
+   thread to exit, it only clears the brr array.
+   @param Relay_log_info    pointer to Coordinator's rli
+*/
+static void handle_slave_brr_worker_stop(Relay_log_info *rli) {
+  if (!rli->brr_workers.empty()) {
+    LOG_BRR_MESSAGE("stop brr worker begin.");
+    for (int i = static_cast<int>(rli->brr_workers.size()) - 1; i >= 0; i--) {
+      Relay_log_info *extra_brr_info = rli->brr_workers[i];
+      assert(extra_brr_info);
+
+      /* We use THD::KILL_CONNECTION to wake up the extra worker. */
+      THD *worker_thd = extra_brr_info->info_thd;
+      mysql_mutex_lock(&worker_thd->LOCK_thd_data);
+      worker_thd->awake(THD::KILL_QUERY);
+      mysql_mutex_unlock(&worker_thd->LOCK_thd_data);
+      extra_brr_info->brr_abort_running = true;
+    }
+    mysql_cond_broadcast(&brr_rpl_info.m_data_cond);
+
+    /* Clear extra workers. */
+    {
+      MUTEX_LOCK(lock, &rli->data_lock);
+      while (!rli->brr_workers.empty()) {
+        rli->brr_workers.pop_back();
+      }
+    }
+    LOG_BRR_MESSAGE("stop brr worker end.");
+  }
 }
 
 /*
@@ -6817,6 +7326,12 @@ static void slave_stop_workers(Relay_log_info *rli, bool *mts_inited) {
     }
   }
   thd_proc_info(thd, "Waiting for workers to exit");
+
+  /*
+    Stop the brr worker thread first and then stop the normal worker to
+    prevent the normal worker from continuously waiting in set_gtid_next.
+  */
+  if (!rli->brr_workers.empty()) handle_slave_brr_worker_stop(rli);
 
   for (Slave_worker **it = rli->workers.begin(); it != rli->workers.end();
        ++it) {
@@ -6897,6 +7412,8 @@ static void slave_stop_workers(Relay_log_info *rli, bool *mts_inited) {
 
   assert(rli->pending_jobs == 0);
   assert(rli->mts_pending_jobs_size == 0);
+
+  wait_brr_workers_exit(rli);
 
 end:
   rli->mts_group_status = Relay_log_info::MTS_NOT_IN_GROUP;
@@ -8997,6 +9514,7 @@ bool start_slave(THD *thd, LEX_SLAVE_CONNECTION *connection_param,
         if (set_mts_settings) {
           mi->rli->opt_replica_parallel_workers =
               opt_mts_replica_parallel_workers;
+          mi->rli->replica_brr_workers = binlog_realtime_apply_workers;
           if (mi->is_gtid_only_mode() &&
               opt_mts_replica_parallel_workers == 0) {
             mi->rli->opt_replica_parallel_workers = 1;
@@ -11445,3 +11963,5 @@ static bool check_replica_configuration_errors(Master_info *mi,
   }
   return false;
 }
+
+#include "sql/rpl_replica_ext.cc"

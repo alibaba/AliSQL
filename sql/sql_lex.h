@@ -1371,6 +1371,7 @@ class Query_block : public Query_term {
   void remove_hidden_items();
 
   Table_ref *get_table_list() const { return m_table_list.first; }
+  uint get_tables_count() const { return m_table_list.elements; }
   bool init_nested_join(THD *thd);
   Table_ref *end_nested_join();
   Table_ref *nest_last_join(THD *thd, size_t table_cnt = 2);

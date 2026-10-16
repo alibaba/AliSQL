@@ -22,6 +22,7 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "sql/rpl_binlog_sender.h"
+#include "sql/rpl_binlog_sender_ext.h"
 #include "libbinlogevents/include/codecs/factory.h"
 
 #include <stdio.h>
@@ -201,7 +202,7 @@ class Sender_context_guard {
 
   @return a std::chrono::nanoseconds duration since the epoch.
  */
-static std::chrono::nanoseconds now_in_nanosecs() {
+std::chrono::nanoseconds now_in_nanosecs() {
   return std::chrono::duration_cast<std::chrono::nanoseconds>(
       std::chrono::high_resolution_clock::now().time_since_epoch());
 }
@@ -252,7 +253,44 @@ Binlog_sender::Binlog_sender(THD *thd, const char *start_file,
       m_flag(flag),
       m_observe_transmission(false),
       m_transmit_started(false),
-      m_prev_event_type(binary_log::UNKNOWN_EVENT) {}
+      m_prev_event_type(binary_log::UNKNOWN_EVENT),
+      m_brr_sender(nullptr) {}
+
+/**
+  If the user variables replica_brr_enable is set, init the Brr_binlog_sender
+  for current dump thread.
+*/
+void Binlog_sender::init_brr_sender() {
+  mysql_mutex_lock(&m_thd->LOCK_thd_data);
+
+  /* Get user_var. */
+  const auto &uv = get_user_var_from_alternatives(m_thd, "replica_brr_enable",
+                                                  "replica_brr_enable");
+  /*
+    Get the user_var.
+
+    Notes that we don’t care the value of of the variable, since slave will not
+    create the user variable if it doesn’t support or it think brr should not be
+    enabled.
+
+    Notes that we currently only enable this function for semi-sync dump thread,
+    because currently this function only optimize the performance of semi-sync.
+    When we finish binlog realtime replica function, we will enable this it for
+    all dump thread.
+  */
+  if (uv && uv->length() > 0) {
+    m_brr_sender = new Brr_binlog_sender(m_thd, this);
+    LOG_BRR_MESSAGE("Binlog realtime transmit sender inited")
+    source_brr_sender_count++;
+  }
+  mysql_mutex_unlock(&m_thd->LOCK_thd_data);
+
+  if (m_brr_sender) {
+    mysql_mutex_lock(&LOCK_replica_list);
+    brr_binlog_sender_set.insert(m_brr_sender);
+    mysql_mutex_unlock(&LOCK_replica_list);
+  }
+}
 
 void Binlog_sender::init() {
   DBUG_TRACE;
@@ -309,6 +347,7 @@ void Binlog_sender::init() {
   m_transmit_started = true;
 
   init_checksum_alg();
+  init_brr_sender();
   /*
     There are two ways to tell the server to not block:
 
@@ -369,6 +408,17 @@ void Binlog_sender::cleanup() {
   thd->variables.max_allowed_packet =
       global_system_variables.max_allowed_packet;
 
+  /* Clear m_brr_sender if inited. */
+  if (m_brr_sender) {
+    mysql_mutex_lock(&LOCK_replica_list);
+    brr_binlog_sender_set.erase(m_brr_sender);
+    mysql_mutex_unlock(&LOCK_replica_list);
+    
+    delete m_brr_sender;
+    m_brr_sender = nullptr;
+    source_brr_sender_count--;
+  }
+
   thd->pop_diagnostics_area();
   if (has_error())
     my_message(m_errno, m_errmsg, MYF(0));
@@ -388,9 +438,14 @@ void Binlog_sender::run() {
   my_off_t start_pos = m_start_pos;
   const char *log_file = m_linfo.log_file_name;
   bool is_index_file_reopened_on_binlog_disable = false;
+  bool brr_error = false;
 
   reader.allocator()->set_sender(this);
-  while (!has_error() && !m_thd->killed) {
+
+  /* Send format description event to the slave to handle brr events. */
+  if (m_brr_sender) brr_error = m_brr_sender->send_brr_fde_event();
+
+  while (!has_error() && !m_thd->killed && !brr_error) {
     /*
       Faked rotate event is only required in a few cases(see comment of the
       function). But even so, a faked rotate event is always sent before sending
@@ -510,6 +565,18 @@ int Binlog_sender::send_binlog(File_reader &reader, my_off_t start_pos) {
 
     if (code) return 1;
     if (send_events(reader, end_pos)) return 1;
+
+    /*
+      Send brr events after send one batch of normal event. This function will
+      only send one event for each brr trx, to avoid affecting the sending speed
+      of normal events.
+    */
+    if (m_brr_sender && m_brr_sender->send_brr_events()) {
+      LOG_BRR_ERROR(
+          "send brr events failed, dump thread will interrupt, replicate will "
+          "reconnect to source");
+      return 1;
+    }
     /*
       It is not active binlog, send_events should not return unless
       it reads all events.
@@ -548,7 +615,10 @@ std::pair<my_off_t, int> Binlog_sender::get_binlog_end_pos(
   if (unlikely(!mysql_bin_log.is_active(m_linfo.log_file_name))) {
     return std::make_pair(0, 0);
   }
-  if (read_pos < result.first) {
+
+  /* Return zero if there are readable normal events or readable brr events. */
+  if (read_pos < result.first ||
+      (m_brr_sender && m_brr_sender->check_brr_reader_readable())) {
     result.second = 0;
     return result;
   }
@@ -614,12 +684,32 @@ int Binlog_sender::send_events(File_reader &reader, my_off_t end_pos) {
       in_exclude_group = skip_event(event_ptr, in_exclude_group);
 
     /*
+      Use gtid to find brr_reader for current transaction. If exist, wait for
+      the brr_reader finish sending all brr events for this transaction, and
+      skip send normal events for this transaction.
+    */
+    if (event_type == binary_log::GTID_LOG_EVENT && m_brr_sender) {
+      my_off_t trx_end_pos = 0;
+      if (!m_brr_sender->is_reader_list_empty() &&
+          m_brr_sender->find_and_finish_brr_transaction(
+              event_ptr, m_event_checksum_alg, log_pos - event_len,
+              in_exclude_group, &trx_end_pos))
+        return 1;
+
+      if (trx_end_pos != 0) {
+        reader.seek(trx_end_pos);
+        log_pos = reader.position();
+        assert(log_pos == trx_end_pos);
+        continue;
+      }
+    }
+
+    /*
       TODO: Set m_exclude_gtid to NULL if all gtids in m_exclude_gtid has
       be skipped. and maybe removing the gtid from m_exclude_gtid will make
       skip_event has better performance.
     */
-    if (m_exclude_gtid &&
-        (in_exclude_group = skip_event(event_ptr, in_exclude_group))) {
+    if (m_exclude_gtid && in_exclude_group) {
       /*
         If we have not send any event from past 'heartbeat_period' time
         period, then it is time to send a packet before skipping this group.
@@ -770,7 +860,7 @@ int Binlog_sender::wait_new_events(my_off_t log_pos) {
     LOCK_binlog_end_pos if we reached the end of the hot log and are going
     to wait for updates on the binary log (Binlog_sender::wait_new_event()).
   */
-  if (stop_waiting_for_update(log_pos)) {
+  if (stop_waiting_for_update(log_pos, false /* have_lock */)) {
     return 0;
   }
 
@@ -794,7 +884,21 @@ int Binlog_sender::wait_new_events(my_off_t log_pos) {
   return ret;
 }
 
-bool Binlog_sender::stop_waiting_for_update(my_off_t log_pos) const {
+bool Binlog_sender::stop_waiting_for_update(
+    my_off_t log_pos, bool have_lock,
+    std::chrono::nanoseconds *brr_ddl_wait_time) {
+  /* Check whether there are some readable brr events. */
+  if (m_brr_sender) {
+    /* Try update brr reader list. */
+    if (m_brr_sender->update_brr_reader_list(have_lock)) return true;
+
+    /*
+      Check whether the end_position or status of brr reader in brr reader
+      list has been updated.
+    */
+    if (m_brr_sender->check_brr_reader_readable(brr_ddl_wait_time)) return true;
+  }
+
   if (mysql_bin_log.get_binlog_end_pos() > log_pos ||
       !mysql_bin_log.is_active(m_linfo.log_file_name) || m_thd->killed) {
     return true;
@@ -806,11 +910,21 @@ inline int Binlog_sender::wait_with_heartbeat(my_off_t log_pos) {
 #ifndef NDEBUG
   ulong hb_info_counter = 0;
 #endif
+  std::chrono::nanoseconds brr_ddl_wait_time = std::chrono::nanoseconds::max();
 
-  while (!stop_waiting_for_update(log_pos)) {
-    // ignoring timeout on conditional variable
-    mysql_bin_log.wait_for_update(m_heartbeat_period);
-
+  while (!stop_waiting_for_update(log_pos, true, &brr_ddl_wait_time)) {
+    if (m_brr_sender && brr_ddl_wait_time != std::chrono::nanoseconds::max()) {
+      /*
+        The minimum value of the heartbeat wait time and the brr DDL wait time
+        is used as the wait time to avoid not sending brr DDL for too long.
+      */
+      mysql_bin_log.wait_for_update(
+          std::min(brr_ddl_wait_time, m_heartbeat_period));
+      brr_ddl_wait_time = std::chrono::nanoseconds::max();
+    } else {
+      // ignoring timeout on conditional variable
+      mysql_bin_log.wait_for_update(m_heartbeat_period);
+    }
     if (stop_waiting_for_update(log_pos)) {
       return 0;
     }
@@ -825,7 +939,9 @@ inline int Binlog_sender::wait_with_heartbeat(my_off_t log_pos) {
                ER_RPL_BINLOG_SKIPPING_REMAINING_HEARTBEAT_INFO);
     }
 #endif
-    if (send_heartbeat_event(log_pos)) return 1;
+    if ((m_heartbeat_period + m_last_event_sent_ts) <= now_in_nanosecs() &&
+        send_heartbeat_event(log_pos))
+      return 1;
   }
 
   return 0;
@@ -1074,6 +1190,12 @@ inline int Binlog_sender::reset_transmit_packet(ushort flags,
   m_packet.length(0);          // size of the content
   qs_append('\0', &m_packet);  // Set this as an OK packet
 
+  /* Add brr magic number in the header of packet if brr sender enabled. */
+  if (m_brr_sender) {
+    qs_append((char)BRR_MAGIC_NUM, &m_packet);
+    qs_append((char)Brr_magic_type::NORMAL_EVENT, &m_packet);
+  }
+
   /* reserve and set default header */
   if (m_observe_transmission &&
       RUN_HOOK(binlog_transmit, reserve_header, (m_thd, flags, &m_packet))) {
@@ -1283,7 +1405,8 @@ int Binlog_sender::send_heartbeat_event_v1(my_off_t log_pos) {
   if (event_checksum_on()) calc_event_checksum(header, event_len);
   return send_packet_and_flush();
 }
-int Binlog_sender::send_heartbeat_event_v2(my_off_t log_pos) {
+
+int Binlog_sender::send_heartbeat_event_v2(my_off_t log_pos, bool with_ack) {
   DBUG_TRACE;
   DBUG_EXECUTE_IF("heartbeat_event_with_position_greater_than_4_gb",
                   { assert(log_pos > 4294967296); };);
@@ -1327,7 +1450,12 @@ int Binlog_sender::send_heartbeat_event_v2(my_off_t log_pos) {
 
   if (event_checksum_on()) calc_event_checksum(header, event_len);
 
-  return send_packet_and_flush();
+  /* Call hook if the ack from slave for semi-sync is asked. */
+  if (with_ack && before_send_hook(filename, log_pos)) return 1;
+  if (unlikely(send_packet_and_flush())) return 1;
+  if (with_ack && unlikely(after_send_hook(filename, 0))) return 1;
+
+  return 0;
 }
 
 inline int Binlog_sender::flush_net() {
@@ -1367,9 +1495,15 @@ inline int Binlog_sender::send_packet_and_flush() {
 
 inline int Binlog_sender::before_send_hook(const char *log_file,
                                            my_off_t log_pos) {
+  String packet_ext = m_packet;
+  if (m_brr_sender)
+    // If brr sender enabled, skip the brr magic num in packet header.
+    packet_ext.set(m_packet, BRR_HEADER_MAGIC_SIZE,
+                     m_packet.length() - BRR_HEADER_MAGIC_SIZE);
+
   if (m_observe_transmission &&
       RUN_HOOK(binlog_transmit, before_send_event,
-               (m_thd, m_flag, &m_packet, log_file, log_pos))) {
+               (m_thd, m_flag, &packet_ext, log_file, log_pos))) {
     set_unknown_error("run 'before_send_event' hook failed");
     return 1;
   }
@@ -1378,9 +1512,15 @@ inline int Binlog_sender::before_send_hook(const char *log_file,
 
 inline int Binlog_sender::after_send_hook(const char *log_file,
                                           my_off_t log_pos) {
+  String packet_ext = m_packet;
+  if (m_brr_sender)
+    // If brr sender enabled, skip the brr magic num in packet header.
+    packet_ext.set(m_packet, BRR_HEADER_MAGIC_SIZE,
+                     m_packet.length() - BRR_HEADER_MAGIC_SIZE);
+
   if (m_observe_transmission &&
       RUN_HOOK(binlog_transmit, after_send_event,
-               (m_thd, m_flag, &m_packet, log_file, log_pos))) {
+               (m_thd, m_flag, &packet_ext, log_file, log_pos))) {
     set_unknown_error("Failed to run hook 'after_send_event'");
     return 1;
   }
@@ -1519,3 +1659,5 @@ void Binlog_sender::calc_shrink_buffer_size(size_t current_size) {
 
   m_new_shrink_size = ALIGN_SIZE(new_size);
 }
+
+#include "sql/rpl_binlog_sender_ext.cc"

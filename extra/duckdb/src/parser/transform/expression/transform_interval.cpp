@@ -139,16 +139,17 @@ unique_ptr<ParsedExpression> Transformer::TransformInterval(duckdb_libpgquery::P
 		throw InternalException("Unsupported interval post-fix");
 	}
 	// first push a cast to the parse type
-	expr = make_uniq<CastExpression>(parse_type, std::move(expr));
+	// MySQL compatibility: cast the expression directly to target_type.
+	expr = make_uniq<CastExpression>(target_type, std::move(expr));
 	SetQueryLocation(*expr, node.location);
 
 	// next, truncate it if the target type doesn't match the parse type
-	if (target_type != parse_type) {
-		vector<unique_ptr<ParsedExpression>> children;
-		children.push_back(std::move(expr));
-		expr = make_uniq<FunctionExpression>("trunc", std::move(children));
-		expr = make_uniq<CastExpression>(target_type, std::move(expr));
-	}
+	// if (target_type != parse_type) {
+		// vector<unique_ptr<ParsedExpression>> children;
+		// children.push_back(std::move(expr));
+		// expr = make_uniq<FunctionExpression>("trunc", std::move(children));
+	// 	expr = make_uniq<CastExpression>(target_type, std::move(expr));
+	// }
 	// now push the operation
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(std::move(expr));

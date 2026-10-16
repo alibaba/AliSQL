@@ -1,0 +1,232 @@
+# ==== Purpose ====
+# This test verifies the replicate maintain of binlog realtime transmit.
+#
+# ==== Implementation ====
+# 0) Prepare data.
+# 1) Test stop slave during transaction realtime transmit.
+# 2) Test slave reconnect during transaction realtime transmit.
+# 3) Test slave will not enable realtime transmit for non-default channel.
+# 4) Cleanup.
+
+--source include/master-slave.inc
+--source include/have_binlog_format_row.inc
+--source include/have_semisync_plugin.inc
+--source include/install_semisync.inc
+CALL mtr.add_suppression("\\[ERROR\\] .*MY-\\d+.* \\[Repl\\] Semi-sync source failed on .*");
+CALL mtr.add_suppression("\\[ERROR\\] .*MY-\\d+.* \\[Repl\\] Binlog realtime replica failed because: .*");
+
+--let $keep_gtid_events= 1
+
+--source include/rpl_connection_master.inc
+FLUSH STATUS;
+SET GLOBAL binlog_realtime_transmit_source_enabled = ON;
+
+--echo #
+--echo # 0. Prepare data.
+--echo ########################################################
+--echo #
+--source include/rpl_connection_slave.inc
+--source include/stop_slave.inc
+SET GLOBAL binlog_realtime_transmit_replica_enabled = ON;
+--source include/start_slave.inc
+FLUSH STATUS;
+
+--source include/rpl_connection_master.inc
+CREATE DATABASE rpl_test;
+CREATE TABLE rpl_test.t1 (s LONGTEXT);
+CREATE TABLE rpl_test.t2 (s LONGTEXT);
+
+--disable_query_log
+--let $i=0
+while ($i < 4)
+{
+  --eval INSERT INTO rpl_test.t1 values(repeat("1", 5242880))
+  --inc $i
+}
+--enable_query_log
+
+--echo #
+--echo # 1. Test stop slave during transaction realtime transmit.
+--echo ########################################################
+--echo #
+--echo # 1.1 Test start slave with realtime transmit after stop slave.
+--let $wait_for_replica_brr_cache_count=1
+--let $include_commit_transaction=0
+--source suite/rpl/include/binlog_realtime_transmit_execute_one_transaction.inc
+
+--source include/rpl_connection_slave.inc
+--source include/stop_slave.inc
+
+--let $wait_for_replica_brr_cache_count_value=0
+--source suite/rpl/include/binlog_realtime_transmit_wait_and_test_replica.inc
+
+--source include/rpl_connection_master.inc
+--source include/stop_dump_threads.inc
+
+--echo # Wait for source_brr_sender_count, expect 0
+--let $show_statement= SHOW STATUS LIKE 'source_brr_sender_count'
+--let $field= Value
+--let $condition= = '0'
+--source include/wait_show_condition.inc
+
+SHOW STATUS LIKE 'source_brr%';
+
+--source include/rpl_connection_slave.inc
+--source include/start_slave.inc
+
+--let $wait_for_replica_brr_cache_count_value=1
+--source suite/rpl/include/binlog_realtime_transmit_wait_and_test_replica.inc
+
+--source include/rpl_connection_master.inc
+SHOW STATUS LIKE 'source_brr%';
+COMMIT;
+
+--source include/rpl_connection_slave.inc
+--source include/rpl_sync.inc
+--let $binlog_file=slave-relay-bin.000006
+--source include/show_relaylog_events.inc
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--echo # 1.2 Test start slave without realtime transmit after stop slave.
+--let $wait_for_replica_brr_cache_count=1
+--let $include_commit_transaction=0
+--source suite/rpl/include/binlog_realtime_transmit_execute_one_transaction.inc
+
+--source include/rpl_connection_slave.inc
+--source include/stop_slave.inc
+
+--source include/rpl_connection_master.inc
+--source include/stop_dump_threads.inc
+
+--let $wait_for_replica_brr_cache_count_value=0
+--source suite/rpl/include/binlog_realtime_transmit_wait_and_test_replica.inc
+
+--source include/rpl_connection_master.inc
+SHOW STATUS LIKE 'source_brr%';
+
+--source include/rpl_connection_slave.inc
+SET GLOBAL binlog_realtime_transmit_replica_enabled = OFF;
+--source include/start_slave.inc
+
+--source include/rpl_connection_master.inc
+SHOW STATUS LIKE 'source_brr%';
+COMMIT;
+
+--source include/rpl_connection_slave.inc
+--source include/rpl_sync.inc
+--let $binlog_file=slave-relay-bin.000008
+--source include/show_relaylog_events.inc
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--source include/stop_slave.inc
+SET GLOBAL binlog_realtime_transmit_replica_enabled = ON;
+--source include/start_slave.inc
+
+--echo #
+--echo # 2. Test slave reconnect during transaction realtime transmit.
+--echo ########################################################
+--echo #
+--let $wait_for_replica_brr_cache_count=1
+--let $include_commit_transaction=0
+--source suite/rpl/include/binlog_realtime_transmit_execute_one_transaction.inc
+
+--source include/rpl_connection_slave.inc
+--echo # Wait for replica_received_brr_events_count, expect 29
+--let $show_statement= SHOW STATUS LIKE "replica_received_brr_events_count"
+--let $field= Value
+--let $condition= = '29'
+--source include/wait_show_condition.inc
+
+--source include/rpl_connection_master.inc
+--echo # Wait for source_brr_sender_count, expect 1.
+--let $show_statement= SHOW STATUS LIKE "source_brr_sender_count"
+--let $field= Value
+--let $condition= = '1'
+--source include/wait_show_condition.inc
+
+--echo # Kill dump thread on master to make slave IO thread reconnect.
+--let $_sdt_dump_thread_id= `SELECT ID FROM INFORMATION_SCHEMA.PROCESSLIST WHERE COMMAND = 'Binlog dump' OR COMMAND = 'Binlog Dump GTID'`
+--disable_query_log
+--disable_result_log
+eval KILL $_sdt_dump_thread_id;
+--enable_query_log
+--enable_result_log
+
+--source include/rpl_connection_slave.inc
+--echo # Wait for replica_received_brr_events_count, expect 36 because current transaction re-transmit in brr dump thread.
+--let $show_statement= SHOW STATUS LIKE "replica_received_brr_events_count"
+--let $field= Value
+--let $condition= = '36'
+--source include/wait_show_condition.inc
+
+--source include/start_slave.inc
+SHOW STATUS LIKE "replica_brr_io_thread_count";
+
+--source include/rpl_connection_master.inc
+--echo # Wait for source_brr_sender_count, expect 1.
+--let $show_statement= SHOW STATUS LIKE "source_brr_sender_count"
+--let $field= Value
+--let $condition= = '1'
+--source include/wait_show_condition.inc
+
+SHOW STATUS LIKE "source_%";
+COMMIT;
+
+--source include/rpl_connection_slave.inc
+--source include/rpl_sync.inc
+--let $binlog_file=slave-relay-bin.000011
+--source include/show_relaylog_events.inc
+SELECT COUNT(*) FROM rpl_test.t2;
+
+SET GLOBAL binlog_realtime_transmit_replica_enabled = ON;
+
+--echo #
+--echo # 3. Test slave will not enable realtime transmit for non-default channel.
+--echo ########################################################
+--echo #
+--source include/rpl_connection_slave.inc
+--source include/stop_slave.inc
+--let $rpl_reset_slave_all= 1
+--source include/rpl_reset_slave.inc
+
+SHOW STATUS LIKE "replica_brr_io_thread_count";
+
+--disable_warnings
+--replace_result $MASTER_MYPORT MASTER_PORT
+--eval CHANGE MASTER TO MASTER_HOST='127.0.0.1', MASTER_PORT=$MASTER_MYPORT, MASTER_USER='root', MASTER_AUTO_POSITION= 1 FOR CHANNEL 'C1'
+
+--let $rpl_channel_name= 'c1'
+--source include/start_slave.inc
+SHOW STATUS LIKE "replica_brr_io_thread_count";
+
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.2.err
+--let $assert_count= 1
+--let $assert_select= Binlog realtime replica failed because: Can't enable realtime apply because it's not default channel
+--let $assert_text= slave will not enable realtime transmit for non-default channel.
+--source include/assert_grep.inc
+
+--source include/stop_slave.inc
+--let $rpl_reset_slave_all= 1
+--source include/rpl_reset_slave.inc
+--replace_result $MASTER_MYPORT MASTER_PORT
+--eval CHANGE MASTER TO MASTER_HOST='127.0.0.1', MASTER_PORT=$MASTER_MYPORT, MASTER_USER='root', MASTER_AUTO_POSITION= 1
+--enable_warnings
+
+--let $rpl_channel_name= ''
+--source include/start_slave.inc
+
+--echo #
+--echo # 4. Cleanup.
+--echo ########################################################
+--echo #
+--source include/rpl_connection_master.inc
+SHOW STATUS LIKE "source_sent_brr_events_count";
+SET GLOBAL binlog_realtime_transmit_source_enabled = DEFAULT;
+DROP DATABASE rpl_test;
+
+--source include/rpl_connection_slave.inc
+SHOW STATUS LIKE "replica_received_brr_events_count";
+SET GLOBAL binlog_realtime_transmit_replica_enabled = DEFAULT;
+--source include/rpl_sync.inc
+--source include/uninstall_semisync.inc
+--source include/rpl_end.inc

@@ -20,11 +20,13 @@ namespace duckdb {
 // Physical Appender
 //===--------------------------------------------------------------------===//
 PhysicalAppender::PhysicalAppender(Connection &con, const string &database_name, const string &schema_name,
-                                   const string &table_name, AppenderType appender_type)
+                                   const string &table_name, AppenderType appender_type,
+                                   const idx_t flush_memory_threshold_p)
     : BaseAppender(Allocator::DefaultAllocator(), appender_type), context(con.context) {
 
-	auto &config = DBConfig::GetConfig(*con.context);
-	flush_memory_threshold = config.options.appender_allocator_flush_threshold;
+	flush_memory_threshold = (flush_memory_threshold_p == DConstants::INVALID_INDEX)
+	                             ? optional_idx::Invalid()
+	                             : optional_idx(flush_memory_threshold_p);
 
 	description = con.TableInfo(database_name, schema_name, table_name);
 	if (!description) {
@@ -79,12 +81,15 @@ PhysicalAppender::PhysicalAppender(Connection &con, const string &database_name,
 }
 
 PhysicalAppender::PhysicalAppender(Connection &con, const string &schema_name, const string &table_name,
-                                   AppenderType appender_type)
-    : PhysicalAppender(con, INVALID_CATALOG, schema_name, table_name, AppenderType::PHYSICAL) {
+                                   AppenderType appender_type, const idx_t flush_memory_threshold_p)
+    : PhysicalAppender(con, INVALID_CATALOG, schema_name, table_name, AppenderType::PHYSICAL,
+                       flush_memory_threshold_p) {
 }
 
-PhysicalAppender::PhysicalAppender(Connection &con, const string &table_name, AppenderType appender_type)
-    : PhysicalAppender(con, INVALID_CATALOG, DEFAULT_SCHEMA, table_name, AppenderType::PHYSICAL) {
+PhysicalAppender::PhysicalAppender(Connection &con, const string &table_name, AppenderType appender_type,
+                                   const idx_t flush_memory_threshold_p)
+    : PhysicalAppender(con, INVALID_CATALOG, DEFAULT_SCHEMA, table_name, AppenderType::PHYSICAL,
+                       flush_memory_threshold_p) {
 }
 
 PhysicalAppender::~PhysicalAppender() {
@@ -116,7 +121,8 @@ void PhysicalAppender::FlushInternal(ColumnDataCollection &collection) {
 		}
 		auto binder = Binder::CreateBinder(*context_ref);
 		auto bound_constraints = binder->BindConstraints(table_entry);
-		MetaTransaction::Get(*context_ref).ModifyDatabase(table_entry.ParentCatalog().GetAttached());
+		MetaTransaction::Get(*context_ref)
+		    .ModifyDatabase(table_entry.ParentCatalog().GetAttached(), DatabaseModificationType::INSERT_DATA);
 		auto col_ids_ptr = column_ids.empty() ? nullptr : &column_ids;
 		table_entry.GetStorage().LocalAppend(table_entry, *context_ref, collection, bound_constraints, col_ids_ptr);
 	});

@@ -4719,13 +4719,13 @@ void Item_func_group_concat::print(const THD *thd, String *str,
       str->append(STRING_WITH_LEN("\'"));
       if (query_type & QT_TO_SYSTEM_CHARSET) {
         // Convert to system charset.
-        convert_and_print(separator, str, system_charset_info);
+        convert_and_print(separator, str, system_charset_info, true);
       } else if (query_type & QT_TO_ARGUMENT_CHARSET) {
         /*
           Convert the string literals to str->charset(),
           which is typically equal to charset_set_client.
         */
-        convert_and_print(separator, str, str->charset());
+        convert_and_print(separator, str, str->charset(), true);
       } else {
         separator->print(str);
       }
@@ -4740,13 +4740,13 @@ void Item_func_group_concat::print(const THD *thd, String *str,
       str->append(STRING_WITH_LEN(", \'"));
       if (query_type & QT_TO_SYSTEM_CHARSET) {
         // Convert to system charset.
-        convert_and_print(separator, str, system_charset_info);
+        convert_and_print(separator, str, system_charset_info, true);
       } else if (query_type & QT_TO_ARGUMENT_CHARSET) {
         /*
           Convert the string literals to str->charset(),
           which is typically equal to charset_set_client.
         */
-        convert_and_print(separator, str, str->charset());
+        convert_and_print(separator, str, str->charset(), true);
       } else {
         separator->print(str);
       }

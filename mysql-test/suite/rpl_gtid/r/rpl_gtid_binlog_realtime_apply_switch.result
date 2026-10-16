@@ -1,0 +1,83 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+CALL mtr.add_suppression("Binlog realtime replica failed because: .*");
+include/rpl_sync.inc
+
+#
+# 1. Can't enable realtime apply when PRIVILEGE_CHECKS_USER is not NULL
+#######################################################################
+#
+include/stop_slave.inc
+CREATE USER 'replication_applier'@'localhost';
+GRANT REPLICATION_APPLIER,SESSION_VARIABLES_ADMIN on *.* to 'replication_applier'@'localhost';
+CHANGE REPLICATION SOURCE TO PRIVILEGE_CHECKS_USER = 'replication_applier'@'localhost';
+include/start_slave.inc
+include/assert_grep.inc [Can't enable realtime apply when PRIVILEGE_CHECKS_USER is not NULL]
+
+#
+# 2. Can't enable realtime apply when ASSIGN_GTIDS_TO_ANONYMOUS_TRANSACTIONS is not OFF
+#######################################################################################
+#
+include/stop_slave.inc
+CHANGE REPLICATION SOURCE TO PRIVILEGE_CHECKS_USER = NULL, ASSIGN_GTIDS_TO_ANONYMOUS_TRANSACTIONS= LOCAL, SOURCE_AUTO_POSITION=0;
+Warnings:
+Note	4017	Using ASSIGN_GTIDS_TO_ANONYMOUS_TRANSACTIONS creates limitations on the replication topology - you cannot fail over between downstream and upstream servers. Only use this option if it is not possible to enable GTIDs on the source, for instance, because of lack of permissions. If possible, use the procedure for enabling GTID transactions online instead, as described in the documentation.
+include/start_slave.inc
+include/assert_grep.inc [Can't enable realtime apply when ASSIGN_GTIDS_TO_ANONYMOUS_TRANSACTIONS is not OFF]
+
+#
+# 3. Can't enable realtime apply when REQUIRE_TABLE_PRIMARY_KEY_CHECK is not STREAM
+###################################################################################
+#
+include/stop_slave.inc
+CHANGE REPLICATION SOURCE TO ASSIGN_GTIDS_TO_ANONYMOUS_TRANSACTIONS= OFF, SOURCE_AUTO_POSITION=1, REQUIRE_TABLE_PRIMARY_KEY_CHECK=ON;
+include/start_slave.inc
+include/assert_grep.inc [Can't enable realtime apply when REQUIRE_TABLE_PRIMARY_KEY_CHECK is not STREAM]
+
+#
+# 4. Can't enable realtime apply when filter is set
+###################################################
+#
+include/stop_slave.inc
+CHANGE REPLICATION SOURCE TO REQUIRE_ROW_FORMAT=0;
+CHANGE REPLICATION FILTER REPLICATE_WILD_DO_TABLE = ('db1.old%');
+include/start_slave.inc
+include/assert_grep.inc [Can't enable realtime apply when filter is set]
+
+#
+# 5. Can't enable realtime apply when it's not default channel
+##############################################################
+#
+include/stop_slave.inc
+CHANGE REPLICATION FILTER REPLICATE_WILD_DO_TABLE = ();
+include/rpl_reset_slave.inc
+CHANGE MASTER TO MASTER_HOST='127.0.0.1', MASTER_PORT=MASTER_PORT, MASTER_USER='root', MASTER_AUTO_POSITION= 1 FOR CHANNEL 'C1';
+include/start_slave.inc [FOR CHANNEL 'c1']
+include/assert_grep.inc [Can't enable realtime apply when it's not default channel]
+include/stop_slave.inc [FOR CHANNEL 'c1']
+include/rpl_reset_slave.inc
+CHANGE MASTER TO MASTER_HOST='127.0.0.1', MASTER_PORT=MASTER_PORT, MASTER_USER='root', MASTER_AUTO_POSITION= 1;
+include/start_slave.inc [FOR CHANNEL '']
+
+#
+# 6. Can't enable realtime apply because replica_preserve_commit_order is on
+############################################################################
+#
+include/stop_slave.inc [FOR CHANNEL '']
+SET GLOBAL replica_preserve_commit_order=ON;
+include/start_slave.inc [FOR CHANNEL '']
+include/assert_grep.inc [Can't enable realtime apply when it's not default channel]
+
+#
+# 7. Clean up
+#############
+#
+include/stop_slave.inc [FOR CHANNEL '']
+SET GLOBAL replica_preserve_commit_order=OFF;
+DROP USER 'replication_applier'@'localhost';
+include/start_slave.inc [FOR CHANNEL '']
+include/rpl_sync.inc
+include/rpl_end.inc

@@ -36,10 +36,12 @@
 #include "sql/binlog.h"    // LOG_INFO
 #include "sql/binlog_reader.h"
 #include "sql/rpl_gtid.h"
+#include "sql/rpl_replica_ext.h"
 #include "sql/sql_error.h"  // Diagnostics_area
 
 class String;
 class THD;
+class Brr_binlog_sender;
 
 /**
   The major logic of dump thread is implemented in this class. It sends
@@ -51,6 +53,7 @@ class Binlog_sender {
                                    Binlog_event_object_istream, Event_allocator>
       File_reader;
 
+  friend class Brr_binlog_sender;
  public:
   Binlog_sender(THD *thd, const char *start_file, my_off_t start_pos,
                 Gtid_set *exclude_gtids, uint32 flag);
@@ -76,8 +79,13 @@ class Binlog_sender {
   /**
     Checks whether thread should continue awaiting new events
     @param log_pos Last processed (sent) event id
+    @param have_lock Whether this function is called inside binlog_end_pos lock.
+    @param brr_ddl_wait_time Records the shortest waiting time for sending brr
+    DDL.
   */
-  bool stop_waiting_for_update(my_off_t log_pos) const;
+  bool stop_waiting_for_update(
+      my_off_t log_pos, bool have_lock = true,
+      std::chrono::nanoseconds *brr_ddl_wait_time = nullptr);
 
   THD *m_thd;
   String &m_packet;
@@ -196,6 +204,24 @@ class Binlog_sender {
   */
   binary_log::Log_event_type m_prev_event_type;
 
+  /** The length of the skipped ignorable log event. */
+  my_off_t m_skipped_ignorable_event_len;
+
+  /** Whether this dump thread belong to a semi-sync replication. */
+  bool m_is_semi_sync_dump_thread;
+
+  /** Whether this dump thread belong to a rds replication. */
+  bool m_is_rds_dump_thread;
+
+  /** The sender of binlog realtime transmit. */
+  Brr_binlog_sender *m_brr_sender;
+
+  /**
+    If the user variables replica_brr_enable is set, init the Brr_binlog_sender
+    for current dump thread.
+  */
+  void init_brr_sender();
+
   /*
     It initializes the context, checks if the dump request is valid and
     if binlog status is correct.
@@ -311,10 +337,11 @@ class Binlog_sender {
      It sends a heartbeat to the client, for the cases when the
      flag USE_HEARTBEAT_EVENT_V2 is set.
      @param[in] log_pos  The log position that events before it are sent.
+     @param[in] with_ack  Whether ask slave ack in semi-sync mode.
 
      @return It returns 0 if succeeds, otherwise 1 is returned.
   */
-  int send_heartbeat_event_v2(my_off_t log_pos);
+  int send_heartbeat_event_v2(my_off_t log_pos, bool with_ack = false);
   /**
      Checks if the heartbeat_version flag is set or not, and call the correct
      send_heartbeat_method accordingly.
@@ -501,4 +528,5 @@ class Binlog_sender {
   void calc_shrink_buffer_size(size_t current_size);
 };
 
+extern std::chrono::nanoseconds now_in_nanosecs();
 #endif  // DEFINED_RPL_BINLOG_SENDER

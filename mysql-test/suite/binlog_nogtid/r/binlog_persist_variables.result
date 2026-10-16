@@ -26,7 +26,7 @@ VARIABLE_NAME LIKE '%source%') AND
 'innodb_master_thread_disabled_debug', 'innodb_replication_delay'))
 ORDER BY VARIABLE_NAME;
 
-include/assert.inc [Expect 125 variables in the table.]
+include/assert.inc [Expect 139 variables in the table.]
 
 # Test SET PERSIST
 SET PERSIST binlog_buffer_size = @@GLOBAL.binlog_buffer_size;
@@ -55,6 +55,19 @@ Warnings:
 Warning	1287	'@@binlog_max_flush_queue_time' is deprecated and will be removed in a future release.
 Warning	1287	'@@binlog_max_flush_queue_time' is deprecated and will be removed in a future release.
 SET PERSIST binlog_order_commits = @@GLOBAL.binlog_order_commits;
+SET PERSIST binlog_realtime_apply_ddl_source_enabled = @@GLOBAL.binlog_realtime_apply_ddl_source_enabled;
+SET PERSIST binlog_realtime_apply_long_trx_enabled = @@GLOBAL.binlog_realtime_apply_long_trx_enabled;
+SET PERSIST binlog_realtime_apply_worker_heartbeat_period = @@GLOBAL.binlog_realtime_apply_worker_heartbeat_period;
+SET PERSIST binlog_realtime_apply_workers = @@GLOBAL.binlog_realtime_apply_workers;
+SET PERSIST binlog_realtime_ddl_time_limit = @@GLOBAL.binlog_realtime_ddl_time_limit;
+SET PERSIST binlog_realtime_enable_log_message = @@GLOBAL.binlog_realtime_enable_log_message;
+SET PERSIST binlog_realtime_replica_long_transaction_limit_size = @@GLOBAL.binlog_realtime_replica_long_transaction_limit_size;
+SET PERSIST binlog_realtime_transmit_enable_log_message = @@GLOBAL.binlog_realtime_transmit_enable_log_message;
+SET PERSIST binlog_realtime_transmit_long_transaction_limit_size = @@GLOBAL.binlog_realtime_transmit_long_transaction_limit_size;
+SET PERSIST binlog_realtime_transmit_max_send_size = @@GLOBAL.binlog_realtime_transmit_max_send_size;
+SET PERSIST binlog_realtime_transmit_read_block_size = @@GLOBAL.binlog_realtime_transmit_read_block_size;
+SET PERSIST binlog_realtime_transmit_replica_enabled = @@GLOBAL.binlog_realtime_transmit_replica_enabled;
+SET PERSIST binlog_realtime_transmit_source_enabled = @@GLOBAL.binlog_realtime_transmit_source_enabled;
 SET PERSIST binlog_rotate_encryption_master_key_at_startup = @@GLOBAL.binlog_rotate_encryption_master_key_at_startup;
 ERROR HY000: Variable 'binlog_rotate_encryption_master_key_at_startup' is a read only variable
 SET PERSIST binlog_row_event_max_size = @@GLOBAL.binlog_row_event_max_size;
@@ -125,6 +138,7 @@ SET PERSIST max_binlog_cache_size = @@GLOBAL.max_binlog_cache_size;
 SET PERSIST max_binlog_size = @@GLOBAL.max_binlog_size;
 SET PERSIST max_binlog_stmt_cache_size = @@GLOBAL.max_binlog_stmt_cache_size;
 SET PERSIST max_relay_log_size = @@GLOBAL.max_relay_log_size;
+SET PERSIST optimize_table_write_binlog_advance = @@GLOBAL.optimize_table_write_binlog_advance;
 SET PERSIST persist_binlog_to_redo = @@GLOBAL.persist_binlog_to_redo;
 SET PERSIST persist_binlog_to_redo_size_limit = @@GLOBAL.persist_binlog_to_redo_size_limit;
 SET PERSIST relay_log = @@GLOBAL.relay_log;
@@ -270,16 +284,16 @@ Warning	1287	'@@sync_relay_log_info' is deprecated and will be removed in a futu
 SET PERSIST sync_source_info = @@GLOBAL.sync_source_info;
 SET PERSIST wait_binlog_flush = @@GLOBAL.wait_binlog_flush;
 
-include/assert.inc [Expect 100 persisted variables in persisted_variables table.]
+include/assert.inc [Expect 114 persisted variables in persisted_variables table.]
 
 ############################################################
 # 2. Restart server, it must preserve the persisted variable
 #    settings. Verify persisted configuration.
 # restart
 
-include/assert.inc [Expect 100 persisted variables in persisted_variables table.']
-include/assert.inc [Expect 100 persisted variables shown as PERSISTED in variables_info table.']
-include/assert.inc [Expect 100 persisted variables with matching persisted and global values.]
+include/assert.inc [Expect 114 persisted variables in persisted_variables table.']
+include/assert.inc [Expect 114 persisted variables shown as PERSISTED in variables_info table.']
+include/assert.inc [Expect 114 persisted variables with matching persisted and global values.]
 
 ############################################################
 # 3. Test RESET PERSIST IF EXISTS. Verify persisted variable
@@ -306,6 +320,19 @@ Warnings:
 Warning	3615	Variable binlog_gtid_simple_recovery does not exist in persisted config file
 RESET PERSIST IF EXISTS binlog_max_flush_queue_time;
 RESET PERSIST IF EXISTS binlog_order_commits;
+RESET PERSIST IF EXISTS binlog_realtime_apply_ddl_source_enabled;
+RESET PERSIST IF EXISTS binlog_realtime_apply_long_trx_enabled;
+RESET PERSIST IF EXISTS binlog_realtime_apply_worker_heartbeat_period;
+RESET PERSIST IF EXISTS binlog_realtime_apply_workers;
+RESET PERSIST IF EXISTS binlog_realtime_ddl_time_limit;
+RESET PERSIST IF EXISTS binlog_realtime_enable_log_message;
+RESET PERSIST IF EXISTS binlog_realtime_replica_long_transaction_limit_size;
+RESET PERSIST IF EXISTS binlog_realtime_transmit_enable_log_message;
+RESET PERSIST IF EXISTS binlog_realtime_transmit_long_transaction_limit_size;
+RESET PERSIST IF EXISTS binlog_realtime_transmit_max_send_size;
+RESET PERSIST IF EXISTS binlog_realtime_transmit_read_block_size;
+RESET PERSIST IF EXISTS binlog_realtime_transmit_replica_enabled;
+RESET PERSIST IF EXISTS binlog_realtime_transmit_source_enabled;
 RESET PERSIST IF EXISTS binlog_rotate_encryption_master_key_at_startup;
 Warnings:
 Warning	3615	Variable binlog_rotate_encryption_master_key_at_startup does not exist in persisted config file
@@ -370,6 +397,7 @@ RESET PERSIST IF EXISTS max_binlog_cache_size;
 RESET PERSIST IF EXISTS max_binlog_size;
 RESET PERSIST IF EXISTS max_binlog_stmt_cache_size;
 RESET PERSIST IF EXISTS max_relay_log_size;
+RESET PERSIST IF EXISTS optimize_table_write_binlog_advance;
 RESET PERSIST IF EXISTS persist_binlog_to_redo;
 RESET PERSIST IF EXISTS persist_binlog_to_redo_size_limit;
 RESET PERSIST IF EXISTS relay_log;

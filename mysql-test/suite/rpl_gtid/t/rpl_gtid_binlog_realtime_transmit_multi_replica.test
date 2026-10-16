@@ -1,0 +1,147 @@
+# ==== Purpose ====
+# This test verifies the binlog realtime transmit works well in multi replicate situation.
+#
+# ==== Implementation ====
+# 0) Prepare data.
+# 1) Test multi replica use binlog realtime transmit.
+# 2) Test multi replica, some of them use binlog realtime transmit, others not.
+# 3) Cleanup.
+--source include/have_binlog_format_row.inc
+--let $keep_gtid_events= 1
+
+--let $rpl_topology= 1->2,1->3,1->4
+--source include/rpl_init.inc
+
+--echo #
+--echo # 0. Prepare data.
+--echo ########################################################
+--echo #
+--let $rpl_connection_name= server_1
+--source include/rpl_connection.inc
+CREATE DATABASE rpl_test;
+CREATE TABLE rpl_test.t1 (s LONGTEXT);
+CREATE TABLE rpl_test.t2 (s LONGTEXT);
+
+--disable_query_log
+--let $i=0
+while ($i < 4)
+{
+  --eval INSERT INTO rpl_test.t1 values(repeat("1", 5242880))
+  --inc $i
+}
+--enable_query_log
+
+--echo #
+--echo # 1. Test multi replica use binlog realtime transmit.
+--echo ########################################################
+--echo #
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+--echo # Wait for replica_brr_cache_count in all slave.
+--let $wait_for_replica_brr_cache_count_value=1
+--let $skip_connection_slave = 1
+
+--let $rpl_connection_name= server_2
+--source include/rpl_connection.inc
+--source suite/rpl/include/binlog_realtime_transmit_wait_and_test_replica.inc
+
+--let $rpl_connection_name= server_3
+--source include/rpl_connection.inc
+--source suite/rpl/include/binlog_realtime_transmit_wait_and_test_replica.inc
+
+--let $rpl_connection_name= server_4
+--source include/rpl_connection.inc
+--source suite/rpl/include/binlog_realtime_transmit_wait_and_test_replica.inc
+
+--echo # Commit the transaction on master.
+--let $rpl_connection_name= server_1
+--source include/rpl_connection.inc
+SHOW STATUS LIKE "source_%";
+
+COMMIT;
+
+--echo # Test data and relay log on slave.
+--let $wait_and_test_after_commit= 1
+--let $wait_sql= SELECT COUNT(*)=4 FROM rpl_test.t2;
+--let $relay_log_file=slave-relay-bin.000003
+
+--let $rpl_connection_name= server_2
+--source include/rpl_connection.inc
+--source suite/rpl/include/binlog_realtime_transmit_wait_and_test_replica.inc
+
+--let $rpl_connection_name= server_3
+--source include/rpl_connection.inc
+--source suite/rpl/include/binlog_realtime_transmit_wait_and_test_replica.inc
+
+--let $rpl_connection_name= server_4
+--source include/rpl_connection.inc
+--source suite/rpl/include/binlog_realtime_transmit_wait_and_test_replica.inc
+
+--let $rpl_connection_name= server_1
+--source include/rpl_connection.inc
+SHOW STATUS LIKE "source_%";
+
+--echo #
+--echo # 2. Test multi replica, some of them use binlog realtime transmit, others not.
+--echo ########################################################
+--echo #
+--echo # Disable binlog realtime transmit on slave 4.
+--let $rpl_connection_name= server_4
+--source include/rpl_connection.inc
+STOP SLAVE;
+SET GLOBAL binlog_realtime_transmit_replica_enabled = 0;
+START SLAVE;
+
+--let $rpl_connection_name= server_1
+--source include/rpl_connection.inc
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+--echo # Wait for replica_brr_cache_count on slave 2 and 3.
+--let $wait_for_replica_brr_cache_count_value=1
+--let $skip_connection_slave = 1
+
+--let $rpl_connection_name= server_2
+--source include/rpl_connection.inc
+--source suite/rpl/include/binlog_realtime_transmit_wait_and_test_replica.inc
+
+--let $rpl_connection_name= server_3
+--source include/rpl_connection.inc
+--source suite/rpl/include/binlog_realtime_transmit_wait_and_test_replica.inc
+
+--echo # Commit the transaction on master.
+--let $rpl_connection_name= server_1
+--source include/rpl_connection.inc
+COMMIT;
+
+--echo # Test data and relay log on slave.
+--let $wait_and_test_after_commit= 1
+--let $wait_sql= SELECT COUNT(*)=8 FROM rpl_test.t2;
+--let $relay_log_file=slave-relay-bin.000005
+
+--let $rpl_connection_name= server_2
+--source include/rpl_connection.inc
+--source suite/rpl/include/binlog_realtime_transmit_wait_and_test_replica.inc
+
+--let $rpl_connection_name= server_3
+--source include/rpl_connection.inc
+--source suite/rpl/include/binlog_realtime_transmit_wait_and_test_replica.inc
+
+--echo # relay log on slave 4 expect not has Ignorable event.
+--let $rpl_connection_name= server_4
+--source include/rpl_connection.inc
+--source suite/rpl/include/binlog_realtime_transmit_wait_and_test_replica.inc
+
+--echo #
+--echo # 3. Cleanup.
+--echo ########################################################
+--echo #
+--let $rpl_connection_name= server_1
+--source include/rpl_connection.inc
+DROP DATABASE rpl_test;
+
+--let $rpl_connection_name= server_4
+--source include/rpl_connection.inc
+SET GLOBAL binlog_realtime_transmit_replica_enabled = ON;
+--source include/rpl_end.inc

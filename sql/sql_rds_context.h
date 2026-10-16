@@ -27,6 +27,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef SQL_RDS_CONTEXT_H
 #define SQL_RDS_CONTEXT_H
 
+struct Brr_trx;
+class Brr_rpl_info;
+enum Brr_magic_type : int;
+
 /**
    RDS-specific data structures that need to be stored in the class THD.
 
@@ -36,7 +40,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
 class THD_rds_context {
  public:
   THD_rds_context()
-      : copy_ddl_from_innodb_to_duckdb(false),
+      : nonblock_ddl_retry_interval(0),
+        nonblock_ddl_lock_wait_timeout(1),
+        brr_trx(nullptr),
+        brr_optimize_query_str(nullptr),
+        copy_ddl_from_innodb_to_duckdb(false),
         duckdb_parallel_copy_ddl(false),
         copy_ddl_from_duckdb_to_duckdb(false) {}
 
@@ -66,7 +74,24 @@ class THD_rds_context {
     copy_ddl_from_duckdb_to_duckdb = value;
   }
 
+  Brr_trx *get_brr_trx() const { return brr_trx; }
+
+  void set_brr_trx(Brr_trx *trx) { brr_trx = trx; }
+
+  String *get_brr_optimize_query_str() const { return brr_optimize_query_str; }
+
+  void set_brr_optimize_query_str(String *str) { brr_optimize_query_str = str; }
+
+  uint nonblock_ddl_retry_interval;
+
+  uint nonblock_ddl_lock_wait_timeout;
  private:
+  /* Use by source. */
+  Brr_trx *brr_trx;
+
+  /* This query string of optimize table. */
+  String *brr_optimize_query_str;
+
   /* Current connection is executing COPY DDL from InnoDB to DuckDB. */
   bool copy_ddl_from_innodb_to_duckdb;
 

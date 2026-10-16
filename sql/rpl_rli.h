@@ -74,6 +74,7 @@ class Slave_worker;
 class String;
 struct LEX_MASTER_INFO;
 struct db_worker_hash_entry;
+class Brr_cache;
 
 extern bool duckdb_multi_trx_in_batch;
 
@@ -1212,6 +1213,23 @@ class Relay_log_info : public Rpl_info {
   */
   // number's is determined by global replica_parallel_workers
   Slave_worker_array workers;
+
+  Slave_brr_worker_array brr_workers;
+  ulong replica_brr_workers;
+  std::atomic<bool> brr_abort_running;
+
+  /*
+    This flag is used to avoid KILL_QUERY is ignored by kill_immunizer.
+  */
+  std::atomic<bool> brr_abort_query;
+
+  Brr_cache *brr_cache;
+  void set_brr_cache(Brr_cache *cache) { brr_cache = cache; }
+  Brr_cache *get_brr_cache() const { return brr_cache; }
+
+  void do_report(loglevel level, int err_code, const char *msg,
+                 va_list args) const override
+      MY_ATTRIBUTE((format(printf, 4, 0)));
 
   // To map a database to a worker
   malloc_unordered_map<std::string,

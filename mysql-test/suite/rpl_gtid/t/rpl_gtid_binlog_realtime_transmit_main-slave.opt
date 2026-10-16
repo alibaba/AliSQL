@@ -1,0 +1,5 @@
+--relay_log_purge=OFF
+--server_id=2
+--replica_net_timeout=100000
+--binlog_realtime_enable_log_message=ON
+$SEMISYNC_PLUGIN_OPT

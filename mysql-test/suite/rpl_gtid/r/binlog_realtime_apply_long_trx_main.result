@@ -1,0 +1,278 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+CALL mtr.add_suppression("\\[Warning\\] .*MY-\\d+.* \\[Repl\\] \\[RDS Diagnose\\] .*");
+CALL mtr.add_suppression("\\[ERROR\\] .*MY-\\d+.* \\[Repl\\] Brr Worker failed executing transaction .*");
+
+#
+# 0. Prepare data.
+########################################################
+#
+[connection master]
+CREATE DATABASE rpl_test;
+CREATE TABLE rpl_test.t1 (s LONGTEXT);
+CREATE TABLE rpl_test.t2 (s LONGTEXT);
+CREATE TABLE rpl_test.t3 (s LONGTEXT);
+CREATE TABLE rpl_test.t4 (s LONGTEXT) engine=MYISAM;
+CREATE TABLE rpl_test.t5 (s LONGTEXT);
+include/rpl_sync.inc
+
+#
+# 1. Test a successfully executed long transaction can be applied by brr.
+#########################################################################
+#
+[connection master]
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+INSERT INTO rpl_test.t3 SELECT * FROM rpl_test.t1;
+
+## Confirmed that the source has generated a brr cache.
+
+## Confirmed that brr worker gets the transaction.
+[connection slave]
+
+## Confirmed that brr worker realtime apply the event.
+
+## Commit the long transaction and check source and replica data.
+[connection master]
+commit;
+[connection slave]
+select count(*) from rpl_test.t2;
+count(*)
+3
+select count(*) from rpl_test.t3;
+count(*)
+3
+
+#
+# 2. Test a rollback transaction, the brr will also roll back it.
+#################################################################
+#
+[connection master]
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+## Confirmed that brr worker gets the transaction.
+[connection slave]
+
+## Rollback the long transaction and check source and replica data.
+[connection master]
+ROLLBACK;
+[connection slave]
+select count(*) from rpl_test.t2;
+count(*)
+5
+
+#
+# 3. Test worker thread will wait the brr worker apply the long transaction.
+#############################################################################
+#
+
+## 
+[connection slave]
+set global debug="+d,brr_wait_apply";
+[connection master]
+BEGIN;
+DELETE FROM rpl_test.t2;
+
+## Confirmed that brr worker gets the transaction.
+[connection slave]
+## Commit the transaction.
+[connection master]
+COMMIT;
+
+## Worker thread should be waiting for the transaction to be committed by brr worker
+[connection slave]
+SET GLOBAL debug="-d,brr_wait_apply";
+SET DEBUG_SYNC = 'now SIGNAL apply_continue';
+[connection slave]
+select count(*) from rpl_test.t2;
+count(*)
+0
+
+#
+# 4. Test worker thread will apply the long transaction if the brr worker failed to apply it.
+#############################################################################################
+#
+[connection slave]
+SET GLOBAL debug="+d,brr_worker_abort_apply";
+[connection master]
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+## Confirmed that brr worker gets the transaction.
+[connection slave]
+
+## Confirmed that brr worker roll back the transaction.
+[connection slave]
+select count(*) from rpl_test.t2;
+count(*)
+0
+
+## Commit the transaction.
+[connection master]
+COMMIT;
+
+## Confirmed that normal worker apply the transaction.
+[connection slave]
+include/rpl_sync.inc
+select count(*) from rpl_test.t2;
+count(*)
+3
+SET GLOBAL debug="-d,brr_worker_abort_apply";
+
+#
+# 5. Test stop slave io_thread will make the brr worker roll back the long transaction.
+#######################################################################################
+#
+[connection slave]
+set global debug="+d,brr_wait_apply";
+[connection master]
+BEGIN;
+DELETE FROM rpl_test.t3;
+
+## Confirmed that brr worker gets the transaction.
+[connection slave]
+
+## Commit the transaction.
+[connection master]
+COMMIT;
+
+## brr roll back transaction.
+[connection slave]
+include/stop_slave_io.inc
+select count(*) from rpl_test.t3;
+count(*)
+3
+
+## Normal worker apply the transaction.
+include/start_slave_io.inc
+include/rpl_sync.inc
+select count(*) from rpl_test.t3;
+count(*)
+0
+
+#
+# 6. Test stop slave sql_thread will make the brr worker roll back the long transaction.
+########################################################################################
+#
+[connection master]
+BEGIN;
+DELETE FROM rpl_test.t2;
+
+## Confirmed that brr worker gets the transaction.
+[connection slave]
+
+## Commit the transaction.
+[connection master]
+COMMIT;
+
+## brr roll back transaction.
+[connection slave]
+include/stop_slave_sql.inc
+select count(*) from rpl_test.t2;
+count(*)
+3
+
+## Normal worker apply the transaction.
+include/start_slave_sql.inc
+include/rpl_sync.inc
+select count(*) from rpl_test.t2;
+count(*)
+0
+set global debug="-d,brr_wait_apply";
+
+#
+# 7. Test binlog_realtime_apply_long_trx_enabled is off, not using realtime apply.
+##################################################################################
+#
+[connection master]
+set global binlog_realtime_apply_long_trx_enabled=OFF;
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+## Confirmed that the source has generated a brr trx and this brr trx not using realtime apply.
+include/assert_grep.inc [Confirmed that the source has generated a brr trx.]
+
+## Confirmed that the replica has generated a brr cache.
+[connection slave]
+
+## Confirmed the trx is not applied by brr worker.
+[connection master]
+COMMIT;
+include/assert_grep.inc [Confirmed the trx is not applied by brr worker.]
+[connection slave]
+
+## Confirmed Gtid_executed_log_event is not generate.
+include/show_relaylog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+slave-relay-bin.000014	#	Format_desc	#	#	SERVER_VERSION, BINLOG_VERSION
+slave-relay-bin.000014	#	Ignorable	#	#	# Unrecognized ignorable event
+slave-relay-bin.000014	#	Query	#	#	BEGIN
+slave-relay-bin.000014	#	Table_map	#	#	table_id: # (rpl_test.t2)
+slave-relay-bin.000014	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000014	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000014	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+slave-relay-bin.000014	#	Xid	#	#	COMMIT /* XID */
+slave-relay-bin.000014	#	Rotate	#	#	slave-relay-bin.000015;pos=POS
+
+#
+# 8. Test trx using stmt cache will not using realtime transmit.
+################################################################
+#
+[connection master]
+set global binlog_realtime_apply_long_trx_enabled=ON;
+INSERT INTO rpl_test.t4 SELECT * FROM rpl_test.t1;
+
+#
+# 9. Test XA transaction will not using realtime transmit.
+##########################################################
+#
+[connection master]
+XA START 'trx1';
+INSERT INTO rpl_test.t3 SELECT * FROM rpl_test.t1;
+XA END 'trx1';
+XA PREPARE 'trx1';
+XA COMMIT 'trx1';
+
+#
+# 10. Testing enabling realtime apply simultaneously with DDL and long transactions did not result in circular waits. 
+#####################################################################################################################
+#
+# Execute DDL
+[connection slave]
+SET GLOBAL debug = '+d,brr_wait_mdl_lock';
+[connection master]
+SET GLOBAL debug = '+d,brr_wait_inplace_alter_table';
+ALTER TABLE rpl_test.t5 ADD COLUMN id1 INT, ALGORITHM=INPLACE;
+# Execute trx1
+[connection master1]
+BEGIN;
+INSERT INTO rpl_test.t5(s) SELECT * FROM rpl_test.t1;
+# Confirm that the BRR worker begin apply the long trx
+[connection slave]
+# Confirm that the BRR worker begin apply the DDL and waiting MDL lock.
+# Commit trx2
+INSERT INTO rpl_test.t5(s) SELECT * FROM rpl_test.t1;
+# Confirm that the BRR worker begin apply the trx2 and waiting MDL lock.
+[connection slave]
+[connection master1]
+COMMIT;
+SET DEBUG_SYNC = 'now SIGNAL continue';
+[connection master]
+SET GLOBAL debug = '-d,brr_wait_inplace_alter_table';
+# Confirm not block.
+include/rpl_sync.inc
+[connection slave]
+SET GLOBAL debug = '-d,brr_wait_mdl_lock';
+
+#
+# 11. Cleanup.
+#############
+#
+[connection master]
+DROP DATABASE rpl_test;
+include/rpl_sync.inc
+include/rpl_end.inc

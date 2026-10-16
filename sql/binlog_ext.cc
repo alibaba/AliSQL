@@ -53,6 +53,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "mysqld_error.h"
 #include "sql/clone_handler.h"
 #include "sql/mysqld.h"
+#include "sql/opt_costconstantcache.h"
+#include "sql/rpl_binlog_sender_ext.h"
+#include "sql/rpl_info_factory.h"
+#include "sql/server_redo_log.h"
 #include "sql/sql_class.h"
 
 #include "sql/duckdb/duckdb_config.h"
@@ -2248,27 +2252,6 @@ inline bool Binlog_cache_free_flush::check(THD *thd) {
 
   if (!m_is_enabled) return false;
 
-  /*
-    Free flush is incompatible with a second non-binlog 2PC engine such as
-    DuckDB. DuckDB registers itself as a 2PC engine whenever binlog is
-    enabled (ha_duckdb.cc: duckdb_hton->prepare is set when opt_bin_log),
-    which makes total_ha_2pc == 3 regardless of duckdb_mode.
-
-    Free flush closes the old binlog cleanly (clearing LOG_EVENT_IN_USE_F)
-    before renaming the temp file to the new binlog. A crash in between
-    therefore leaves a *cleanly-closed* binlog together with a still
-    prepared transaction -- a combination the normal recovery path assumes
-    is impossible. On restart open_binlog() sees the clean binlog and calls
-    ha_recover(nullptr), which only force-rolls-back such a prepared
-    transaction when total_ha_2pc <= opt_bin_log + 1 (binlog + a single
-    engine). With DuckDB present that guard fails, recovery keeps dry_run
-    and the server aborts with "Found N prepared transactions".
-
-    So when more than one non-binlog engine participates in 2PC, fall back
-    to the normal binlog flush path instead of doing a free flush.
-  */
-  if (total_ha_2pc > (ulong)opt_bin_log + 1) return false;
-
   /* Do not free flush if total_bytes smaller than limit size. */
   if (DBUG_EVALUATE_IF("free_flush_skip_limit_size_check", 0, 1) &&
       likely(cache_storage->length() <= m_limit_size))
@@ -2334,4 +2317,208 @@ inline bool Binlog_cache_free_flush::check_reserved_space_enough(
   }
 
   return true;
+}
+
+/** Put this function here to make it inline. */
+inline void RDS_binlog_cache_storage::update_brr_pos_after_write() {
+  if (!m_brr_enabled) return;
+
+  if (likely(!m_brr_trx &&
+             m_file.length() <= brr_trx_mngr.get_limit_size_var()))
+    return;
+
+  if (unlikely(!brr_trx_mngr.get_enabled())) {
+    /*
+      This may happen when binlog realtime transmit switch off before current
+      trx commit.
+    */
+    rollback_brr_trx();
+    return;
+  }
+
+  /*
+    If a non-transactional table is operated on, realtime transmit is not
+    used.
+  */
+  assert(current_thd);
+  binlog_cache_mngr *cache_mngr = thd_get_cache_mngr(current_thd);
+  if (!cache_mngr->stmt_cache.is_binlog_empty()) {
+    rollback_brr_trx();
+    return;
+  }
+
+  /*
+    Flush binlog cache and append brr trx(or update brr pos) in two situations.
+    1. The cache size exceeds the
+       binlog_realtime_transmit_long_transaction_limit_size variable.
+
+    2. The new cache pos subtract last update brr pos exceeds the
+       binlog_realtime_transmit_read_block_size. This is to avoid flush binlog
+       cache too frequency.
+
+    3. This trx is not use binlog compression, we do not support it currently.
+  */
+  if (disk_writes() > 0 && !m_brr_trx && current_thd &&
+      !current_thd->variables.binlog_trx_compression &&
+      m_file.length() > brr_trx_mngr.get_limit_size_var()) {
+    flush_and_update_brr_pos();
+    m_brr_trx = brr_trx_mngr.open_brr_trx(tmp_file_name(), m_file.length(),
+                                          m_file_reserved_size, nullptr);
+  } else if (m_brr_trx && m_file.length() - m_brr_trx->end_position >=
+             brr_trx_mngr.get_read_block_size()) {
+    flush_and_update_brr_pos();
+  }
+  return;
+}
+
+inline void RDS_binlog_cache_storage::update_brr_gtid(const rpl_sid *sid_ptr,
+                                                      rpl_gno gno) {
+  if (!m_brr_trx) return;
+  IO_CACHE *info = m_file.get_io_cache();
+
+  /*
+    The info->file == -1 means that this trx used Binlog_cache_free_flush,
+    which means the binlog cache has been flushed, detached and renamed before
+    called this function, do not need to flush again.
+
+    If this trx has not used Binlog_cache_free_flush, this binlog cache will
+    change to read cache during writing binlog cache to binlog file, so we need
+    to flush buffer to tmp file before it changes to read cache.
+  */
+  if (info->file != -1) flush_and_update_brr_pos();
+
+  brr_trx_mngr.update_brr_trx_gtid(m_brr_trx, sid_ptr, gno);
+}
+
+inline bool check_relay_log_reserved_space_enough(my_off_t reserved_size,
+                                                  Gtid_set *gtid_set) {
+  ulong front_len = BIN_LOG_HEADER_SIZE;
+
+  /* 1. Relay log have two format description events. */
+  front_len += 2 * (Binary_log_event::FORMAT_DESCRIPTION_HEADER_LEN +
+                    BINLOG_CHECKSUM_ALG_DESC_LEN + LOG_EVENT_HEADER_LEN +
+                    BINLOG_CHECKSUM_LEN);
+
+  /* 2. Previous gtid event.*/
+  gtid_set->get_sid_map()->get_sid_lock()->wrlock();
+  front_len += gtid_set->get_encoded_length() + LOG_EVENT_HEADER_LEN;
+  gtid_set->get_sid_map()->get_sid_lock()->unlock();
+
+  /* 3. Gtid event */
+  front_len += binary_log::Gtid_event::MAX_EVENT_LENGTH;
+
+  /* 4. Min value of ignorable event, only event header. */
+  front_len += LOG_EVENT_HEADER_LEN;
+
+  if (front_len > reserved_size) {
+    LOG_BRR_ERROR(
+        "check reserve space for front events of relay log is not enough, "
+        "interrupt the IO thread. Reserve size = %llu, front event size = %lu",
+        reserved_size, front_len)
+    return false;
+  }
+
+  return true;
+}
+
+bool MYSQL_BIN_LOG::rename_tmp_to_relay(Master_info *mi,
+                                        const char *tmp_file_name,
+                                        my_off_t file_reserved_size,
+                                        my_off_t file_end_pos,
+                                        Gtid_log_event *gtid_ev) {
+  assert(is_relay_log);
+  assert(mi->transaction_parser.is_not_inside_transaction());
+
+  bool error = false;
+
+  mysql_mutex_lock(&LOCK_log);
+
+  if (!check_relay_log_reserved_space_enough(file_reserved_size,
+                                             previous_gtid_set_relaylog))
+    goto end;
+
+  flush_and_sync(true);
+
+  /* Rename the brr cache tmp file to relay log file and rotate to it. */
+  tmp_relay_file_name = tmp_file_name;
+  tmp_relay_file_reserved_size = file_reserved_size;
+
+  error = new_file_without_locking(brr_rpl_info.get_description_event());
+
+  tmp_relay_file_name = nullptr;
+  tmp_relay_file_reserved_size = 0;
+
+  if (error) goto end;
+
+  bytes_written += file_end_pos - m_binlog_file->position();
+  m_binlog_file->seek(file_end_pos);
+
+  /* Add logged gtid to make sure the previous gtid event correct. */
+  mysql_mutex_lock(&mi->data_lock);
+  mi->rli->get_sid_lock()->wrlock();
+  mi->rli->add_logged_gtid(
+      gtid_ev->get_sidno(mi->rli->get_gtid_set()->get_sid_map()),
+      gtid_ev->get_gno());
+  mi->rli->get_sid_lock()->unlock();
+  mysql_mutex_unlock(&mi->data_lock);
+
+  /*
+    Use BINLOG_CHECKSUM_ALG_OFF for the rotate event in current relay log file,
+    the Format description event in next file and the previous gtid event in
+    next file.
+  */
+  {
+    auto relay_log_checksum_alg_save = relay_log_checksum_alg;
+    relay_log_checksum_alg = binary_log::BINLOG_CHECKSUM_ALG_OFF;
+
+    error = new_file_without_locking(mi->get_mi_description_event());
+
+    /* Use original checksum_alg for following events. */
+    relay_log_checksum_alg = relay_log_checksum_alg_save;
+  }
+
+  if (error) goto end;
+
+  lock_binlog_end_pos();
+  update_binlog_end_pos(false /*need_lock*/);
+  harvest_bytes_written(mi->rli, true /*need_log_space_lock=true*/);
+  unlock_binlog_end_pos();
+
+end:
+  mysql_mutex_unlock(&LOCK_log);
+  return error;
+}
+
+bool MYSQL_BIN_LOG::rename_brr_cache_to_relay_log() {
+  bool ret = false;
+  if ((ret = my_rename(tmp_relay_file_name, log_file_name, MYF(0)))) {
+    LOG_BRR_ERROR(
+        "rename relay log cache to relay log fail, tmp_file_name: %s, target "
+        "file name: %s",
+        tmp_relay_file_name, log_file_name);
+  } else
+    ret = m_binlog_file->open(
+        m_log_file_key, log_file_name,
+        (MY_WME | MY_NABP | MY_WAIT_IF_FULL | MY_REPORT_WAITING_IF_FULL),
+        true /* exist */);
+
+  return ret;
+}
+
+bool MYSQL_BIN_LOG::write_empty_event_to_relay_log() {
+  assert(current_thd != nullptr);
+  Empty_log_event empty_event(current_thd, 0);
+  empty_event.set_size(tmp_relay_file_reserved_size -
+                       m_binlog_file->position());
+
+  if (DBUG_EVALUATE_IF("not_set_relay_flag_to_ignore_event", false, true)) {
+    empty_event.set_relay_log_event();
+  }
+
+  if (empty_event.write(m_binlog_file)) {
+    LOG_BRR_ERROR("Write brr empty_event failed");
+    return true;
+  }
+  bytes_written += empty_event.common_header->data_written;
+  return false;
 }

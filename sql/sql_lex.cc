@@ -3338,7 +3338,8 @@ void Query_block::print_values(
     else
       str->append(',');
 
-    if (prefix != nullptr) str->append(prefix);
+    if (prefix != nullptr && !(query_type & QT_DUCKDB_REWRITE))
+      str->append(prefix);
 
     str->append('(');
     bool col_first = true;

@@ -48,6 +48,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 const char BINLOG_CACHE_DIR[FN_REFLEN] = "#alisql_binlog_cache_temp_file";
 const char BINLOG_CACHE_NAME[FN_REFLEN] = "rds_binlog_cache";
+const char RELAY_LOG_CACHE_NAME[FN_REFLEN] = "rds_relay_log_cache";
 
 /**
    The format of binlog redo log looks like:

@@ -2410,6 +2410,224 @@ void report_error_to_coordinator(Slave_worker *worker) {
   }
 }
 
+int slave_brr_worker_exec_event(Relay_log_info *brr_worker_info,
+                                  Log_event *ev) {
+  THD *thd = brr_worker_info->info_thd;
+  int ret = 0;
+  DBUG_TRACE;
+  thd->server_id = ev->server_id;
+  thd->unmasked_server_id = ev->common_header->unmasked_server_id;
+  thd->set_time();
+  thd->lex->set_current_query_block(nullptr);
+  if (!ev->common_header->when.tv_sec)
+    ev->common_header->when.tv_sec = static_cast<long>(time(nullptr));
+  ev->thd = thd;
+  ev->worker = brr_worker_info;
+
+  if (ev->ends_group()) {
+    assert(thd->rli_slave);
+    Brr_cache *brr_cache = thd->rli_slave->get_brr_cache();
+    ulonglong brr_index = brr_cache->get_brr_index();
+
+    LOG_BRR_MESSAGE("%s, long transaction brr index: %llu start waiting",
+                    __func__, brr_index);
+
+    if (brr_rpl_info.wait_for_gtid_spec(thd)) {
+      my_error(ER_QUERY_INTERRUPTED, MYF(0));
+      ret = 1;
+    } else {
+      brr_rpl_info.brr_set_gtid_var(thd, brr_cache->get_brr_gtid_spec());
+
+      Xid_log_event *xid_ev = dynamic_cast<Xid_log_event *>(ev);
+      if (xid_ev) {
+        ret = xid_ev->do_commit(thd);
+        if (ret)
+          LOG_BRR_ERROR("Commit brr long transaction failed, brr index: %llu",
+                        brr_index);
+      } else {
+        ret = true;
+        LOG_BRR_ERROR(
+            "Commit brr long transaction failed, thd last event is not "
+            "Xid_log_event, brr index: %llu",
+            brr_index);
+      }
+    }
+
+    LOG_BRR_MESSAGE("%s, long transaction brr index: %llu, get %s signal",
+                    __func__, brr_index, ret ? "rollback" : "commit");
+  } else
+    ret = ev->do_apply_event(brr_worker_info);
+
+  return ret;
+}
+
+void clean_brr_worker_context(Relay_log_info *worker, THD *thd, bool error) {
+  /*
+    Reset thd->killed, return as event applied successfully.
+  */
+  mysql_mutex_lock(&thd->LOCK_thd_data);
+  thd->killed = THD::NOT_KILLED;
+  mysql_mutex_unlock(&thd->LOCK_thd_data);
+  thd->rli_slave->brr_abort_query = false;
+
+  /*
+    Cleanup after an error requires clear_error() go first.
+    Otherwise assert(!all) in binlog_rollback()
+  */
+  if (error) {
+    thd->clear_error();
+    worker->cleanup_context(thd, error);
+  }
+}
+
+/**
+  Brr worker apply one job group.
+
+  param[in] brr_worker_info the brr worker which calls it.
+
+  return returns 0 if the group of jobs are applied successfully, otherwise
+         returns an error code.
+ */
+int slave_brr_worker_exec_job_group(Relay_log_info *brr_worker_info) {
+  THD *thd = brr_worker_info->info_thd;
+  int error = 0;
+  Log_event *ev = nullptr;
+  ulonglong brr_rpl_index = 0;
+  Brr_cache *brr_cache = nullptr;
+  Query_log_event *query_event = nullptr;
+  char brr_statistics[LOG_BUFF_MAX];
+  const char *brr_statistics_fmt =
+      "replica received %llu DDL and %llu long transaction, %llu trx is "
+      "assigned to brr worker, brr worker commit %llu DDL and rollback %llu "
+      "DDL, brr worker commit %llu long transaction and rollback %llu long "
+      "transaction";
+
+  /* Wait until we get the brr cache, or the brr worker thread is killed. */
+  while (!brr_rpl_info.brr_worker_interrupted(thd)) {
+    brr_cache = brr_rpl_info.get_cache_for_worker(thd);
+
+    if (brr_cache) {
+      break;
+    }
+  }
+
+  DBUG_EXECUTE_IF("brr_worker_stop_before_apply_event", {
+    const char act[] = "now WAIT_FOR brr_worker_continue";
+    assert(opt_debug_sync_timeout > 0);
+    assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(act)));
+  };);
+
+  if (brr_rpl_info.brr_worker_interrupted(thd)) {
+    error = -1;
+    goto err;
+  }
+
+  brr_rpl_index = brr_cache->get_brr_index();
+  LOG_BRR_MESSAGE(
+      "%s, get brr transaction, index: %llu, type: %s", __func__, brr_rpl_index,
+      brr_cache->get_brr_type() == Brr_trx_type::BRR_DDL ? "DDL"
+                                                         : "LONG_TRANSACTION");
+
+  while (true) {
+    /* Read brr event from brr cache. */
+    ev = brr_rpl_info.read_next_event(thd);
+
+    if (!ev) {
+      error = -1;
+      break;
+    }
+
+    if (brr_cache->get_brr_type() == Brr_trx_type::BRR_DDL) {
+      query_event = static_cast<Query_log_event *>(ev);
+
+      LOG_BRR_MESSAGE("%s, brr index: %llu, begin execute: %s", __func__,
+                      brr_rpl_index, query_event->query);
+    }
+
+    error = slave_brr_worker_exec_event(brr_worker_info, ev);
+
+    if (error || brr_cache->get_brr_type() == Brr_trx_type::BRR_DDL ||
+        ev->ends_group())
+      break;
+
+    /*
+      Support Rows_query_log_event. The ev will be clean up in two place:
+      1. When apply Row_log_event and the Row_log_event is the end of a
+         statement.
+      2. Errors occurred when apply transaction, then call
+         Relay_log_info::cleanup_context to clean it.
+    */
+    if (ev && ev->worker != nullptr) {
+      delete ev;
+      ev = nullptr;
+    }
+  }
+
+  if (error) {
+    LOG_BRR_MESSAGE("%s, brr transaction index: %llu rolled back", __func__,
+                    brr_rpl_index);
+    if (brr_cache->get_brr_type() == Brr_trx_type::BRR_DDL)
+      replica_brr_ddl_rollback_by_brr_worker++;
+    else
+      replica_brr_long_trx_rollback_by_brr_worker++;
+  } else {
+    LOG_BRR_MESSAGE("%s, brr transaction index: %llu committed", __func__,
+                    brr_rpl_index);
+    if (brr_cache->get_brr_type() == Brr_trx_type::BRR_DDL)
+      replica_brr_ddl_commit_by_brr_worker++;
+    else
+      replica_brr_long_trx_commit_by_brr_worker++;
+  }
+
+err:
+  sprintf(brr_statistics, brr_statistics_fmt, replica_brr_ddl_received.load(),
+          replica_brr_long_trx_received.load(),
+          replica_brr_trx_assigned_to_brr_worker.load(),
+          replica_brr_ddl_commit_by_brr_worker.load(),
+          replica_brr_ddl_rollback_by_brr_worker.load(),
+          replica_brr_long_trx_commit_by_brr_worker.load(),
+          replica_brr_long_trx_rollback_by_brr_worker.load());
+  LogErr(INFORMATION_LEVEL, ER_BINLOG_REALTIME_REPLICA_MESSAGE, brr_statistics);
+
+  if (ev && ev->worker != nullptr) {
+    delete ev;
+    ev = nullptr;
+  }
+
+  brr_rpl_info.cleanup_brr_trx(thd, error);
+
+  if (brr_worker_info->brr_abort_running) {
+    /*
+      The brr worker thread will be destroyed when brr_abort_running is
+      true.
+      The KILL_QUERY signal is used to notify the brr worker to roll back
+      the current transaction, so the brr worker will not be killed by the
+      KILL_QUERY signal.
+    */
+    return -1;
+  }
+
+  /*
+    We will do the necessary cleanup when a brr transaction fails to apply
+    or is rolled back.
+  */
+  if (error) {
+    /*
+      We arrive here in two cases:
+      1. An error occurred while executing event in brr worker
+      2. The current brr worker thread receives a rollback message, or the IO
+      thread exits.
+
+      For all the cases, we will rollback the brr transaction and other threads
+      will not be affected.
+    */
+    clean_brr_worker_context(brr_worker_info, thd, error);
+    error = 0;
+  }
+
+  return error;
+}
+
 /**
   apply one job group.
 

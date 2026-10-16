@@ -44,9 +44,9 @@ explain select * from tt;
 EXPLAIN FROM DUCKDB
 physical_plan
 ┌───────────────────────────┐
-│         SEQ_SCAN          │
+│          SEQ_SCAN         │
 │    ────────────────────   │
-│         Table: tt         │
+│   Table: duckdb.test.tt   │
 │   Type: Sequential Scan   │
 │                           │
 │        Projections:       │
@@ -76,21 +76,24 @@ explain analyze select * from tt
 ┌─────────────┴─────────────┐
 │      EXPLAIN_ANALYZE      │
 │    ────────────────────   │
+│                           │
 │           0 rows          │
-│          (0.00s)          │
+│           0.00s           │
 └─────────────┬─────────────┘
 ┌─────────────┴─────────────┐
 │         TABLE_SCAN        │
 │    ────────────────────   │
-│         Table: tt         │
+│   Table: duckdb.test.tt   │
 │   Type: Sequential Scan   │
 │                           │
 │        Projections:       │
 │             id            │
 │            name           │
 │                           │
+│                           │
+│                           │
 │          12 rows          │
-│          (0.00s)          │
+│           0.00s           │
 └───────────────────────────┘
 
 set duckdb_explain_output="OPTIMIZED_ONLY";
@@ -112,7 +115,7 @@ logical_opt
 ┌─────────────┴─────────────┐
 │          SEQ_SCAN         │
 │    ────────────────────   │
-│         Table: tt         │
+│   Table: duckdb.test.tt   │
 │   Type: Sequential Scan   │
 │                           │
 │          ~12 rows         │
@@ -138,21 +141,24 @@ explain analyze select * from tt
 ┌─────────────┴─────────────┐
 │      EXPLAIN_ANALYZE      │
 │    ────────────────────   │
+│                           │
 │           0 rows          │
-│          (0.00s)          │
+│           0.00s           │
 └─────────────┬─────────────┘
 ┌─────────────┴─────────────┐
 │         TABLE_SCAN        │
 │    ────────────────────   │
-│         Table: tt         │
+│   Table: duckdb.test.tt   │
 │   Type: Sequential Scan   │
 │                           │
 │        Projections:       │
 │             id            │
 │            name           │
 │                           │
+│                           │
+│                           │
 │          12 rows          │
-│          (0.00s)          │
+│           0.00s           │
 └───────────────────────────┘
 
 set duckdb_explain_output="ALL";
@@ -172,7 +178,7 @@ logical_plan
 ┌─────────────┴─────────────┐
 │          SEQ_SCAN         │
 │    ────────────────────   │
-│         Table: tt         │
+│   Table: duckdb.test.tt   │
 │   Type: Sequential Scan   │
 └───────────────────────────┘
 logical_opt
@@ -188,16 +194,16 @@ logical_opt
 ┌─────────────┴─────────────┐
 │          SEQ_SCAN         │
 │    ────────────────────   │
-│         Table: tt         │
+│   Table: duckdb.test.tt   │
 │   Type: Sequential Scan   │
 │                           │
 │          ~12 rows         │
 └───────────────────────────┘
 physical_plan
 ┌───────────────────────────┐
-│         SEQ_SCAN          │
+│          SEQ_SCAN         │
 │    ────────────────────   │
-│         Table: tt         │
+│   Table: duckdb.test.tt   │
 │   Type: Sequential Scan   │
 │                           │
 │        Projections:       │
@@ -227,21 +233,24 @@ explain analyze select * from tt
 ┌─────────────┴─────────────┐
 │      EXPLAIN_ANALYZE      │
 │    ────────────────────   │
+│                           │
 │           0 rows          │
-│          (0.00s)          │
+│           0.00s           │
 └─────────────┬─────────────┘
 ┌─────────────┴─────────────┐
 │         TABLE_SCAN        │
 │    ────────────────────   │
-│         Table: tt         │
+│   Table: duckdb.test.tt   │
 │   Type: Sequential Scan   │
 │                           │
 │        Projections:       │
 │             id            │
 │            name           │
 │                           │
+│                           │
+│                           │
 │          12 rows          │
-│          (0.00s)          │
+│           0.00s           │
 └───────────────────────────┘
 
 set duckdb_explain_output="LOGICAL_ONLY";

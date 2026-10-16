@@ -114,6 +114,11 @@ class Convert_all_to_duckdb {
       t.join();
     }
 
+    /* Retry failed/unprocessed tables single-threaded to avoid VIEW MDL
+       deadlocks caused by concurrent threads updating the same view's
+       metadata. */
+    retry_failed_tables();
+
     return is_error();
   }
 
@@ -136,7 +141,10 @@ class Convert_all_to_duckdb {
   /** Ignore error flag. */
   bool m_ignore_error;
 
-  /** Mutex to protect m_schema_to_tables. */
+  /** Failed tables for single-threaded retry. */
+  std::vector<String_type> m_failed_tables;
+
+  /** Mutex to protect m_schema_to_tables and m_failed_tables. */
   std::mutex m_mutex;
 
   /** RAII to lock and unlock mutex. */
@@ -284,11 +292,92 @@ class Convert_all_to_duckdb {
 
     bool ret = con.execute_direct(str);
 
+    if (ret) {
+      Mutex_guard guard(&m_mutex);
+      m_failed_tables.push_back(table_name);
+    }
+
     bool expected = m_error.load();
     bool desired;
     do {
       desired = expected | ret;
     } while (!m_error.compare_exchange_weak(expected, desired));
+  }
+
+  /**
+    Retry failed and unprocessed tables in a single thread.
+    When multiple threads concurrently convert tables that are referenced
+    by the same VIEW, MDL deadlocks can occur in
+    update_referencing_views_metadata(). Single-threaded retry avoids this.
+  */
+  void retry_failed_tables() {
+    std::vector<String_type> retry_tables;
+    {
+      Mutex_guard guard(&m_mutex);
+      retry_tables = std::move(m_failed_tables);
+      /* Also collect unprocessed tables (threads may have stopped early). */
+      for (auto &pair : *m_schema_to_tables) {
+        for (auto &table : pair.second) {
+          retry_tables.push_back("`" + pair.first + "`.`" + table + "`");
+        }
+      }
+      m_schema_to_tables->clear();
+    }
+
+    if (retry_tables.empty() || check_if_shutdown()) return;
+
+    std::string msg =
+        "Retrying " + std::to_string(retry_tables.size()) +
+        " table(s) single-threaded to avoid VIEW MDL conflicts";
+    LogErr(INFORMATION_LEVEL, ER_DUCKDB, msg.c_str());
+
+    /*
+      Use a separate thread because retry needs a clean THD context;
+      the caller's THD is not suitable for executing DDL statements.
+    */
+    std::thread retry([this, retry_tables = std::move(retry_tables)]() {
+      my_thread_init();
+      assert(current_thd == nullptr);
+      THD *thd = create_thd(false, false, false, PSI_NOT_INSTRUMENTED, 0);
+      thd->security_context()->skip_grants();
+      {
+        plugin_thdvar_init(thd, true);
+        Disable_autocommit_guard autocommit_guard(thd);
+        Disable_binlog_guard disable_binlog(thd);
+        Disable_sql_log_bin_guard disable_sql_log_bin(thd);
+
+        for (const auto &name : retry_tables) {
+          if (check_if_shutdown()) {
+            m_error = true;
+            break;
+          }
+          alter_table(name);
+        }
+        plugin_thdvar_cleanup(thd, true);
+      }
+      destroy_thd(thd);
+      assert(current_thd == nullptr);
+      my_thread_end();
+    });
+    retry.join();
+
+    /* Determine final error state from retry results. */
+    {
+      Mutex_guard guard(&m_mutex);
+      if (m_failed_tables.empty()) {
+        /* A shutdown can interrupt retry before any table reports failure. */
+        m_error = (get_server_state() == SERVER_SHUTTING_DOWN);
+      } else {
+        m_error = true;
+        std::string fail_msg =
+            std::to_string(m_failed_tables.size()) +
+            " table(s) still failed after single-threaded retry:";
+        for (const auto &name : m_failed_tables) {
+          fail_msg += " " + name;
+        }
+        LogErr(WARNING_LEVEL, ER_DUCKDB, fail_msg.c_str());
+      }
+    }
   }
 
   /**
@@ -313,7 +402,7 @@ class Convert_all_to_duckdb {
       Disable_sql_log_bin_guard disable_sql_log_bin(thd);
 
       String_type full_name;
-      while (fetch_table_name(full_name) && !is_error()) {
+      while (!is_error() && fetch_table_name(full_name)) {
         assert(!full_name.empty());
         alter_table(full_name);
       }

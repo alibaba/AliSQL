@@ -32,8 +32,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/dd/types/index_element.h"
 #include "sql/dd/types/table.h"
 #include "sql/derror.h"
+#include "sql/duckdb/duckdb_sql_quote.h"
 #include "sql/handler.h"
 #include "sql/key_spec.h"
+#include "sql/mysqld.h"
 #include "sql/sql_class.h"
 #include "sql/sql_gipk.h"
 #include "sql/sql_lex.h"
@@ -54,13 +56,13 @@ namespace myduck {
                                or dropped.
 */
 static void process_fields(THD *thd, Alter_info *alter_info) {
-  /** Duckdb don't support auto-increment */
   List_iterator<Create_field> it(alter_info->create_list);
 
   Create_field *sql_field;
   for (; (sql_field = it++);) {
     /* Unmark auto_increment. */
-    if (sql_field->auto_flags & Field::NEXT_NUMBER) {
+    if (!duckdb_support_auto_increment &&
+        (sql_field->auto_flags & Field::NEXT_NUMBER)) {
       sql_field->auto_flags &= ~(Field::NEXT_NUMBER);
       // push_warning_printf(thd, Sql_condition::SL_WARNING,
       //                     ER_DUCKDB_TABLE_AUTO_INCREMENT_REMOVED,
@@ -713,8 +715,9 @@ void cleanup_tmp_table(THD *thd, const char *db, const char *tmp_table_name) {
   std::string table_name(tmp_table_name);
 
   std::ostringstream query;
-  query << "USE `" << schema_name << "`;";
-  query << "DROP TABLE IF EXISTS `" << table_name << "`;";
+  query << "USE " << myduck::quote_duckdb_ident(schema_name) << ";";
+  query << "DROP TABLE IF EXISTS " << myduck::quote_duckdb_ident(table_name)
+        << ";";
   duckdb_query(thd, query.str());
   thd->get_duckdb_context()->delete_appender(schema_name, table_name);
 

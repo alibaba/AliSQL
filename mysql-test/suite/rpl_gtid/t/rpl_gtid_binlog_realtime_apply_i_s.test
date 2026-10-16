@@ -1,0 +1,185 @@
+# ==== Purpose ====
+# Test binlog realtime apply related i_s table.
+#
+# ==== Implementation ====
+# 1) Prepare data.
+# 2) Test DDL real-time apply IS table information is correct
+# 3) Test Long transaction real-time apply IS table information is correct
+# 4) Cleanup.
+
+--source include/master-slave.inc
+--source include/have_binlog_format_row.inc
+--source include/have_debug.inc
+
+CALL mtr.add_suppression("\\[Warning\\] .*MY-\\d+.* \\[Repl\\] \\[RDS Diagnose\\] .*");
+
+--echo
+--echo #
+--echo # 1. Prepare data.
+--echo ##################
+--echo #
+connection master;
+CREATE DATABASE rpl_test;
+CREATE TABLE rpl_test.t1 (s LONGTEXT);
+CREATE TABLE rpl_test.t2 (s LONGTEXT);
+--disable_query_log
+--let $i=0
+while ($i < 2)
+{
+  --eval INSERT INTO rpl_test.t1 values(repeat("1", 5242880))
+  --inc $i
+}
+--enable_query_log
+--source include/rpl_sync.inc
+SET GLOBAL debug='+d,ignore_brr_ddl_time_limit';
+
+--echo
+--echo #
+--echo # 2. Test DDL real-time apply IS table information is correct
+--echo #############################################################
+--echo #
+connection master;
+SET GLOBAL debug = '+d,brr_wait_inplace_alter_table';
+
+connection slave;
+SET GLOBAL debug = '+d,brr_wait_inplace_alter_table';
+
+connection master;
+--send ALTER TABLE rpl_test.t1 ADD COLUMN id_2 INT, ALGORITHM=INPLACE;
+
+--echo
+--echo ## wait brr trx assigned to a brr worker
+connection slave;
+--let $status_var= replica_brr_trx_assigned_to_brr_worker
+--let $status_var_value= 1
+--source include/wait_for_status_var.inc
+
+--echo
+--echo ## check field of BRR_REPLICA_INFO is correct
+--replace_column 3 # 5 # 10 #
+SELECT * FROM INFORMATION_SCHEMA.BRR_REPLICA_INFO;
+
+--let $assert_text= check BRR_INDEX of BRR_REPLICA_INFO is correct
+--let $assert_cond= [SELECT BRR_INDEX FROM INFORMATION_SCHEMA.BRR_REPLICA_INFO, BRR_INDEX, 1] = 1
+--source include/assert.inc
+
+--let $assert_text= check BRR_TYPE of BRR_REPLICA_INFO is correct
+--let $assert_cond= "[SELECT BRR_TYPE FROM INFORMATION_SCHEMA.BRR_REPLICA_INFO, BRR_TYPE, 1]" = "DDL"
+--source include/assert.inc
+
+--let $assert_text= check GNO of BRR_REPLICA_INFO is correct
+--let $assert_cond= [SELECT GNO FROM INFORMATION_SCHEMA.BRR_REPLICA_INFO, GNO, 1] = 0
+--source include/assert.inc
+
+--let $assert_text= check BRR_EVENTS_RECEIVED of BRR_REPLICA_INFO is correct
+--let $assert_cond= [SELECT BRR_EVENTS_RECEIVED FROM INFORMATION_SCHEMA.BRR_REPLICA_INFO, BRR_EVENTS_RECEIVED, 1] = 1
+--source include/assert.inc
+
+--let $assert_text= check TRX_CONTENT_EVENTS_RECEIVED of BRR_EVENTS_RECEIVED is correct
+--let $assert_cond= [SELECT TRX_CONTENT_EVENTS_RECEIVED FROM INFORMATION_SCHEMA.BRR_REPLICA_INFO, TRX_CONTENT_EVENTS_RECEIVED, 1] = 1
+--source include/assert.inc
+
+--let $assert_text= check TRX_COMPLETE of BRR_EVENTS_RECEIVED is correct
+--let $assert_cond= [SELECT TRX_COMPLETE FROM INFORMATION_SCHEMA.BRR_REPLICA_INFO, TRX_COMPLETE, 1] = 0
+--source include/assert.inc
+
+--let $assert_text= check ASSIGNED_TO_BRR_WORKER of BRR_EVENTS_RECEIVED is correct
+--let $assert_cond= [SELECT ASSIGNED_TO_BRR_WORKER FROM INFORMATION_SCHEMA.BRR_REPLICA_INFO, ASSIGNED_TO_BRR_WORKER, 1] = 1
+--source include/assert.inc
+
+connection master1;
+SET GLOBAL debug = '-d,brr_wait_inplace_alter_table';
+SET DEBUG_SYNC = 'now SIGNAL continue';
+
+connection slave;
+let $wait_condition= SELECT count(*) = 1 FROM INFORMATION_SCHEMA.BRR_REPLICA_INFO WHERE TRX_COMPLETE = 1;
+--source include/wait_condition.inc
+
+--replace_column 3 # 4 # 5 # 10 #
+SELECT * FROM INFORMATION_SCHEMA.BRR_REPLICA_INFO;
+--let $assert_text= check BRR_EVENTS_RECEIVED of BRR_EVENTS_RECEIVED is correct
+--let $assert_cond= [SELECT BRR_EVENTS_RECEIVED FROM INFORMATION_SCHEMA.BRR_REPLICA_INFO, BRR_EVENTS_RECEIVED, 1] = 2
+--source include/assert.inc
+
+--let $assert_text= check TRX_CONTENT_EVENTS_RECEIVED of BRR_EVENTS_RECEIVED is correct
+--let $assert_cond= [SELECT TRX_CONTENT_EVENTS_RECEIVED FROM INFORMATION_SCHEMA.BRR_REPLICA_INFO, TRX_CONTENT_EVENTS_RECEIVED, 1] = 2
+--source include/assert.inc
+
+connection slave1;
+SET GLOBAL debug = '-d,brr_wait_inplace_alter_table';
+SET DEBUG_SYNC = 'now SIGNAL continue';
+
+connection master;
+--reap
+
+connection slave;
+--let $status_var= replica_brr_cache_count
+--let $status_var_value= 0
+--source include/wait_for_status_var.inc
+
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.2.err
+--let $assert_count= 1
+--let $assert_select = .* \[Note\] \[MY-[0-9]+] \[Repl\] Binlog realtime replica message: replica received 1 DDL and 0 long transaction, 1 trx is assigned to brr worker, brr worker commit 1 DDL and rollback 0 DDL.
+--let $assert_text= brr statistics.
+--source include/assert_grep.inc
+
+--echo
+--echo #
+--echo # 3. Test Long transaction real-time apply IS table information is correct
+--echo ##########################################################################
+--echo #
+--echo
+--echo ## Create long transaction.
+connection master;
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT s FROM rpl_test.t1;
+
+--let $assert_text= check BRR_TYPE of BRR_EVENTS_RECEIVED is correct
+--let $assert_cond= "[SELECT BRR_TYPE FROM INFORMATION_SCHEMA.BRR_SOURCE_TRX_INFO, BRR_TYPE, 1]" = "LONG_TRANSACTION"
+--source include/assert.inc
+
+connection slave;
+--let $status_var= replica_brr_cache_count
+--let $status_var_value= 1
+--source include/wait_for_status_var.inc
+
+--replace_column 3 # 5 # 10 #
+SELECT * FROM INFORMATION_SCHEMA.BRR_REPLICA_INFO;
+
+--let $assert_text= check BRR_INDEX of BRR_REPLICA_INFO is correct
+--let $assert_cond= [SELECT BRR_INDEX FROM INFORMATION_SCHEMA.BRR_REPLICA_INFO, BRR_INDEX, 1] = 2
+--source include/assert.inc
+
+--let $assert_text= check BRR_TYPE of BRR_REPLICA_INFO is correct
+--let $assert_cond= "[SELECT BRR_TYPE FROM INFORMATION_SCHEMA.BRR_REPLICA_INFO, BRR_TYPE, 1]" = "LONG_TRANSACTION"
+--source include/assert.inc
+
+--let $assert_text= check GNO of BRR_REPLICA_INFO is correct
+--let $assert_cond= [SELECT GNO FROM INFORMATION_SCHEMA.BRR_REPLICA_INFO, GNO, 1] = 0
+--source include/assert.inc
+
+--let $assert_text= check BRR_EVENTS_RECEIVED of BRR_REPLICA_INFO is correct
+--let $assert_cond= [SELECT BRR_EVENTS_RECEIVED FROM INFORMATION_SCHEMA.BRR_REPLICA_INFO, BRR_EVENTS_RECEIVED, 1] = 0
+--source include/assert.inc
+
+--let $assert_text= check TRX_COMPLETE of BRR_EVENTS_RECEIVED is correct
+--let $assert_cond= [SELECT TRX_COMPLETE FROM INFORMATION_SCHEMA.BRR_REPLICA_INFO, TRX_COMPLETE, 1] = 0
+--source include/assert.inc
+
+--let $assert_text= check ASSIGNED_TO_BRR_WORKER of BRR_EVENTS_RECEIVED is correct
+--let $assert_cond= [SELECT ASSIGNED_TO_BRR_WORKER FROM INFORMATION_SCHEMA.BRR_REPLICA_INFO, ASSIGNED_TO_BRR_WORKER, 1] = 0
+--source include/assert.inc
+
+connection master;
+commit;
+
+--echo
+--echo #
+--echo # 4. Cleanup
+--echo ############
+--echo #
+connection master;
+SET GLOBAL debug='-d,ignore_brr_ddl_time_limit';
+DROP DATABASE rpl_test;
+--source include/rpl_sync.inc
+--source include/rpl_end.inc

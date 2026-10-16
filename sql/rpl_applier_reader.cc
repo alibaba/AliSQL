@@ -266,6 +266,13 @@ Log_event *Rpl_applier_reader::read_next_event() {
   if (ev != nullptr) {
     m_rli->set_future_event_relay_log_pos(m_relaylog_file_reader.position());
     ev->future_event_relay_log_pos = m_rli->get_future_event_relay_log_pos();
+
+    if (unlikely(ev->get_type_code() == binary_log::IGNORABLE_LOG_EVENT) &&
+        (ev->common_header->flags & LOG_EVENT_RDS_F)) {
+      delete ev;
+      return read_next_event();
+    }
+
     return ev;
   }
 

@@ -6953,7 +6953,16 @@ Item *Item_datetime_with_ref::clone_item() const {
 }
 
 void Item_temporal_with_ref::print(const THD *, String *str,
-                                   enum_query_type) const {
+                                   enum_query_type query_type) const {
+  if ((query_type & QT_DUCKDB_REWRITE) && value == 0) {
+    // DuckDB does not support '0000-00-00' (date) or '0000-00-00 00:00:00'
+    // (datetime/timestamp) as valid temporal values. Print 0 instead, since
+    // DuckDB supports temporal-to-double conversion and this is typically
+    // generated from implicit boolean context like
+    // (date_or_ts_col OR ...) -> (date_or_ts_col <> 0 OR ...).
+    str->append('0');
+    return;
+  }
   char buff[MAX_DATE_STRING_REP_LENGTH];
   MYSQL_TIME ltime;
   TIME_from_longlong_packed(&ltime, data_type(), value);

@@ -929,7 +929,9 @@ enum enum_schema_tables : int {
   SCH_USER_PRIVILEGES,
   SCH_TMP_TABLE_COLUMNS,
   SCH_TMP_TABLE_KEYS,
-  SCH_LAST = SCH_TMP_TABLE_KEYS
+  SCH_BRR_SENDER_TRX_INFO,
+  SCH_BRR_SOURCE_TRX_INFO,
+  SCH_LAST = SCH_BRR_SOURCE_TRX_INFO
 };
 
 enum ha_stat_type { HA_ENGINE_STATUS, HA_ENGINE_LOGS, HA_ENGINE_MUTEX };
@@ -3555,6 +3557,8 @@ class Alter_inplace_info {
      my_get_err_msg(), so that the error message as a whole is localized.
   */
   const char *unsupported_reason;
+
+  bool nonblock_ddl_process_flag{false};
 
   Alter_inplace_info(HA_CREATE_INFO *create_info_arg,
                      Alter_info *alter_info_arg, bool error_if_not_empty_arg,
@@ -6184,6 +6188,25 @@ class handler {
                               Alter_inplace_info *ha_alter_info,
                               const dd::Table *old_table_def,
                               dd::Table *new_table_def) {
+    return inplace_alter_table(altered_table, ha_alter_info, old_table_def,
+                               new_table_def);
+  }
+
+  /**
+     For innobase, apply row log operations to the table.
+     Public function wrapping the actual handler call.
+     @see inplace_alter_table()
+  */
+  bool ha_inplace_apply_log_only(TABLE *altered_table,
+                                 Alter_inplace_info *ha_alter_info,
+                                 const dd::Table *old_table_def,
+                                 dd::Table *new_table_def) {
+    /* Only InnoDB supports this */
+    if (ht->db_type != DB_TYPE_INNODB) {
+      return false;
+    }
+    /* Mark nonblock DDL process flag to avoid build B-tree. */
+    ha_alter_info->nonblock_ddl_process_flag = true;
     return inplace_alter_table(altered_table, ha_alter_info, old_table_def,
                                new_table_def);
   }

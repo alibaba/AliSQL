@@ -168,7 +168,7 @@ void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vector &resu
 				auto vindex = vdata.sel->get_index(i);
 
 				auto ivalue = input_data[vindex];
-				if (!result_has_value[i] || OP::template Operation<T>(ivalue, result_data[i])) {
+				if ((!result_has_value[i] || OP::template Operation<T>(ivalue, result_data[i])) && !input_has_null[i]) {
 					result_has_value[i] = true;
 					result_data[i] = ivalue;
 				}
@@ -208,36 +208,36 @@ unique_ptr<FunctionData> BindLeastGreatest(ClientContext &context, ScalarFunctio
 #ifndef DUCKDB_SMALLER_BINARY
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		bound_function.function = LeastGreatestFunction<int8_t, OP>;
+		bound_function.SetFunctionCallback(LeastGreatestFunction<int8_t, OP>);
 		break;
 	case PhysicalType::INT16:
-		bound_function.function = LeastGreatestFunction<int16_t, OP>;
+		bound_function.SetFunctionCallback(LeastGreatestFunction<int16_t, OP>);
 		break;
 	case PhysicalType::INT32:
-		bound_function.function = LeastGreatestFunction<int32_t, OP>;
+		bound_function.SetFunctionCallback(LeastGreatestFunction<int32_t, OP>);
 		break;
 	case PhysicalType::INT64:
-		bound_function.function = LeastGreatestFunction<int64_t, OP>;
+		bound_function.SetFunctionCallback(LeastGreatestFunction<int64_t, OP>);
 		break;
 	case PhysicalType::INT128:
-		bound_function.function = LeastGreatestFunction<hugeint_t, OP>;
+		bound_function.SetFunctionCallback(LeastGreatestFunction<hugeint_t, OP>);
 		break;
 	case PhysicalType::DOUBLE:
-		bound_function.function = LeastGreatestFunction<double, OP>;
+		bound_function.SetFunctionCallback(LeastGreatestFunction<double, OP>);
 		break;
 	case PhysicalType::VARCHAR:
-		bound_function.function = LeastGreatestFunction<string_t, OP, StandardLeastGreatest<true>>;
+		bound_function.SetFunctionCallback(LeastGreatestFunction<string_t, OP, StandardLeastGreatest<true>>);
 		break;
 #endif
 	default:
 		// fallback with sort keys
-		bound_function.function = LeastGreatestFunction<string_t, OP, SortKeyLeastGreatest>;
-		bound_function.init_local_state = LeastGreatestSortKeyInit<LEAST_GREATER_OP>;
+		bound_function.SetFunctionCallback(LeastGreatestFunction<string_t, OP, SortKeyLeastGreatest>);
+		bound_function.SetInitStateCallback(LeastGreatestSortKeyInit<LEAST_GREATER_OP>);
 		break;
 	}
 	bound_function.arguments[0] = child_type;
 	bound_function.varargs = child_type;
-	bound_function.return_type = child_type;
+	bound_function.SetReturnType(child_type);
 	return nullptr;
 }
 

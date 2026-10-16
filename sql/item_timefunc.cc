@@ -2343,10 +2343,7 @@ null_date:
 
 void Item_func_date_format::print(const THD *thd, String *str,
                                   enum_query_type query_type) const {
-  if ((query_type & QT_DUCKDB_REWRITE) &&
-      (args[0]->data_type() == MYSQL_TYPE_VARCHAR ||
-       args[0]->data_type() == MYSQL_TYPE_VAR_STRING ||
-       args[0]->data_type() == MYSQL_TYPE_STRING)) {
+  if ((query_type & QT_DUCKDB_REWRITE) && args[0]->is_duckdb_string_type()) {
     MYSQL_TIME l_time;
     if (!is_time_format) {
       if (dynamic_cast<PTI_text_literal_text_string *>(args[0]) &&
@@ -2760,6 +2757,53 @@ void Item_date_add_interval::print(const THD *thd, String *str,
       str->append(STRING_WITH_LEN("CAST("));
       args[0]->print(thd, str, query_type);
       str->append(STRING_WITH_LEN(" AS TIMESTAMP)"));
+    } else if (args[0]->is_duckdb_string_type()) {
+      const bool is_date_level =
+          m_interval_type <= INTERVAL_DAY ||
+          m_interval_type == INTERVAL_YEAR_MONTH;
+      if (is_date_level) {
+        /*
+          For DATE-level intervals (YEAR/MONTH/WEEK/DAY/etc.), MySQL preserves
+          the input format per-row: date-only input returns a date string,
+          datetime input returns a datetime string. We use CASE WHEN to detect
+          the input format at runtime via string length, and cast the result
+          to VARCHAR so that the format difference is preserved (DuckDB would
+          otherwise coerce both CASE branches to TIMESTAMP).
+        */
+        const char *op = m_subtract ? " - interval " : " + interval ";
+        str->append(STRING_WITH_LEN(
+            "CASE WHEN LENGTH(TRIM("));
+        args[0]->print(thd, str, query_type);
+        str->append(STRING_WITH_LEN(
+            ")) <= 10 THEN CAST(CAST((TRY_CAST("));
+        args[0]->print(thd, str, query_type);
+        str->append(STRING_WITH_LEN(" AS TIMESTAMP)"));
+        str->append(op);
+        str->append('(');
+        args[1]->print(thd, str, query_type);
+        str->append(STRING_WITH_LEN(") "));
+        str->append(interval_names[m_interval_type]);
+        str->append(STRING_WITH_LEN(
+            ") AS DATE) AS VARCHAR) ELSE CAST((TRY_CAST("));
+        args[0]->print(thd, str, query_type);
+        str->append(STRING_WITH_LEN(" AS TIMESTAMP)"));
+        str->append(op);
+        str->append('(');
+        args[1]->print(thd, str, query_type);
+        str->append(STRING_WITH_LEN(") "));
+        str->append(interval_names[m_interval_type]);
+        str->append(STRING_WITH_LEN(") AS VARCHAR) END)"));
+        return;
+      } else {
+        /*
+          For time-level intervals (HOUR/MINUTE/SECOND/etc.), MySQL always
+          returns DATETIME regardless of input format, so a simple TRY_CAST
+          to TIMESTAMP is sufficient.
+        */
+        str->append(STRING_WITH_LEN("TRY_CAST("));
+        args[0]->print(thd, str, query_type);
+        str->append(STRING_WITH_LEN(" AS TIMESTAMP)"));
+      }
     } else {
       args[0]->print(thd, str, query_type);
     }
@@ -2786,9 +2830,7 @@ void Item_extract::print(const THD *thd, String *str,
   str->append(interval_names[int_type]);
   str->append(STRING_WITH_LEN(" from "));
   if ((query_type & QT_DUCKDB_REWRITE) &&
-      (args[0]->data_type() == MYSQL_TYPE_VARCHAR ||
-       args[0]->data_type() == MYSQL_TYPE_VAR_STRING ||
-       args[0]->data_type() == MYSQL_TYPE_STRING)) {
+      args[0]->is_duckdb_string_type()) {
     str->append(STRING_WITH_LEN("(CAST("));
     args[0]->print(thd, str, query_type);
     if (date_value) {
@@ -3555,9 +3597,7 @@ void Item_func_timestamp_diff::print(const THD *thd, String *str,
   if (query_type & QT_DUCKDB_REWRITE) {
     for (uint i = 0; i < 2; i++) {
       str->append(',');
-      if (args[i]->data_type() == MYSQL_TYPE_VARCHAR ||
-          args[i]->data_type() == MYSQL_TYPE_VAR_STRING ||
-          args[i]->data_type() == MYSQL_TYPE_STRING) {
+      if (args[i]->is_duckdb_string_type()) {
         str->append(STRING_WITH_LEN("CAST("));
         args[i]->print(thd, str, query_type);
         str->append(STRING_WITH_LEN(" AS TIMESTAMP)"));

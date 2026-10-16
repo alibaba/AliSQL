@@ -81,6 +81,9 @@ Database: information_schema
 +---------------------------------------+
 | ADMINISTRABLE_ROLE_AUTHORIZATIONS     |
 | APPLICABLE_ROLES                      |
+| BRR_REPLICA_INFO                      |
+| BRR_SENDER_TRX_INFO                   |
+| BRR_SOURCE_TRX_INFO                   |
 | CHARACTER_SETS                        |
 | CHECK_CONSTRAINTS                     |
 | COLLATIONS                            |
@@ -165,6 +168,9 @@ Database: INFORMATION_SCHEMA
 +---------------------------------------+
 | ADMINISTRABLE_ROLE_AUTHORIZATIONS     |
 | APPLICABLE_ROLES                      |
+| BRR_REPLICA_INFO                      |
+| BRR_SENDER_TRX_INFO                   |
+| BRR_SOURCE_TRX_INFO                   |
 | CHARACTER_SETS                        |
 | CHECK_CONSTRAINTS                     |
 | COLLATIONS                            |

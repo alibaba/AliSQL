@@ -47,6 +47,8 @@ extern ulonglong global_max_threads;
 extern ulonglong max_threads_per_query;
 extern bool global_use_dio;
 extern bool global_scheduler_process_partial;
+extern bool global_enable_background_checkpoint;
+extern ulonglong global_background_checkpoint_full_interval;
 extern ulonglong appender_allocator_flush_threshold;
 extern ulonglong checkpoint_threshold;
 
@@ -72,11 +74,14 @@ bool update_scheduler_process_partial(sys_var *sys_var [[maybe_unused]],
                                       THD *thd,
                                       enum_var_type type [[maybe_unused]]);
 
-bool update_appender_allocator_flush_threshold(sys_var *sys_var
-                                               [[maybe_unused]],
-                                               THD *thd,
-                                               enum_var_type type
-                                               [[maybe_unused]]);
+bool update_enable_background_checkpoint(sys_var *sys_var [[maybe_unused]],
+                                         THD *thd,
+                                         enum_var_type type [[maybe_unused]]);
+
+bool update_background_checkpoint_full_interval(
+    sys_var *sys_var [[maybe_unused]], THD *thd,
+    enum_var_type type [[maybe_unused]]);
+
 bool update_checkpoint_threshold(sys_var *sys_var [[maybe_unused]], THD *thd,
                                  enum_var_type type [[maybe_unused]]);
 }  // namespace myduck

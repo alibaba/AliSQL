@@ -55,9 +55,6 @@ public:
 
 	string GetSegmentInfo() const override;
 
-	vector<block_id_t> GetAdditionalBlocks() const override;
-	void Cleanup(BlockManager &manager);
-
 	void InsertOverflowBlock(block_id_t block_id, reference<StringBlock> block);
 	reference<StringBlock> FindOverflowBlock(block_id_t block_id);
 

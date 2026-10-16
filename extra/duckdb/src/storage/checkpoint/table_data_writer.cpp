@@ -54,8 +54,8 @@ unique_ptr<RowGroupWriter> SingleFileTableDataWriter::GetRowGroupWriter(RowGroup
 	                                           table_data_writer);
 }
 
-CheckpointType SingleFileTableDataWriter::GetCheckpointType() const {
-	return checkpoint_manager.GetCheckpointType();
+CheckpointOptions SingleFileTableDataWriter::GetCheckpointOptions() const {
+	return checkpoint_manager.GetCheckpointOptions();
 }
 
 MetadataManager &SingleFileTableDataWriter::GetMetadataManager() {
@@ -70,11 +70,15 @@ void SingleFileTableDataWriter::WriteUnchangedTable(MetaBlockPointer pointer,
 	existing_rows = total_rows;
 }
 
+void SingleFileTableDataWriter::FlushPartialBlocks() {
+	checkpoint_manager.partial_block_manager.FlushPartialBlocks();
+}
+
 void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stats, DataTableInfo &info,
                                               RowGroupCollection &collection, Serializer &serializer) {
 	MetaBlockPointer pointer;
 	idx_t total_rows;
-	auto debug_verify_blocks = DBConfig::GetSetting<DebugVerifyBlocksSetting>(GetDatabase());
+	auto debug_verify_blocks = Settings::Get<DebugVerifyBlocksSetting>(GetDatabase());
 	if (!existing_pointer.IsValid()) {
 		// write the metadata
 		// store the current position in the metadata writer
@@ -159,24 +163,17 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	serializer.WriteProperty(102, "total_rows", total_rows);
 
 	auto v1_0_0_storage = serializer.GetOptions().serialization_compatibility.serialization_version < 3;
-	case_insensitive_map_t<Value> options;
+	IndexSerializationInfo serialization_info;
 	if (!v1_0_0_storage) {
-		options.emplace("v1_0_0_storage", v1_0_0_storage);
+		serialization_info.options.emplace("v1_0_0_storage", v1_0_0_storage);
 	}
+	serialization_info.checkpoint_id = GetCheckpointOptions().transaction_id;
 
-	// If there is a context available, bind indexes before serialization.
-	// This is necessary so that buffered index operations are replayed before we checkpoint, otherwise
-	// we would lose them if there was a restart after this.
-	if (context && context->transaction.HasActiveTransaction()) {
-		info.BindIndexes(*context);
-	}
-	// FIXME: If we do not have a context, however, the unbound indexes have to be serialized to disk.
-
-	auto index_storage_infos = info.GetIndexes().SerializeToDisk(context, options);
+	auto index_storage_infos = info.GetIndexes().SerializeToDisk(context, serialization_info);
 
 	if (debug_verify_blocks) {
-		for (auto &entry : index_storage_infos) {
-			for (auto &allocator : entry.allocator_infos) {
+		for (auto &entry : index_storage_infos.ordered_infos) {
+			for (auto &allocator : entry.get().allocator_infos) {
 				for (auto &block : allocator.block_pointers) {
 					checkpoint_manager.verify_block_usage_count[block.block_id]++;
 				}
@@ -187,7 +184,9 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	// write empty block pointers for forwards compatibility
 	vector<BlockPointer> compat_block_pointers;
 	serializer.WriteProperty(103, "index_pointers", compat_block_pointers);
-	serializer.WritePropertyWithDefault(104, "index_storage_infos", index_storage_infos);
+	serializer.WriteList(
+	    104, "index_storage_infos", index_storage_infos.ordered_infos.size(),
+	    [&](Serializer::List &list, idx_t i) { list.WriteElement(index_storage_infos.ordered_infos[i].get()); });
 }
 
 } // namespace duckdb

@@ -1,0 +1,5 @@
+--force-restart
+--binlog_realtime_transmit_source_enabled=ON
+--debug-sync-timeout=1000
+--binlog_realtime_apply_ddl_source_enabled=ON
+--binlog_realtime_enable_log_message=ON

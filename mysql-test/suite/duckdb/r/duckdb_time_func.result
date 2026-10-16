@@ -79,9 +79,8 @@ SELECT CONVERT_TZ(TIMESTAMP '2004-01-01 12:00:00','+00:00','+10:00');
 CONVERT_TZ(TIMESTAMP '2004-01-01 12:00:00','+00:00','+10:00')
 2004-01-01 22:00:00
 SELECT CONVERT_TZ(TIMESTAMP '2004-01-01 12:00:00','+00:00','+10:00') FROM t;
-ERROR HY000: [DuckDB] Not implemented Error: Unknown TimeZone '+00:00'!
-
-Candidate time zones: "GMT0".
+CONVERT_TZ(TIMESTAMP '2004-01-01 12:00:00','+00:00','+10:00')
+2004-01-01 22:00:00
 ---------------------------
 4. CURDATE()
 ---------------------------

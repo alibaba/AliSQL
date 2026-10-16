@@ -1,0 +1,77 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+CALL mtr.add_suppression("\\[Warning\\] .*MY-\\d+.* \\[Repl\\] \\[RDS Diagnose\\] .*");
+
+#
+# 1. Prepare data.
+##################
+#
+CREATE DATABASE rpl_test;
+CREATE TABLE rpl_test.t1 (s LONGTEXT);
+CREATE TABLE rpl_test.t2 (s LONGTEXT);
+include/rpl_sync.inc
+SET GLOBAL debug='+d,ignore_brr_ddl_time_limit';
+
+#
+# 2. Test DDL real-time apply IS table information is correct
+#############################################################
+#
+SET GLOBAL debug = '+d,brr_wait_inplace_alter_table';
+SET GLOBAL debug = '+d,brr_wait_inplace_alter_table';
+ALTER TABLE rpl_test.t1 ADD COLUMN id_2 INT, ALGORITHM=INPLACE;;
+
+## wait brr trx assigned to a brr worker
+
+## check field of BRR_REPLICA_INFO is correct
+SELECT * FROM INFORMATION_SCHEMA.BRR_REPLICA_INFO;
+BRR_INDEX	BRR_TYPE	TMP_FILE_NAME	GNO	RECEIVED_POS	BRR_EVENTS_RECEIVED	TRX_CONTENT_EVENTS_RECEIVED	TRX_COMPLETE	ASSIGNED_TO_BRR_WORKER	APPLY_POS
+1	DDL	#	0	#	1	1	0	1	#
+include/assert.inc [check BRR_INDEX of BRR_REPLICA_INFO is correct]
+include/assert.inc [check BRR_TYPE of BRR_REPLICA_INFO is correct]
+include/assert.inc [check GNO of BRR_REPLICA_INFO is correct]
+include/assert.inc [check BRR_EVENTS_RECEIVED of BRR_REPLICA_INFO is correct]
+include/assert.inc [check TRX_CONTENT_EVENTS_RECEIVED of BRR_EVENTS_RECEIVED is correct]
+include/assert.inc [check TRX_COMPLETE of BRR_EVENTS_RECEIVED is correct]
+include/assert.inc [check ASSIGNED_TO_BRR_WORKER of BRR_EVENTS_RECEIVED is correct]
+SET GLOBAL debug = '-d,brr_wait_inplace_alter_table';
+SET DEBUG_SYNC = 'now SIGNAL continue';
+SELECT * FROM INFORMATION_SCHEMA.BRR_REPLICA_INFO;
+BRR_INDEX	BRR_TYPE	TMP_FILE_NAME	GNO	RECEIVED_POS	BRR_EVENTS_RECEIVED	TRX_CONTENT_EVENTS_RECEIVED	TRX_COMPLETE	ASSIGNED_TO_BRR_WORKER	APPLY_POS
+1	DDL	#	#	#	2	2	1	1	#
+include/assert.inc [check BRR_EVENTS_RECEIVED of BRR_EVENTS_RECEIVED is correct]
+include/assert.inc [check TRX_CONTENT_EVENTS_RECEIVED of BRR_EVENTS_RECEIVED is correct]
+SET GLOBAL debug = '-d,brr_wait_inplace_alter_table';
+SET DEBUG_SYNC = 'now SIGNAL continue';
+include/assert_grep.inc [brr statistics.]
+
+#
+# 3. Test Long transaction real-time apply IS table information is correct
+##########################################################################
+#
+
+## Create long transaction.
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT s FROM rpl_test.t1;
+include/assert.inc [check BRR_TYPE of BRR_EVENTS_RECEIVED is correct]
+SELECT * FROM INFORMATION_SCHEMA.BRR_REPLICA_INFO;
+BRR_INDEX	BRR_TYPE	TMP_FILE_NAME	GNO	RECEIVED_POS	BRR_EVENTS_RECEIVED	TRX_CONTENT_EVENTS_RECEIVED	TRX_COMPLETE	ASSIGNED_TO_BRR_WORKER	APPLY_POS
+2	LONG_TRANSACTION	#	0	#	0	4	0	0	#
+include/assert.inc [check BRR_INDEX of BRR_REPLICA_INFO is correct]
+include/assert.inc [check BRR_TYPE of BRR_REPLICA_INFO is correct]
+include/assert.inc [check GNO of BRR_REPLICA_INFO is correct]
+include/assert.inc [check BRR_EVENTS_RECEIVED of BRR_REPLICA_INFO is correct]
+include/assert.inc [check TRX_COMPLETE of BRR_EVENTS_RECEIVED is correct]
+include/assert.inc [check ASSIGNED_TO_BRR_WORKER of BRR_EVENTS_RECEIVED is correct]
+commit;
+
+#
+# 4. Cleanup
+############
+#
+SET GLOBAL debug='-d,ignore_brr_ddl_time_limit';
+DROP DATABASE rpl_test;
+include/rpl_sync.inc
+include/rpl_end.inc

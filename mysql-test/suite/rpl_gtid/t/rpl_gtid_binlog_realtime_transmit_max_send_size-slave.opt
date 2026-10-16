@@ -1,0 +1,3 @@
+--relay_log_purge=OFF
+--binlog_realtime_transmit_replica_enabled=ON
+$SEMISYNC_PLUGIN_OPT

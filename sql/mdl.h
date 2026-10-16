@@ -34,6 +34,7 @@
 #include "my_alloc.h"
 #include "my_compiler.h"
 
+#include <functional>
 #include "my_inttypes.h"
 #include "my_psi_config.h"
 #include "my_sys.h"
@@ -1421,11 +1422,15 @@ class MDL_context {
   void destroy();
 
   bool try_acquire_lock(MDL_request *mdl_request);
+  bool acquire_lock_raw(MDL_request *mdl_request, Timeout_type lock_wait_timeout);
   bool acquire_lock(MDL_request *mdl_request, Timeout_type lock_wait_timeout);
   bool acquire_locks(MDL_request_list *requests,
                      Timeout_type lock_wait_timeout);
+  bool upgrade_shared_lock_raw(MDL_ticket *mdl_ticket, enum_mdl_type new_type,
+                               Timeout_type lock_wait_timeout);
   bool upgrade_shared_lock(MDL_ticket *mdl_ticket, enum_mdl_type new_type,
-                           Timeout_type lock_wait_timeout);
+                           Timeout_type lock_wait_timeout,
+                           std::function<bool()> *processor = nullptr);
 
   bool clone_ticket(MDL_request *mdl_request);
 

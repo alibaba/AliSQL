@@ -110,7 +110,7 @@ void BufferManager::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 	throw NotImplementedException("This type of BufferManager does not support 'AddToEvictionQueue");
 }
 
-void BufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer, BlockHandle *block) {
+void BufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer) {
 	throw NotImplementedException("This type of BufferManager does not support 'WriteTemporaryBuffer");
 }
 
@@ -119,7 +119,7 @@ unique_ptr<FileBuffer> BufferManager::ReadTemporaryBuffer(QueryContext context, 
 	throw NotImplementedException("This type of BufferManager does not support 'ReadTemporaryBuffer");
 }
 
-void BufferManager::DeleteTemporaryFile(BlockHandle &block) {
+void BufferManager::DeleteTemporaryFile(BlockMemory &memory) {
 	throw NotImplementedException("This type of BufferManager does not support 'DeleteTemporaryFile");
 }
 

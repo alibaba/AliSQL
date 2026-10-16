@@ -1,0 +1,52 @@
+# This test case is used to test whether replication will be interrupted
+# when optimize_table_write_binlog_advance is ON on the source and OFF
+# on the replica.
+
+--source include/master-slave.inc
+--source include/have_binlog_format_row.inc
+--source include/have_debug.inc
+
+--echo #
+--echo # 0. Prepare data.
+--echo ########################################################
+--echo #
+connection master;
+CREATE DATABASE rpl_test;
+CREATE TABLE rpl_test.t1 (s LONGTEXT);
+CREATE TABLE rpl_test.t2 (s LONGTEXT);
+
+--disable_query_log
+--let $i=0
+while ($i < 3)
+{
+  --eval INSERT INTO rpl_test.t1 values(repeat("1", 5242880))
+  --inc $i
+}
+--enable_query_log
+
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+--source include/rpl_sync.inc
+
+connection slave;
+SET GLOBAL optimize_table_write_binlog_advance=ON;
+
+--echo
+--echo #
+--echo # 1. Optimize multiple tables and replication is ok.
+--echo ####################################################
+--echo #
+connection master;
+optimize table rpl_test.t1, rpl_test.t2;
+--source include/rpl_sync.inc
+
+--echo
+--echo #
+--echo # 2. Clean up
+--echo ####################################################
+--echo #
+connection slave;
+SET GLOBAL optimize_table_write_binlog_advance=OFF;
+connection master;
+DROP DATABASE rpl_test;
+--source include/rpl_sync.inc
+--source include/rpl_end.inc

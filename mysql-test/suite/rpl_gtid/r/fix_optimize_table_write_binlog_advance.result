@@ -1,0 +1,36 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+#
+# 0. Prepare data.
+########################################################
+#
+CREATE DATABASE rpl_test;
+CREATE TABLE rpl_test.t1 (s LONGTEXT);
+CREATE TABLE rpl_test.t2 (s LONGTEXT);
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+include/rpl_sync.inc
+SET GLOBAL optimize_table_write_binlog_advance=ON;
+
+#
+# 1. Optimize multiple tables and replication is ok.
+####################################################
+#
+optimize table rpl_test.t1, rpl_test.t2;
+Table	Op	Msg_type	Msg_text
+rpl_test.t1	optimize	note	Table does not support optimize, doing recreate + analyze instead
+rpl_test.t1	optimize	status	OK
+rpl_test.t2	optimize	note	Table does not support optimize, doing recreate + analyze instead
+rpl_test.t2	optimize	status	OK
+include/rpl_sync.inc
+
+#
+# 2. Clean up
+####################################################
+#
+SET GLOBAL optimize_table_write_binlog_advance=OFF;
+DROP DATABASE rpl_test;
+include/rpl_sync.inc
+include/rpl_end.inc

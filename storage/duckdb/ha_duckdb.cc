@@ -48,6 +48,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/dd/dd_table.h"
 #include "sql/dd/types/tablespace.h"
 #include "sql/duckdb/duckdb_config.h"
+#include "sql/duckdb/duckdb_sql_quote.h"
 #include "sql/duckdb/duckdb_table.h"
 #include "sql/rpl_rli.h"
 #include "sql/sql_class.h"
@@ -58,6 +59,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/sql_time.h"
 #include "sql/tztime.h"
 #include "typelib.h"
+#include "scope_guard.h"
+#include "sql/debug_sync.h"
 #include "sql/sql_partition.h"
 
 bool copy_ddl_in_batch = true;
@@ -97,7 +100,10 @@ static bool duckdb_is_supported_system_table(const char *db,
 static bool duckdb_get_tablespace_type_by_name(const char *tablespace_name,
                                                Tablespace_type *space_type);
 
-Duckdb_share::Duckdb_share() { thr_lock_init(&lock); }
+Duckdb_share::Duckdb_share() {
+  thr_lock_init(&lock);
+  m_auto_inc_val = 1;
+}
 
 static int duckdb_prepare(handlerton *, THD *const thd, bool commit_trx) {
   if (commit_trx ||
@@ -123,6 +129,13 @@ static int duckdb_commit(handlerton *, THD *const thd, bool commit_trx) {
   if (commit_trx ||
       (!thd_test_options(thd, OPTION_NOT_AUTOCOMMIT | OPTION_BEGIN))) {
     DBUG_EXECUTE_IF("crash_before_duckdb_commit", DBUG_SUICIDE(););
+    DBUG_EXECUTE_IF("duckdb_inject_commit_error", {
+      my_error(ER_DUCKDB_COMMIT_ERROR, MYF(0),
+               "injected commit error for testing");
+      std::string err_msg;
+      thd->get_duckdb_context()->duckdb_trans_rollback(err_msg);
+      return 1;
+    });
 
     srv_duckdb_status.duckdb_commit++;
 
@@ -205,9 +218,7 @@ static void duckdb_drop_database(handlerton *, char *path) {
 
   /* Drop schema if exist */
   std::string query = "DROP SCHEMA IF EXISTS ";
-  query.append(STRING_WITH_LEN("`"));
-  query.append(db.name);
-  query.append(STRING_WITH_LEN("`"));
+  query.append(myduck::quote_duckdb_ident(db.name));
 
   duckdb_register_trx(thd);
   [[maybe_unused]] auto query_result = myduck::duckdb_query(thd, query, false);
@@ -224,9 +235,7 @@ static void duckdb_create_database(handlerton *, char *db) {
 
   DBUG_PRINT("enter", ("db: '%s'", db));
   std::string query = "CREATE SCHEMA IF NOT EXISTS ";
-  query.append(STRING_WITH_LEN("`"));
-  query.append(db);
-  query.append(STRING_WITH_LEN("`"));
+  query.append(myduck::quote_duckdb_ident(db));
 
   duckdb_register_trx(thd);
   [[maybe_unused]] auto query_result = myduck::duckdb_query(thd, query, false);
@@ -317,10 +326,18 @@ Duckdb_share *ha_duckdb::get_share() {
 
   lock_shared_ha_data();
   if (!(tmp_share = static_cast<Duckdb_share *>(get_ha_share_ptr()))) {
-    tmp_share = new Duckdb_share;
+    tmp_share = new Duckdb_share();
     if (!tmp_share) goto err;
 
     set_ha_share_ptr(static_cast<Handler_share *>(tmp_share));
+    if (table->found_next_number_field != nullptr) {
+      ulonglong max_val_in_duckdb = get_auto_inc_from_duckdb();
+      /*
+        In this time, ha_duckdb->share has not been set yet. So we
+        use tmp_share directly, which we be set to share in ha_duckdb later.
+      */
+      update_auto_inc_val(max_val_in_duckdb, tmp_share);
+    }
   }
 err:
   unlock_shared_ha_data();
@@ -328,12 +345,12 @@ err:
 }
 
 static handler *duckdb_create_handler(handlerton *hton, TABLE_SHARE *table,
-                                      bool, MEM_ROOT *mem_root) {
-  return new (mem_root) ha_duckdb(hton, table);
+                                      bool partitioned, MEM_ROOT *mem_root) {
+  return new (mem_root) ha_duckdb(hton, table, partitioned);
 }
 
-ha_duckdb::ha_duckdb(handlerton *hton, TABLE_SHARE *table_arg)
-    : handler(hton, table_arg) {
+ha_duckdb::ha_duckdb(handlerton *hton, TABLE_SHARE *table_arg, bool partitioned)
+    : handler(hton, table_arg), share(nullptr), m_partitioned(partitioned) {
   bitmap_init(&m_blob_map, nullptr, MAX_FIELDS);
 }
 
@@ -622,7 +639,7 @@ static bool specify_partition(THD *thd) {
   information to extract the data from the native byte array type.
 */
 
-int ha_duckdb::write_row(uchar *) {
+int ha_duckdb::write_row(uchar *buf) {
   DBUG_TRACE;
   int ret = 0;
   THD *thd = ha_thd();
@@ -637,9 +654,16 @@ int ha_duckdb::write_row(uchar *) {
 
   assert(table_share != nullptr && table != nullptr);
   my_bitmap_map *org_bitmap = dbug_tmp_use_all_columns(table, table->read_set);
+  auto guard = create_scope_guard(
+      [&]() { dbug_tmp_restore_column_map(table->read_set, org_bitmap); });
 
   ret = duckdb_register_trx(thd);
   if (ret) return ret;
+
+  if (table->next_number_field && buf == table->record[0]) {
+    int error;
+    if ((error = update_auto_increment())) return error;
+  }
 
   bool idempotent_flag = rli ? rli->get_local_duckdb_idempotent_flag() : false;
   bool insert_only_flag = rli ? rli->get_duckdb_insert_only_flag() : true;
@@ -671,7 +695,13 @@ int ha_duckdb::write_row(uchar *) {
     if (ret == 0) srv_duckdb_status.duckdb_rows_insert_in_batch++;
   }
 
-  dbug_tmp_restore_column_map(table->read_set, org_bitmap);
+  if (table->next_number_field) {
+    my_bitmap_map *const old_map =
+        dbug_tmp_use_all_columns(table, table->read_set);
+    ulonglong update_val = table->next_number_field->val_int();
+    dbug_tmp_restore_column_map(table->read_set, old_map);
+    update_auto_inc_val(update_val);
+  }
 
   return ret;
 }
@@ -699,8 +729,17 @@ int ha_duckdb::update_row(const uchar *old_row, uchar *new_row) {
   assert(batch_state == myduck::BatchState::NOT_IN_BATCH ||
          batch_state == myduck::BatchState::IN_MIX_BATCH);
 
+  bool pk_updated = calc_pk_difference(old_row, new_row, table);
+  if (pk_updated && table->next_number_field) {
+    my_bitmap_map *const old_map =
+        dbug_tmp_use_all_columns(table, table->read_set);
+    ulonglong update_val = table->next_number_field->val_int();
+    dbug_tmp_restore_column_map(table->read_set, old_map);
+    update_auto_inc_val(update_val);
+  }
+
   if (batch_state == myduck::BatchState::NOT_IN_BATCH) {
-    if (idempotent_flag && calc_pk_difference(old_row, new_row, table)) {
+    if (idempotent_flag && pk_updated) {
       if (!bitmap_is_set_all(table->write_set)) {
         LogErr(WARNING_LEVEL, ER_DUCKDB,
                "'binlog_row_image' is not set to 'FULL', idempotent replay is "
@@ -895,8 +934,9 @@ int ha_duckdb::rnd_init(bool) {
   }
 
   /* 2. construct the query string and execute the query */
-  std::string query =
-      "SELECT * FROM `" + schema_name + "`.`" + table_name + "`";
+  std::string query = "SELECT * FROM " +
+                      myduck::quote_duckdb_ident(schema_name) + "." +
+                      myduck::quote_duckdb_ident(table_name);
   query_result = myduck::duckdb_query(thd, query, true);
   if (query_result->HasError()) {
     my_error(ER_DUCKDB_QUERY_ERROR, MYF(0), query_result->GetError().c_str());
@@ -1055,8 +1095,14 @@ int ha_duckdb::rnd_pos(uchar *, uchar *) {
   sql_select.cc, sql_select.cc, sql_show.cc, sql_show.cc, sql_show.cc,
   sql_show.cc, sql_table.cc, sql_union.cc and sql_update.cc
 */
-int ha_duckdb::info(uint) {
+int ha_duckdb::info(uint flag) {
   DBUG_TRACE;
+
+  if (flag & HA_STATUS_AUTO) {
+    ulonglong new_val = get_auto_inc_from_duckdb();
+    update_auto_inc_val(new_val);
+    stats.auto_increment_value = share->m_auto_inc_val;
+  }
   return 0;
 }
 
@@ -1204,8 +1250,9 @@ int ha_duckdb::delete_table(const char *, const dd::Table *dd_table) {
   std::string table_name(dd_table->name());
 
   std::ostringstream query;
-  query << "USE `" << schema_name << "`;";
-  query << "DROP TABLE IF EXISTS `" << table_name << "`;";
+  query << "USE " << myduck::quote_duckdb_ident(schema_name) << ";";
+  query << "DROP TABLE IF EXISTS " << myduck::quote_duckdb_ident(table_name)
+        << ";";
   auto query_result = myduck::duckdb_query(ha_thd(), query.str());
 
   if (query_result == nullptr) {
@@ -1349,6 +1396,12 @@ int ha_duckdb::create(const char *, TABLE *form, HA_CREATE_INFO *create_info,
       strncmp(dd_table->name().c_str(), "#sql-", strlen("#sql-")) == 0) {
     if (commit_and_begin()) {
       return HA_DUCKDB_CREATE_ERROR;
+    }
+  }
+
+  if (create_info->auto_increment_value) {
+    if (share == nullptr) {
+      share = get_share();
     }
   }
 
@@ -1654,7 +1707,7 @@ bool ha_duckdb::commit_inplace_alter_table(TABLE *altered_table,
   return false;
 }
 
-int ha_duckdb::truncate(dd::Table *) {
+int ha_duckdb::truncate(dd::Table *dd_table) {
   int err = 0;
   DBUG_TRACE;
   THD *thd = ha_thd();
@@ -1666,14 +1719,24 @@ int ha_duckdb::truncate(dd::Table *) {
   std::string table_name = to_string(table->s->table_name);
 
   std::ostringstream query;
-  query << "USE `" << schema_name << "`;";
-  query << "TRUNCATE TABLE `" << table_name << "`;";
+  query << "USE " << myduck::quote_duckdb_ident(schema_name) << ";";
+  query << "TRUNCATE TABLE " << myduck::quote_duckdb_ident(table_name) << ";";
 
   auto query_result = myduck::duckdb_query(ha_thd(), query.str());
 
   if (query_result->HasError()) {
     my_error(ER_DUCKDB_QUERY_ERROR, MYF(0), query_result->GetError().c_str());
     return HA_DUCKDB_TRUNCATE_TABLE_ERROR;
+  }
+
+  if (share != nullptr) {
+    share->m_auto_inc_val = 1;
+  }
+
+  /* Maintains similar behavior to InnoDB: clear the auto_increment value. */
+  auto &s = dd_table->se_private_data();
+  if (s.exists(myduck::DUCKDB_AUTO_INC)) {
+    s.remove(myduck::DUCKDB_AUTO_INC);
   }
 
   return err;
@@ -1703,6 +1766,166 @@ bool ha_duckdb::commit_and_begin() {
          "commit and begin for copy ddl from InnoDB");
 
   return false;
+}
+
+void ha_duckdb::get_auto_increment(ulonglong offset, ulonglong increment,
+                                   ulonglong nb_desired_values [[maybe_unused]],
+                                   ulonglong *const first_value,
+                                   ulonglong *const nb_reserved_values) {
+  DEBUG_SYNC(ha_thd(), "duckdb_get_auto_inc_val");
+
+  /*
+    When the value of auto_increment_offset is greater than that of
+    auto_increment_increment, the value of auto_increment_offset is ignored.
+    Refers:
+    https://dev.mysql.com/doc/refman/8.0/en/replication-options-source.html
+  */
+  if (offset > increment) {
+    offset = 1;
+  }
+
+  Field *field = table->key_info[table->s->next_number_index].key_part[0].field;
+  ulonglong new_val = 0;
+  ulonglong max_val = field->get_max_int_value();
+  std::atomic<ulonglong> &auto_inc_val = share->m_auto_inc_val;
+
+  if (increment == 1) {
+    assert(offset == 1);
+
+    new_val = auto_inc_val;
+    while (new_val != std::numeric_limits<ulonglong>::max()) {
+      if (auto_inc_val.compare_exchange_weak(new_val,
+                                             std::min(new_val + 1, max_val))) {
+        break;
+      }
+    }
+  } else {
+    ulonglong last_val = auto_inc_val;
+
+    if (last_val > max_val) {
+      new_val = std::numeric_limits<ulonglong>::max();
+    } else {
+      do {
+        assert(last_val > 0);
+        ulonglong n =
+            (last_val - 1) / increment +
+            ((last_val - 1) % increment + increment - offset) / increment;
+
+        if (n > (std::numeric_limits<ulonglong>::max() - offset) / increment) {
+          assert(max_val == std::numeric_limits<ulonglong>::max());
+          new_val = std::numeric_limits<ulonglong>::max();
+          auto_inc_val.store(new_val);
+          break;
+        }
+
+        new_val = n * increment + offset;
+      } while (!auto_inc_val.compare_exchange_weak(
+          last_val, std::min(new_val + 1, max_val)));
+    }
+  }
+
+  *first_value = new_val;
+  *nb_reserved_values = 1;
+}
+
+void ha_duckdb::update_create_info(HA_CREATE_INFO *const create_info) {
+  DBUG_TRACE;
+  assert(create_info != nullptr);
+
+  if (!(create_info->used_fields & HA_CREATE_USED_AUTO)) {
+    create_info->auto_increment_value = share->m_auto_inc_val;
+  }
+}
+
+ulonglong ha_duckdb::get_auto_inc_from_duckdb() {
+  Field *field = table->found_next_number_field;
+  if (field == nullptr) return 0;
+
+  std::string schema_name = to_string(table->s->db);
+  std::string table_name = to_string(table->s->table_name);
+
+  std::ostringstream query;
+  query << "SELECT MAX(`";
+  query << field->field_name;
+  query << "`) FROM `" << schema_name << "`.`" << table_name << "`;";
+
+  auto query_result = myduck::duckdb_query(ha_thd(), query.str());
+  if (query_result == nullptr || query_result->HasError()) return 0;
+
+  if (query_result->type == duckdb::QueryResultType::STREAM_RESULT) {
+    auto &stream_result = query_result->Cast<duckdb::StreamQueryResult>();
+    query_result = stream_result.Materialize();
+  }
+
+  auto materialized_res =
+      dynamic_cast<duckdb::MaterializedQueryResult *>(query_result.get());
+  auto value = materialized_res->GetValue(0, 0);
+  if (value.IsNull()) return 0;
+
+  ulonglong value_in_duckdb = value.GetValue<uint64_t>();
+  ulonglong max_val = field->get_max_int_value();
+
+  return std::min(value_in_duckdb, max_val);
+}
+
+void ha_duckdb::update_auto_inc_val(ulonglong update_val,
+                                    Duckdb_share *new_share) {
+  Field *field = table->found_next_number_field;
+  if (field == nullptr) {
+    return;
+  }
+
+  ulonglong new_val = update_val;
+  ulonglong max_val = field->get_max_int_value();
+  if (new_val != max_val) {
+    new_val++;
+  }
+
+  Duckdb_share *update_share = nullptr;
+
+  if (new_share == nullptr) {
+    update_share = share;
+  } else {
+    /*
+      We just create the duckdb_share, so the auto increment value saved in DD
+      should be checked too.
+    */
+    assert(share == nullptr);
+    update_share = new_share;
+    ulonglong auto_inc_in_dd = get_auto_inc_from_dd();
+    new_val = std::max(new_val, auto_inc_in_dd);
+    new_val = std::min(new_val, max_val);
+  }
+
+  if (new_val <= max_val) {
+    ulonglong cur_auto_inc_val = update_share->m_auto_inc_val;
+    while (cur_auto_inc_val < new_val &&
+           !update_share->m_auto_inc_val.compare_exchange_weak(cur_auto_inc_val,
+                                                               new_val)) {
+    }
+  }
+}
+
+ulonglong ha_duckdb::get_auto_inc_from_dd() {
+  THD *thd = ha_thd();
+  ulonglong auto_inc = 0;
+  dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
+  const dd::Table *table_def = nullptr;
+  if (thd->dd_client()->acquire(table->s->db.str, table->s->table_name.str,
+                                &table_def)) {
+    return auto_inc;
+  }
+
+  if (table_def == nullptr) {
+    return auto_inc;
+  }
+
+  auto &s = table_def->se_private_data();
+  if (s.exists(myduck::DUCKDB_AUTO_INC)) {
+    s.get(myduck::DUCKDB_AUTO_INC, &auto_inc);
+  }
+
+  return auto_inc;
 }
 
 struct st_mysql_storage_engine duckdb_storage_engine = {

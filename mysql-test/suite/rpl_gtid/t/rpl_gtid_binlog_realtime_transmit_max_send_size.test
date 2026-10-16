@@ -1,0 +1,148 @@
+# ==== Purpose ====
+# This test verifies the replicate maintain of binlog realtime transmit.
+#
+# ==== Implementation ====
+# 0) Prepare data.
+# 1) Test transaction not realtime transmit if the size of single event exceed the max_send_size.
+# 2) Test send brr trx one by one if the total size of brr event in one loop exceed the max_send_size.
+# 4) Cleanup.
+--source include/have_debug.inc
+--source include/master-slave.inc
+--source include/have_binlog_format_row.inc
+--source include/have_semisync_plugin.inc
+--source include/install_semisync.inc
+
+--let $keep_gtid_events= 1
+
+CALL mtr.add_suppression("Send brr event failed, event length is too long");
+
+--source include/rpl_connection_master.inc
+FLUSH STATUS;
+SET GLOBAL binlog_realtime_transmit_source_enabled = ON;
+
+--source include/rpl_connection_slave.inc
+FLUSH STATUS;
+
+--echo #
+--echo # 0. Prepare data.
+--echo ########################################################
+--echo #
+--source include/rpl_connection_master.inc
+CREATE DATABASE rpl_test;
+CREATE TABLE rpl_test.t1 (s LONGTEXT);
+CREATE TABLE rpl_test.t2 (s LONGTEXT);
+
+--disable_query_log
+--let $i=0
+while ($i < 4)
+{
+  --eval INSERT INTO rpl_test.t1 values(repeat("1", 5242880))
+  --inc $i
+}
+--enable_query_log
+
+--echo #
+--echo # 1. Test transaction not realtime transmit if the size of single event exceed the max_send_size.
+--echo ########################################################
+--echo #
+--let $wait_for_replica_brr_cache_count=0
+--let $include_commit_transaction=1
+--let $relay_log_file=slave-relay-bin.000004
+--source suite/rpl/include/binlog_realtime_transmit_execute_one_transaction.inc
+
+--source include/rpl_connection_master.inc
+SHOW STATUS LIKE "source_brr%";
+SHOW STATUS LIKE "source_sent_brr_events_count";
+
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_count= 1
+--let $assert_select= Send brr event failed, event length is too long
+--let $assert_text= Send brr event failed, event length is too long
+--source include/assert_grep.inc
+
+--echo # Wait for source_brr_reader_count, expect 0
+--let $show_statement= SHOW STATUS LIKE 'source_brr_reader_count'
+--let $field= Value
+--let $condition= = '0'
+--source include/wait_show_condition.inc
+
+--echo #
+--echo # 2. Test send brr trx one by one if the total size of brr event in one loop exceed the max_send_size.
+--echo ########################################################
+--echo #
+--source include/rpl_connection_master.inc
+--echo # Expect source_sent_brr_events_count is 10 (now brr support asynchronous replication, so there are two FDE event, cause we start asynchronous replication, then start semi-sync replication after call  install_semisync.inc)
+SHOW STATUS LIKE 'source_sent_brr_events_count';
+
+--echo # Stop the dump thread before update brr_reader_list, to make sure 2 trxs append into brr_reader_list together.
+SET GLOBAL binlog_realtime_transmit_max_send_size=10000000;
+SET GLOBAL debug = '+d,wait_before_update_brr_reader_list';
+
+connect(conn1,localhost,root,,);
+connect(conn2,localhost,root,,);
+
+connection conn1;
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+connection conn2;
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+--echo # Continue read and send brr event, check max_size logic use source_brr_exceed_max_send_size_count later.
+connection default;
+SET GLOBAL debug = '-d,wait_before_update_brr_reader_list';
+SET debug_sync='now SIGNAL continue_update_brr_reader_list';
+
+--echo # Wait for source_brr_exceed_max_send_size_count, expect 4
+--let $show_statement= SHOW STATUS LIKE 'source_brr_exceed_max_send_size_count'
+--let $field= Value
+--let $condition= = '4'
+--source include/wait_show_condition.inc
+
+--echo # Wait for source_brr_reader_count, expect 2
+--let $show_statement= SHOW STATUS LIKE 'source_brr_reader_count'
+--let $field= Value
+--let $condition= = '2'
+--source include/wait_show_condition.inc
+
+connection conn1;
+COMMIT;
+
+connection conn2;
+COMMIT;
+
+--echo # Wait for source_brr_reader_count, expect 0
+--let $show_statement= SHOW STATUS LIKE 'source_brr_reader_count'
+--let $field= Value
+--let $condition= = '0'
+--source include/wait_show_condition.inc
+
+# Expect source_brr_exceed_max_send_size_count should be 4, source_sent_brr_events_count should be 25
+SHOW STATUS LIKE "source_%";
+
+--source include/rpl_connection_slave.inc
+--source include/rpl_sync.inc
+--let $binlog_file=slave-relay-bin.000006
+--source include/show_relaylog_events.inc
+
+--let $binlog_file=slave-relay-bin.000008
+--source include/show_relaylog_events.inc
+
+--echo #
+--echo # 3. Cleanup.
+--echo ########################################################
+--echo #
+--source include/rpl_connection_master.inc
+SHOW STATUS LIKE "source_sent_brr_events_count";
+SET GLOBAL binlog_realtime_transmit_source_enabled = DEFAULT;
+SET GLOBAL binlog_realtime_transmit_max_send_size = DEFAULT;
+DROP DATABASE rpl_test;
+
+--source include/rpl_connection_slave.inc
+SHOW STATUS LIKE "replica_received_brr_events_count";
+--source include/rpl_sync.inc
+--source include/uninstall_semisync.inc
+--source include/rpl_end.inc
+
+

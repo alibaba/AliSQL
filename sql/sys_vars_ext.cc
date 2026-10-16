@@ -29,10 +29,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/duckdb/duckdb_log.h"
 #include "sql/handler.h"  // total_ha_2pc
 #include "sql/rpl_applier_reader.h"
+#include "sql/rpl_binlog_sender_ext.h"
 #include "sql/rpl_rli.h"
 #include "sql/sql_table_ext.h"
 #include "sql/sys_vars.h"
 #include "vidx/vidx_index.h"
+#include "sql/rpl_replica.h"
 
 /** DuckDB related variables begin. */
 static Sys_var_bool Sys_duckdb_require_primary_key(
@@ -89,6 +91,23 @@ static Sys_var_bool Sys_duckdb_scheduler_process_partial(
     GLOBAL_VAR(myduck::global_scheduler_process_partial), CMD_LINE(OPT_ARG),
     DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
     ON_UPDATE(myduck::update_scheduler_process_partial));
+
+static Sys_var_bool Sys_duckdb_enable_background_checkpoint(
+    "duckdb_enable_background_checkpoint",
+    "Run auto-checkpoint in a background thread instead of blocking the "
+    "committing thread.",
+    GLOBAL_VAR(myduck::global_enable_background_checkpoint), CMD_LINE(OPT_ARG),
+    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(myduck::update_enable_background_checkpoint));
+
+static Sys_var_ulonglong Sys_duckdb_background_checkpoint_full_interval(
+    "duckdb_background_checkpoint_full_interval",
+    "Number of concurrent checkpoints between full checkpoints in "
+    "background mode (0 = always full).",
+    GLOBAL_VAR(myduck::global_background_checkpoint_full_interval),
+    CMD_LINE(REQUIRED_ARG), VALID_RANGE(0, ULLONG_MAX), DEFAULT(0),
+    BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(myduck::update_background_checkpoint_full_interval));
 
 static Sys_var_ulonglong Sys_duckdb_merge_join_threshold(
     "duckdb_merge_join_threshold",
@@ -242,6 +261,12 @@ static const char *duckdb_disabled_optimizers_names[] = {
     "MATERIALIZED_CTE",
     "SUM_REWRITER",
     "LATE_MATERIALIZATION",
+    "CTE_INLINING",
+    "ROW_GROUP_PRUNER",
+    "TOP_N_WINDOW_ELIMINATION",
+    "COMMON_SUBPLAN",
+    "JOIN_ELIMINATION",
+    "WINDOW_SELF_JOIN",
     nullptr};
 
 static Sys_var_set Sys_duckdb_disabled_optimizers(
@@ -289,8 +314,7 @@ static Sys_var_ulonglong Sys_duckdb_appender_allocator_flush_threshold(
     GLOBAL_VAR(myduck::appender_allocator_flush_threshold),
     CMD_LINE(REQUIRED_ARG), VALID_RANGE(0, ULLONG_MAX),
     DEFAULT(64 * 1024 * 1024), BLOCK_SIZE(1024), NO_MUTEX_GUARD, NOT_IN_BINLOG,
-    ON_CHECK(nullptr),
-    ON_UPDATE(myduck::update_appender_allocator_flush_threshold));
+    ON_CHECK(nullptr), ON_UPDATE(nullptr));
 
 static Sys_var_bool Sys_duckdb_sql_normalization(
     "duckdb_sql_normalization", "Normalize SQL before sending to DuckDB.",
@@ -329,6 +353,11 @@ static Sys_var_bool Sys_duckdb_convert_tables_with_generated_columns(
     GLOBAL_VAR(duckdb_convert_tables_with_generated_columns), CMD_LINE(OPT_ARG),
     DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 
+static Sys_var_bool Sys_duckdb_support_auto_increment(
+    "duckdb_support_auto_increment",
+    "Whether support AUTO_INCREMENT option of DuckDB table.",
+    GLOBAL_VAR(duckdb_support_auto_increment), CMD_LINE(OPT_ARG),
+    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 /* DuckDB related variables end. */
 
 static Sys_var_set Sys_duckdb_log_options(
@@ -465,3 +494,117 @@ static Sys_var_uint Sys_binlog_group_delay_running_threads(
     GLOBAL_VAR(opt_binlog_group_delay_running_threads), CMD_LINE(REQUIRED_ARG),
     VALID_RANGE(0, (100000)), DEFAULT(100), BLOCK_SIZE(1));
 /* Persist Binlog Into Redo related variables end. */
+
+extern bool binlog_realtime_transmit_replica_enabled;
+static Sys_var_bool Sys_binlog_realtime_transmit_replica_enabled(
+    "binlog_realtime_transmit_replica_enabled",
+    "Whether enable binlog realtime transmit on slave side.",
+    GLOBAL_VAR(binlog_realtime_transmit_replica_enabled), CMD_LINE(OPT_ARG),
+    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
+bool discard_binlog_realtime_log_message = false;
+static Sys_var_bool Sys_binlog_realtime_transmit_enable_log_message(
+    "binlog_realtime_transmit_enable_log_message",
+    "Whether enable binlog realtime transmit log message level error log.",
+    GLOBAL_VAR(discard_binlog_realtime_log_message), CMD_LINE(OPT_ARG),
+    DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
+static Sys_var_bool Sys_binlog_realtime_enable_log_message(
+    "binlog_realtime_enable_log_message",
+    "Whether enable binlog realtime transmit log message level error log.",
+    GLOBAL_VAR(binlog_realtime_transmit_enable_log_message), CMD_LINE(OPT_ARG),
+    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
+static Sys_var_bool Sys_binlog_realtime_transmit_source_enabled(
+    "binlog_realtime_transmit_source_enabled",
+    "Whether enable binlog realtime transmit on master side.",
+    GLOBAL_VAR(brr_trx_mngr.get_enabled()), CMD_LINE(OPT_ARG),
+    DEFAULT(DEFAULT_BRR_SOURCE_ENABLED), NO_MUTEX_GUARD, NOT_IN_BINLOG,
+    ON_CHECK(0), ON_UPDATE(0));
+
+ulonglong discard_binlog_realtime_transaction_limit_size = 0;
+static Sys_var_ulonglong
+    Sys_binlog_realtime_transmit_long_transaction_limit_size(
+        "binlog_realtime_transmit_long_transaction_limit_size",
+        "The transaction whose binlog length exceed this limit size will use "
+        "binlog realtime transmit function. This variable is deprecated",
+        GLOBAL_VAR(discard_binlog_realtime_transaction_limit_size),
+        CMD_LINE(REQUIRED_ARG),
+        VALID_RANGE(BRR_LONG_TRANSACTION_LOWER_SIZE, ULLONG_MAX),
+        DEFAULT(DEFAULT_BRR_LONG_TRANSACTION_LIMIT_SIZE), BLOCK_SIZE(1));
+
+static Sys_var_ulonglong
+    Sys_binlog_realtime_replica_long_transaction_limit_size(
+        "binlog_realtime_replica_long_transaction_limit_size",
+        "The transaction whose binlog length exceed this limit size will use "
+        "binlog realtime transmit function.",
+        GLOBAL_VAR(brr_trx_mngr.get_limit_size_var()), CMD_LINE(REQUIRED_ARG),
+        VALID_RANGE(BRR_LONG_TRANSACTION_LOWER_SIZE, ULLONG_MAX),
+        DEFAULT(DEFAULT_BRR_LONG_TRANSACTION_LIMIT_SIZE), BLOCK_SIZE(1));
+
+static Sys_var_ulonglong Sys_binlog_realtime_transmit_read_block_size(
+    "binlog_realtime_transmit_read_block_size",
+    "For a transaction who is using binlog realtime transmit, master will read"
+    "binlog cache tmp file when the size of new binlog events exceed this "
+    "limit size, and send them to slave.",
+    GLOBAL_VAR(brr_trx_mngr.get_read_block_size()),
+    CMD_LINE(REQUIRED_ARG), VALID_RANGE(4096, ULLONG_MAX),
+    DEFAULT(DEFAULT_BRR_READ_BLOCK_SIZE), BLOCK_SIZE(1));
+
+static Sys_var_ulonglong Sys_binlog_realtime_transmit_max_send_size(
+    "binlog_realtime_transmit_max_send_size",
+    "In order to avoid realtime transmit block the normal event transmit, we "
+    "limit the max send size of realtime events each batch. If single event "
+    "exceed this size, it will not be send realtimely; If a batch of realtime "
+    "events exceed this size, the rest of realtime events will be sent in next "
+    "batch",
+    GLOBAL_VAR(brr_trx_mngr.get_max_send_size()), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(1024, ULLONG_MAX), DEFAULT(DEFAULT_BRR_READ_BLOCK_SIZE),
+    BLOCK_SIZE(1));
+
+extern bool binlog_realtime_apply_ddl_source_enabled;
+static Sys_var_bool Sys_binlog_realtime_apply_ddl_source_enabled(
+    "binlog_realtime_apply_ddl_source_enabled",
+    "Whether to transmit DDL binlog in real time.",
+    GLOBAL_VAR(binlog_realtime_apply_ddl_source_enabled), CMD_LINE(OPT_ARG),
+    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
+extern bool binlog_realtime_apply_long_trx_enabled;
+static Sys_var_bool Sys_binlog_realtime_apply_long_trx_enabled(
+    "binlog_realtime_apply_long_trx_enabled",
+    "Whether to apply long trx in real time.",
+    GLOBAL_VAR(binlog_realtime_apply_long_trx_enabled), CMD_LINE(OPT_ARG),
+    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
+static Sys_var_uint Sys_binlog_realtime_apply_worker_heartbeat_period(
+    "binlog_realtime_apply_worker_heartbeat_period",
+    "When using binlog realtime apply, the brr worker will periodically check "
+    "if there are brr transactions waiting to be applied. This parameter "
+    "defines the interval between two checks, in milliseconds.",
+    GLOBAL_VAR(binlog_realtime_apply_worker_heartbeat_period),
+    CMD_LINE(REQUIRED_ARG), VALID_RANGE(1, UINT_MAX),
+    DEFAULT(DEFAULT_REALTIME_APPLY_WORKER_HEARTBEAT_PERIOD), BLOCK_SIZE(1));
+
+static Sys_var_uint Sys_binlog_realtime_ddl_time_limit(
+    "binlog_realtime_ddl_time_limit",
+    "If the DDL execution exceeds this time, the replica will apply the DDL in "
+    "real time. The time is in milliseconds.",
+    GLOBAL_VAR(binlog_realtime_ddl_time_limit), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(0, UINT_MAX), DEFAULT(DEFAULT_BINLOG_REALTIME_DDL_TIME_LIMIT),
+    BLOCK_SIZE(1));
+
+static Sys_var_ulong Sys_binlog_realtime_apply_workers(
+    "binlog_realtime_apply_workers",
+    "Number of worker threads for executing brr events",
+    GLOBAL_VAR(binlog_realtime_apply_workers), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(0, MTS_MAX_WORKERS), DEFAULT(DEFAULT_REALTIME_APPLY_WORKERS),
+    BLOCK_SIZE(1));
+
+static Sys_var_bool Sys_optimize_table_write_binlog_advance(
+    "optimize_table_write_binlog_advance",
+    "The actual execution statement of optimize table is recreate table + "
+    "analyze table. If this parameter is enabled, binlog is written after "
+    "recreate table succeeds.",
+    GLOBAL_VAR(optimize_table_write_binlog_advance), CMD_LINE(OPT_ARG),
+    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+/* RDS DEFINED */

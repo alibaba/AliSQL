@@ -12395,6 +12395,12 @@ ER_SERVER_REDO_LOG_INVALID_LOG_TYPE
 ER_RDS_FLASHBACK
   eng "%s"
 
+ER_BINLOG_REALTIME_REPLICA_FAILED
+  eng "Binlog realtime replica failed because: %s"
+
+ER_BINLOG_REALTIME_REPLICA_MESSAGE
+  eng "Binlog realtime replica message: %s"
+
 #
 # End of RDS error messages intended to be logged to the server error log.
 #

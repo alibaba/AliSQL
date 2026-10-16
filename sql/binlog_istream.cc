@@ -170,8 +170,10 @@ bool Basic_binlog_ifile::read_binlog_magic() {
   return m_error->set_type(Binlog_read_error::SUCCESS);
 }
 
-Basic_binlog_ifile::Basic_binlog_ifile(Binlog_read_error *binlog_read_error)
-    : m_error(binlog_read_error) {
+Basic_binlog_ifile::Basic_binlog_ifile(Binlog_read_error *binlog_read_error,
+                                       bool skip_check_binlog_magic)
+    : m_error(binlog_read_error),
+      m_skip_check_binlog_magic(skip_check_binlog_magic) {
   DBUG_TRACE;
 }
 
@@ -185,7 +187,11 @@ bool Basic_binlog_ifile::open(const char *file_name) {
   if (m_istream == nullptr)
     return m_error->set_type(Binlog_read_error::CANNOT_OPEN);
   m_file_name = file_name;
-  return read_binlog_magic();
+  /*
+    For those files without binlog_magic, such as binlog cache file, we skip
+    check binlog_magic.
+  */
+  return m_skip_check_binlog_magic ? false : read_binlog_magic();
 }
 
 void Basic_binlog_ifile::close() {

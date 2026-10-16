@@ -126,7 +126,6 @@ struct HexStrOperator {
 struct HexIntegralOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
-
 		auto num_leading_zero = CountZeros<uint64_t>::Leading(static_cast<uint64_t>(input));
 		idx_t num_bits_to_check = 64 - num_leading_zero;
 		D_ASSERT(num_bits_to_check <= sizeof(INPUT_TYPE) * 8);
@@ -156,7 +155,6 @@ struct HexIntegralOperator {
 struct HexHugeIntOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
-
 		idx_t num_leading_zero = CountZeros<hugeint_t>::Leading(UnsafeNumericCast<hugeint_t>(input));
 		idx_t buffer_size = sizeof(INPUT_TYPE) * 2 - (num_leading_zero / 4);
 
@@ -183,7 +181,6 @@ struct HexHugeIntOperator {
 struct HexUhugeIntOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
-
 		idx_t num_leading_zero = CountZeros<uhugeint_t>::Leading(UnsafeNumericCast<uhugeint_t>(input));
 		idx_t buffer_size = sizeof(INPUT_TYPE) * 2 - (num_leading_zero / 4);
 
@@ -335,7 +332,6 @@ struct OctStrOperator {
 struct BinaryIntegralOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
-
 		auto num_leading_zero = CountZeros<uint64_t>::Leading(static_cast<uint64_t>(input));
 		idx_t num_bits_to_check = 64 - num_leading_zero;
 		D_ASSERT(num_bits_to_check <= sizeof(INPUT_TYPE) * 8);
@@ -578,7 +574,7 @@ ScalarFunctionSet HexFun::GetFunctions() {
 
 ScalarFunction UnhexFun::GetFunction() {
 	ScalarFunction function({LogicalType::VARCHAR}, LogicalType::BLOB, FromHexFunction);
-	BaseScalarFunction::SetReturnsError(function);
+	function.SetFallible();
 	return function;
 }
 
@@ -607,7 +603,7 @@ ScalarFunctionSet BinFun::GetFunctions() {
 
 ScalarFunction UnbinFun::GetFunction() {
 	ScalarFunction function({LogicalType::VARCHAR}, LogicalType::BLOB, FromBinaryFunction);
-	BaseScalarFunction::SetReturnsError(function);
+	function.SetFallible();
 	return function;
 }
 

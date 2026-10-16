@@ -51,8 +51,12 @@
 #include "mysql/service_thd_wait.h"
 #include "mysqld_error.h"
 #include "prealloced_array.h"
+#include "sql/current_thd.h"
 #include "sql/debug_sync.h"
+#include "sql/error_handler.h"
+#include "sql/sql_class.h"
 #include "sql/thr_malloc.h"
+#include "sql/rpl_rli.h"
 
 extern MYSQL_PLUGIN_IMPORT CHARSET_INFO *system_charset_info;
 
@@ -3356,7 +3360,7 @@ void MDL_lock::object_lock_notify_conflicting_locks(MDL_context *ctx,
   @retval  true    Failure (Out of resources or waiting is aborted),
 */
 
-bool MDL_context::acquire_lock(MDL_request *mdl_request,
+bool MDL_context::acquire_lock_raw(MDL_request *mdl_request,
                                Timeout_type lock_wait_timeout) {
   // in order to test bug#34594035 call functions that before the fix
   // caused crash and return failure
@@ -3742,9 +3746,9 @@ bool MDL_context::clone_tickets(const MDL_context *ticket_owner,
   @retval true   Failure (thread was killed)
 */
 
-bool MDL_context::upgrade_shared_lock(MDL_ticket *mdl_ticket,
-                                      enum_mdl_type new_type,
-                                      Timeout_type lock_wait_timeout) {
+bool MDL_context::upgrade_shared_lock_raw(MDL_ticket *mdl_ticket,
+                                          enum_mdl_type new_type,
+                                          Timeout_type lock_wait_timeout) {
   MDL_request mdl_new_lock_request;
   MDL_savepoint mdl_svp = mdl_savepoint();
   bool is_new_ticket;
@@ -3847,6 +3851,196 @@ bool MDL_context::upgrade_shared_lock(MDL_ticket *mdl_ticket,
   }
 
   return false;
+}
+
+/** Class to trap ER_LOCK_WAIT_TIMEOUT error. */
+class Rds_nonblock_ddl_error_handler : public Internal_error_handler {
+ public:
+  Rds_nonblock_ddl_error_handler() : m_is_timeout(false) {}
+
+  bool handle_condition(THD *, uint sql_errno, const char *,
+                        Sql_condition::enum_severity_level *,
+                        const char *) override {
+    m_is_timeout = (sql_errno == ER_LOCK_WAIT_TIMEOUT);
+    return m_is_timeout;
+  }
+
+  bool is_timeout() const { return m_is_timeout; }
+
+ private:
+  bool m_is_timeout;
+};
+
+/* Simple timer of nonblock DDL. */
+class Rds_nonblock_ddl_timer {
+ public:
+  Rds_nonblock_ddl_timer() { m_start_time = std::chrono::steady_clock::now(); }
+
+  ulong elapsed_time() const {
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed_duration =
+        std::chrono::duration_cast<std::chrono::seconds>(now - m_start_time);
+    return static_cast<ulong>(elapsed_duration.count());
+  }
+
+ private:
+  std::chrono::time_point<std::chrono::steady_clock> m_start_time;
+};
+
+/**
+  Upgrade a shared metadata lock.
+
+  Used in ALTER TABLE and CREATE TABLE.
+
+  @param mdl_ticket         Lock to upgrade.
+  @param new_type           Lock type to upgrade to.
+  @param lock_wait_timeout  Seconds to wait before timeout.
+  @param try_nonblock       If true, try to upgrade lock without blocking.
+  @param processor          processor to call when in nonblock retry interval.
+
+  @note In case of failure to upgrade lock (e.g. because upgrader
+        was killed) leaves lock in its original state (locked in
+        shared mode).
+
+  @note There can be only one upgrader for a lock or we will have deadlock.
+        This invariant is ensured by the fact that upgradeable locks SU, SNW
+        and SNRW are not compatible with each other and themselves in case
+        of ALTER TABLE operation.
+        In case of CREATE TABLE operation there is chance of deadlock as 'S'
+        is compatible with 'S'. But the deadlock is recovered by backoff and
+        retry mechanism.
+
+  @retval false  Success
+  @retval true   Failure (thread was killed)
+*/
+bool MDL_context::upgrade_shared_lock(MDL_ticket *mdl_ticket,
+                                      enum_mdl_type new_type,
+                                      Timeout_type lock_wait_timeout,
+                                      std::function<bool()> *processor) {
+  THD *thd = current_thd;
+  if (thd == nullptr || thd->variables.lock_wait_timeout <=
+           thd->get_rds_context().nonblock_ddl_lock_wait_timeout ||
+       thd->get_rds_context().nonblock_ddl_retry_interval == 0) {
+    return upgrade_shared_lock_raw(mdl_ticket, new_type, lock_wait_timeout);
+  }
+
+#ifndef NDEBUG
+  uint current_times = 0;
+#endif /* NDEBUG */
+  /* Avoid error of ER_LOCK_WAIT_TIMEOUT. */
+  ulong total_time = thd->variables.lock_wait_timeout;
+  ulong cost_time = 0;
+  Rds_nonblock_ddl_error_handler error_handler;
+  Rds_nonblock_ddl_timer timer;
+
+  while (cost_time < total_time) {
+    /* 1. Upgrade MDL with remaining time. */
+    ulong current_lock_wait_timeout =
+        std::min(total_time - cost_time,
+                 static_cast<ulong>(
+                     thd->get_rds_context().nonblock_ddl_lock_wait_timeout));
+    thd->push_internal_handler(&error_handler);
+    bool error = upgrade_shared_lock_raw(mdl_ticket, new_type,
+                                         current_lock_wait_timeout);
+    thd->pop_internal_handler();
+
+    if (!error) {
+      return false;
+    }
+
+    if (!error_handler.is_timeout()) {
+      return true;
+    }
+
+    if ((cost_time = timer.elapsed_time()) >= total_time) break;
+
+    /* 2. Timeout, sleep for retry interval. */
+    DEBUG_SYNC_C("retry_upgrade_shared_lock_nonblock");
+    ulong current_sleep_time = std::min(
+        total_time - cost_time,
+        static_cast<ulong>(thd->get_rds_context().nonblock_ddl_retry_interval));
+    std::this_thread::sleep_for(std::chrono::seconds(current_sleep_time));
+    DBUG_PRINT(
+        "rds_nonblock_ddl",
+        ("Still trying to acquire MDL, retry times: %u.", current_times));
+
+    if ((cost_time = timer.elapsed_time()) >= total_time) break;
+
+    /*
+      3. Execute the processor callback if provided, current callback action is
+      apply row log. We cannot know how long the processing will take.
+    */
+    if (processor != nullptr) {
+      if (processor->operator()()) return true;
+      DBUG_PRINT(
+          "rds_nonblock_ddl",
+          ("Some processing was done during the nonblock DDL retry interval."));
+      if ((cost_time = timer.elapsed_time()) >= total_time) break;
+    }
+
+#ifndef NDEBUG
+    current_times++;
+#endif /* NDEBUG */
+  }
+
+  my_error(ER_LOCK_WAIT_TIMEOUT, MYF(0));
+  return true;
+}
+
+bool MDL_context::acquire_lock(MDL_request *mdl_requests,
+                               Timeout_type lock_wait_timeout) {
+  // Startup XA recovery acquires MDL before a current THD exists.
+  THD *thd = current_thd;
+  if (thd == nullptr || thd->variables.lock_wait_timeout <=
+           thd->get_rds_context().nonblock_ddl_lock_wait_timeout ||
+       thd->get_rds_context().nonblock_ddl_retry_interval == 0) {
+    return acquire_lock_raw(mdl_requests, lock_wait_timeout);
+  }
+
+#ifndef NDEBUG
+  uint current_times = 0;
+#endif /* NDEBUG */
+  /* Avoid error of ER_LOCK_WAIT_TIMEOUT. */
+  ulong total_time = thd->variables.lock_wait_timeout;
+  ulong cost_time = 0;
+  Rds_nonblock_ddl_error_handler error_handler;
+  Rds_nonblock_ddl_timer timer;
+
+  while (cost_time < total_time) {
+    /* 1. Upgrade MDL with remaining time. */
+    ulong current_lock_wait_timeout =
+        std::min(total_time - cost_time,
+                 static_cast<ulong>(
+                     thd->get_rds_context().nonblock_ddl_lock_wait_timeout));
+    thd->push_internal_handler(&error_handler);
+    bool error = acquire_lock_raw(mdl_requests, current_lock_wait_timeout);
+    thd->pop_internal_handler();
+
+    if (!error) {
+      return false;
+    }
+
+    if (!error_handler.is_timeout()) {
+      return true;
+    }
+
+    if ((cost_time = timer.elapsed_time()) >= total_time) break;
+
+    /* 2. Timeout, sleep for retry interval. */
+    DEBUG_SYNC_C("retry_upgrade_shared_lock_nonblock");
+    ulong current_sleep_time = std::min(
+        total_time - cost_time,
+        static_cast<ulong>(thd->get_rds_context().nonblock_ddl_retry_interval));
+    std::this_thread::sleep_for(std::chrono::seconds(current_sleep_time));
+
+    if ((cost_time = timer.elapsed_time()) >= total_time) break;
+#ifndef NDEBUG
+    current_times++;
+#endif /* NDEBUG */
+  }
+
+  my_error(ER_LOCK_WAIT_TIMEOUT, MYF(0));
+  return true;
 }
 
 /**

@@ -458,6 +458,21 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
       error = -1;
     }
 
+    /*
+      Update auto_increment value only when the auto-increment column is
+      explicitly modified by the UPDATE statement. In most cases, UPDATE
+      does not touch the auto-increment column, so we can skip the
+      expensive SELECT MAX() query to DuckDB. For the rare case where
+      the auto-increment column is explicitly updated (e.g.,
+      UPDATE t SET id = 1000 ...), we fall back to querying DuckDB
+      to refresh the in-memory auto-increment counter.
+    */
+    if (error < 0 && table->found_next_number_field &&
+        bitmap_is_set(table->write_set,
+                      table->found_next_number_field->field_index())) {
+      table->file->info(HA_STATUS_AUTO);
+    }
+
     /**
      TODO: In the current implementation, we cannot record binlog in row
      format. In the future, we hope to delete data through the handler

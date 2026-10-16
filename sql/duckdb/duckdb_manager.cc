@@ -63,7 +63,24 @@ bool DuckdbManager::Initialize() {
   /* Unfortunally, pread failed when MainHeader::CheckMagicBytes. */
   config.options.use_direct_io = global_use_dio;
 
-  config.options.scheduler_process_partial = global_scheduler_process_partial;
+  // scheduler_process_partial became a generic setting in duckdb v1.5; the field
+  // on DBConfigOptions is gone. Route through the generic option API so it lands
+  // in the user_settings slot the generic DUCKDB_SETTING form reads.
+  config.SetOptionByName("scheduler_process_partial",
+                         duckdb::Value::BOOLEAN(global_scheduler_process_partial));
+
+  config.SetOptionByName("enable_background_checkpoint",
+                         duckdb::Value::BOOLEAN(global_enable_background_checkpoint));
+
+  config.SetOptionByName(
+      "background_checkpoint_full_interval",
+      duckdb::Value::UBIGINT(global_background_checkpoint_full_interval));
+
+  // DuckDB v1.5.2 rejects non-integer literals in ORDER BY (e.g. ORDER BY 'abc')
+  // by default. MySQL silently ignores them, and our plugin can rewrite a
+  // GROUP_CONCAT positional ORDER BY into one that contains string literals,
+  // so enable the legacy permissive behavior.
+  config.SetOptionByName("order_by_non_integer_literal", duckdb::Value::BOOLEAN(true));
 
   if (global_max_threads != 0) {
     config.options.maximum_threads = global_max_threads;
@@ -84,11 +101,6 @@ bool DuckdbManager::Initialize() {
 
   if (global_max_temp_directory_size != 0)
     config.options.maximum_swap_space = global_max_temp_directory_size;
-
-  if (appender_allocator_flush_threshold != 0) {
-    config.options.appender_allocator_flush_threshold =
-        appender_allocator_flush_threshold;
-  }
 
   config.options.checkpoint_wal_size = checkpoint_threshold;
 

@@ -1,0 +1,204 @@
+# ==== Purpose ====
+# This test case is to test the interaction between brr worker and normal worker,
+# as well as coordinator.
+#
+# ==== Implementation ===
+# 0) Prepare data.
+# 1) Test stop slave sql_thread will kill the brr worker thread when it is idle.
+# 2) Test stop slave sql_thread will kill the brr worker thread when it is running.
+# 3) Brr worker thread is invisible, we can't kill brr worker thread explicitly.
+# 4) Cleanup.
+
+--let $rpl_require_row_format=2:1
+--source include/master-slave.inc
+--source include/have_binlog_format_row.inc
+--source include/have_debug.inc
+
+CALL mtr.add_suppression("\\[ERROR\\] .*MY-\\d+.* \\[Repl\\] Brr Worker failed executing transaction .*");
+CALL mtr.add_suppression(".*The replica coordinator and worker threads are stopped.*");
+CALL mtr.add_suppression(".* Binlog realtime replica failed because: read_next_event, apply row log failed.");
+
+--echo 
+--echo #
+--echo # 0. Prepare data.
+--echo ########################################################
+--echo #
+connection master;
+SET GLOBAL debug='+d,ignore_brr_ddl_time_limit';
+CREATE DATABASE rpl_test;
+CREATE TABLE rpl_test.t1 (s LONGTEXT);
+--disable_query_log
+--let $i=0
+while ($i < 2)
+{
+  --eval INSERT INTO rpl_test.t1 values(repeat("1", 5242880))
+  --inc $i
+}
+--enable_query_log
+--source include/rpl_sync.inc
+
+--echo 
+--echo #
+--echo # 1. Test stop slave sql_thread will kill the brr worker thread when it is idle.
+--echo ################################################################################
+--echo #
+--echo # stop slave sql_thread will cause the brr worker thread exit. 
+connection slave;
+--source include/stop_slave_sql.inc
+--let $status_var= replica_brr_worker_size
+--let $status_var_value= 0
+--source include/wait_for_status_var.inc
+
+--echo
+--echo # Kill worker thread will cause SQL thread to exit, so brr worker thread exit too.
+--echo # This can also simulate the normal worker failed to apply transaction too.
+--source include/start_slave_sql.inc
+--let $status_var= replica_brr_worker_size
+--let $status_var_value= 4
+--source include/wait_for_status_var.inc
+
+SELECT PROCESSLIST_ID INTO @id FROM performance_schema.threads WHERE NAME LIKE "%replica_worker" LIMIT 1;
+KILL QUERY @id;
+
+--let $status_var= replica_brr_worker_size
+--let $status_var_value= 0
+--source include/wait_for_status_var.inc
+
+# BRR workers can exit before the coordinator finishes stopping.
+--let $slave_sql_errno= convert_error(ER_MTA_INCONSISTENT_DATA)
+--source include/wait_for_slave_sql_error.inc
+--let $slave_sql_errno=
+--source include/start_slave_sql.inc
+
+--echo 
+--echo #
+--echo # 2. Test stop slave sql_thread will kill the brr worker thread when it is running.
+--echo ###################################################################################
+--echo #
+connection master;
+SET SESSION debug = '+d,brr_wait_inplace_alter_table'; 
+--send ALTER TABLE rpl_test.t1 ADD COLUMN id_1 INT, ALGORITHM=INPLACE;
+
+--echo 
+--echo ## The brr worker will rollback the DDL and exit when stop slave sql_thread. 
+connection slave;
+--let $status_var= replica_brr_trx_assigned_to_brr_worker
+--let $status_var_value= 1
+--source include/wait_for_status_var.inc
+
+--let $wait_condition= SELECT count(*) = 1 FROM performance_schema.threads WHERE PROCESSLIST_STATE = 'Waiting for brr events'
+--source include/wait_condition.inc
+
+--source include/stop_slave_sql.inc
+--let $status_var= replica_brr_worker_size
+--let $status_var_value= 0
+--source include/wait_for_status_var.inc
+
+--let $status_var= replica_brr_ddl_rollback_by_brr_worker
+--let $status_var_value= 1
+--source include/wait_for_status_var.inc
+
+--echo 
+--echo ## The brr worker will not affect IO thread
+--let $assert_text= IO thread is running
+--let $assert_cond= "[SHOW SLAVE STATUS, Slave_IO_Running, 1]" LIKE "Yes"
+--source include/assert.inc
+
+--echo 
+--echo ## Brr cache will be not removed, because the brr trx is not complete. 
+--let $assert_text= replica_brr_cache_count should be 1
+--let $assert_status_name= replica_brr_cache_count
+--let $assert_status_value=1
+--source include/assert_status.inc
+
+--let $MYSQLD_DATADIR= `select @@datadir`
+--let $RELAY_LOG_CACHE_TEMP_FILE_DIR = $MYSQLD_DATADIR/#alisql_binlog_cache_temp_file
+--exec ls $RELAY_LOG_CACHE_TEMP_FILE_DIR|grep "RL"|wc -l
+
+--echo 
+--echo ## When brr worker start again, IO thread will not create new brr cache.
+connection slave;
+--echo ## FORMAT_DESCRIPTION_EVENT # BRR_DDL_BEGIN_EVENT # QUERY_LOG_EVENT
+--let $assert_status_name= replica_received_brr_events_count
+--let $assert_status_value=3
+--source include/assert_status.inc
+
+--source include/start_slave_sql.inc
+
+connection master1;
+SET DEBUG_SYNC = 'now SIGNAL continue';
+
+connection master;
+--reap
+
+--echo 
+--echo ## GTID_EXECUTED_LOG_EVENT # GTID_LOG_EVENT
+connection slave;
+--let $status_var= replica_received_brr_events_count
+--let $status_var_value= 5
+--source include/wait_for_status_var.inc
+
+--echo 
+--echo ## Brr cache will be removed, because the brr trx is complete.
+--let $assert_status_name= replica_brr_cache_count
+--let $assert_status_value=0
+--source include/assert_status.inc
+
+--exec ls $RELAY_LOG_CACHE_TEMP_FILE_DIR|grep "RL"|wc -l
+
+--echo 
+--echo ## Brr trx will not be assigned to other brr worker.
+--let $assert_text= replica_brr_trx_assigned_to_brr_worker should be 1
+--let $assert_status_name= replica_brr_trx_assigned_to_brr_worker
+--let $assert_status_value=1
+--source include/assert_status.inc
+
+--source include/rpl_sync.inc
+--echo
+--echo ## normal worker will apply this transaction.
+connection slave;
+SHOW CREATE TABLE rpl_test.t1;
+--let $assert_status_name= replica_brr_ddl_commit_by_brr_worker
+--let $assert_status_value= 0
+--source include/assert_status.inc
+
+--echo 
+--echo #
+--echo # 3. Brr worker thread is invisible, we can't kill brr worker thread explicitly.
+--echo ########################################################
+--echo #
+connection master;
+SET SESSION debug = '+d,brr_wait_inplace_alter_table'; 
+--send ALTER TABLE rpl_test.t1 ADD COLUMN id_2 INT, ALGORITHM=INPLACE;
+
+connection slave;
+--let $status_var= replica_brr_trx_assigned_to_brr_worker
+--let $status_var_value= 2
+--source include/wait_for_status_var.inc
+
+SELECT PROCESSLIST_ID INTO @id FROM performance_schema.threads WHERE NAME LIKE "%brr_worker" AND PROCESSLIST_STATE not like "Waiting for brr transaction";
+
+--disable_result_log
+--error ER_NO_SUCH_THREAD
+KILL QUERY @id;
+
+--error ER_NO_SUCH_THREAD
+KILL @id;
+--enable_result_log
+
+connection master1;
+SET DEBUG_SYNC = 'now SIGNAL continue';
+
+connection master;
+--reap
+
+--echo 
+--echo #
+--echo # 4. Clean up.
+--echo ########################################################
+--echo #
+connection master;
+SET GLOBAL debug='-d,ignore_brr_ddl_time_limit';
+DROP DATABASE rpl_test;
+--source include/rpl_sync.inc
+--source include/rpl_end.inc

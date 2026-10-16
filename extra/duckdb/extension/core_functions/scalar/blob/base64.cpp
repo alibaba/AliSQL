@@ -46,7 +46,7 @@ ScalarFunctionSet ToBase64Fun::GetFunctions() {
 
 ScalarFunction FromBase64Fun::GetFunction() {
 	ScalarFunction function({LogicalType::VARCHAR}, LogicalType::BLOB, Base64DecodeFunction);
-	BaseScalarFunction::SetReturnsError(function);
+	function.SetFallible();
 	return function;
 }
 

@@ -1,0 +1,162 @@
+# ==== Purpose ====
+# This test verifies binlog realtime apply support optimize table.
+#
+# ==== Implementation ===
+# 0. Prepare data.
+# 1. Test optimize table not record binlog will not use brr.
+# 2. Test optimize table can use realtime apply.
+# 3. Failed optimize table can rolled back by the replica.
+# 4. clean up 
+
+--source include/master-slave.inc
+--source include/have_binlog_format_row.inc
+--source include/have_debug.inc
+
+CALL mtr.add_suppression("\\[Warning\\] .*MY-\\d+.* \\[Repl\\] \\[RDS Diagnose\\] .*");
+CALL mtr.add_suppression("\\[ERROR\\] .*MY-\\d+.* \\[Repl\\] Brr Worker failed executing transaction .*");
+CALL mtr.add_suppression("\\[Warning\\] .*MY-\\d+.* \\[Server\\] \\[RDS Diagnose\\] optimize .*");
+CALL mtr.add_suppression("\\[ERROR\\] .*MY-\\d+.* \\[Server\\] Binlog realtime replica failed because: mysql_admin_table.*");
+
+--echo
+--echo #
+--echo # 0. Prepare data.
+--echo ########################################################
+--echo #
+connection master;
+CREATE DATABASE rpl_test;
+CREATE TABLE rpl_test.t1 (s LONGTEXT);
+CREATE TABLE rpl_test.t2 (s LONGTEXT);
+--disable_query_log
+--let $i=0
+while ($i < 2)
+{
+  --eval INSERT INTO rpl_test.t1 values(repeat("1", 5242880))
+  --inc $i
+}
+--enable_query_log
+--source include/rpl_sync.inc
+
+--echo #
+--echo # 1. Test optimize table not record binlog will not use brr.
+--echo ##############################################################
+--echo #
+connection master;
+OPTIMIZE NO_WRITE_TO_BINLOG TABLE rpl_test.t1;
+OPTIMIZE LOCAL TABLE rpl_test.t1;
+OPTIMIZE NO_WRITE_TO_BINLOG TABLE rpl_test.t1,rpl_test.t2;
+OPTIMIZE LOCAL TABLE rpl_test.t1,rpl_test.t2;
+
+# assert the brr_trx is not created
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_count = 0
+--let $assert_select = .* Binlog realtime replica message: brr trx start on source, brr index.*
+--let $assert_text = Test instant DDL will not use real-time applications.
+
+--echo #
+--echo # 2. Test optimize table can use realtime apply.
+--echo ##############################################################
+--echo #
+--echo # optimize one table is ok.
+connection master;
+SET GLOBAL debug='+d,ignore_brr_ddl_time_limit';
+connection slave;
+FLUSH RELAY LOGS;
+--let $ddl_statement= OPTIMIZE TABLE rpl_test.t1
+--let $expect_assigned_to_brr_worker_value=1
+--let $expect_commit_by_brr_worker_value=1
+--let $wait_timeout=100000
+--let $algorithm=INPLACE
+--let $is_optimize=TRUE
+--source suite/rpl/include/binlog_realtime_apply_one_ddl.inc
+
+--echo # optimize multiple table is ok.
+connection master;
+SET SESSION debug = '+d,brr_wait_inplace_alter_table';
+--send OPTIMIZE TABLE rpl_test.t1, rpl_test.t2;
+
+connection slave;
+--let $status_var= replica_brr_trx_assigned_to_brr_worker
+--let $status_var_value= 2
+--let $wait_timeout=100000
+--source include/wait_for_status_var.inc
+
+connection master1;
+SET DEBUG_SYNC = 'now SIGNAL continue';
+
+connection slave;
+--let $status_var= replica_brr_ddl_commit_by_brr_worker
+--let $status_var_value= 2
+--let $wait_timeout=100000
+--source include/wait_for_status_var.inc
+
+connection slave;
+--let $status_var= replica_brr_trx_assigned_to_brr_worker
+--let $status_var_value= 3
+--let $wait_timeout=100000
+--source include/wait_for_status_var.inc
+
+connection master1;
+SET DEBUG_SYNC = 'now SIGNAL continue';
+
+connection slave;
+--let $status_var= replica_brr_ddl_commit_by_brr_worker
+--let $status_var_value= 3
+--let $wait_timeout=100000
+--source include/wait_for_status_var.inc
+
+connection master;
+--reap
+SET SESSION debug = '-d,brr_wait_inplace_alter_table';
+
+--echo #
+--echo # 3. Failed optimize table can rolled back by the replica.
+--echo ##########################################################
+--echo #
+--echo # brr worker failed execute optimize table before brr_set_gtid_var
+connection master;
+--let $ddl_statement= OPTIMIZE TABLE rpl_test.t1
+--let $expect_assigned_to_brr_worker_value=4
+--let $expect_rollback_by_brr_worker_value=1
+--let $algorithm=INPLACE
+--let $wait_timeout=100000
+--let $is_optimize=TRUE
+--source suite/rpl/include/binlog_realtime_rollback_one_ddl.inc
+
+--echo # brr worker failed execute optimize table after brr_set_gtid_var
+--source include/rpl_sync.inc
+connection slave;
+SET GLOBAL debug = '+d,simulate_error_after_brr_set_gtid_var';
+
+connection master;
+SET SESSION debug = '+d,brr_wait_inplace_alter_table';
+--send OPTIMIZE TABLE rpl_test.t1;
+
+connection slave;
+--let $status_var= replica_brr_trx_assigned_to_brr_worker
+--let $status_var_value= 5
+--let $wait_timeout=100000
+--source include/wait_for_status_var.inc
+
+connection master1;
+SET DEBUG_SYNC = 'now SIGNAL continue';
+connection master;
+--reap
+SET SESSION debug = '-d,brr_wait_inplace_alter_table';
+
+connection slave;
+--let $status_var= replica_brr_ddl_rollback_by_brr_worker
+--let $status_var_value= 2
+--let $wait_timeout=100000
+--source include/wait_for_status_var.inc
+SET GLOBAL debug = '-d,simulate_error_after_brr_set_gtid_var';
+
+--echo
+--echo #
+--echo # 4. clean up 
+--echo #############
+--echo #
+connection master;
+SET GLOBAL debug='-d,ignore_brr_ddl_time_limit';
+DROP DATABASE rpl_test;
+--source include/rpl_sync.inc
+--source include/rpl_end.inc

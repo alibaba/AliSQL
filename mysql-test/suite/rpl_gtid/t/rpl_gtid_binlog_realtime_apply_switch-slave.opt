@@ -1,0 +1,8 @@
+--binlog_realtime_transmit_replica_enabled=ON
+--binlog_realtime_transmit_enable_log_message=ON
+--relay_log_purge=OFF
+--replica_parallel_workers=4
+--replica_net_timeout=100000
+--binlog_realtime_apply_workers=4
+--binlog_realtime_enable_log_message=ON
+--replica_preserve_commit_order=off
