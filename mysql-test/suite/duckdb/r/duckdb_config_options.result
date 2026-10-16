@@ -1,0 +1,82 @@
+#
+# 1) Read-only global variable, unset by default
+#
+SELECT @@global.duckdb_config_options;
+@@global.duckdb_config_options
+NULL
+SELECT @@session.duckdb_config_options;
+ERROR HY000: Variable 'duckdb_config_options' is a GLOBAL variable
+SET GLOBAL duckdb_config_options = 'allow_unsigned_extensions=true';
+ERROR HY000: Variable 'duckdb_config_options' is a read only variable
+CALL dbms_duckdb.query("SELECT current_setting('allow_unsigned_extensions') AS allow_unsigned_extensions");
+RESULT
+allow_unsigned_extensions	
+BOOLEAN	
+[ Rows: 1]
+false
+
+
+# DuckDB itself refuses this once the instance is running
+CALL dbms_duckdb.query("SET GLOBAL allow_unsigned_extensions = true");
+RESULT
+Invalid Input Error: Cannot change allow_unsigned_extensions setting while database is running
+
+CALL dbms_duckdb.query("SELECT current_setting('allow_unsigned_extensions') AS allow_unsigned_extensions");
+RESULT
+allow_unsigned_extensions	
+BOOLEAN	
+[ Rows: 1]
+false
+
+
+#
+# 2) Settings are applied at startup
+#
+# restart: --duckdb_config_options=allow_unsigned_extensions=true;preserve_insertion_order=OFF;
+SELECT @@global.duckdb_config_options;
+@@global.duckdb_config_options
+allow_unsigned_extensions=true;preserve_insertion_order=OFF;
+CALL dbms_duckdb.query("SELECT current_setting('allow_unsigned_extensions') AS allow_unsigned_extensions");
+RESULT
+allow_unsigned_extensions	
+BOOLEAN	
+[ Rows: 1]
+true
+
+
+CALL dbms_duckdb.query("SELECT current_setting('preserve_insertion_order') AS preserve_insertion_order");
+RESULT
+preserve_insertion_order	
+BOOLEAN	
+[ Rows: 1]
+false
+
+
+# Aliases resolve to the DuckDB setting name
+# restart: --duckdb_config_options=null_order=nulls_last
+CALL dbms_duckdb.query("SELECT current_setting('default_null_order') AS default_null_order");
+RESULT
+default_null_order	
+VARCHAR	
+[ Rows: 1]
+NULLS_LAST
+
+
+#
+# 3) Invalid lists stop the server from starting
+#
+# Not a name=value pair
+Pattern "duckdb_config_options: expected name=value, got 'allow_unsigned_extensions'" found
+# Unknown setting; surrounding spaces are trimmed
+Pattern "duckdb_config_options: unknown DuckDB setting 'no_such_setting'" found
+# Boolean that is not ON/OFF, TRUE/FALSE or 1/0
+Pattern "duckdb_config_options: 'allow_unsigned_extensions' expects ON/OFF, TRUE/FALSE or 1/0, got 'maybe'" found
+# Value DuckDB rejects
+Pattern "duckdb_config_options: cannot set 'default_order'" found
+# Settings with their own duckdb_* variable, by name and by alias
+Pattern "duckdb_config_options: 'threads' is controlled by duckdb_threads" found
+Pattern "duckdb_config_options: 'memory_limit' is controlled by duckdb_memory_limit" found
+# restart:
+SELECT @@global.duckdb_config_options;
+@@global.duckdb_config_options
+NULL

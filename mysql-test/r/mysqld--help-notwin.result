@@ -436,6 +436,12 @@ The following options may be given as the first argument:
  commit multiple transactions every so many binlogs. 0
  represents never, 1 represents that commit is required
  for each rotate.
+ --duckdb-config-options=name 
+ Extra DuckDB settings applied when the DuckDB instance is
+ created, as 'name=value' pairs separated by ';', e.g.
+ 'allow_unsigned_extensions=true;preserve_insertion_order
+ =false'. Settings that have their own duckdb_* variable
+ are not accepted
  --duckdb-convert-all-at-startup 
  Whether convert all non-DuckDB engine tables to DuckDB at
  startup.
@@ -1998,6 +2004,7 @@ duckdb-checkpoint-threshold 268435456
 duckdb-commit-multi-trx-due-to-reader TRUE
 duckdb-commit-multi-trx-due-to-rotate TRUE
 duckdb-commit-multi-trx-due-to-rotate-frequency 1
+duckdb-config-options (No default value)
 duckdb-convert-all-at-startup FALSE
 duckdb-convert-all-at-startup-ignore-error FALSE
 duckdb-convert-all-at-startup-threads 4

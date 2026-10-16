@@ -188,6 +188,26 @@ All variables in this section are dynamic. Variables marked `Global, Session` ha
 
 ---
 
+## `duckdb_config_options`
+- **Scope**: Global  
+- **Change type**: Static  
+- **Data type**: String  
+- **Default**: (empty)  
+- **Description**: Extra DuckDB settings applied when the DuckDB instance is created, as `name=value` pairs separated by `;`. Use it for settings that DuckDB accepts only before the database is opened, such as `allow_unsigned_extensions`, and for DuckDB settings that have no AliSQL variable. This variable is read-only and can only be configured before startup.
+
+  ```ini
+  [mysqld]
+  duckdb_config_options = allow_unsigned_extensions=true;preserve_insertion_order=false
+  ```
+
+  - Names are DuckDB setting names, and aliases are accepted. Boolean settings take `ON`/`OFF`, `TRUE`/`FALSE` or `1`/`0`. Other values are converted to the setting's type by DuckDB.
+  - Settings that have their own variable are refused: `memory_limit`, `threads`, `temp_directory`, `max_temp_directory_size`, `checkpoint_threshold`, `scheduler_process_partial` and `appender_allocator_flush_threshold`. Use `duckdb_memory_limit`, `duckdb_threads` and the other `duckdb_*` variables instead.
+  - The server does not start if an entry is not `name=value`, names an unknown setting, or has a value DuckDB rejects. The error log gives the reason, and each applied setting is logged as well.
+  - Values cannot contain `;`.
+  - To check a value, run `CALL dbms_duckdb.query("SELECT current_setting('<name>')")`. Settings that DuckDB allows to change at runtime can still be changed later with `CALL dbms_duckdb.query("SET ...")`.
+
+---
+
 ## `duckdb_max_temp_directory_size`
 - **Scope**: Global  
 - **Change type**: Dynamic  
