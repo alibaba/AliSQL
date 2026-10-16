@@ -16,8 +16,38 @@
 | `duckdb_convert_tables_with_generated_columns` | GLOBAL | `ON` | 允许转换包含生成列的表 |
 | `duckdb_copy_data_between_tables_use_ins_sel` | GLOBAL, SESSION | `OFF` | DuckDB 表间 Copy DDL 使用 `INSERT ... SELECT` |
 | `ignore_index_hint_error` | GLOBAL | `OFF` | 将不存在的索引 Hint 从错误降级为警告 |
+| `duckdb_support_auto_increment` | GLOBAL | `OFF` | 为 DuckDB 表保留并实现 AUTO_INCREMENT |
+| `duckdb_enable_background_checkpoint` | GLOBAL | `OFF` | 在后台线程执行自动 Checkpoint |
+| `duckdb_background_checkpoint_full_interval` | GLOBAL | `0` | 两次 Full Checkpoint 之间的 Concurrent Checkpoint 数量，零表示始终 Full |
 
 本节参数均支持动态修改。标为 `GLOBAL, SESSION` 的参数同时具有全局默认值和连接级取值：`SET GLOBAL` 影响后续新建连接，`SET SESSION` 只影响当前连接。
+
+### `duckdb_support_auto_increment`
+
+- **参数范围**: 全局参数
+- **修改形式**: 动态修改
+- **参数类型**: 布尔类型
+- **默认值**: `OFF`
+- **取值范围**: `ON` \| `OFF`
+- **含义**: 创建或转换 DuckDB 表时开启 AUTO_INCREMENT 支持。默认 OFF 时，字段转换路径会移除 AUTO_INCREMENT 属性；开启后不会自动修改已有表定义，也不会增加物理 PRIMARY/UNIQUE 唯一性强制检查。
+
+### `duckdb_enable_background_checkpoint`
+
+- **参数范围**: 全局参数
+- **修改形式**: 动态修改
+- **参数类型**: 布尔类型
+- **默认值**: `OFF`
+- **取值范围**: `ON` \| `OFF`
+- **含义**: 将自动 Checkpoint 放到后台线程执行，避免由提交线程同步执行。动态更新会转发到内嵌 DuckDB 参数；WAL 大小触发阈值仍由 `duckdb_checkpoint_threshold` 控制。
+
+### `duckdb_background_checkpoint_full_interval`
+
+- **参数范围**: 全局参数
+- **修改形式**: 动态修改
+- **参数类型**: 无符号整型（Checkpoint 次数）
+- **默认值**: `0`
+- **取值范围**: `0` 到 `ULLONG_MAX`
+- **含义**: 后台模式中两次 Full Checkpoint 之间的 Concurrent Checkpoint 数量。零表示始终 Full；这是次数而不是时间间隔，单独设置它不会开启后台 Checkpoint。
 
 ### `duckdb_sql_normalization`
 
@@ -309,7 +339,8 @@
   COMMON_AGGREGATE, COLUMN_LIFETIME, BUILD_SIDE_PROBE_SIDE, LIMIT_PUSHDOWN,  
   TOP_N, COMPRESSED_MATERIALIZATION, DUPLICATE_GROUPS, REORDER_FILTER,  
   SAMPLING_PUSHDOWN, JOIN_FILTER_PUSHDOWN, EXTENSION, MATERIALIZED_CTE,  
-  SUM_REWRITER, LATE_MATERIALIZATION
+  SUM_REWRITER, LATE_MATERIALIZATION, CTE_INLINING, ROW_GROUP_PRUNER,
+  TOP_N_WINDOW_ELIMINATION, COMMON_SUBPLAN, JOIN_ELIMINATION, WINDOW_SELF_JOIN
 - **含义**: 禁用 DuckDB 引擎中指定的优化器规则。
 
 ### `duckdb_data_import_mode`

@@ -260,6 +260,8 @@ duckdb_multi_trx_max_batch_length=268435456
 
 从节点的 `server_id` 必须与主库及复制拓扑中的其他服务不同。
 
+本示例使用 DuckDB Multi-Trx Batch。BRR 实时回放要求并行复制 Worker，不能直接在这份配置上增加 BRR Worker 来启用。仅提前传输和实时回放各自的要求参见 [BRR 指南](../binlog-realtime-replication/binlog-realtime-replication-zh.md)。当前 DuckDB 快照新增的自增列与后台 Checkpoint 参见 [DuckDB 集成指南](./duckdb-zh.md#自增列与后台-checkpoint)。
+
 3. **准备存量数据与 GTID 状态**
 
 主库已有数据时，必须先基于同一时点的一致性物理备份或逻辑备份准备从节点，恢复后的数据与 `gtid_executed`/`gtid_purged` 必须对应同一个主库快照。使用物理备份时，先恢复 InnoDB 数据，再按第 2 节执行启动转换；使用逻辑备份时，将备份导入 DuckDB 节点，并恢复备份工具记录的 GTID 元数据。继续操作前应核对行数与 GTID 状态。

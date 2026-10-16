@@ -33,7 +33,9 @@
 
 ## About AliSQL
 
-AliSQL is an open-source MySQL branch maintained by Alibaba Cloud Database Team. This release is based on MySQL 8.0.44 and adds a DuckDB analytical storage engine, HNSW vector indexes, Native Flashback, and binlog optimizations while retaining the MySQL client protocol.
+AliSQL is an open-source MySQL branch maintained by Alibaba Cloud Database Team. This release is based on MySQL 8.0.44 and adds a DuckDB analytical storage engine, HNSW vector indexes, Native Flashback, binlog realtime replication (BRR), and binlog optimizations while retaining the MySQL client protocol.
+
+The [2026-10-16 update](./wiki/changes/changes-in-alisql-8.0.44.2026-10-16-en.md) introduces BRR and upgrades the embedded DuckDB snapshot to `v1.5.2-dev736`, with optional AUTO_INCREMENT and background checkpoints.
 
 <table>
 <tr>
@@ -70,10 +72,11 @@ Applications connect through the MySQL protocol and continue to use MySQL client
 | **Native Flashback** | Query historical InnoDB data with `AS OF TIMESTAMP` and retained undo snapshots | Available |
 | **Large TX Optimization** | Binlog Cache Free Flush reduces commit-time I/O amplification for large InnoDB transactions | Available* |
 | **Binlog Durability** | Persist Binlog Into Redo V2 reduces synchronous binlog I/O while retaining crash recovery | Available |
+| **Binlog Realtime Replication (BRR)** | Transmit eligible large transactions before commit and optionally apply supported DDL and transactions early on replicas | Available, opt-in |
 | **DDL Optimization** | Instant DDL, parallel B+tree construction, non-blocking locks | Planned |
 | **RTO Optimization** | Accelerated crash recovery for faster instance startup | Planned |
 
-`*` Free Flush supports large InnoDB transactions. In this release, DuckDB registers an additional 2PC participant, so AliSQL builds that include DuckDB use normal binlog group commit. Large-transaction optimization for DuckDB will be added in the next release.
+`*` Free Flush targets eligible InnoDB transactions while DuckDB mode is inactive. With DuckDB mode enabled, commit uses the dedicated DuckDB path. BRR reuses Free Flush cache files; this does not by itself imply a Free Flush commit.
 
 ## Quick Start
 
@@ -180,6 +183,7 @@ Q4 2025  ━━━━━━━━━━━━━━━━━━━━━━━�
          [x] Native Flashback       [x] Transaction & Binlog   [ ] DDL / RTO
              - AS OF TIMESTAMP          - Binlog in Redo V2       - Instant DDL
              - Undo snapshots           - Free Flush               - Fast Crash Recovery
+                                        - Realtime Replication
 ```
 
 ## Documentation
@@ -191,6 +195,8 @@ Q4 2025  ━━━━━━━━━━━━━━━━━━━━━━━�
 | [Native Flashback Guide](./wiki/native-flashback/native-flashback-en.md) | Historical InnoDB queries and recovery |
 | [Binlog in Redo Guide](./wiki/binlog-in-redo/binlog-in-redo-en.md) | Redo-backed binlog persistence and fallback rules |
 | [Binlog Cache Free Flush Guide](./wiki/binlog-cache-free-flush/binlog-cache-free-flush-en.md) | Large-transaction commit path, configuration, and restrictions |
+| [Binlog Realtime Replication Guide](./wiki/binlog-realtime-replication/binlog-realtime-replication-en.md) | BRR transmission, early apply, configuration, monitoring, and limitations |
+| [2026-10-16 Release Notes](./wiki/changes/changes-in-alisql-8.0.44.2026-10-16-en.md) | BRR, DuckDB updates, and integration fixes |
 | [Release Notes](./wiki/changes-in-alisql-8.0.44.md) | What's new in AliSQL 8.0.44 |
 | [Setup DuckDB Node](./wiki/duckdb/how-to-setup-duckdb-node-en.md) | Quick setup guide for analytics |
 

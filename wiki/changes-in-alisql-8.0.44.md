@@ -1,6 +1,15 @@
 # AliSQL 8.0.44 Feature Release Notes
 
-AliSQL 8.0.44 is based on MySQL 8.0.44. This release adds the DuckDB storage engine, native vector indexes, two binlog commit optimizations, and Native Flashback. Most new execution paths are disabled by default.
+AliSQL 8.0.44 is based on MySQL 8.0.44. It includes the DuckDB storage engine, native vector indexes, binlog realtime replication (BRR), two binlog commit optimizations, and Native Flashback. Most new execution paths are disabled by default.
+
+## Release History
+
+| Update | English | 中文 |
+|--------|---------|------|
+| 2026-10-16: BRR, DuckDB snapshot upgrade, AUTO_INCREMENT, background checkpoints, and integration fixes | [Release notes](./changes/changes-in-alisql-8.0.44.2026-10-16-en.md) | [发布说明](./changes/changes-in-alisql-8.0.44.2026-10-16-zh.md) |
+| 2026-06-30: DuckDB enhancements, VIDX, binlog commit optimizations, and Native Flashback | [Release notes](./changes/changes-in-alisql-8.0.44.2026-06-30-en.md) | [发布说明](./changes/changes-in-alisql-8.0.44.2026-06-30-zh.md) |
+
+## Current Feature Overview
 
 | Area | Feature | Default |
 |------|---------|---------|
@@ -8,6 +17,7 @@ AliSQL 8.0.44 is based on MySQL 8.0.44. This release adds the DuckDB storage eng
 | Vector search | Native `VECTOR` type and HNSW vector indexes | `vidx_disabled=ON` |
 | Large transactions | Binlog Cache Free Flush | `OFF` |
 | Binlog durability | Persist Binlog Into Redo V2 | `persist_binlog_to_redo=OFF` |
+| Replication | BRR transmission and early apply for eligible DDL and large transactions | Transmission `OFF`; BRR workers `0` |
 | Historical queries | Native Flashback with `AS OF TIMESTAMP` | Snapshot task `OFF` |
 
 ## DuckDB Storage Engine Enhancements
@@ -18,7 +28,9 @@ AliSQL integrates DuckDB as a native analytical storage engine while preserving 
 
 ### New Features
 
-- Upgraded the embedded DuckDB core to v1.4.4.
+- Upgraded the embedded DuckDB core to snapshot `v1.5.2-dev736` at `8a66223119b16000f3814fa7150cfa7370b63209`.
+- Added optional AUTO_INCREMENT and background automatic checkpoints.
+- Added `JSON_OBJECTAGG`, cross-schema RENAME TABLE, additional temporal SQL compatibility, and DDL/rollback fixes.
 - Added optional SQL normalization for cross-database queries, temporal expressions, additional MySQL functions, and prepared-statement reprepare.
 - Added generated-column conversion, Latin1 character-set support, BLOB/VARCHAR comparison, and improved BINARY, VARBINARY, and BIT default-value handling.
 - Added separate per-query thread controls for user and replication workloads.
@@ -49,8 +61,24 @@ AliSQL integrates DuckDB as a native analytical storage engine while preserving 
 | `duckdb_convert_tables_with_generated_columns` | Global | `ON` | Allow conversion of tables containing generated columns |
 | `duckdb_copy_data_between_tables_use_ins_sel` | Global, Session | `OFF` | Use `INSERT ... SELECT` for DuckDB-to-DuckDB Copy DDL |
 | `ignore_index_hint_error` | Global | `OFF` | Warn instead of failing when an index hint names a missing index |
+| `duckdb_support_auto_increment` | Global | `OFF` | Enable AUTO_INCREMENT support for DuckDB tables |
+| `duckdb_enable_background_checkpoint` | Global | `OFF` | Run automatic checkpoints in a background thread |
+| `duckdb_background_checkpoint_full_interval` | Global | `0` | Concurrent checkpoints between full checkpoints; 0 to `ULLONG_MAX`, zero means always full |
 
 For deployment, compatibility boundaries, and the complete variable list, see the [DuckDB integration guide](./duckdb/duckdb-en.md), [setup guide](./duckdb/how-to-setup-duckdb-node-en.md), and [variables reference](./duckdb/duckdb_variables-en.md).
+
+## Binlog Realtime Replication (BRR)
+
+BRR overlaps source execution, network transfer, and replica work. It can transmit eligible large transactions before source commit and optionally apply supported DDL and transactions on dedicated replica workers. Final commit/rollback follows the source outcome and GTID dependencies.
+
+- Source and receiver switches default to `OFF`; `binlog_realtime_apply_workers` defaults to `0`.
+- The active source-side large-transaction threshold, `binlog_realtime_replica_long_transaction_limit_size`, defaults to 512 GiB. The DDL time threshold defaults to 1000 ms.
+- Both nodes must negotiate the same BRR protocol on the default channel. Early apply requires GTIDs, parallel workers, `replica_preserve_commit_order=OFF`, and the documented channel restrictions.
+- Large-transaction transmission uses Free Flush cache files, while the actual Free Flush commit optimization retains its transaction eligibility checks. Active DuckDB mode selects a dedicated commit path.
+- BRR early apply and DuckDB Multi-Trx Batch have conflicting ordinary-worker requirements; their example configurations must not be combined unchanged.
+- This update fixes BRR metadata-event leaks, XA recovery without a current THD, and normal OPTIMIZE binlogging after partial failures.
+
+See the [English BRR guide](./binlog-realtime-replication/binlog-realtime-replication-en.md) or [中文指南](./binlog-realtime-replication/binlog-realtime-replication-zh.md) for configuration, parameter defaults, monitoring, limitations, and shutdown procedures.
 
 ## Native Vector Index (VIDX)
 
@@ -113,7 +141,7 @@ See the [Vector Index guide](./vidx/vidx_readme.md) for architecture and tuning 
 
 Large transactions normally spill their transaction binlog cache to a temporary file and then copy that data into the binlog again during commit. Binlog Cache Free Flush reserves the required binlog header space in that temporary file, finalizes it, and renames it as the next binlog file. This removes the second large copy and reduces commit-time I/O amplification.
 
-Free Flush supports large InnoDB transactions when the registered 2PC participants are the binlog and InnoDB. The current DuckDB integration registers another 2PC participant, so builds that include DuckDB use normal binlog group commit. Large-transaction optimization for DuckDB will be added in the next release.
+Free Flush targets eligible InnoDB transactions while DuckDB mode is inactive. The BRR integration removes the earlier extra-2PC-engine registration guard, so including DuckDB in a build does not by itself force fallback. Active DuckDB mode instead selects a dedicated commit path before the Free Flush checks. See the [Free Flush guide](./binlog-cache-free-flush/binlog-cache-free-flush-en.md) for current eligibility and recovery considerations.
 
 > **RDS MySQL:** Supported versions and the RDS `loose_binlog_cache_free_flush*` parameters are listed in the official [English](https://help.aliyun.com/en/rds/apsaradb-rds-for-mysql/binlog-cache-free-flush) and [Chinese](https://help.aliyun.com/zh/rds/apsaradb-rds-for-mysql/binlog-cache-free-flush) documentation. The RDS names and ranges do not apply to the source variables below.
 
@@ -127,9 +155,9 @@ SET GLOBAL binlog_cache_free_flush = ON;
 | `binlog_cache_free_flush` | Global, dynamic | `OFF` | `ON`, `OFF` | Enables the optimized commit path |
 | `binlog_cache_free_flush_limit_size` | Global, dynamic | 256 MiB | 10 MiB to `ULLONG_MAX` bytes | Minimum transaction cache size for Free Flush |
 
-The server uses Free Flush only when all safety checks pass. The transaction cache must exceed the configured limit, have spilled to a finalized unencrypted temporary file, contain no statement-cache events or incidents, and must not modify `mysql.gtid_executed`. The binlog must be open, and InnoDB must be the only registered non-binlog 2PC engine. If any condition is not met, the transaction uses normal binlog group commit.
+Free Flush requires the transaction cache to exceed the configured limit, have spilled to a finalized unencrypted temporary file with reserved header space, contain no statement-cache events or incidents, and not modify `mysql.gtid_executed`. The binlog must be open. Active DuckDB mode selects its dedicated commit path before these checks; otherwise transactions rejected by Free Flush continue through the configured normal/Binlog-in-Redo commit paths.
 
-Binlog encryption also forces normal group commit because the cache file and final binlog use different keys. See the Free Flush guide for the crash-recovery reason behind the 2PC restriction.
+Binlog encryption excludes Free Flush because the cache file and final binlog use different keys. The earlier engine-registration guard is no longer present, so crash-recovery qualification must cover the actual engine combination.
 
 For the full mechanism, eligibility checks, build boundary, and open-source/RDS differences, see the [Binlog Cache Free Flush guide](./binlog-cache-free-flush/binlog-cache-free-flush-en.md) or its [Chinese version](./binlog-cache-free-flush/binlog-cache-free-flush-zh.md).
 
@@ -252,11 +280,8 @@ For complete enablement rules, recovery workflow, procedures, and open-source/RD
 - All major new execution paths are disabled by default except the Native Flashback query gate; snapshot generation and undo retention remain disabled by default.
 - Validate DuckDB SQL compatibility and vector recall/performance with production-shaped workloads before migration.
 - Size `binlog_buffer_size`, undo retention, and HNSW cache limits against peak concurrency rather than average load.
-- Keep the normal binlog path available. Binlog in Redo falls back when a transaction fails its checks. Free Flush currently requires InnoDB to be the only non-binlog 2PC engine; large-transaction optimization for DuckDB will be added in the next release.
+- Keep the normal binlog path available. Binlog in Redo and Free Flush retain their respective transaction checks; active DuckDB mode uses its dedicated commit path. Qualify Free Flush crash recovery with the actual engine combination.
 
-Release history:
+Earlier baseline: [2025-12-31 DuckDB release](./changes/changes-in-alisql-8.0.44.2025-12-31.md).
 
-- 2026-06-30 complete feature release: [English](./changes/changes-in-alisql-8.0.44.2026-06-30-en.md) / [中文](./changes/changes-in-alisql-8.0.44.2026-06-30-zh.md)
-- [2025-12-31 DuckDB baseline](./changes/changes-in-alisql-8.0.44.2025-12-31.md)
-
-Each feature guide links to the corresponding RDS MySQL documentation and notes differences from the source build.
+Where applicable, feature guides link to RDS MySQL documentation and describe differences from the source build.

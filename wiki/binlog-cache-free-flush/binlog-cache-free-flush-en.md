@@ -8,15 +8,15 @@ The configuration below applies to self-managed AliSQL 8.0.44. RDS MySQL uses di
 
 ## Support in This Release
 
-Free Flush supports large InnoDB transactions in the binlog-plus-InnoDB 2PC topology. The current DuckDB integration registers an additional 2PC participant, so AliSQL builds that include DuckDB use normal binlog group commit, even if `duckdb_mode=NONE`. Large-transaction optimization for DuckDB will be added in the next release.
+Free Flush targets eligible large InnoDB transactions while DuckDB mode is inactive. The BRR integration removes the earlier check that rejected Free Flush solely because another non-binlog 2PC engine was registered. A build containing DuckDB can therefore enter Free Flush with `duckdb_mode=NONE`; engine registration alone no longer guarantees fallback.
 
-The restriction comes from crash recovery. Free Flush currently supports the binlog plus one non-binlog 2PC storage engine. When the binlog is enabled, a build with DuckDB registers an additional 2PC `prepare` callback regardless of `duckdb_mode`.
+When DuckDB mode is enabled, the binlog commit entry selects the dedicated DuckDB commit path before checking Free Flush eligibility. Enabling `binlog_cache_free_flush` does not turn that path into a Free Flush commit.
 
-Free Flush closes the old binlog before renaming the temporary file. If a crash occurs between those steps, the current recovery code cannot resolve the prepared transaction when more than one non-binlog 2PC engine is registered. Using normal group commit in that configuration avoids the ambiguous recovery state and does not change transaction correctness.
+Free Flush closes the old binlog before renaming the cache file. Crash/restart qualification must cover that interval with the actual registered engine combination; the removed engine-count check must not be treated as a remaining recovery safeguard.
 
 ## Configuration
 
-Enable Free Flush only when the binlog and InnoDB are the server's registered 2PC participants:
+Configure the cache infrastructure and the InnoDB transaction size threshold:
 
 ```sql
 SET GLOBAL binlog_cache_free_flush_limit_size = 268435456;
@@ -37,9 +37,9 @@ In an eligible build, a transaction enters Free Flush only when every check pass
 - Binlog encryption and cache-file encryption are disabled.
 - The binlog is open.
 - The transaction did not modify `mysql.gtid_executed`.
-- No 2PC storage engine other than InnoDB is registered.
+- The commit entry has not selected the dedicated DuckDB-mode path.
 
-If any check fails, that transaction uses normal binlog group commit and can still commit successfully.
+Transactions that do not enter Free Flush continue through the configured commit paths: the dedicated DuckDB path when selected, or normal/Binlog-in-Redo commit otherwise.
 
 ## Variables
 
@@ -52,8 +52,14 @@ The open-source lower bound is 10 MiB. Do not copy the RDS product range or `loo
 
 ## Operational Guidance
 
+### Use with Binlog Realtime Replication
+
+[BRR large-transaction transmission](../binlog-realtime-replication/binlog-realtime-replication-en.md) also uses the named cache files and reserved header space enabled by `binlog_cache_free_flush=ON`. BRR therefore requires this source-side setting even when a transaction does not meet the Free Flush commit checks. Enabling the cache infrastructure for BRR does not imply that the rename-based commit path is eligible.
+
+### Commit-Path Checks
+
 - Keep normal group commit available as the fallback path.
-- Confirm that InnoDB is the only registered non-binlog 2PC engine.
+- Check active DuckDB mode; engine registration alone does not exclude Free Flush in this release.
 - Benchmark transactions above the threshold and confirm actual I/O behavior; variable state alone is not evidence that Free Flush ran.
 - Binlog encryption always forces fallback because the cache temporary file and final binlog use different file keys.
 - Keep crash-injection and restart recovery tests in the qualification suite for any build that enables the optimized path.
