@@ -8,15 +8,15 @@ Binlog Cache Free Flush 是大事务提交优化。事务 Binlog Cache 溢出到
 
 ## 本版本支持范围
 
-本版本已经支持 InnoDB 大事务的 Free Flush，适用于 Binlog 加 InnoDB 的 2PC 组合。当前 DuckDB 集成会注册额外的 2PC 参与者，因此包含 DuckDB 的 AliSQL 使用普通 Binlog Group Commit，即使 `duckdb_mode=NONE` 也是如此。下一版本将支持 DuckDB 场景的大事务优化。
+Free Flush 面向 DuckDB Mode 未开启时符合条件的 InnoDB 大事务。BRR 集成移除了此前仅因注册了额外非 Binlog 2PC 引擎就拒绝 Free Flush 的检查。因此，包含 DuckDB 的构建在 `duckdb_mode=NONE` 时仍可能进入 Free Flush，不能再依据引擎注册情况判断一定回退。
 
-这个限制来自崩溃恢复。Free Flush 当前支持 Binlog 加一个非 Binlog 2PC 存储引擎。构建中包含 DuckDB 时，只要开启 Binlog，DuckDB 就会额外注册一个 2PC `prepare` 回调，与 `duckdb_mode` 的取值无关。
+开启 DuckDB Mode 后，Binlog 提交入口会先选择专用 DuckDB 提交路径，不再进入后面的 Free Flush 准入检查；开启 `binlog_cache_free_flush` 不会将该路径变成 Free Flush 提交。
 
-Free Flush 会先关闭旧 Binlog，再把临时文件重命名为新 Binlog。如果在两步之间发生崩溃，并且注册了多个非 Binlog 2PC 引擎，当前恢复代码无法安全处理遗留的 Prepared Transaction。在这种配置下使用普通 Group Commit 可以避开该恢复状态，事务正确性不受影响。
+Free Flush 会先关闭旧 Binlog，再把 Cache 文件重命名为新 Binlog。崩溃重启验证需要覆盖这两步之间的窗口及实际注册的引擎组合，不能将已移除的引擎数量检查当作仍然存在的恢复保护。
 
 ## 配置
 
-只有服务端注册的 2PC 参与者为 Binlog 和 InnoDB 时，才开启 Free Flush：
+配置 Cache 文件基础设施及 InnoDB 事务大小阈值：
 
 ```sql
 SET GLOBAL binlog_cache_free_flush_limit_size = 268435456;
@@ -37,9 +37,9 @@ SET GLOBAL binlog_cache_free_flush = ON;
 - Binlog 加密和 Cache 文件加密均未开启。
 - Binlog 处于打开状态。
 - 事务未修改 `mysql.gtid_executed`。
-- 除 InnoDB 外，没有注册其他 2PC 存储引擎。
+- 提交入口没有选择专用的 DuckDB Mode 路径。
 
-任一检查不满足时，该事务会使用普通 Binlog Group Commit，并且仍可正常提交。
+未进入 Free Flush 的事务继续使用配置决定的提交路径：已选中的专用 DuckDB 路径，或者普通 Group Commit/Binlog in Redo 路径。
 
 ## 参数
 
@@ -52,8 +52,14 @@ SET GLOBAL binlog_cache_free_flush = ON;
 
 ## 运维建议
 
+### 与 Binlog 实时复制配合
+
+[BRR 大事务提前传输](../binlog-realtime-replication/binlog-realtime-replication-zh.md)也需要 `binlog_cache_free_flush=ON` 提供的具名 Cache 文件和预留头部空间。因此，即使事务不满足 Free Flush 提交检查，BRR 仍需要在主库开启这一设置。为 BRR 启用 Cache 文件基础设施，不代表提交时满足重命名优化路径的准入条件。
+
+### 提交路径检查
+
 - 保留普通 Group Commit 作为回退路径。
-- 确认 InnoDB 是唯一注册的非 Binlog 2PC 引擎。
+- 检查当前 DuckDB Mode；本版本不能只依据引擎注册情况排除 Free Flush。
 - 使用超过阈值的事务压测并观察实际 I/O；仅检查参数状态不能证明 Free Flush 已执行。
 - Binlog 加密一定会触发回退，因为 Cache 临时文件与最终 Binlog 使用不同的文件密钥。
 - 任何启用优化路径的构建，都应在准入测试中保留崩溃注入和重启恢复测试。

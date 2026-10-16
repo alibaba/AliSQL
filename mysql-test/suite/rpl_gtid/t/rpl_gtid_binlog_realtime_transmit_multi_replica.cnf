@@ -1,0 +1,37 @@
+!include ../my.cnf
+
+# Set innodb-write-io-threads and innodb-read-io-threads to 2,
+# instead of the default value 4, so that the aio-max-nr limit
+# is not exceeded due to the increased number of concurrent mysqld
+# instances when MTR runs rpl tests with parallel 4 or more.
+
+[mysqld.1]
+binlog_cache_free_flush=ON
+binlog_realtime_replica_long_transaction_limit_size=10485760
+binlog_realtime_transmit_max_send_size=10000000
+binlog_realtime_transmit_source_enabled=ON
+
+[mysqld.2]
+relay_log_purge=OFF
+binlog_realtime_transmit_replica_enabled=ON
+relay-log=slave-relay-bin
+
+[mysqld.3]
+relay_log_purge=OFF
+binlog_realtime_transmit_replica_enabled=ON
+relay-log=slave-relay-bin
+
+[mysqld.4]
+relay_log_purge=OFF
+binlog_realtime_transmit_replica_enabled=ON
+relay-log=slave-relay-bin
+
+[ENV]
+SERVER_MYPORT_1=                @mysqld.1.port
+SERVER_MYSOCK_1=                @mysqld.1.socket
+SERVER_MYPORT_2=                @mysqld.2.port
+SERVER_MYSOCK_2=                @mysqld.2.socket
+SERVER_MYPORT_3=                @mysqld.3.port
+SERVER_MYSOCK_3=                @mysqld.3.socket
+SERVER_MYPORT_4=                @mysqld.4.port
+SERVER_MYSOCK_4=                @mysqld.4.socket

@@ -36,8 +36,21 @@ public:
 	virtual unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) = 0;
 
 	virtual void AddRowGroup(RowGroupPointer &&row_group_pointer, unique_ptr<RowGroupWriter> writer);
-	virtual CheckpointType GetCheckpointType() const = 0;
+	virtual CheckpointOptions GetCheckpointOptions() const = 0;
+	virtual void FlushPartialBlocks() = 0;
 	virtual MetadataManager &GetMetadataManager() = 0;
+	optional_idx GetRowGroupCount() {
+		return row_group_count;
+	}
+	void SetRowGroupCount(optional_idx row_group_count_p) {
+		row_group_count = row_group_count_p;
+	}
+	bool GetRebuildIndexes() const {
+		return rebuild_indexes;
+	}
+	void SetRebuildIndexes() {
+		rebuild_indexes = true;
+	}
 
 	DatabaseInstance &GetDatabase();
 	unique_ptr<TaskExecutor> CreateTaskExecutor();
@@ -47,6 +60,9 @@ protected:
 	optional_ptr<ClientContext> context;
 	//! Pointers to the start of each row group.
 	vector<RowGroupPointer> row_group_pointers;
+
+	optional_idx row_group_count;
+	bool rebuild_indexes = false;
 };
 
 class SingleFileTableDataWriter : public TableDataWriter {
@@ -60,7 +76,8 @@ public:
 	void FinalizeTable(const TableStatistics &global_stats, DataTableInfo &info, RowGroupCollection &collection,
 	                   Serializer &serializer) override;
 	unique_ptr<RowGroupWriter> GetRowGroupWriter(RowGroup &row_group) override;
-	CheckpointType GetCheckpointType() const override;
+	CheckpointOptions GetCheckpointOptions() const override;
+	void FlushPartialBlocks() override;
 	MetadataManager &GetMetadataManager() override;
 
 private:

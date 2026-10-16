@@ -4062,11 +4062,14 @@ Query_log_event::Query_log_event(THD *thd_arg, const char *query_arg,
 
     my_xid xid = trn_ctx->xid_state()->get_xid()->get_my_xid();
 
-    /*
-      xid uniqueness: the last time used not equal to the current one
-    */
-    assert(thd->debug_binlog_xid_last.is_null() ||
-           thd->debug_binlog_xid_last.get_my_xid() != xid);
+    /*  For SA, we keep the same xid as Query_log_event of DDL. */
+    if (!thd->get_rds_context().get_brr_trx()) {
+      /*
+       xid uniqueness: the last time used not equal to the current one
+      */
+      assert(thd->debug_binlog_xid_last.is_null() ||
+             thd->debug_binlog_xid_last.get_my_xid() != xid);
+    }
 
     ddl_xid = xid;
 #ifndef NDEBUG
@@ -4598,6 +4601,17 @@ int Query_log_event::do_apply_event(Relay_log_info const *rli,
     const_cast<Relay_log_info *>(rli)->clear_flag(Relay_log_info::IN_STMT);
   } else {
     const_cast<Relay_log_info *>(rli)->slave_close_thread_tables(thd);
+  }
+
+  if (const_cast<Relay_log_info *>(rli)->get_brr_cache()) {
+    /*
+      Realtime apply only support ROW format, so there are not temporary tables.
+      But because of REQUIRE_ROW_FORMAT default value is 0, we will enter the
+      follwing attach_temp_tables_worker which will cause crash, because we
+      don't set rli->current_mts_submode.
+    */
+    assert(!thd->temporary_tables);
+    set_skip_temp_tables_handling_by_worker();
   }
 
   {
@@ -9721,6 +9735,14 @@ int Rows_log_event::do_apply_event(Relay_log_info const *rli) {
   TABLE *table = nullptr;
   int error = 0;
 
+  DBUG_EXECUTE_IF("brr_wait_apply", {
+    if (thd->rli_slave && thd->rli_slave->get_brr_cache()) {
+      const char act[] = "now WAIT_FOR apply_continue";
+      assert(opt_debug_sync_timeout > 0);
+      assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(act)));
+    }
+  };);
+
   /*
     'thd' has been set by exec_relay_log_event(), just before calling
     do_apply_event(). We still check here to prevent future coding
@@ -9752,6 +9774,12 @@ int Rows_log_event::do_apply_event(Relay_log_info const *rli) {
       if (gtid_pre_statement_post_implicit_commit_checks(thd))
         state = GTID_STATEMENT_CANCEL;
     }
+
+    DBUG_EXECUTE_IF("brr_worker_abort_apply", {
+      if (thd->rli_slave && thd->rli_slave->get_brr_cache()) {
+        thd->killed = THD::KILL_QUERY;
+      }
+    });
 
     if (state == GTID_STATEMENT_CANCEL) {
       uint mysql_error = thd->get_stmt_da()->mysql_errno();
@@ -13005,6 +13033,81 @@ bool Empty_log_event::write_data_body(Basic_ostream *ostream) {
   if (data_len > 0 && ostream->write(empty_buffer, data_len)) return true;
 
   return false;
+}
+#endif
+
+#ifdef MYSQL_SERVER
+Brr_gtid_executed_log_event::Brr_gtid_executed_log_event(THD *thd,
+                                                         bool get_gtid_executed)
+    : binary_log::Ignorable_event(), Ignorable_log_event(thd) {
+  if (get_gtid_executed) {
+    global_sid_lock->wrlock();
+
+    const Gtid_set *gtid_set = gtid_state->get_executed_gtids();
+    m_data_len = gtid_set->get_encoded_length();
+    m_data_buf = new uchar[m_data_len];
+    if (m_data_buf) gtid_set->encode(m_data_buf);
+
+    global_sid_lock->unlock();
+  }
+}
+
+bool Brr_gtid_executed_log_event::write_gtid_executed_header(
+    Basic_ostream *ostream) {
+  uchar header[LOG_EVENT_HEADER_LEN];
+  int4store(header, 0);
+  header[EVENT_TYPE_OFFSET] = binary_log::IGNORABLE_LOG_EVENT;
+  int4store(header + SERVER_ID_OFFSET, server_id);
+  int4store(header + LOG_POS_OFFSET, 0);
+  /*
+    Gtid_execute_log_event is only used on repliaca, we add
+    LOG_EVENT_RELAY_LOG_F to avoid slave lag spike.
+  */
+  int2store(header + FLAGS_OFFSET,
+            (LOG_EVENT_IGNORABLE_F | LOG_EVENT_RDS_F | LOG_EVENT_RELAY_LOG_F));
+  int4store(header + EVENT_LEN_OFFSET, m_data_len + LOG_EVENT_HEADER_LEN);
+  return ostream->write(header, LOG_EVENT_HEADER_LEN);
+}
+
+bool Brr_gtid_executed_log_event::write_buffer(const uchar *buf, size_t buf_len,
+                                               Basic_ostream *ostream) {
+  assert(buf && buf_len && ostream);
+  m_data_len = buf_len;
+  if (write_gtid_executed_header(ostream) || ostream->write(buf, buf_len))
+    return true;
+  return false;
+}
+
+bool Brr_gtid_executed_log_event::write(Basic_ostream *ostream) {
+  assert(ostream);
+  if (!m_data_buf || write_gtid_executed_header(ostream) ||
+      ostream->write(m_data_buf, m_data_len))
+    return true;
+
+  return false;
+}
+
+/* Pack info for its unrecognized ignorable event */
+int Brr_gtid_executed_log_event::pack_info(Protocol *protocol) {
+  char buf[256];
+  size_t bytes;
+  bytes = snprintf(buf, sizeof(buf),
+                   "# RDS binlog realtime replica Brr_gtid_executed_event");
+  protocol->store_string(buf, bytes, &my_charset_bin);
+  return 0;
+}
+#endif
+
+#ifndef MYSQL_SERVER
+/* Print for its unrecognized ignorable event */
+void Brr_gtid_executed_log_event::print(
+    FILE *, PRINT_EVENT_INFO *print_event_info) const {
+  if (print_event_info->short_form) return;
+
+  print_header(&print_event_info->head_cache, print_event_info, false);
+  my_b_printf(&print_event_info->head_cache, "\tBrr_gtid_executed_event\n");
+  my_b_printf(&print_event_info->head_cache,
+              "# RDS binlog realtime replica gtid_executed event\n");
 }
 #endif
 

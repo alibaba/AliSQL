@@ -27,10 +27,13 @@ class ColumnDataCollection;
 class PhysicalAppender : public BaseAppender {
 public:
 	DUCKDB_API PhysicalAppender(Connection &con, const string &database_name, const string &schema_name,
-	                            const string &table_name, AppenderType appender_type);
+	                            const string &table_name, AppenderType appender_type,
+	                            const idx_t flush_memory_threshold = DConstants::INVALID_INDEX);
 	DUCKDB_API PhysicalAppender(Connection &con, const string &schema_name, const string &table_name,
-	                            AppenderType appender_type);
-	DUCKDB_API PhysicalAppender(Connection &con, const string &table_name, AppenderType appender_type);
+	                            AppenderType appender_type,
+	                            const idx_t flush_memory_threshold = DConstants::INVALID_INDEX);
+	DUCKDB_API PhysicalAppender(Connection &con, const string &table_name, AppenderType appender_type,
+	                            const idx_t flush_memory_threshold = DConstants::INVALID_INDEX);
 	DUCKDB_API ~PhysicalAppender() override;
 
 public:

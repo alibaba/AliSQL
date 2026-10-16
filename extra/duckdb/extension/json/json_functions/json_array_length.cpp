@@ -53,6 +53,12 @@ ScalarFunctionSet JSONFunctions::GetArrayLengthFunction() {
 	ScalarFunctionSet set("json_array_length");
 	GetArrayLengthFunctionsInternal(set, LogicalType::VARCHAR);
 	GetArrayLengthFunctionsInternal(set, LogicalType::JSON());
+	for (auto &func : set.functions) {
+		if (func.arguments.size() == 1 && func.arguments[0].IsJSONType()) {
+			continue;
+		}
+		func.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
+	}
 	return set;
 }
 
@@ -70,6 +76,9 @@ ScalarFunctionSet JSONFunctions::GetLengthFunction() {
 	ScalarFunctionSet set("json_length");
 	GetLengthFunctionsInternal(set, LogicalType::VARCHAR);
 	GetLengthFunctionsInternal(set, LogicalType::JSON());
+	for (auto &func : set.functions) {
+		func.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
+	}
 	return set;
 }
 

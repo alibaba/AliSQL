@@ -30,14 +30,8 @@
 --source include/restart_mysqld.inc
 SET TIME_ZONE = system;
 
---let $_TMP_OUT_o= $MYSQLTEST_VARDIR/tmp/_t_os_time_o
---let $_TMP_OUT_n= $MYSQLTEST_VARDIR/tmp/_t_os_time_n
-
---exec date +"%Y-%m-%d %H:%M:%S" | tr -d '\n' > $_TMP_OUT_o
---exec date -d "+1 minutes" +"%Y-%m-%d %H:%M:%S" | tr -d '\n' > $_TMP_OUT_n
-
---let $os_time_o = `SELECT LOAD_FILE('$_TMP_OUT_o')`
---let $os_time_n = `SELECT LOAD_FILE('$_TMP_OUT_n')`
+--let $os_time_o = `SELECT DATE_FORMAT(NOW(), '%Y-%m-%d %H:%i:%s')`
+--let $os_time_n = `SELECT DATE_FORMAT(NOW() + INTERVAL 1 MINUTE, '%Y-%m-%d %H:%i:%s')`
 
 SELECT sleep(1);
 
@@ -68,8 +62,6 @@ INSERT INTO t VALUES (now());
 --die "[SELECT count]" != "1"
 }
 
---remove_file $_TMP_OUT_o
---remove_file $_TMP_OUT_n
 DROP TABLE t;
 
 

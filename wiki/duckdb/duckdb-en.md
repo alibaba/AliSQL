@@ -60,7 +60,9 @@ For production topology and initialization details, see [How to Setup a DuckDB N
 
 ## AliSQL 8.0.44 Highlights
 
-- DuckDB core upgraded to v1.4.4.
+- DuckDB core upgraded to the pinned development snapshot `v1.5.2-dev736` (`8a66223119b16000f3814fa7150cfa7370b63209`).
+- Added optional AUTO_INCREMENT and background automatic checkpoints; both default to OFF.
+- Added `JSON_OBJECTAGG`, cross-schema RENAME TABLE, and fixes for quoting, NOT NULL alterations, generated-column dependencies, startup conversion, and rollback.
 - Optional SQL normalization rewrites additional MySQL syntax and functions for DuckDB, including cross-database queries and prepared-statement reprepare.
 - Added generated-column conversion, Latin1 support, BIT/default-value compatibility, and BLOB/VARCHAR comparison.
 - Added per-query thread limits for user and replication workloads, plus an optional high-precision calculation mode.
@@ -68,6 +70,30 @@ For production topology and initialization details, see [How to Setup a DuckDB N
 - Improved batch replication, GTID handling, idempotent replay, crash rollback, and orphan-table cleanup.
 
 See the [AliSQL 8.0.44 release notes](../changes-in-alisql-8.0.44.md) and [DuckDB variables reference](./duckdb_variables-en.md) for the complete list and controls.
+
+### AUTO_INCREMENT and Background Checkpoints
+
+Enable AUTO_INCREMENT before creating or converting tables that should retain this attribute:
+
+```sql
+SET GLOBAL duckdb_support_auto_increment = ON;
+CREATE TABLE analytics_events (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    event_name VARCHAR(64)
+) ENGINE=DuckDB;
+INSERT INTO analytics_events (event_name) VALUES ('created');
+```
+
+The default `OFF` preserves the earlier behavior of removing the AUTO_INCREMENT attribute during DuckDB field conversion. Changing the variable does not add that attribute back to an existing table. MySQL PRIMARY/UNIQUE metadata still does not imply physical uniqueness enforcement in DuckDB.
+
+Background automatic checkpoints can be enabled independently:
+
+```sql
+SET GLOBAL duckdb_enable_background_checkpoint = ON;
+SET GLOBAL duckdb_background_checkpoint_full_interval = 0;
+```
+
+The interval counts concurrent checkpoints between full checkpoints; zero means always full. `duckdb_checkpoint_threshold` continues to control the WAL-size trigger. See the [2026-10-16 notes](../changes/changes-in-alisql-8.0.44.2026-10-16-en.md) for this update's scope.
 
 
 ## Architecture
@@ -124,6 +150,7 @@ AliSQL can run a DuckDB node as a binlog replica. DuckDB does not expose MySQL's
 - DuckDB favors large transactions; frequent small transactions can increase replication lag
 - Batch replay groups small transactions to improve replication throughput and reduce commit overhead
 - Multi-Trx Batch requires `replica_parallel_workers=0`, and `duckdb_multi_trx_in_batch` can be changed only while replication is stopped
+- [BRR early apply](../binlog-realtime-replication/binlog-realtime-replication-en.md) requires parallel replication workers, so its configuration cannot be combined unchanged with Multi-Trx Batch
 - The resulting replay rate and lag depend on row shape, transaction size, hardware, and source concurrency
 - Batch writes are also used for `INSERT` and, when the data-import restrictions permit, `DELETE` on a DuckDB primary
 ![Batch commit](./pic/batch_commit.png)

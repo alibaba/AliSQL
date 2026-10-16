@@ -1,0 +1,536 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+include/install_semisync.inc
+FLUSH STATUS;
+[connection master]
+SET GLOBAL binlog_realtime_transmit_source_enabled = ON;
+CALL mtr.add_suppression("\\[ERROR\\] .*MY-\\d+.* \\[Repl\\] Brr Worker failed executing transaction .*");
+#
+# 0. Prepare data.
+########################################################
+#
+[connection slave]
+include/stop_slave.inc
+SET GLOBAL binlog_realtime_transmit_replica_enabled = ON;
+include/start_slave.inc
+include/assert_grep.inc [Select brr init message in source error log.]
+include/assert_grep.inc [Select brr init message in replica error log.]
+[connection master]
+CREATE DATABASE rpl_test;
+CREATE TABLE rpl_test.t1 (s LONGTEXT);
+CREATE TABLE rpl_test.t2 (s LONGTEXT);
+#
+# 1. Test realtime transmit for transaction use normal binlog flush.
+########################################################
+#
+[connection master]
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+[connection slave]
+# Wait for replica_brr_cache_count, expect 1
+# Check tmp files in binlog cache tmp file dir.
+RL_rds_relay_log_cache_0_1
+include/rpl_sync.inc
+[connection master]
+COMMIT;
+[connection slave]
+include/rpl_sync.inc
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+4
+include/show_relaylog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+slave-relay-bin.000005	#	Previous_gtids	#	#	Gtid_set
+slave-relay-bin.000005	#	Format_desc	#	#	SERVER_VERSION, BINLOG_VERSION
+slave-relay-bin.000005	#	Ignorable	#	#	# Unrecognized ignorable event
+slave-relay-bin.000005	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= 'Gtid_set'
+slave-relay-bin.000005	#	Query	#	#	BEGIN
+slave-relay-bin.000005	#	Table_map	#	#	table_id: # (rpl_test.t2)
+slave-relay-bin.000005	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000005	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000005	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000005	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+slave-relay-bin.000005	#	Xid	#	#	COMMIT /* XID */
+slave-relay-bin.000005	#	Rotate	#	#	slave-relay-bin.000006;pos=POS
+[connection master]
+SHOW STATUS LIKE "source_brr%";
+Variable_name	Value
+source_brr_exceed_max_send_size_count	0
+source_brr_reader_count	0
+source_brr_sender_count	1
+source_brr_trx_count	0
+# Check the message in error log.
+include/assert_grep.inc [Select brr trx init message in source error log.]
+include/assert_grep.inc [Select brr reader init message in source error log.]
+include/assert_grep.inc [Select brr trx removed message in source error log.]
+include/assert_grep.inc [Select brr reader removed message in source error log.]
+include/assert_grep.inc [Select brr cache open message in replica error log.]
+include/assert_grep.inc [Select brr cache finished message in source error log.]
+[connection slave]
+include/stop_slave.inc
+[connection master]
+include/stop_dump_threads.inc
+# Wait for source_brr_sender_count, expect 0
+include/assert_grep.inc [Select brr sender finished.]
+include/assert_grep.inc [Select brr IO thread finished.]
+[connection slave]
+include/start_slave.inc
+#
+# 2. Test realtime transmit for transaction use binlog cache free flush.
+########################################################
+#
+[connection master]
+SET GLOBAL binlog_cache_free_flush_limit_size = 10 * 1024 * 1024;
+[connection master]
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+[connection slave]
+# Wait for replica_brr_cache_count, expect 1
+# Check tmp files in binlog cache tmp file dir.
+RL_rds_relay_log_cache_1_2
+include/rpl_sync.inc
+[connection master]
+COMMIT;
+[connection slave]
+include/rpl_sync.inc
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+8
+include/show_relaylog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+slave-relay-bin.000010	#	Previous_gtids	#	#	Gtid_set
+slave-relay-bin.000010	#	Format_desc	#	#	SERVER_VERSION, BINLOG_VERSION
+slave-relay-bin.000010	#	Ignorable	#	#	# Unrecognized ignorable event
+slave-relay-bin.000010	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= 'Gtid_set'
+slave-relay-bin.000010	#	Query	#	#	BEGIN
+slave-relay-bin.000010	#	Table_map	#	#	table_id: # (rpl_test.t2)
+slave-relay-bin.000010	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000010	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000010	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000010	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+slave-relay-bin.000010	#	Xid	#	#	COMMIT /* XID */
+slave-relay-bin.000010	#	Rotate	#	#	slave-relay-bin.000011;pos=POS
+[connection master]
+SHOW STATUS LIKE "source_brr%";
+Variable_name	Value
+source_brr_exceed_max_send_size_count	0
+source_brr_reader_count	0
+source_brr_sender_count	1
+source_brr_trx_count	0
+#
+# 3. Test rollback realtime transmit for transaction.
+########################################################
+#
+# 3.1 Test rollback the whole transaction.
+[connection master]
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+[connection slave]
+# Wait for replica_brr_cache_count, expect 1
+# Check tmp files in binlog cache tmp file dir.
+RL_rds_relay_log_cache_1_3
+include/rpl_sync.inc
+[connection master]
+ROLLBACK;
+# Wait for source_brr_reader_count, expect 0
+SHOW STATUS LIKE "source_brr%";
+Variable_name	Value
+source_brr_exceed_max_send_size_count	0
+source_brr_reader_count	0
+source_brr_sender_count	1
+source_brr_trx_count	0
+[connection slave]
+# Wait for replica_brr_cache_count, expect 0
+# Check tmp files in binlog cache tmp file dir.
+[connection slave]
+include/rpl_sync.inc
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+8
+SHOW STATUS LIKE "replica_brr_cache_count";
+Variable_name	Value
+replica_brr_cache_count	0
+# 3.2 Test rollback to savepoint.
+[connection master]
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+[connection slave]
+# Wait for replica_brr_cache_count, expect 1
+# Check tmp files in binlog cache tmp file dir.
+RL_rds_relay_log_cache_1_4
+include/rpl_sync.inc
+[connection master]
+SAVEPOINT identifier;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+ROLLBACK TO identifier;
+[connection slave]
+# Wait for replica_brr_cache_count, expect 0
+# Check tmp files in binlog cache tmp file dir.
+[connection master]
+# Wait for source_brr_reader_count, expect 0
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+SHOW STATUS LIKE 'source_brr%';
+Variable_name	Value
+source_brr_exceed_max_send_size_count	0
+source_brr_reader_count	0
+source_brr_sender_count	1
+source_brr_trx_count	0
+COMMIT;
+[connection slave]
+include/rpl_sync.inc
+include/show_relaylog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+slave-relay-bin.000015	#	Previous_gtids	#	#	Gtid_set
+slave-relay-bin.000015	#	Rotate	#	#	master-bin.000004;pos=POS
+slave-relay-bin.000015	#	Format_desc	#	#	SERVER_VERSION, BINLOG_VERSION
+slave-relay-bin.000015	#	Rotate	#	#	master-bin.000004;pos=POS
+slave-relay-bin.000015	#	Ignorable	#	#	# Unrecognized ignorable event
+slave-relay-bin.000015	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= 'Gtid_set'
+slave-relay-bin.000015	#	Query	#	#	BEGIN
+slave-relay-bin.000015	#	Table_map	#	#	table_id: # (rpl_test.t2)
+slave-relay-bin.000015	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000015	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000015	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000015	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+slave-relay-bin.000015	#	Query	#	#	SAVEPOINT `identifier`
+slave-relay-bin.000015	#	Table_map	#	#	table_id: # (rpl_test.t2)
+slave-relay-bin.000015	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000015	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000015	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000015	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+slave-relay-bin.000015	#	Xid	#	#	COMMIT /* XID */
+slave-relay-bin.000015	#	Rotate	#	#	slave-relay-bin.000016;pos=POS
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+16
+#
+# 4. Test turn off binlog_realtime_transmit_source_enabled in middle of transaction.
+########################################################
+#
+# 4.1 Test turn off binlog_realtime_transmit_source_enabled after open brr_trx.
+[connection master]
+[connection master]
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+[connection slave]
+# Wait for replica_brr_cache_count, expect 1
+# Check tmp files in binlog cache tmp file dir.
+RL_rds_relay_log_cache_1_5
+include/rpl_sync.inc
+[connection master]
+SET GLOBAL binlog_realtime_transmit_source_enabled = OFF;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+[connection slave]
+# Wait for replica_brr_cache_count, expect 0
+# Check tmp files in binlog cache tmp file dir.
+[connection master]
+SET GLOBAL binlog_realtime_transmit_source_enabled = ON;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+SHOW STATUS LIKE 'source_brr%';
+Variable_name	Value
+source_brr_exceed_max_send_size_count	0
+source_brr_reader_count	0
+source_brr_sender_count	1
+source_brr_trx_count	0
+COMMIT;
+[connection slave]
+include/rpl_sync.inc
+include/show_relaylog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+slave-relay-bin.000019	#	Previous_gtids	#	#	Gtid_set
+slave-relay-bin.000019	#	Rotate	#	#	master-bin.000006;pos=POS
+slave-relay-bin.000019	#	Format_desc	#	#	SERVER_VERSION, BINLOG_VERSION
+slave-relay-bin.000019	#	Rotate	#	#	master-bin.000006;pos=POS
+slave-relay-bin.000019	#	Ignorable	#	#	# Unrecognized ignorable event
+slave-relay-bin.000019	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= 'Gtid_set'
+slave-relay-bin.000019	#	Query	#	#	BEGIN
+slave-relay-bin.000019	#	Table_map	#	#	table_id: # (rpl_test.t2)
+slave-relay-bin.000019	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000019	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000019	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000019	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+slave-relay-bin.000019	#	Table_map	#	#	table_id: # (rpl_test.t2)
+slave-relay-bin.000019	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000019	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000019	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000019	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+slave-relay-bin.000019	#	Table_map	#	#	table_id: # (rpl_test.t2)
+slave-relay-bin.000019	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000019	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000019	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000019	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+slave-relay-bin.000019	#	Xid	#	#	COMMIT /* XID */
+slave-relay-bin.000019	#	Rotate	#	#	slave-relay-bin.000020;pos=POS
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+28
+# 4.2 Test turn off binlog_realtime_transmit_source_enabled before open brr_trx.
+[connection master]
+BEGIN;
+INSERT INTO rpl_test.t2 values("abc");
+SET GLOBAL binlog_realtime_transmit_source_enabled = OFF;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+SET GLOBAL binlog_realtime_transmit_source_enabled = ON;
+COMMIT;
+[connection slave]
+include/rpl_sync.inc
+include/show_relaylog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+slave-relay-bin.000023	#	Previous_gtids	#	#	Gtid_set
+slave-relay-bin.000023	#	Rotate	#	#	master-bin.000008;pos=POS
+slave-relay-bin.000023	#	Format_desc	#	#	SERVER_VERSION, BINLOG_VERSION
+slave-relay-bin.000023	#	Rotate	#	#	master-bin.000008;pos=POS
+slave-relay-bin.000023	#	Ignorable	#	#	# Unrecognized ignorable event
+slave-relay-bin.000023	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= 'Gtid_set'
+slave-relay-bin.000023	#	Query	#	#	BEGIN
+slave-relay-bin.000023	#	Table_map	#	#	table_id: # (rpl_test.t2)
+slave-relay-bin.000023	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+slave-relay-bin.000023	#	Table_map	#	#	table_id: # (rpl_test.t2)
+slave-relay-bin.000023	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000023	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000023	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000023	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+slave-relay-bin.000023	#	Xid	#	#	COMMIT /* XID */
+slave-relay-bin.000023	#	Rotate	#	#	slave-relay-bin.000024;pos=POS
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+33
+#
+# 5. Test multi transactions use realtime transmit together.
+########################################################
+#
+# Start five transactions.
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+[connection slave]
+# Wait for replica_brr_cache_count, expect 5
+# Check tmp files in binlog cache tmp file dir.
+RL_rds_relay_log_cache_1_10
+RL_rds_relay_log_cache_1_6
+RL_rds_relay_log_cache_1_7
+RL_rds_relay_log_cache_1_8
+RL_rds_relay_log_cache_1_9
+[connection master]
+SHOW STATUS LIKE 'source_brr%';
+Variable_name	Value
+source_brr_exceed_max_send_size_count	0
+source_brr_reader_count	5
+source_brr_sender_count	1
+source_brr_trx_count	5
+# Commit two transactions, Executed more sql for three transactions.
+COMMIT;
+COMMIT;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+[connection slave]
+# Wait for replica_brr_cache_count, expect 3
+# Check tmp files in binlog cache tmp file dir.
+RL_rds_relay_log_cache_1_10
+RL_rds_relay_log_cache_1_8
+RL_rds_relay_log_cache_1_9
+[connection slave]
+include/rpl_sync.inc
+include/show_relaylog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+slave-relay-bin.000028	#	Previous_gtids	#	#	Gtid_set
+slave-relay-bin.000028	#	Format_desc	#	#	SERVER_VERSION, BINLOG_VERSION
+slave-relay-bin.000028	#	Ignorable	#	#	# Unrecognized ignorable event
+slave-relay-bin.000028	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= 'Gtid_set'
+slave-relay-bin.000028	#	Query	#	#	BEGIN
+slave-relay-bin.000028	#	Table_map	#	#	table_id: # (rpl_test.t2)
+slave-relay-bin.000028	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000028	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000028	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000028	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+slave-relay-bin.000028	#	Xid	#	#	COMMIT /* XID */
+slave-relay-bin.000028	#	Rotate	#	#	slave-relay-bin.000029;pos=POS
+include/show_relaylog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+slave-relay-bin.000034	#	Previous_gtids	#	#	Gtid_set
+slave-relay-bin.000034	#	Format_desc	#	#	SERVER_VERSION, BINLOG_VERSION
+slave-relay-bin.000034	#	Ignorable	#	#	# Unrecognized ignorable event
+slave-relay-bin.000034	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= 'Gtid_set'
+slave-relay-bin.000034	#	Query	#	#	BEGIN
+slave-relay-bin.000034	#	Table_map	#	#	table_id: # (rpl_test.t2)
+slave-relay-bin.000034	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000034	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000034	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000034	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+slave-relay-bin.000034	#	Xid	#	#	COMMIT /* XID */
+slave-relay-bin.000034	#	Rotate	#	#	slave-relay-bin.000035;pos=POS
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+41
+[connection master]
+SHOW STATUS LIKE 'source_brr%';
+Variable_name	Value
+source_brr_exceed_max_send_size_count	0
+source_brr_reader_count	3
+source_brr_sender_count	1
+source_brr_trx_count	3
+# Commit all transactions.
+COMMIT;
+COMMIT;
+COMMIT;
+[connection slave]
+# Wait for replica_brr_cache_count, expect 0
+# Check tmp files in binlog cache tmp file dir.
+[connection slave]
+include/rpl_sync.inc
+include/show_relaylog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+slave-relay-bin.000040	#	Previous_gtids	#	#	Gtid_set
+slave-relay-bin.000040	#	Format_desc	#	#	SERVER_VERSION, BINLOG_VERSION
+slave-relay-bin.000040	#	Ignorable	#	#	# Unrecognized ignorable event
+slave-relay-bin.000040	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= 'Gtid_set'
+slave-relay-bin.000040	#	Query	#	#	BEGIN
+slave-relay-bin.000040	#	Table_map	#	#	table_id: # (rpl_test.t2)
+slave-relay-bin.000040	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000040	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000040	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000040	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+slave-relay-bin.000040	#	Table_map	#	#	table_id: # (rpl_test.t2)
+slave-relay-bin.000040	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000040	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000040	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000040	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+slave-relay-bin.000040	#	Xid	#	#	COMMIT /* XID */
+slave-relay-bin.000040	#	Rotate	#	#	slave-relay-bin.000041;pos=POS
+include/show_relaylog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+slave-relay-bin.000046	#	Previous_gtids	#	#	Gtid_set
+slave-relay-bin.000046	#	Format_desc	#	#	SERVER_VERSION, BINLOG_VERSION
+slave-relay-bin.000046	#	Ignorable	#	#	# Unrecognized ignorable event
+slave-relay-bin.000046	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= 'Gtid_set'
+slave-relay-bin.000046	#	Query	#	#	BEGIN
+slave-relay-bin.000046	#	Table_map	#	#	table_id: # (rpl_test.t2)
+slave-relay-bin.000046	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000046	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000046	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000046	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+slave-relay-bin.000046	#	Table_map	#	#	table_id: # (rpl_test.t2)
+slave-relay-bin.000046	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000046	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000046	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000046	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+slave-relay-bin.000046	#	Xid	#	#	COMMIT /* XID */
+slave-relay-bin.000046	#	Rotate	#	#	slave-relay-bin.000047;pos=POS
+include/show_relaylog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+slave-relay-bin.000052	#	Previous_gtids	#	#	Gtid_set
+slave-relay-bin.000052	#	Format_desc	#	#	SERVER_VERSION, BINLOG_VERSION
+slave-relay-bin.000052	#	Ignorable	#	#	# Unrecognized ignorable event
+slave-relay-bin.000052	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= 'Gtid_set'
+slave-relay-bin.000052	#	Query	#	#	BEGIN
+slave-relay-bin.000052	#	Table_map	#	#	table_id: # (rpl_test.t2)
+slave-relay-bin.000052	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000052	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000052	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000052	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+slave-relay-bin.000052	#	Table_map	#	#	table_id: # (rpl_test.t2)
+slave-relay-bin.000052	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000052	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000052	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000052	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+slave-relay-bin.000052	#	Xid	#	#	COMMIT /* XID */
+slave-relay-bin.000052	#	Rotate	#	#	slave-relay-bin.000053;pos=POS
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+65
+[connection master]
+SHOW STATUS LIKE 'source_brr%';
+Variable_name	Value
+source_brr_exceed_max_send_size_count	0
+source_brr_reader_count	0
+source_brr_sender_count	1
+source_brr_trx_count	0
+#
+# 6. Test source brr trx will remove itself if no brr slave exist.
+########################################################
+#
+[connection slave]
+include/stop_slave.inc
+SET GLOBAL binlog_realtime_transmit_replica_enabled = OFF;
+include/start_slave.inc
+[connection master]
+# Wait for source_brr_sender_count, expect 0
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+# Wait for source_brr_trx_count, expect 1
+SHOW STATUS LIKE 'source_brr_reader_count';
+Variable_name	Value
+source_brr_reader_count	0
+COMMIT;
+# Wait for source_brr_trx_count, expect 0
+[connection slave]
+include/stop_slave.inc
+SET GLOBAL binlog_realtime_transmit_replica_enabled = ON;
+include/start_slave.inc
+[connection master]
+# Wait for source_brr_sender_count, expect 1
+#
+# 7. Test transaction use binlog compress will not realtime transmit.
+########################################################
+#
+[connection master]
+SET binlog_transaction_compression = ON;
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+# Wait for source_brr_trx_count, expect 0
+SHOW STATUS LIKE 'source_%';
+Variable_name	Value
+source_brr_exceed_max_send_size_count	0
+source_brr_reader_count	0
+source_brr_sender_count	1
+source_brr_trx_count	0
+source_sent_brr_events_count	101
+COMMIT;
+[connection slave]
+include/rpl_sync.inc
+include/show_relaylog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+slave-relay-bin.000061	#	Previous_gtids	#	#	Gtid_set
+slave-relay-bin.000061	#	Rotate	#	#	master-bin.000021;pos=POS
+slave-relay-bin.000061	#	Format_desc	#	#	SERVER_VERSION, BINLOG_VERSION
+slave-relay-bin.000061	#	Rotate	#	#	master-bin.000021;pos=POS
+slave-relay-bin.000061	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= 'Gtid_set'
+slave-relay-bin.000061	#	Query	#	#	BEGIN
+slave-relay-bin.000061	#	Table_map	#	#	table_id: # (rpl_test.t2)
+slave-relay-bin.000061	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000061	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000061	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000061	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+slave-relay-bin.000061	#	Xid	#	#	COMMIT /* XID */
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+73
+# 8. Cleanup.
+########################################################
+#
+[connection master]
+SHOW STATUS LIKE "source_sent_brr_events_count";
+Variable_name	Value
+source_sent_brr_events_count	101
+SET GLOBAL binlog_cache_free_flush_limit_size= DEFAULT;
+SET GLOBAL binlog_realtime_transmit_source_enabled = DEFAULT;
+DROP DATABASE rpl_test;
+[connection slave]
+SET GLOBAL binlog_realtime_transmit_replica_enabled= DEFAULT;
+SHOW STATUS LIKE "replica_received_brr_events_count";
+Variable_name	Value
+replica_received_brr_events_count	101
+include/rpl_sync.inc
+include/uninstall_semisync.inc
+include/rpl_end.inc

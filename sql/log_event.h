@@ -317,6 +317,15 @@ int ignored_error_code(int err_code);
 */
 #define LOG_EVENT_MTS_ISOLATE_F 0x200
 
+/**
+   HOT SPOT UPDATE: group of update transaction will commit as a whole.
+   Event having LOG_EVENT_RDS_F flag is the first or last.
+
+   BRR: This flag is set in the header of gtid_executed_log_event to
+   distinguish the event from the ignorable event.
+*/
+#define LOG_EVENT_RDS_F 0x8000
+
 /** @}*/
 
 /**
@@ -1764,7 +1773,7 @@ class Xid_log_event : public binary_log::Xid_event, public Xid_apply_log_event {
 #ifdef MYSQL_SERVER
   bool write(Basic_ostream *ostream) override;
 #endif
- private:
+ public:
 #if defined(MYSQL_SERVER)
   bool do_commit(THD *thd_arg) override;
 #endif
@@ -3624,6 +3633,71 @@ class Empty_log_event : public Ignorable_log_event {
 };
 
 /**
+  @class Brr_gtid_executed_log_event
+  It is the subclass of Ignorable_log_event, used to determine replay 
+  timing in realtime apply.
+
+  @internal
+  The inheritance structure is as follows
+
+        Binary_log_event
+               ^
+               |
+               |
+ B_l:Ignorable_event     Log_event
+                 \       /
+       <<virtual>>\     /
+                   \   /
+             Ignorable_log_event
+                     \
+                      \
+                Brr_gtid_executed_log_event
+
+  This event is composed of Event header and empty buffer.
+*/
+class Brr_gtid_executed_log_event : public Ignorable_log_event {
+ public:
+  Brr_gtid_executed_log_event(const char *buf,
+                              const Format_description_event *descr_event)
+      : binary_log::Ignorable_event(buf, descr_event),
+        Ignorable_log_event(buf, descr_event) {
+    m_data_len = uint4korr(buf + EVENT_LEN_OFFSET) - LOG_EVENT_HEADER_LEN;
+    m_data_buf = new uchar[m_data_len];
+    memcpy(m_data_buf, buf + LOG_EVENT_HEADER_LEN, m_data_len);
+  }
+
+  ~Brr_gtid_executed_log_event() override {
+    if (m_data_buf) {
+      delete[] m_data_buf;
+      m_data_buf = nullptr;
+    }
+  }
+
+#ifdef MYSQL_SERVER
+  Brr_gtid_executed_log_event(THD *thd, bool get_gtid_executed = false);
+
+  bool write_gtid_executed_header(Basic_ostream *ostream);
+
+  bool write_buffer(const uchar *buf, size_t buf_len, Basic_ostream *ostream);
+
+  bool write(Basic_ostream *ostream) override;
+
+  int pack_info(Protocol *) override;
+#endif
+
+#ifndef MYSQL_SERVER
+  void print(FILE *file, PRINT_EVENT_INFO *print_event_info) const override;
+#endif
+
+  uchar *get_data_buf() { return m_data_buf; }
+  size_t get_data_size() override { return m_data_len; }
+
+ private:
+  my_off_t m_data_len = 0;
+  uchar *m_data_buf = nullptr;
+};
+
+/**
   @class Rows_query_log_event
   It is used to record the original query for the rows
   events in RBR.
@@ -3982,6 +4056,8 @@ class Gtid_log_event : public binary_log::Gtid_event, public Log_event {
   void set_gtid_duckdb_idempotent_flag(bool flag) {
     duckdb_idempotent_flag = flag;
   }
+
+  const Gtid_specification & get_spec() {return spec;}
 
   /// string holding the text "SET @@GLOBAL.GTID_NEXT = '"
   static const char *SET_STRING_PREFIX;

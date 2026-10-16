@@ -15,8 +15,44 @@
 | `duckdb_convert_tables_with_generated_columns` | Global | `ON` | Allow generated-column table conversion |
 | `duckdb_copy_data_between_tables_use_ins_sel` | Global, Session | `OFF` | Use `INSERT ... SELECT` for DuckDB-to-DuckDB Copy DDL |
 | `ignore_index_hint_error` | Global | `OFF` | Downgrade missing index hints from errors to warnings |
+| `duckdb_support_auto_increment` | Global | `OFF` | Preserve and implement AUTO_INCREMENT for DuckDB tables |
+| `duckdb_enable_background_checkpoint` | Global | `OFF` | Run automatic checkpoints in a background thread |
+| `duckdb_background_checkpoint_full_interval` | Global | `0` | Concurrent checkpoints between full checkpoints; zero means always full |
 
 All variables in this section are dynamic. Variables marked `Global, Session` have a global default and a per-connection value: `SET GLOBAL` affects new sessions, while `SET SESSION` affects only the current session.
+
+## `duckdb_support_auto_increment`
+
+- **Scope**: Global
+- **Change type**: Dynamic
+- **Data type**: Boolean
+- **Default**: `OFF`
+- **Valid values**: `ON` \| `OFF`
+- **Description**: Enables AUTO_INCREMENT support when creating or converting DuckDB tables. With the default OFF value, the field-conversion path removes AUTO_INCREMENT. Enabling it does not alter existing table definitions; it also does not add physical PRIMARY/UNIQUE enforcement.
+
+---
+
+## `duckdb_enable_background_checkpoint`
+
+- **Scope**: Global
+- **Change type**: Dynamic
+- **Data type**: Boolean
+- **Default**: `OFF`
+- **Valid values**: `ON` \| `OFF`
+- **Description**: Runs automatic checkpoints in a background thread instead of blocking the committing thread. The update is forwarded to the embedded DuckDB setting. `duckdb_checkpoint_threshold` controls the WAL-size trigger.
+
+---
+
+## `duckdb_background_checkpoint_full_interval`
+
+- **Scope**: Global
+- **Change type**: Dynamic
+- **Data type**: Unsigned integer (checkpoint count)
+- **Default**: `0`
+- **Valid range**: `0` to `ULLONG_MAX`
+- **Description**: Number of concurrent checkpoints between full checkpoints in background mode. Zero means always full. This is a count, not a time interval; it does not enable background checkpoints by itself.
+
+---
 
 ## `duckdb_sql_normalization`
 
@@ -380,7 +416,8 @@ All variables in this section are dynamic. Variables marked `Global, Session` ha
   `COMMON_AGGREGATE`, `COLUMN_LIFETIME`, `BUILD_SIDE_PROBE_SIDE`, `LIMIT_PUSHDOWN`,  
   `TOP_N`, `COMPRESSED_MATERIALIZATION`, `DUPLICATE_GROUPS`, `REORDER_FILTER`,  
   `SAMPLING_PUSHDOWN`, `JOIN_FILTER_PUSHDOWN`, `EXTENSION`, `MATERIALIZED_CTE`,  
-  `SUM_REWRITER`, `LATE_MATERIALIZATION`
+  `SUM_REWRITER`, `LATE_MATERIALIZATION`, `CTE_INLINING`, `ROW_GROUP_PRUNER`,
+  `TOP_N_WINDOW_ELIMINATION`, `COMMON_SUBPLAN`, `JOIN_ELIMINATION`, `WINDOW_SELF_JOIN`
 - **Description**: Disables the specified optimizer rules in DuckDB.
 
 ---

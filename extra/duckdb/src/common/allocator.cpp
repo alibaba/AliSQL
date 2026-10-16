@@ -9,7 +9,6 @@
 #include "duckdb/common/types/timestamp.hpp"
 
 #include <cstdint>
-
 #ifdef DUCKDB_DEBUG_ALLOCATION
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/pair.hpp"
@@ -34,6 +33,8 @@
 #endif
 
 namespace duckdb {
+
+constexpr const idx_t Allocator::MAXIMUM_ALLOC_SIZE;
 
 AllocatedData::AllocatedData() : allocator(nullptr), pointer(nullptr), allocated_size(0) {
 }
@@ -135,8 +136,7 @@ data_ptr_t Allocator::AllocateData(idx_t size) {
 	}
 	auto result = allocate_function(private_data.get(), size);
 #ifdef DEBUG
-	D_ASSERT(private_data);
-	if (private_data->free_type != AllocatorFreeType::DOES_NOT_REQUIRE_FREE) {
+	if (ShouldUseDebugInfo()) {
 		private_data->debug_info->AllocateData(result, size);
 	}
 #endif
@@ -152,8 +152,7 @@ void Allocator::FreeData(data_ptr_t pointer, idx_t size) {
 	}
 	D_ASSERT(size > 0);
 #ifdef DEBUG
-	D_ASSERT(private_data);
-	if (private_data->free_type != AllocatorFreeType::DOES_NOT_REQUIRE_FREE) {
+	if (ShouldUseDebugInfo()) {
 		private_data->debug_info->FreeData(pointer, size);
 	}
 #endif
@@ -172,8 +171,7 @@ data_ptr_t Allocator::ReallocateData(data_ptr_t pointer, idx_t old_size, idx_t s
 	}
 	auto new_pointer = reallocate_function(private_data.get(), pointer, old_size, size);
 #ifdef DEBUG
-	D_ASSERT(private_data);
-	if (private_data->free_type != AllocatorFreeType::DOES_NOT_REQUIRE_FREE) {
+	if (ShouldUseDebugInfo()) {
 		private_data->debug_info->ReallocateData(pointer, new_pointer, old_size, size);
 	}
 #endif
@@ -254,7 +252,7 @@ static void MallocTrim(idx_t pad) {
 		return; // Another thread has updated LAST_TRIM_TIMESTAMP_MS since we loaded it
 	}
 
-	// We succesfully updated LAST_TRIM_TIMESTAMP_MS, we can trim
+	// We successfully updated LAST_TRIM_TIMESTAMP_MS, we can trim
 	malloc_trim(pad);
 #endif
 }

@@ -50,6 +50,44 @@ bool ignore_index_hint_error = false;
 LEX_CSTRING FORCE_CONVERT_SYS_SCHEMA_NAME = {STRING_WITH_LEN("sys")};
 
 /**
+  Convert partition/subpartition engine types to the target engine.
+
+  @param[in]  part_info       Partition info containing partition elements.
+  @param[in]  target_hton     Target engine handlerton.
+  @param[in]  only_from_innodb If true, only convert partitions whose engine
+                               is InnoDB; otherwise convert all non-null engines.
+
+  @return true if at least one partition engine was converted, false otherwise.
+*/
+static bool convert_partition_engine(partition_info *part_info,
+                                     handlerton *target_hton,
+                                     bool only_from_innodb) {
+  if (!part_info) return false;
+  bool converted = false;
+  List_iterator<partition_element> part_it(part_info->partitions);
+  partition_element *part_elem;
+  while ((part_elem = part_it++)) {
+    if (part_elem->engine_type &&
+        (!only_from_innodb ||
+         part_elem->engine_type->db_type == DB_TYPE_INNODB)) {
+      part_elem->engine_type = target_hton;
+      converted = true;
+    }
+    List_iterator<partition_element> sub_it(part_elem->subpartitions);
+    partition_element *sub_elem;
+    while ((sub_elem = sub_it++)) {
+      if (sub_elem->engine_type &&
+          (!only_from_innodb ||
+           sub_elem->engine_type->db_type == DB_TYPE_INNODB)) {
+        sub_elem->engine_type = target_hton;
+        converted = true;
+      }
+    }
+  }
+  return converted;
+}
+
+/**
   @brief whether the type of the thd is a ignore type
 
   Check whether the type of the thd is SYSTEM_THREAD_SERVER_INITIALIZE,
@@ -155,6 +193,19 @@ static void force_convert_engine(THD *thd, HA_CREATE_INFO *create_info,
        (!create_info->db_type && table && table->s &&
         table->s->db_type()->db_type == DB_TYPE_INNODB))) {
     from_innodb_to_duckdb = true;
+  } else if (!(create_info->options & HA_LEX_CREATE_TMP_TABLE) &&
+             !is_tmp_table && thd->work_part_info &&
+             ((create_info->db_type &&
+               create_info->db_type->db_type == DB_TYPE_DUCKDB) ||
+              (!create_info->db_type && table && table->s &&
+               table->s->db_type()->db_type == DB_TYPE_DUCKDB))) {
+    const LEX_CSTRING duckdb_engine_name = {STRING_WITH_LEN("DUCKDB")};
+    plugin_ref plugin = ha_resolve_by_name(thd, &duckdb_engine_name, false);
+    if (plugin) {
+      convert_partition_engine(thd->work_part_info,
+                               plugin_data<handlerton *>(plugin), true);
+    }
+    return;
   }
 
   if (!from_innodb_to_duckdb) return;
@@ -162,11 +213,14 @@ static void force_convert_engine(THD *thd, HA_CREATE_INFO *create_info,
   const LEX_CSTRING duckdb_engine_name = {STRING_WITH_LEN("DUCKDB")};
   plugin_ref plugin = ha_resolve_by_name(thd, &duckdb_engine_name, false);
   if (plugin) {
-    create_info->db_type = plugin_data<handlerton *>(plugin);
+    handlerton *duckdb_hton = plugin_data<handlerton *>(plugin);
+    create_info->db_type = duckdb_hton;
     create_info->used_fields |= HA_CREATE_USED_ENGINE;
-    // push_warning(thd, Sql_condition::SL_WARNING,
-    // ER_WARN_USING_OTHER_HANDLER,
-    //         "Storage engine converted from INNODB to DUCKDB.");
+
+    if (thd->work_part_info) {
+      thd->work_part_info->default_engine_type = duckdb_hton;
+      convert_partition_engine(thd->work_part_info, duckdb_hton, false);
+    }
 
     return;
   }

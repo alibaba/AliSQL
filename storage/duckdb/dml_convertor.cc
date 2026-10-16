@@ -26,6 +26,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "dml_convertor.h"
 #include "sql/duckdb/duckdb_charset_collation.h"
+#include "sql/duckdb/duckdb_sql_quote.h"
 
 #include <iomanip>
 #include <iostream>
@@ -38,6 +39,16 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 static const uint sizeof_trailing_comma = sizeof(", ") - 1;
 static const uint sizeof_trailing_and = sizeof(" AND ") - 1;
+
+/** Append a DuckDB-quoted identifier to a MySQL String buffer.
+@param[in, out]  query  generated SQL buffer
+@param[in]       name   raw identifier
+@param[in]       len    raw identifier length */
+static inline void append_quoted_ident(String &query, const char *name,
+                                       size_t len) {
+  std::string q = myduck::quote_duckdb_ident(name, len);
+  query.append(q.c_str(), q.size());
+}
 
 void append_field_value_to_sql(String &target_str, const Field *field) {
   if (field->is_null()) {
@@ -177,13 +188,10 @@ void append_field_value_to_sql(String &target_str, const Field *field) {
 
 static inline void append_table_name(TABLE *table, String &query) {
   TABLE_SHARE *table_share = table->s;
-  query.append(STRING_WITH_LEN("`"));
-  query.append(table_share->db.str, table_share->db.length);
-  query.append(STRING_WITH_LEN("`"));
+  append_quoted_ident(query, table_share->db.str, table_share->db.length);
   query.append(STRING_WITH_LEN("."));
-  query.append(STRING_WITH_LEN("`"));
-  query.append(table_share->table_name.str, table_share->table_name.length);
-  query.append(STRING_WITH_LEN("`"));
+  append_quoted_ident(query, table_share->table_name.str,
+                      table_share->table_name.length);
 }
 
 static inline void get_write_fields(TABLE *table,
@@ -234,9 +242,7 @@ void DMLConvertor::generate_where_clause(String &query) {
   query.append(STRING_WITH_LEN(" WHERE "));
 
   for (auto field : fields) {
-    query.append(STRING_WITH_LEN("`"));
-    query.append(field->field_name, strlen(field->field_name));
-    query.append(STRING_WITH_LEN("`"));
+    append_quoted_ident(query, field->field_name, strlen(field->field_name));
     query.append(STRING_WITH_LEN(" = "));
 
     append_where_value(query, field);
@@ -258,9 +264,7 @@ void InsertConvertor::generate_fields_and_values(String &query) {
   if (fields.size()) {
     query.append(STRING_WITH_LEN(" ("));
     for (auto field : fields) {
-      query.append(STRING_WITH_LEN("`"));
-      query.append(field->field_name, strlen(field->field_name));
-      query.append(STRING_WITH_LEN("`"));
+      append_quoted_ident(query, field->field_name, strlen(field->field_name));
       query.append(STRING_WITH_LEN(", "));
     }
     query.length(query.length() - sizeof_trailing_comma);
@@ -287,9 +291,7 @@ void UpdateConvertor::generate_fields_and_values(String &query) {
   get_write_fields(m_table, fields);
 
   for (auto field : fields) {
-    query.append(STRING_WITH_LEN("`"));
-    query.append(field->field_name, strlen(field->field_name));
-    query.append(STRING_WITH_LEN("`"));
+    append_quoted_ident(query, field->field_name, strlen(field->field_name));
     query.append(STRING_WITH_LEN(" = "));
 
     append_field_value_to_sql(query, field);

@@ -33,7 +33,9 @@
 
 ## AliSQL 简介
 
-AliSQL 是阿里云数据库团队维护的开源 MySQL 分支。本版本基于 MySQL 8.0.44，增加 DuckDB 分析型存储引擎、HNSW 向量索引、Native Flashback 和 Binlog 优化，并保留 MySQL 客户端协议。
+AliSQL 是阿里云数据库团队维护的开源 MySQL 分支。本版本基于 MySQL 8.0.44，增加 DuckDB 分析型存储引擎、HNSW 向量索引、Native Flashback、Binlog 实时复制（BRR）和 Binlog 优化，并保留 MySQL 客户端协议。
+
+[2026-10-16 更新](./wiki/changes/changes-in-alisql-8.0.44.2026-10-16-zh.md)新增 BRR，并将内嵌 DuckDB 源码升级到 `v1.5.2-dev736`，增加可选的自增列与后台 Checkpoint 支持。
 
 <table>
 <tr>
@@ -70,10 +72,11 @@ AliSQL 是阿里云数据库团队维护的开源 MySQL 分支。本版本基于
 | **Native Flashback** | 使用 `AS OF TIMESTAMP` 和保留的 Undo 快照查询 InnoDB 历史数据 | 已发布 |
 | **大事务优化** | Binlog Cache Free Flush 减少 InnoDB 大事务提交阶段的 Binlog I/O 放大 | 已发布* |
 | **Binlog 持久化优化** | Persist Binlog Into Redo V2 在保留崩溃恢复能力的同时降低同步 Binlog I/O | 已发布 |
+| **Binlog 实时复制（BRR）** | 在提交前传输符合条件的大事务，并可在从库提前执行受支持的 DDL 和事务 | 已发布，默认关闭 |
 | **DDL 优化** | Instant DDL、并行 B+树构建、非阻塞锁机制 | 规划中 |
 | **RTO 优化** | 加速崩溃恢复，缩短实例启动时间 | 规划中 |
 
-`*` Free Flush 已支持 InnoDB 大事务。当前版本中，DuckDB 会注册额外的 2PC 参与者，因此包含 DuckDB 的 AliSQL 使用普通 Binlog Group Commit；下一版本将支持 DuckDB 场景的大事务优化。
+`*` Free Flush 面向 DuckDB Mode 未开启时符合条件的 InnoDB 大事务；开启 DuckDB Mode 后，提交使用专用的 DuckDB 路径。BRR 复用 Free Flush Cache 文件，不代表提交时一定走 Free Flush。
 
 ## 快速开始
 
@@ -180,6 +183,7 @@ LIMIT 10;
          [x] Native Flashback       [x] 事务与 Binlog 优化      [ ] DDL / RTO
              - AS OF TIMESTAMP          - Binlog in Redo V2       - Instant DDL
              - Undo 快照                - Free Flush                - 快速崩溃恢复
+                                        - 实时复制
 ```
 
 ## 文档
@@ -191,6 +195,8 @@ LIMIT 10;
 | [Native Flashback 指南](./wiki/native-flashback/native-flashback-zh.md) | InnoDB 历史查询与恢复 |
 | [Binlog in Redo 指南](./wiki/binlog-in-redo/binlog-in-redo-zh.md) | Redo 持久化 Binlog 与回退规则 |
 | [Binlog Cache Free Flush 指南](./wiki/binlog-cache-free-flush/binlog-cache-free-flush-zh.md) | 大事务提交路径、配置与限制 |
+| [Binlog 实时复制指南](./wiki/binlog-realtime-replication/binlog-realtime-replication-zh.md) | BRR 提前传输、实时回放、配置、监控与限制 |
+| [2026-10-16 发布说明](./wiki/changes/changes-in-alisql-8.0.44.2026-10-16-zh.md) | BRR、DuckDB 更新与集成修复 |
 | [发布说明](./wiki/changes-in-alisql-8.0.44.md) | AliSQL 8.0.44 新特性 |
 | [搭建 DuckDB 节点](./wiki/duckdb/how-to-setup-duckdb-node-zh.md) | 快速搭建分析节点指南 |
 

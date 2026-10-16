@@ -86,6 +86,9 @@ static void LoadInternal(ExtensionLoader &loader) {
 	copy_fun.name = "jsonl";
 	loader.RegisterFunction(copy_fun);
 
+	// JSON aggregate functions
+	loader.RegisterFunction(JSONFunctions::GetObjectAggFunction());
+
 	// JSON macro's
 	for (idx_t index = 0; JSON_MACROS[index].name != nullptr; index++) {
 		idx_t overload_count;

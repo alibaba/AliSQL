@@ -267,7 +267,8 @@ bool setup_natural_join_row_types(THD *thd,
                                   mem_root_deque<Table_ref *> *from_clause,
                                   Name_resolution_context *context);
 bool wait_while_table_is_used(THD *thd, TABLE *table,
-                              enum ha_extra_function function);
+                              enum ha_extra_function function,
+                              std::function<bool()> *processor = nullptr);
 
 void update_non_unique_table_error(Table_ref *update, const char *operation,
                                    Table_ref *duplicate);

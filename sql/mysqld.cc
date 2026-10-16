@@ -984,6 +984,8 @@ MySQL clients support the protocol:
 #include "sql/binlog_ext.h"
 #include "sql/server_redo_log.h"
 
+#include "sql/rpl_binlog_sender_ext.h"
+
 using std::max;
 using std::min;
 using std::vector;
@@ -1395,9 +1397,76 @@ uint duckdb_convert_all_at_startup_threads = 0;
 bool duckdb_convert_all_skip_mtr_db = false;
 std::atomic<bool> on_duckdb_convert_progress = false;
 bool duckdb_convert_tables_with_generated_columns = true;
+bool duckdb_support_auto_increment = false;
 
 ulonglong global_conn_mem_limit = 0;
 ulonglong global_conn_mem_counter = 0;
+
+/* The number of brr_sender on current source point. */
+std::atomic<uint> source_brr_sender_count = 0;
+
+/* The number of brr_trx current source point has created. */
+std::atomic<ulonglong> source_brr_trx_count = 0;
+
+/* The number of brr_reader current source point has created. */
+std::atomic<ulonglong> source_brr_reader_count = 0;
+
+/* The number of brr_event current source point has sent. */
+std::atomic<ulonglong> source_sent_brr_events_count = 0;
+
+/* The number of brr reader exceeded the max_send_size. */
+std::atomic<ulonglong> source_brr_exceed_max_send_size_count = 0;
+
+/* Whether binlog realtime replication is enabled on current replica point. */
+std::atomic<uint> replica_brr_io_thread_count = 0;
+
+/* The number of brr_cache current replica point has created. */
+std::atomic<ulonglong> replica_brr_cache_count = 0;
+
+/* The number of brr_event current replica point has received. */
+std::atomic<ulonglong> replica_received_brr_events_count = 0;
+
+/* The number of extra worker threads. */
+std::atomic<uint> replica_brr_worker_size = 0;
+
+/* Whether the real-time apply of replica is enabled. */
+std::atomic<bool> replica_brr_enabled = false;
+
+/* The number of brr DDLs received by the replica. */
+std::atomic<ulonglong> replica_brr_ddl_received = 0;
+
+/* The number of brr long trx received by the replica. */
+std::atomic<ulonglong> replica_brr_long_trx_received = 0;
+
+/* The number of brr DDLs that need rolled back. */
+std::atomic<ulonglong> replica_brr_ddl_need_rollback = 0;
+
+/* The number of brr DDLs that need commit. */
+std::atomic<ulonglong> replica_brr_ddl_need_commit = 0;
+
+/* The number of brr DDLs that brr worker commit. */
+std::atomic<ulonglong> replica_brr_ddl_commit_by_brr_worker = 0;
+
+/* The number of brr long trx that brr worker rollback. */
+std::atomic<ulonglong> replica_brr_long_trx_rollback_by_brr_worker = 0;
+
+/* The number of brr long trx that need rolled back. */
+std::atomic<ulonglong> replica_brr_long_trx_need_rollback = 0;
+
+/* The number of brr long trx that need commit. */
+std::atomic<ulonglong> replica_brr_long_trx_need_commit = 0;
+
+/* The number of brr long trx that brr worker commit. */
+std::atomic<ulonglong> replica_brr_long_trx_commit_by_brr_worker = 0;
+
+/* The number of brr DDLs that brr worker rollback. */
+std::atomic<ulonglong> replica_brr_ddl_rollback_by_brr_worker = 0;
+
+/* The number of brr transaction allocated to the extra worker thread. */
+std::atomic<ulonglong> replica_brr_trx_assigned_to_brr_worker = 0;
+
+/* The number of brr transaction not allocated to the extra worker thread. */
+std::atomic<ulonglong> replica_brr_trx_not_assigned_to_brr_worker = 0;
 
 /**
   This variable holds handle to the object that's responsible
@@ -2649,6 +2718,7 @@ static void clean_up(bool print_message) {
   injector::free_instance();
   mysql_bin_log.cleanup();
   server_redo_log::deinit();
+  brr_rpl_info.cleanup();
 
   udf_load_service.deinit();
   delete rpl_source_io_monitor;
@@ -4884,6 +4954,10 @@ int init_common_variables() {
     inited before MY_INIT(). So we do it here.
   */
   mysql_bin_log.init_pthread_objects();
+
+  brr_trx_mngr.init_pthread_objects();
+
+  brr_rpl_info.init_pthread_objects();
 
   /* TODO: remove this when my_time_t is 64 bit compatible */
   if (!is_time_t_valid_for_timestamp(server_start_time)) {
@@ -9769,6 +9843,202 @@ static int show_deprecated_use_i_s_processlist_last_timestamp(THD *,
   return 0;
 }
 
+static uint show_source_brr_sender_count(THD *, SHOW_VAR *var, char *buf) {
+  var->type = SHOW_LONG;
+  var->value = buf;
+  long *value = reinterpret_cast<long *>(buf);
+  *value = static_cast<long>(source_brr_sender_count);
+  return 0;
+}
+
+static ulonglong show_source_brr_trx_count(THD *, SHOW_VAR *var, char *buf) {
+  var->type = SHOW_LONGLONG;
+  var->value = buf;
+  ulonglong *value = reinterpret_cast<ulonglong *>(buf);
+  *value = static_cast<ulonglong>(source_brr_trx_count);
+  return 0;
+}
+
+static ulonglong show_source_brr_reader_count(THD *, SHOW_VAR *var, char *buf) {
+  var->type = SHOW_LONGLONG;
+  var->value = buf;
+  ulonglong *value = reinterpret_cast<ulonglong *>(buf);
+  *value = static_cast<ulonglong>(source_brr_reader_count);
+  return 0;
+}
+
+static ulonglong show_source_sent_brr_events_count(THD *, SHOW_VAR *var,
+                                                   char *buf) {
+  var->type = SHOW_LONGLONG;
+  var->value = buf;
+  ulonglong *value = reinterpret_cast<ulonglong *>(buf);
+  *value = static_cast<ulonglong>(source_sent_brr_events_count);
+  return 0;
+}
+
+static ulonglong show_source_brr_exceed_max_send_size_count(THD *,
+                                                            SHOW_VAR *var,
+                                                            char *buf) {
+  var->type = SHOW_LONGLONG;
+  var->value = buf;
+  ulonglong *value = reinterpret_cast<ulonglong *>(buf);
+  *value = static_cast<ulonglong>(source_brr_exceed_max_send_size_count);
+  return 0;
+}
+
+static uint show_replica_brr_io_thread_count(THD *, SHOW_VAR *var, char *buf) {
+  var->type = SHOW_LONG;
+  var->value = buf;
+  long *value = reinterpret_cast<long *>(buf);
+  *value = static_cast<long>(replica_brr_io_thread_count);
+  return 0;
+}
+
+static ulonglong show_replica_brr_cache_count(THD *, SHOW_VAR *var, char *buf) {
+  var->type = SHOW_LONGLONG;
+  var->value = buf;
+  ulonglong *value = reinterpret_cast<ulonglong *>(buf);
+  *value = static_cast<ulonglong>(replica_brr_cache_count);
+  return 0;
+}
+
+static ulonglong show_replica_received_brr_events_count(THD *, SHOW_VAR *var,
+                                                        char *buf) {
+  var->type = SHOW_LONGLONG;
+  var->value = buf;
+  ulonglong *value = reinterpret_cast<ulonglong *>(buf);
+  *value = static_cast<ulonglong>(replica_received_brr_events_count);
+  return 0;
+}
+
+static ulonglong show_replica_brr_worker_size(THD *, SHOW_VAR *var, char *buf) {
+  var->type = SHOW_LONG;
+  var->value = buf;
+  ulonglong *value = reinterpret_cast<ulonglong *>(buf);
+  *value = static_cast<ulonglong>(replica_brr_worker_size);
+  return 0;
+}
+
+static int show_replica_brr_enabled(THD *, SHOW_VAR *var, char *buf) {
+  var->type = SHOW_BOOL;
+  var->value = buf;
+  int *value = reinterpret_cast<int *>(buf);
+  *value = static_cast<int>(replica_brr_enabled);
+  return 0;
+}
+
+static ulonglong show_replica_brr_ddl_received(THD *, SHOW_VAR *var,
+                                               char *buf) {
+  var->type = SHOW_LONGLONG;
+  var->value = buf;
+  ulonglong *value = reinterpret_cast<ulonglong *>(buf);
+  *value = static_cast<ulonglong>(replica_brr_ddl_received);
+  return 0;
+}
+
+static ulonglong show_replica_brr_long_trx_received(THD *, SHOW_VAR *var,
+                                                    char *buf) {
+  var->type = SHOW_LONGLONG;
+  var->value = buf;
+  ulonglong *value = reinterpret_cast<ulonglong *>(buf);
+  *value = static_cast<ulonglong>(replica_brr_long_trx_received);
+  return 0;
+}
+
+static ulonglong show_replica_brr_ddl_need_rollback(THD *, SHOW_VAR *var,
+                                                    char *buf) {
+  var->type = SHOW_LONGLONG;
+  var->value = buf;
+  ulonglong *value = reinterpret_cast<ulonglong *>(buf);
+  *value = static_cast<ulonglong>(replica_brr_ddl_need_rollback);
+  return 0;
+}
+
+static ulonglong show_replica_brr_ddl_need_commit(THD *, SHOW_VAR *var,
+                                                  char *buf) {
+  var->type = SHOW_LONGLONG;
+  var->value = buf;
+  ulonglong *value = reinterpret_cast<ulonglong *>(buf);
+  *value = static_cast<ulonglong>(replica_brr_ddl_need_commit);
+  return 0;
+}
+
+static ulonglong show_replica_brr_ddl_commit_by_brr_worker(THD *, SHOW_VAR *var,
+                                                           char *buf) {
+  var->type = SHOW_LONGLONG;
+  var->value = buf;
+  ulonglong *value = reinterpret_cast<ulonglong *>(buf);
+  *value = static_cast<ulonglong>(replica_brr_ddl_commit_by_brr_worker);
+  return 0;
+}
+
+static ulonglong show_replica_brr_ddl_rollback_by_brr_worker(THD *,
+                                                             SHOW_VAR *var,
+                                                             char *buf) {
+  var->type = SHOW_LONGLONG;
+  var->value = buf;
+  ulonglong *value = reinterpret_cast<ulonglong *>(buf);
+  *value = static_cast<ulonglong>(replica_brr_ddl_rollback_by_brr_worker);
+  return 0;
+}
+
+static ulonglong show_replica_brr_long_trx_need_rollback(THD *, SHOW_VAR *var,
+                                                         char *buf) {
+  var->type = SHOW_LONGLONG;
+  var->value = buf;
+  ulonglong *value = reinterpret_cast<ulonglong *>(buf);
+  *value = static_cast<ulonglong>(replica_brr_long_trx_need_rollback);
+  return 0;
+}
+
+static ulonglong show_replica_brr_long_trx_need_commit(THD *, SHOW_VAR *var,
+                                                       char *buf) {
+  var->type = SHOW_LONGLONG;
+  var->value = buf;
+  ulonglong *value = reinterpret_cast<ulonglong *>(buf);
+  *value = static_cast<ulonglong>(replica_brr_long_trx_need_commit);
+  return 0;
+}
+
+static ulonglong show_replica_brr_long_trx_commit_by_brr_worker(THD *,
+                                                                SHOW_VAR *var,
+                                                                char *buf) {
+  var->type = SHOW_LONGLONG;
+  var->value = buf;
+  ulonglong *value = reinterpret_cast<ulonglong *>(buf);
+  *value = static_cast<ulonglong>(replica_brr_long_trx_commit_by_brr_worker);
+  return 0;
+}
+
+static ulonglong show_replica_brr_long_trx_rollback_by_brr_worker(THD *,
+                                                                  SHOW_VAR *var,
+                                                                  char *buf) {
+  var->type = SHOW_LONGLONG;
+  var->value = buf;
+  ulonglong *value = reinterpret_cast<ulonglong *>(buf);
+  *value = static_cast<ulonglong>(replica_brr_long_trx_rollback_by_brr_worker);
+  return 0;
+}
+
+static ulonglong show_replica_brr_trx_assigned_to_brr_worker(THD *,
+                                                               SHOW_VAR *var,
+                                                               char *buf) {
+  var->type = SHOW_LONGLONG;
+  var->value = buf;
+  ulonglong *value = reinterpret_cast<ulonglong *>(buf);
+  *value = static_cast<ulonglong>(replica_brr_trx_assigned_to_brr_worker);
+  return 0;
+}
+
+static ulonglong show_replica_brr_trx_not_assigned_to_brr_worker(
+    THD *, SHOW_VAR *var, char *buf) {
+  var->type = SHOW_LONGLONG;
+  var->value = buf;
+  ulonglong *value = reinterpret_cast<ulonglong *>(buf);
+  *value = static_cast<ulonglong>(replica_brr_trx_not_assigned_to_brr_worker);
+  return 0;
+}
+
 SHOW_VAR status_vars[] = {
     {"Aborted_clients", (char *)&aborted_threads, SHOW_LONG, SHOW_SCOPE_GLOBAL},
     {"Aborted_connects", (char *)&show_aborted_connects, SHOW_FUNC,
@@ -10137,6 +10407,61 @@ SHOW_VAR status_vars[] = {
      SHOW_SCOPE_GLOBAL},
     {"DuckDB_convert_stage_at_startup",
      (char *)&dd::upgrade::myduck::show_convert_stage, SHOW_FUNC,
+     SHOW_SCOPE_GLOBAL},
+    {"brr_version", (char *)&RDS_BRR_VERSION, SHOW_CHAR_PTR, SHOW_SCOPE_GLOBAL},
+    {"source_brr_sender_count", (char *)&show_source_brr_sender_count,
+     SHOW_FUNC, SHOW_SCOPE_GLOBAL},
+    {"source_brr_trx_count", (char *)&show_source_brr_trx_count, SHOW_FUNC,
+     SHOW_SCOPE_GLOBAL},
+    {"source_brr_reader_count", (char *)&show_source_brr_reader_count,
+     SHOW_FUNC, SHOW_SCOPE_GLOBAL},
+    {"source_sent_brr_events_count", (char *)&show_source_sent_brr_events_count,
+     SHOW_FUNC, SHOW_SCOPE_GLOBAL},
+    {"source_brr_exceed_max_send_size_count",
+     (char *)&show_source_brr_exceed_max_send_size_count, SHOW_FUNC,
+     SHOW_SCOPE_GLOBAL},
+    {"replica_brr_io_thread_count", (char *)&show_replica_brr_io_thread_count,
+     SHOW_FUNC, SHOW_SCOPE_GLOBAL},
+    {"replica_brr_cache_count", (char *)&show_replica_brr_cache_count,
+     SHOW_FUNC, SHOW_SCOPE_GLOBAL},
+    {"replica_received_brr_events_count",
+     (char *)&show_replica_received_brr_events_count, SHOW_FUNC,
+     SHOW_SCOPE_GLOBAL},
+    {"replica_brr_worker_size", (char *)&show_replica_brr_worker_size,
+     SHOW_FUNC, SHOW_SCOPE_GLOBAL},
+    {"replica_brr_enabled", (char *)&show_replica_brr_enabled, SHOW_FUNC,
+     SHOW_SCOPE_GLOBAL},
+    {"replica_brr_ddl_received", (char *)&show_replica_brr_ddl_received,
+     SHOW_FUNC, SHOW_SCOPE_GLOBAL},
+    {"replica_brr_long_trx_received",
+     (char *)&show_replica_brr_long_trx_received, SHOW_FUNC, SHOW_SCOPE_GLOBAL},
+    {"replica_brr_ddl_need_rollback",
+     (char *)&show_replica_brr_ddl_need_rollback, SHOW_FUNC, SHOW_SCOPE_GLOBAL},
+    {"replica_brr_ddl_need_commit", (char *)&show_replica_brr_ddl_need_commit,
+     SHOW_FUNC, SHOW_SCOPE_GLOBAL},
+    {"replica_brr_ddl_commit_by_brr_worker",
+     (char *)&show_replica_brr_ddl_commit_by_brr_worker, SHOW_FUNC,
+     SHOW_SCOPE_GLOBAL},
+    {"replica_brr_ddl_rollback_by_brr_worker",
+     (char *)&show_replica_brr_ddl_rollback_by_brr_worker, SHOW_FUNC,
+     SHOW_SCOPE_GLOBAL},
+    {"replica_brr_long_trx_need_rollback",
+     (char *)&show_replica_brr_long_trx_need_rollback, SHOW_FUNC,
+     SHOW_SCOPE_GLOBAL},
+    {"replica_brr_long_trx_need_commit",
+     (char *)&show_replica_brr_long_trx_need_commit, SHOW_FUNC,
+     SHOW_SCOPE_GLOBAL},
+    {"replica_brr_long_trx_commit_by_brr_worker",
+     (char *)&show_replica_brr_long_trx_commit_by_brr_worker, SHOW_FUNC,
+     SHOW_SCOPE_GLOBAL},
+    {"replica_brr_long_trx_rollback_by_brr_worker",
+     (char *)&show_replica_brr_long_trx_rollback_by_brr_worker, SHOW_FUNC,
+     SHOW_SCOPE_GLOBAL},
+    {"replica_brr_trx_assigned_to_brr_worker",
+     (char *)&show_replica_brr_trx_assigned_to_brr_worker, SHOW_FUNC,
+     SHOW_SCOPE_GLOBAL},
+    {"replica_brr_trx_not_assigned_to_brr_worker",
+     (char *)&show_replica_brr_trx_not_assigned_to_brr_worker, SHOW_FUNC,
      SHOW_SCOPE_GLOBAL},
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_ALL}};
 
@@ -12350,6 +12675,7 @@ PSI_stage_info stage_replica_waiting_worker_queue= { 0, "Waiting for Replica Wor
 PSI_stage_info stage_replica_waiting_worker_to_free_events= { 0, "Waiting for Replica Workers to free pending events", 0, PSI_DOCUMENT_ME};
 PSI_stage_info stage_replica_waiting_worker_to_release_partition= { 0, "Waiting for Replica Worker to release partition", 0, PSI_DOCUMENT_ME};
 PSI_stage_info stage_replica_waiting_workers_to_exit= { 0, "Waiting for workers to exit", 0, PSI_DOCUMENT_ME};
+PSI_stage_info stage_replica_waiting_brr_workers_to_exit= { 0, "Waiting for brr workers to exit", 0, PSI_DOCUMENT_ME};
 PSI_stage_info stage_rpl_apply_row_evt_write= { 0, "Applying batch of row changes (write)", PSI_FLAG_STAGE_PROGRESS, PSI_DOCUMENT_ME};
 PSI_stage_info stage_rpl_apply_row_evt_update= { 0, "Applying batch of row changes (update)", PSI_FLAG_STAGE_PROGRESS, PSI_DOCUMENT_ME};
 PSI_stage_info stage_rpl_apply_row_evt_delete= { 0, "Applying batch of row changes (delete)", PSI_FLAG_STAGE_PROGRESS, PSI_DOCUMENT_ME};
@@ -12454,6 +12780,7 @@ PSI_stage_info *all_server_stages[] = {
     &stage_replica_waiting_worker_to_free_events,
     &stage_replica_waiting_worker_to_release_partition,
     &stage_replica_waiting_workers_to_exit,
+    &stage_replica_waiting_brr_workers_to_exit,
     &stage_rpl_apply_row_evt_write,
     &stage_rpl_apply_row_evt_update,
     &stage_rpl_apply_row_evt_delete,

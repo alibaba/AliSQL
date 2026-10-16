@@ -202,6 +202,50 @@ The following options may be given as the first argument:
  transactions are written to the binary log. Default is to
  order commits.
  (Defaults to on; use --skip-binlog-order-commits to disable.)
+ --binlog-realtime-apply-ddl-source-enabled 
+ Whether to transmit DDL binlog in real time.
+ --binlog-realtime-apply-long-trx-enabled 
+ Whether to apply long trx in real time.
+ --binlog-realtime-apply-worker-heartbeat-period=# 
+ When using binlog realtime apply, the brr worker will
+ periodically check if there are brr transactions waiting
+ to be applied. This parameter defines the interval
+ between two checks, in milliseconds.
+ --binlog-realtime-apply-workers=# 
+ Number of worker threads for executing brr events
+ --binlog-realtime-ddl-time-limit=# 
+ If the DDL execution exceeds this time, the replica will
+ apply the DDL in real time. The time is in milliseconds.
+ --binlog-realtime-enable-log-message 
+ Whether enable binlog realtime transmit log message level
+ error log.
+ --binlog-realtime-replica-long-transaction-limit-size=# 
+ The transaction whose binlog length exceed this limit
+ size will use binlog realtime transmit function.
+ --binlog-realtime-transmit-enable-log-message 
+ Whether enable binlog realtime transmit log message level
+ error log.
+ (Defaults to on; use --skip-binlog-realtime-transmit-enable-log-message to disable.)
+ --binlog-realtime-transmit-long-transaction-limit-size=# 
+ The transaction whose binlog length exceed this limit
+ size will use binlog realtime transmit function. This
+ variable is deprecated
+ --binlog-realtime-transmit-max-send-size=# 
+ In order to avoid realtime transmit block the normal
+ event transmit, we limit the max send size of realtime
+ events each batch. If single event exceed this size, it
+ will not be send realtimely; If a batch of realtime
+ events exceed this size, the rest of realtime events will
+ be sent in next batch
+ --binlog-realtime-transmit-read-block-size=# 
+ For a transaction who is using binlog realtime transmit,
+ master will readbinlog cache tmp file when the size of
+ new binlog events exceed this limit size, and send them
+ to slave.
+ --binlog-realtime-transmit-replica-enabled 
+ Whether enable binlog realtime transmit on slave side.
+ --binlog-realtime-transmit-source-enabled 
+ Whether enable binlog realtime transmit on master side.
  --binlog-rotate-encryption-master-key-at-startup 
  Force binlog encryption master key rotation at startup
  --binlog-row-event-max-size=# 
@@ -369,6 +413,9 @@ The following options may be given as the first argument:
  --duckdb-appender-allocator-flush-threshold=# 
  Peak allocation threshold at which to flush the allocator
  when DuckDB appender flushs chunk.
+ --duckdb-background-checkpoint-full-interval=# 
+ Number of concurrent checkpoints between full checkpoints
+ in background mode (0 = always full).
  --duckdb-batch-max-row-count=# 
  To avoid out-of-memory errors, DuckDB needs to split
  large batch, which limits the number of rows in a batch;
@@ -422,6 +469,9 @@ The following options may be given as the first argument:
  --duckdb-dml-in-batch 
  Use batch to speed up INSERT/UPDATE/DELETE
  (Defaults to on; use --skip-duckdb-dml-in-batch to disable.)
+ --duckdb-enable-background-checkpoint 
+ Run auto-checkpoint in a background thread instead of
+ blocking the committing thread.
  --duckdb-explain-output[=name] 
  The default type in which the EXPLAIN statement used in
  duckdb egnineValid values are LOGICAL (default),
@@ -476,6 +526,8 @@ The following options may be given as the first argument:
  only contains Insert.
  --duckdb-sql-normalization 
  Normalize SQL before sending to DuckDB.
+ --duckdb-support-auto-increment 
+ Whether support AUTO_INCREMENT option of DuckDB table.
  --duckdb-temp-directory=name 
  Set the directory to which duckdb write temp files
  --duckdb-threads=#  The number of total threads used by duckdb, 0 means
@@ -939,6 +991,10 @@ The following options may be given as the first argument:
  value is 0 then mysqld will reserve max_connections*5 or
  max_connections + table_open_cache*2 (whichever is
  larger) number of file descriptors
+ --optimize-table-write-binlog-advance 
+ The actual execution statement of optimize table is
+ recreate table + analyze table. If this parameter is
+ enabled, binlog is written after recreate table succeeds.
  --optimizer-max-subgraph-pairs=# 
  Maximum depth of subgraph pairs a query can have before
  the hypergraph join optimizer starts reducing the search
@@ -1874,6 +1930,19 @@ binlog-group-delay-running-threads 100
 binlog-gtid-simple-recovery TRUE
 binlog-max-flush-queue-time 0
 binlog-order-commits TRUE
+binlog-realtime-apply-ddl-source-enabled FALSE
+binlog-realtime-apply-long-trx-enabled FALSE
+binlog-realtime-apply-worker-heartbeat-period 200
+binlog-realtime-apply-workers 0
+binlog-realtime-ddl-time-limit 1000
+binlog-realtime-enable-log-message FALSE
+binlog-realtime-replica-long-transaction-limit-size 549755813888
+binlog-realtime-transmit-enable-log-message TRUE
+binlog-realtime-transmit-long-transaction-limit-size 549755813888
+binlog-realtime-transmit-max-send-size 2097152
+binlog-realtime-transmit-read-block-size 2097152
+binlog-realtime-transmit-replica-enabled FALSE
+binlog-realtime-transmit-source-enabled FALSE
 binlog-rotate-encryption-master-key-at-startup FALSE
 binlog-row-event-max-size 8192
 binlog-row-image FULL
@@ -1923,6 +1992,7 @@ disconnect-on-expired-password TRUE
 disconnect-slave-event-count 0
 div-precision-increment 4
 duckdb-appender-allocator-flush-threshold 67108864
+duckdb-background-checkpoint-full-interval 0
 duckdb-batch-max-row-count 0
 duckdb-checkpoint-threshold 268435456
 duckdb-commit-multi-trx-due-to-reader TRUE
@@ -1939,6 +2009,7 @@ duckdb-copy-ddl-threads 4
 duckdb-data-import-mode FALSE
 duckdb-disabled-optimizers 
 duckdb-dml-in-batch TRUE
+duckdb-enable-background-checkpoint FALSE
 duckdb-explain-output PHYSICAL_ONLY
 duckdb-force-no-collation FALSE
 duckdb-idempotent-data-import-enabled FALSE
@@ -1958,6 +2029,7 @@ duckdb-require-primary-key TRUE
 duckdb-scheduler-process-partial TRUE
 duckdb-source-set-insert-only-to-binlog FALSE
 duckdb-sql-normalization FALSE
+duckdb-support-auto-increment FALSE
 duckdb-temp-directory (No default value)
 duckdb-threads 0
 duckdb-update-modified-column-only TRUE
@@ -2093,6 +2165,7 @@ offline-mode FALSE
 old FALSE
 old-alter-table FALSE
 old-style-user-limits FALSE
+optimize-table-write-binlog-advance FALSE
 optimizer-max-subgraph-pairs 100000
 optimizer-prune-level 1
 optimizer-search-depth 62
@@ -2145,7 +2218,7 @@ performance-schema-max-file-classes 80
 performance-schema-max-file-handles 32768
 performance-schema-max-file-instances -1
 performance-schema-max-index-stat -1
-performance-schema-max-memory-classes 450
+performance-schema-max-memory-classes 600
 performance-schema-max-metadata-locks -1
 performance-schema-max-mutex-classes 350
 performance-schema-max-mutex-instances -1

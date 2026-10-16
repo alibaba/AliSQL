@@ -141,6 +141,8 @@
 #include "template_utils.h"
 #include "thr_lock.h"
 #include "vidx/vidx_index.h"
+#include "sql/rpl_binlog_sender_i_s_ext.h"
+#include "sql/rpl_replica_i_s_ext.h"
 
 /* @see dynamic_privileges_table.cc */
 bool iterate_all_dynamic_privileges(THD *thd,
@@ -5180,6 +5182,12 @@ ST_SCHEMA_TABLE schema_tables[] = {
      make_tmp_table_columns_format, get_schema_tmp_table_columns_record, true},
     {"TMP_TABLE_KEYS", tmp_table_keys_fields_info, show_temporary_tables,
      make_old_format, get_schema_tmp_table_keys_record, true},
+    {"BRR_SENDER_TRX_INFO", i_s_brr_sender_field_info,
+     i_s_brr_sender_trx_info_fill_table, make_old_format, nullptr, false},
+    {"BRR_SOURCE_TRX_INFO", i_s_brr_source_trx_field_info,
+     i_s_brr_source_trx_info_fill_table, make_old_format, nullptr, false},
+    {"BRR_REPLICA_INFO", i_s_brr_replica_info, i_s_brr_replica_info_fill_table,
+     make_old_format, nullptr, false},
     {nullptr, nullptr, nullptr, nullptr, nullptr, false}};
 
 int initialize_schema_table(st_plugin_int *plugin) {
@@ -5817,3 +5825,6 @@ void show_sql_type(enum_field_types type, bool is_array, uint metadata,
   }
   if (is_array) str->append(STRING_WITH_LEN(" array"));
 }
+
+#include "sql/rpl_binlog_sender_i_s_ext.cc"
+#include "sql/rpl_replica_i_s_ext.cc"

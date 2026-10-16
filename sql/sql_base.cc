@@ -2467,6 +2467,8 @@ bool rename_temporary_table(THD *thd, TABLE *table, const char *db,
    @param function HA_EXTRA_PREPARE_FOR_DROP if table is to be deleted
                    HA_EXTRA_FORCE_REOPEN if table is not be used
                    HA_EXTRA_PREPARE_FOR_RENAME if table is to be renamed
+   @param try_nonblock If true, try to upgrade lock without blocking.
+   @param processor processor to call when in nonblock retry interval.
 
    @note When returning, the table will be unusable for other threads
          until metadata lock is downgraded.
@@ -2476,14 +2478,16 @@ bool rename_temporary_table(THD *thd, TABLE *table, const char *db,
 */
 
 bool wait_while_table_is_used(THD *thd, TABLE *table,
-                              enum ha_extra_function function) {
+                              enum ha_extra_function function,
+                              std::function<bool()> *processor) {
   DBUG_TRACE;
   DBUG_PRINT("enter", ("table: '%s'  share: %p  db_stat: %u  version: %lu",
                        table->s->table_name.str, table->s, table->db_stat,
                        table->s->version()));
 
   if (thd->mdl_context.upgrade_shared_lock(table->mdl_ticket, MDL_EXCLUSIVE,
-                                           thd->variables.lock_wait_timeout))
+                                           thd->variables.lock_wait_timeout,
+                                           processor))
     return true;
 
   tdc_remove_table(thd, TDC_RT_REMOVE_NOT_OWN, table->s->db.str,

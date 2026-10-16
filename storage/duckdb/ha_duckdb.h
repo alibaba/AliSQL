@@ -53,6 +53,9 @@ class Duckdb_share : public Partition_share {
   THR_LOCK lock;
   Duckdb_share();
   ~Duckdb_share() override { thr_lock_delete(&lock); }
+
+  /* Auto increment value of DuckDB. */
+  std::atomic<ulonglong> m_auto_inc_val;
 };
 
 /** @brief
@@ -64,7 +67,7 @@ class ha_duckdb : public handler, public Partition_handler {
   Duckdb_share *get_share();  ///< Get the share
 
  public:
-  ha_duckdb(handlerton *hton, TABLE_SHARE *table_arg);
+  ha_duckdb(handlerton *hton, TABLE_SHARE *table_arg, bool partitioned = false);
   ~ha_duckdb();
 
   enum row_type get_real_row_type(
@@ -97,10 +100,9 @@ class ha_duckdb : public handler, public Partition_handler {
       used in testing.
     */
     // TODO: supprt HA_NO_AUTO_INCREMENT through duckdb sequence.
-    return (HA_BINLOG_STMT_CAPABLE | HA_BINLOG_ROW_CAPABLE |
-            HA_NO_AUTO_INCREMENT | HA_NULL_IN_KEY | HA_CAN_INDEX_BLOBS |
-            HA_SUPPORTS_DEFAULT_EXPRESSION | HA_DESCENDING_INDEX |
-            HA_GENERATED_COLUMNS);
+    return (HA_BINLOG_STMT_CAPABLE | HA_BINLOG_ROW_CAPABLE | HA_NULL_IN_KEY |
+            HA_CAN_INDEX_BLOBS | HA_SUPPORTS_DEFAULT_EXPRESSION |
+            HA_DESCENDING_INDEX | HA_GENERATED_COLUMNS);
   }
 
   /** @brief
@@ -259,7 +261,7 @@ class ha_duckdb : public handler, public Partition_handler {
   int rnd_next(uchar *buf) override;             ///< required
   int rnd_pos(uchar *buf, uchar *pos) override;  ///< required
   void position(const uchar *record) override;   ///< required
-  int info(uint) override;                       ///< required
+  int info(uint flag) override;                  ///< required
   int extra(enum ha_extra_function operation) override;
   int external_lock(THD *thd, int lock_type) override;  ///< required
   int delete_all_rows(void) override;
@@ -290,6 +292,12 @@ class ha_duckdb : public handler, public Partition_handler {
 
   bool commit_and_begin();
 
+  void get_auto_increment(ulonglong offset, ulonglong increment,
+                          ulonglong nb_desired_values,
+                          ulonglong *const first_value,
+                          ulonglong *const nb_reserved_values) override;
+  void update_create_info(HA_CREATE_INFO *const create_info) override;
+
  private:
   std::unique_ptr<duckdb::QueryResult> query_result;
 
@@ -301,6 +309,8 @@ class ha_duckdb : public handler, public Partition_handler {
   bool m_first_write{true};
 
   /* DuckDB partition start */
+  bool m_partitioned{false};
+
  public:
   partition_info *m_part_info{nullptr};
 
@@ -321,7 +331,7 @@ class ha_duckdb : public handler, public Partition_handler {
   }
 
   Partition_handler *get_partition_handler() override {
-    return (static_cast<Partition_handler *>(this));
+    return m_partitioned ? static_cast<Partition_handler *>(this) : nullptr;
   }
 
   enum row_type get_partition_row_type(const dd::Table *table [[maybe_unused]],
@@ -343,6 +353,27 @@ class ha_duckdb : public handler, public Partition_handler {
   int truncate_partition_low(dd::Table *dd_table) override;
 
   /* DuckDB partition end */
+  /*
+    Get auto increment value from DuckDB.
+    @return auto increment value
+  */
+  ulonglong get_auto_inc_from_duckdb();
+
+  /*
+    Get auto increment value from data dictionary.
+    @return auto increment value
+  */
+  ulonglong get_auto_inc_from_dd();
+
+  /*
+    Update auto increment value in Duckdb_share.
+
+    @param[in] update_val    Auto increment value to update
+    @param[in] duckdb_share  Duckdb_share object to update, if null, use
+                             this->share.
+  */
+  void update_auto_inc_val(ulonglong update_val,
+                           Duckdb_share *duckdb_share = nullptr);
 };
 
 #endif  // HA_DUCKDB_H

@@ -80,8 +80,7 @@ static my_time_t get_system_timezone_offset() {
   return (seconds - seconds_syszone);
 }
 
-std::string get_timezone_according_thd(THD *thd, std::string &warn_msg) {
-  Time_zone *tz = thd->variables.time_zone;
+std::string convert_timezone_for_duckdb(Time_zone *tz, std::string &warn_msg) {
   std::string target_tzname;
 
   switch (tz->get_timezone_type()) {
@@ -112,5 +111,9 @@ std::string get_timezone_according_thd(THD *thd, std::string &warn_msg) {
   }
 
   return target_tzname;
+}
+
+std::string get_timezone_according_thd(THD *thd, std::string &warn_msg) {
+  return convert_timezone_for_duckdb(thd->variables.time_zone, warn_msg);
 }
 }  // namespace myduck

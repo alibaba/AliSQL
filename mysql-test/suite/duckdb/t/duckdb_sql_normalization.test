@@ -75,8 +75,51 @@ SET timestamp = 1753226301;
 SELECT UNIX_TIMESTAMP(timestamp_char), UNIX_TIMESTAMP(date_char), UNIX_TIMESTAMP() FROM t2;
 SET timestamp = default;
 
+# TEXT columns (BLOB type with non-binary charset) should also trigger CAST
+CREATE TABLE t3 (id INT PRIMARY KEY, date_text TEXT, time_text TEXT, timestamp_text TEXT) ENGINE=DuckDB;
+INSERT INTO t3 VALUES (1, '2025-12-25', '10:47:30', '2025-12-25 10:47:30');
+
+# Item_func::print - date functions with TEXT arg -> CAST AS TIMESTAMP
+SELECT LAST_DAY(date_text), LAST_DAY(timestamp_text)
+FROM t3;
+SELECT DAYNAME(timestamp_text), WEEK(timestamp_text)
+	, DAYOFYEAR(timestamp_text), QUARTER(timestamp_text)
+	, YEAR(timestamp_text), MONTH(timestamp_text)
+FROM t3;
+SELECT CONVERT_TZ(timestamp_text, 'GMT', 'Asia/Shanghai') FROM t3;
+SET timestamp = 1753226301;
+SELECT UNIX_TIMESTAMP(timestamp_text), UNIX_TIMESTAMP(date_text), UNIX_TIMESTAMP() FROM t3;
+SET timestamp = default;
+
+# Item_func::print - time functions with TEXT arg -> CAST AS TIME
+SELECT HOUR(time_text), MINUTE(time_text)
+	, SECOND(time_text), MICROSECOND(time_text)
+FROM t3;
+
+# Item_func_date_format::print - DATE_FORMAT/TIME_FORMAT with TEXT arg
+SELECT DATE_FORMAT(timestamp_text, '%W %M %Y %H %i %s') FROM t3;
+SELECT TIME_FORMAT(time_text, '%H %i %s') FROM t3;
+
+# Item_extract::print - EXTRACT with TEXT arg
+SELECT EXTRACT(YEAR FROM date_text), EXTRACT(SECOND FROM time_text)
+	, EXTRACT(YEAR FROM timestamp_text), EXTRACT(SECOND FROM timestamp_text)
+FROM t3;
+
+# Item_func_timestamp_diff::print - TIMESTAMPDIFF with TEXT args
+SELECT TIMESTAMPDIFF(MONTH, date_text, timestamp_text) FROM t3;
+
 DROP TABLE t1;
 DROP TABLE t2;
+DROP TABLE t3;
+
+CREATE TABLE t1 (id INT PRIMARY KEY, date_char CHAR(20)) ENGINE=DuckDB;
+INSERT INTO t1 VALUES (1, '2020-01-01'), (2, '2020-01-01 12:13:14');
+SELECT date_char + INTERVAL 1 DAY, date_char + INTERVAL 1 SECOND
+	, DATE_SUB(DATE_FORMAT('2020-01-01', '%Y-%m-%d'), INTERVAL 1 DAY)
+	, DATE_SUB(DATE_FORMAT('2020-01-01', '%Y-%m-%d'), INTERVAL 1 SECOND)
+FROM t1;
+
+DROP TABLE t1;
 
 --echo --------------------------
 --echo 3. Support interval expr unit
@@ -143,6 +186,7 @@ INSERT INTO t1 VALUES (1, 1, 1), (2, 1, 1), (3, 0, 2);
 SELECT GROUP_CONCAT(col1, col2 ORDER BY col1 SEPARATOR ' ') FROM t1;
 SELECT GROUP_CONCAT(col1, col2 ORDER BY col1 SEPARATOR ' ') FROM t1;
 SELECT GROUP_CONCAT(DISTINCT col1, col2 SEPARATOR ' ') in ('11 02', '02 11') FROM t1;
+SELECT GROUP_CONCAT(col1, '🟥' ORDER BY col1 SEPARATOR '🟥') FROM t1;
 
 DROP TABLE t1;
 
@@ -269,6 +313,12 @@ SELECT CAST(id AS SIGNED) FROM t1;
 
 DROP TABLE t1;
 
+# CAST AS SIGNED with TEXT column (Item_typecast_signed::print)
+CREATE TABLE t2 (id INT PRIMARY KEY, num_text TEXT) ENGINE=DuckDB;
+INSERT INTO t2 VALUES (1, '12345'), (2, '67.89');
+SELECT CAST(num_text AS SIGNED) FROM t2;
+DROP TABLE t2;
+
 --echo --------------------------
 --echo 12. Index hint
 --echo --------------------------
@@ -319,6 +369,54 @@ SELECT 17 MEMBER OF('[23, "abc", "17", "ab", 10]'), "17" MEMBER OF('[23, "abc", 
 SELECT CAST('[4,5]' AS JSON) MEMBER OF('[[3,4],[4,5]]') FROM t1;
 SELECT '[4,5]' MEMBER OF('[[3,4],[4,5]]') FROM t1;
 SELECT '\"' MEMBER OF('["\\\""]'), '"' MEMBER OF('["\\\""]') FROM t1;
+
+DROP TABLE t1;
+
+--echo --------------------------
+--echo 15. VALUES ROW
+--echo --------------------------
+
+CREATE TABLE t1 (id INT PRIMARY KEY, col1 INT) ENGINE=DuckDB;
+INSERT INTO t1 VALUES (1, 3);
+
+SELECT * FROM (VALUES ROW(1, 2), ROW(3, 4) UNION SELECT * FROM t1) d ORDER BY column_1;
+SELECT column_1 FROM (VALUES ROW(1, 2), ROW(3, 4) UNION SELECT * FROM t1) d ORDER BY column_1;
+SELECT * FROM (VALUES ROW(1, 2), ROW(3, 4)) d1, t1 WHERE d1.column_0 = t1.id ORDER BY column_1, t1.id;
+SELECT * FROM (VALUES ROW(1, 2), ROW(3, 4)) d1(id, col1), t1 WHERE d1.id = t1.id ORDER BY d1.id, t1.id;
+
+DROP TABLE t1;
+
+--echo --------------------------
+--echo 16. System variable replacement for DuckDB
+--echo --------------------------
+
+CREATE TABLE t1 (id INT PRIMARY KEY) ENGINE=DuckDB;
+INSERT INTO t1 VALUES (1);
+
+# time_zone variable should be converted to IANA timezone name for DuckDB
+SET time_zone = '+00:00';
+SELECT @@session.time_zone FROM t1;
+SET time_zone = default;
+
+# Numeric system variable should be printed as plain number
+SELECT @@session.auto_increment_increment FROM t1;
+
+DROP TABLE t1;
+
+--echo --------------------------
+--echo 17. Temporal columns in boolean context (zero date comparison)
+--echo --------------------------
+
+CREATE TABLE t1 (id INT PRIMARY KEY, ts TIMESTAMP NULL DEFAULT NULL, d DATE DEFAULT NULL) ENGINE=DuckDB;
+INSERT INTO t1 VALUES (1, '2025-01-01 00:00:00', '2025-01-01');
+INSERT INTO t1 VALUES (2, NULL, NULL);
+
+# timestamp column in boolean context: (ts OR ...) should be rewritten as (ts <> 0 OR ...)
+# instead of (ts <> '0000-00-00 00:00:00' OR ...) which DuckDB cannot parse.
+SELECT * FROM t1 WHERE ts OR id = 2 ORDER BY id;
+
+# date column in boolean context: same rewrite needed for zero date '0000-00-00'
+SELECT * FROM t1 WHERE d OR id = 2 ORDER BY id;
 
 DROP TABLE t1;
 

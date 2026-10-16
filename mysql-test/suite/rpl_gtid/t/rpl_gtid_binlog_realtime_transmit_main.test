@@ -1,0 +1,452 @@
+# ==== Purpose ====
+# This test verifies the main function of binlog realtime transmit.
+#
+# ==== Implementation ====
+# 0) Prepare data.
+# 1) Test realtime transmit for transaction use normal binlog flush.
+# 2) Test realtime transmit for transaction use binlog cache free flush.
+# 3) Test rollback realtime transmit for transaction.
+#    3.1) Test rollback the whole transaction.
+#    3.2) Test rollback to savepoint.
+# 4) Test turn off binlog_realtime_transmit_source_enabled in middle of transaction.
+#    4.1) Test turn off binlog_realtime_transmit_source_enabled after open brr_trx.
+#    4.2) Test turn off binlog_realtime_transmit_source_enabled before open brr_trx.
+# 5) Test multi transactions use realtime transmit together.
+# 6) Test source brr trx will remove itself if no brr slave exist.
+# 7) Test transaction use binlog compress will not realtime transmit.
+# 8) Cleanup.
+
+--source include/master-slave.inc
+--source include/have_binlog_format_row.inc
+--source include/have_semisync_plugin.inc
+--source include/install_semisync.inc
+--let $keep_gtid_events= 1
+
+FLUSH STATUS;
+
+--source include/rpl_connection_master.inc
+SET GLOBAL binlog_realtime_transmit_source_enabled = ON;
+CALL mtr.add_suppression("\\[ERROR\\] .*MY-\\d+.* \\[Repl\\] Brr Worker failed executing transaction .*");
+
+--echo #
+--echo # 0. Prepare data.
+--echo ########################################################
+--echo #
+--source include/rpl_connection_slave.inc
+--source include/stop_slave.inc
+SET GLOBAL binlog_realtime_transmit_replica_enabled = ON;
+--source include/start_slave.inc
+
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_count= 1
+--let $assert_select= Binlog realtime transmit sender inited
+--let $assert_text= Select brr init message in source error log.
+--source include/assert_grep.inc
+
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.2.err
+--let $assert_count= 1
+--let $assert_select= Binlog realtime transmit initialized
+--let $assert_text= Select brr init message in replica error log.
+--source include/assert_grep.inc
+
+--source include/rpl_connection_master.inc
+CREATE DATABASE rpl_test;
+CREATE TABLE rpl_test.t1 (s LONGTEXT);
+CREATE TABLE rpl_test.t2 (s LONGTEXT);
+
+--disable_query_log
+--let $i=0
+while ($i < 4)
+{
+  --eval INSERT INTO rpl_test.t1 values(repeat("1", 5242880))
+  --inc $i
+}
+--enable_query_log
+
+--echo #
+--echo # 1. Test realtime transmit for transaction use normal binlog flush.
+--echo ########################################################
+--echo #
+--let $wait_for_replica_brr_cache_count=1
+--let $include_commit_transaction=1
+--let $relay_log_file=slave-relay-bin.000005
+--source suite/rpl/include/binlog_realtime_transmit_execute_one_transaction.inc
+
+--source include/rpl_connection_master.inc
+SHOW STATUS LIKE "source_brr%";
+
+--echo # Check the message in error log.
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_count= 1
+--let $assert_select= Binlog realtime replica message: brr trx start on source, brr index: 1, tmp file name: .*ML_rds_binlog_cache_
+--let $assert_text= Select brr trx init message in source error log.
+--source include/assert_grep.inc
+
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_count= 1
+--let $assert_select= Binlog realtime replica message: brr reader start on source, brr trx start realtime transmit by dump thread, thread_id: .*, replica server_id: 2, brr index: 1, tmp file name: .*ML_rds_binlog_cache_
+--let $assert_text= Select brr reader init message in source error log.
+--source include/assert_grep.inc
+
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_count= 1
+--let $assert_select= Binlog realtime replica message: brr trx removed on source, brr index: 1, brr status: 1, brr trx gno: 10
+--let $assert_text= Select brr trx removed message in source error log.
+--source include/assert_grep.inc
+
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_count= 1
+--let $assert_select= Binlog realtime replica message: remove brr reader by dump thread, thread_id: .*, replica server_id: 2, brr index: 1, is trx send complete: 1. The trx type is LONG TRANSACTION, total trx content events sent: 8, total brr events sent: 0, brr status: 1, brr trx gno : 10
+--let $assert_text= Select brr reader removed message in source error log.
+--source include/assert_grep.inc
+
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.2.err
+--let $assert_count= 1
+--let $assert_select= Binlog realtime replica message: brr cache opened, brr index: 1, brr cache tmp file:.*RL_rds_relay_log_cache_0_1
+--let $assert_text= Select brr cache open message in replica error log.
+--source include/assert_grep.inc
+
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.2.err
+--let $assert_count= 1
+--let $assert_select= Binlog realtime replica message: brr cache with gno: 10, brr index: 1, trx content events received: 8, brr events received: 0, is_old: 0, is_complete: 1, is_assigned: 0
+--let $assert_text= Select brr cache finished message in source error log.
+--source include/assert_grep.inc
+
+--source include/rpl_connection_slave.inc
+--source include/stop_slave.inc
+
+--source include/rpl_connection_master.inc
+--source include/stop_dump_threads.inc
+
+--echo # Wait for source_brr_sender_count, expect 0
+--let $show_statement= SHOW STATUS LIKE 'source_brr_sender_count'
+--let $field= Value
+--let $condition= = '0'
+--source include/wait_show_condition.inc
+
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_count= 1
+--let $assert_select= Brr sender finished
+--let $assert_text= Select brr sender finished.
+--source include/assert_grep.inc
+
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.2.err
+--let $assert_count= 1
+--let $assert_select= Brr IO thread finished
+--let $assert_text= Select brr IO thread finished.
+--source include/assert_grep.inc
+
+--source include/rpl_connection_slave.inc
+--source include/start_slave.inc
+
+--echo #
+--echo # 2. Test realtime transmit for transaction use binlog cache free flush.
+--echo ########################################################
+--echo #
+--source include/rpl_connection_master.inc
+SET GLOBAL binlog_cache_free_flush_limit_size = 10 * 1024 * 1024;
+--let $wait_for_replica_brr_cache_count=1
+--let $include_commit_transaction=1
+--let $relay_log_file=slave-relay-bin.000010
+--source suite/rpl/include/binlog_realtime_transmit_execute_one_transaction.inc
+
+--source include/rpl_connection_master.inc
+SHOW STATUS LIKE "source_brr%";
+
+--echo #
+--echo # 3. Test rollback realtime transmit for transaction.
+--echo ########################################################
+--echo #
+--echo # 3.1 Test rollback the whole transaction.
+--let $wait_for_replica_brr_cache_count=1
+--let $include_commit_transaction=0
+--source suite/rpl/include/binlog_realtime_transmit_execute_one_transaction.inc
+
+--source include/rpl_connection_master.inc
+ROLLBACK;
+
+--echo # Wait for source_brr_reader_count, expect 0
+--let $show_statement= SHOW STATUS LIKE 'source_brr_reader_count'
+--let $field= Value
+--let $condition= = '0'
+--source include/wait_show_condition.inc
+
+SHOW STATUS LIKE "source_brr%";
+
+--let $wait_for_replica_brr_cache_count_value=0
+--source suite/rpl/include/binlog_realtime_transmit_wait_and_test_replica.inc
+
+--source include/rpl_connection_slave.inc
+--source include/rpl_sync.inc
+SELECT COUNT(*) FROM rpl_test.t2;
+
+SHOW STATUS LIKE "replica_brr_cache_count";
+
+--echo # 3.2 Test rollback to savepoint.
+--let $wait_for_replica_brr_cache_count=1
+--let $include_commit_transaction=0
+--source suite/rpl/include/binlog_realtime_transmit_execute_one_transaction.inc
+
+--source include/rpl_connection_master.inc
+SAVEPOINT identifier;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+ROLLBACK TO identifier;
+
+--let $wait_for_replica_brr_cache_count_value=0
+--source suite/rpl/include/binlog_realtime_transmit_wait_and_test_replica.inc
+
+--source include/rpl_connection_master.inc
+--echo # Wait for source_brr_reader_count, expect 0
+--let $show_statement= SHOW STATUS LIKE 'source_brr_reader_count'
+--let $field= Value
+--let $condition= = '0'
+--source include/wait_show_condition.inc
+
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+SHOW STATUS LIKE 'source_brr%';
+COMMIT;
+
+--source include/rpl_connection_slave.inc
+--source include/rpl_sync.inc
+--let $binlog_file=slave-relay-bin.000015
+--source include/show_relaylog_events.inc
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--echo #
+--echo # 4. Test turn off binlog_realtime_transmit_source_enabled in middle of transaction.
+--echo ########################################################
+--echo #
+--echo # 4.1 Test turn off binlog_realtime_transmit_source_enabled after open brr_trx.
+--source include/rpl_connection_master.inc
+--let $wait_for_replica_brr_cache_count=1
+--let $include_commit_transaction=0
+--source suite/rpl/include/binlog_realtime_transmit_execute_one_transaction.inc
+
+--source include/rpl_connection_master.inc
+SET GLOBAL binlog_realtime_transmit_source_enabled = OFF;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+--let $wait_for_replica_brr_cache_count_value=0
+--source suite/rpl/include/binlog_realtime_transmit_wait_and_test_replica.inc
+
+--source include/rpl_connection_master.inc
+SET GLOBAL binlog_realtime_transmit_source_enabled = ON;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+SHOW STATUS LIKE 'source_brr%';
+COMMIT;
+
+--source include/rpl_connection_slave.inc
+--source include/rpl_sync.inc
+--let $binlog_file=slave-relay-bin.000019
+--source include/show_relaylog_events.inc
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--echo # 4.2 Test turn off binlog_realtime_transmit_source_enabled before open brr_trx.
+--source include/rpl_connection_master.inc
+BEGIN;
+INSERT INTO rpl_test.t2 values("abc");
+
+SET GLOBAL binlog_realtime_transmit_source_enabled = OFF;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+SET GLOBAL binlog_realtime_transmit_source_enabled = ON;
+COMMIT;
+
+--source include/rpl_connection_slave.inc
+--source include/rpl_sync.inc
+--let $binlog_file=slave-relay-bin.000023
+--source include/show_relaylog_events.inc
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--echo #
+--echo # 5. Test multi transactions use realtime transmit together.
+--echo ########################################################
+--echo #
+--echo # Start five transactions.
+connect(conn1,localhost,root,,);
+connect(conn2,localhost,root,,);
+connect(conn3,localhost,root,,);
+connect(conn4,localhost,root,,);
+connect(conn5,localhost,root,,);
+
+connection conn1;
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+connection conn2;
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+connection conn3;
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+connection conn4;
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+connection conn5;
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+--let $wait_for_replica_brr_cache_count_value=5
+--source suite/rpl/include/binlog_realtime_transmit_wait_and_test_replica.inc
+
+--source include/rpl_connection_master.inc
+SHOW STATUS LIKE 'source_brr%';
+
+--echo # Commit two transactions, Executed more sql for three transactions.
+connection conn1;
+COMMIT;
+
+connection conn2;
+COMMIT;
+
+connection conn3;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+connection conn4;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+connection conn5;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+--let $wait_for_replica_brr_cache_count_value=3
+--source suite/rpl/include/binlog_realtime_transmit_wait_and_test_replica.inc
+
+--source include/rpl_connection_slave.inc
+--source include/rpl_sync.inc
+--let $binlog_file=slave-relay-bin.000028
+--source include/show_relaylog_events.inc
+
+--let $binlog_file=slave-relay-bin.000034
+--source include/show_relaylog_events.inc
+
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--source include/rpl_connection_master.inc
+SHOW STATUS LIKE 'source_brr%';
+
+--echo # Commit all transactions.
+connection conn3;
+COMMIT;
+
+connection conn4;
+COMMIT;
+
+connection conn5;
+COMMIT;
+
+--let $wait_for_replica_brr_cache_count_value=0
+--source suite/rpl/include/binlog_realtime_transmit_wait_and_test_replica.inc
+
+--source include/rpl_connection_slave.inc
+--source include/rpl_sync.inc
+--let $binlog_file=slave-relay-bin.000040
+--source include/show_relaylog_events.inc
+
+--let $binlog_file=slave-relay-bin.000046
+--source include/show_relaylog_events.inc
+
+--let $binlog_file=slave-relay-bin.000052
+--source include/show_relaylog_events.inc
+
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--source include/rpl_connection_master.inc
+SHOW STATUS LIKE 'source_brr%';
+
+--echo #
+--echo # 6. Test source brr trx will remove itself if no brr slave exist.
+--echo ########################################################
+--echo #
+--source include/rpl_connection_slave.inc
+--source include/stop_slave.inc
+SET GLOBAL binlog_realtime_transmit_replica_enabled = OFF;
+--source include/start_slave.inc
+
+--source include/rpl_connection_master.inc
+--echo # Wait for source_brr_sender_count, expect 0
+--let $show_statement= SHOW STATUS LIKE 'source_brr_sender_count'
+--let $field= Value
+--let $condition= = '0'
+--source include/wait_show_condition.inc
+
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+--echo # Wait for source_brr_trx_count, expect 1
+--let $show_statement= SHOW STATUS LIKE 'source_brr_trx_count'
+--let $field= Value
+--let $condition= = '1'
+--source include/wait_show_condition.inc
+
+SHOW STATUS LIKE 'source_brr_reader_count';
+
+COMMIT;
+
+--echo # Wait for source_brr_trx_count, expect 0
+--let $show_statement= SHOW STATUS LIKE 'source_brr_trx_count'
+--let $field= Value
+--let $condition= = '0'
+--source include/wait_show_condition.inc
+
+--source include/rpl_connection_slave.inc
+--source include/stop_slave.inc
+SET GLOBAL binlog_realtime_transmit_replica_enabled = ON;
+--source include/start_slave.inc
+
+--source include/rpl_connection_master.inc
+--echo # Wait for source_brr_sender_count, expect 1
+--let $show_statement= SHOW STATUS LIKE 'source_brr_sender_count'
+--let $field= Value
+--let $condition= = '1'
+--source include/wait_show_condition.inc
+
+--echo #
+--echo # 7. Test transaction use binlog compress will not realtime transmit.
+--echo ########################################################
+--echo #
+--source include/rpl_connection_master.inc
+SET binlog_transaction_compression = ON;
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+--echo # Wait for source_brr_trx_count, expect 0
+--let $show_statement= SHOW STATUS LIKE 'source_brr_trx_count'
+--let $field= Value
+--let $condition= = '0'
+--source include/wait_show_condition.inc
+
+SHOW STATUS LIKE 'source_%';
+
+COMMIT;
+
+--source include/rpl_connection_slave.inc
+--source include/rpl_sync.inc
+--let $binlog_file=slave-relay-bin.000061
+--source include/show_relaylog_events.inc
+
+SELECT COUNT(*) FROM rpl_test.t2;
+
+--echo # 8. Cleanup.
+--echo ########################################################
+--echo #
+disconnect conn1;
+disconnect conn2;
+disconnect conn3;
+disconnect conn4;
+disconnect conn5;
+
+--source include/rpl_connection_master.inc
+SHOW STATUS LIKE "source_sent_brr_events_count";
+SET GLOBAL binlog_cache_free_flush_limit_size= DEFAULT;
+SET GLOBAL binlog_realtime_transmit_source_enabled = DEFAULT;
+DROP DATABASE rpl_test;
+
+--source include/rpl_connection_slave.inc
+SET GLOBAL binlog_realtime_transmit_replica_enabled= DEFAULT;
+SHOW STATUS LIKE "replica_received_brr_events_count";
+--source include/rpl_sync.inc
+--source include/uninstall_semisync.inc
+--source include/rpl_end.inc

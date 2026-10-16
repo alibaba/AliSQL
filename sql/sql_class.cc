@@ -115,6 +115,7 @@
 #include "thr_mutex.h"
 
 #include "duckdb/duckdb_context.h"
+#include "sql/rpl_replica_ext.h"   // THD_rds_context
 
 class Parse_tree_root;
 

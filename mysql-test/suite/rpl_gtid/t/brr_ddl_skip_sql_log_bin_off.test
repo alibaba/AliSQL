@@ -1,0 +1,57 @@
+# ==== Purpose ====
+# Verify that BRR DDL is NOT triggered when sql_log_bin=0.
+#
+# ==== Implementation ====
+# 1. With sql_log_bin=1, OPTIMIZE TABLE should trigger BRR DDL.
+# 2. With sql_log_bin=0, OPTIMIZE TABLE should NOT trigger BRR DDL.
+
+--source include/master-slave.inc
+--source include/have_binlog_format_row.inc
+--source include/have_debug.inc
+
+CALL mtr.add_suppression("\\[Warning\\] .*MY-\\d+.* \\[Repl\\] \\[RDS Diagnose\\] .*");
+CALL mtr.add_suppression("\\[Warning\\] .*MY-\\d+.* \\[Server\\] \\[RDS Diagnose\\] optimize .*");
+
+--echo
+--echo # 0. Prepare data.
+--source include/rpl_connection_master.inc
+CREATE TABLE t1 (a INT PRIMARY KEY, b INT);
+INSERT INTO t1 VALUES (1, 1);
+--source include/rpl_sync.inc
+
+--echo
+--echo # 1. With sql_log_bin=1, OPTIMIZE TABLE should trigger BRR DDL.
+--source include/rpl_connection_master.inc
+SET GLOBAL debug='+d,ignore_brr_ddl_time_limit';
+OPTIMIZE TABLE t1;
+SET GLOBAL debug='-d,ignore_brr_ddl_time_limit';
+
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_select = .* Binlog realtime replica message: brr trx start on source, brr index.*
+--let $assert_count = 1
+--let $assert_text = OPTIMIZE TABLE with sql_log_bin=1 should trigger BRR DDL.
+--source include/assert_grep.inc
+
+--source include/rpl_sync.inc
+
+--echo
+--echo # 2. With sql_log_bin=0, OPTIMIZE TABLE should NOT trigger BRR DDL.
+--source include/rpl_connection_master.inc
+SET GLOBAL debug='+d,ignore_brr_ddl_time_limit';
+SET sql_log_bin = 0;
+OPTIMIZE TABLE t1;
+SET sql_log_bin = 1;
+SET GLOBAL debug='-d,ignore_brr_ddl_time_limit';
+
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_select = .* Binlog realtime replica message: brr trx start on source, brr index.*
+--let $assert_count = 1
+--let $assert_text = OPTIMIZE TABLE with sql_log_bin=0 should NOT trigger additional BRR DDL.
+--source include/assert_grep.inc
+
+--echo
+--echo # Cleanup.
+--source include/rpl_connection_master.inc
+DROP TABLE t1;
+--source include/rpl_sync.inc
+--source include/rpl_end.inc

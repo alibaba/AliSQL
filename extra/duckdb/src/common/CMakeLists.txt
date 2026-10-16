@@ -13,7 +13,6 @@ add_subdirectory(tree_renderer)
 add_subdirectory(row_operations)
 add_subdirectory(serializer)
 add_subdirectory(sort)
-add_subdirectory(sorting)
 add_subdirectory(types)
 add_subdirectory(value_operations)
 add_subdirectory(vector_operations)
@@ -43,12 +42,14 @@ add_library_unity(
   encryption_functions.cpp
   encryption_key_manager.cpp
   encryption_state.cpp
+  encryption_types.cpp
   exception.cpp
   exception_format_value.cpp
   extra_type_info.cpp
   file_buffer.cpp
   file_system.cpp
   filename_pattern.cpp
+  path.cpp
   fsst.cpp
   gzip_file_system.cpp
   hive_partitioning.cpp
@@ -65,6 +66,7 @@ add_library_unity(
   enum_util.cpp
   symbols.cpp
   render_tree.cpp
+  thread_util.cpp
   tree_renderer.cpp
   types.cpp
   bignum.cpp

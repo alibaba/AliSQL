@@ -59,7 +59,9 @@ ALTER TABLE existing_innodb_table ENGINE=DuckDB;
 
 ## AliSQL 8.0.44 增强
 
-- DuckDB 内核升级到 v1.4.4。
+- DuckDB 内核升级到固定开发快照 `v1.5.2-dev736`（`8a66223119b16000f3814fa7150cfa7370b63209`）。
+- 新增可选的 AUTO_INCREMENT 和后台自动 Checkpoint，默认均关闭。
+- 新增 `JSON_OBJECTAGG`、跨库 RENAME TABLE，并修复引号转义、NOT NULL 修改、生成列依赖、启动转换和回滚处理。
 - 可选 SQL Normalization 可转写更多 MySQL 语法和函数，包括跨库查询及 Prepared Statement 自动 reprepare。
 - 增加 Generated Column 转换、Latin1、BIT/默认值兼容以及 BLOB/VARCHAR 比较支持。
 - 增加用户查询与复制查询的单查询线程上限，以及可选的高精度计算模式。
@@ -67,6 +69,30 @@ ALTER TABLE existing_innodb_table ENGINE=DuckDB;
 - 完善批量复制、GTID 管理、幂等回放、崩溃回滚和孤表清理。
 
 完整变更与控制参数参见 [AliSQL 8.0.44 发布说明](../changes-in-alisql-8.0.44.md)和 [DuckDB 参数参考](./duckdb_variables-zh.md)。
+
+### 自增列与后台 Checkpoint
+
+创建或转换需要保留 AUTO_INCREMENT 属性的表之前，先开启支持：
+
+```sql
+SET GLOBAL duckdb_support_auto_increment = ON;
+CREATE TABLE analytics_events (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    event_name VARCHAR(64)
+) ENGINE=DuckDB;
+INSERT INTO analytics_events (event_name) VALUES ('created');
+```
+
+默认 `OFF` 保留了此前在 DuckDB 字段转换时移除 AUTO_INCREMENT 属性的行为；修改开关不会自动给已有表补回这一属性。MySQL PRIMARY/UNIQUE 元数据仍不代表 DuckDB 会实际强制唯一性。
+
+后台自动 Checkpoint 可以独立启用：
+
+```sql
+SET GLOBAL duckdb_enable_background_checkpoint = ON;
+SET GLOBAL duckdb_background_checkpoint_full_interval = 0;
+```
+
+间隔表示两次 Full Checkpoint 之间的 Concurrent Checkpoint 数量，零表示始终 Full；WAL 大小触发阈值仍由 `duckdb_checkpoint_threshold` 控制。本次更新范围参见 [2026-10-16 发布说明](../changes/changes-in-alisql-8.0.44.2026-10-16-zh.md)。
 
 ## 架构
 
@@ -122,6 +148,7 @@ AliSQL 支持 DuckDB 节点通过 Binlog 作为从库。由于 DuckDB 没有提�
 - DuckDB 更偏好大事务；频繁的小事务可能增加复制延迟
 - 通过批量回放合并小事务，提高复制吞吐并减少提交开销
 - Multi-Trx Batch 要求 `replica_parallel_workers=0`，并且只能在复制停止时修改 `duckdb_multi_trx_in_batch`
+- [BRR 实时回放](../binlog-realtime-replication/binlog-realtime-replication-zh.md)要求并行复制 Worker，不能与 Multi-Trx Batch 原样混用配置
 - 实际回放速率与延迟取决于行大小、事务规模、硬件和主库并发
 - DuckDB 主节点上的 `INSERT`，以及满足数据导入限制时的 `DELETE`，也会使用批量写入
 ![Batch commit](./pic/batch_commit.png)

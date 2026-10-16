@@ -378,5 +378,5 @@ class DropPartitionConvertor : public AlterTableConvertor {
   std::string m_query;
 };
 
-/* Convert a binary string to hexadecimal representation '\x01\x0A\xAC'::BLOB */
+/* Convert a binary string to a SQL bit-string literal: x'010AAC'::BLOB */
 std::string toHex(const char *data, size_t length);

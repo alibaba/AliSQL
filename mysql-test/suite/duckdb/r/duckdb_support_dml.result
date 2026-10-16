@@ -380,18 +380,18 @@ physical_plan
 │         PROJECTION        │
 │    ────────────────────   │
 │             10            │
-│             #0            │
+│           rowid           │
 │                           │
-│          ~3 Rows          │
+│          ~3 rows          │
 └─────────────┬─────────────┘
 ┌─────────────┴─────────────┐
-│         SEQ_SCAN          │
+│          SEQ_SCAN         │
 │    ────────────────────   │
-│         Table: t1         │
+│   Table: duckdb.test.t1   │
 │   Type: Sequential Scan   │
 │       Filters: id=1       │
 │                           │
-│          ~3 Rows          │
+│          ~3 rows          │
 └───────────────────────────┘
 
 EXPLAIN ANALYZE UPDATE t1 SET col1 = 10 WHERE id = 1;
@@ -412,13 +412,13 @@ physical_plan
 │           DELETE          │
 └─────────────┬─────────────┘
 ┌─────────────┴─────────────┐
-│         SEQ_SCAN          │
+│          SEQ_SCAN         │
 │    ────────────────────   │
-│         Table: t1         │
+│   Table: duckdb.test.t1   │
 │   Type: Sequential Scan   │
 │       Filters: id=1       │
 │                           │
-│          ~3 Rows          │
+│          ~3 rows          │
 └───────────────────────────┘
 
 EXPLAIN ANALYZE DELETE FROM t1 WHERE id = 1;

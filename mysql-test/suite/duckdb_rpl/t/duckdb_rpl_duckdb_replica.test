@@ -33,6 +33,7 @@ SELECT * FROM t1;
 CALL dbms_duckdb.query("SELECT * FROM mysql.duckdb_binlog_position");
 --source include/start_slave.inc
 
+--sleep 10
 --let $rpl_connection_name = server_3
 --source include/rpl_connection.inc
 --let $slave_io_errno=2003

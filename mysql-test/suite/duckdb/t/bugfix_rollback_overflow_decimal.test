@@ -1,0 +1,40 @@
+--source include/master-slave.inc
+--source include/have_binlog_format_row.inc
+
+--echo # Prepare
+--source include/rpl_connection_master.inc
+CREATE TABLE t1 (
+    id BIGINT NOT NULL,
+    c0 DECIMAL(40, 20) NOT NULL,
+    PRIMARY KEY(id)
+) ENGINE=InnoDB;
+
+--source include/rpl_sync.inc
+--source include/rpl_connection_slave.inc
+ALTER TABLE t1 ENGINE=DuckDB;
+SHOW CREATE TABLE t1;
+
+--echo # Insert overflow DECIMAL into Master
+--source include/stop_slave_sql.inc
+--source include/rpl_connection_master.inc
+INSERT INTO t1 VALUES(1, '123456');
+INSERT INTO t1 VALUES(2, '1435323879643025700');
+
+--echo # Slave's replication interrupted
+--source include/rpl_connection_slave.inc
+CALL mtr.add_suppression("MY-010584");
+--source include/start_slave_sql.inc
+--let $slave_sql_errno= convert_error(ER_DUCKDB_APPENDER_ERROR)
+--source include/wait_for_slave_sql_to_stop.inc
+
+--echo # Alter Slave's table to InnoDB, resume replication
+--source include/rpl_connection_slave.inc
+ALTER TABLE t1 ENGINE=InnoDB;
+--source include/start_slave_sql.inc
+--source include/rpl_sync.inc
+
+--echo # Cleanup
+--source include/rpl_connection_master.inc
+DROP TABLE t1;
+--source include/rpl_sync.inc
+--source include/rpl_end.inc

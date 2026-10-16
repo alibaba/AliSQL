@@ -1,0 +1,2 @@
+--relay_log_purge=OFF
+$SEMISYNC_PLUGIN_OPT

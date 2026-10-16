@@ -180,6 +180,11 @@ Relay_log_info::Relay_log_info(bool is_slave_recovery,
       last_event_start_time(0),
       deferred_events(nullptr),
       workers(PSI_NOT_INSTRUMENTED),
+      brr_workers(PSI_NOT_INSTRUMENTED),
+      replica_brr_workers(0),
+      brr_abort_running(false),
+      brr_abort_query(false),
+      brr_cache(nullptr),
       workers_array_initialized(false),
       curr_group_assigned_parts(PSI_NOT_INSTRUMENTED),
       curr_group_da(PSI_NOT_INSTRUMENTED),
@@ -1313,6 +1318,7 @@ void Relay_log_info::cleanup_context(THD *thd, bool error) {
   if (error) {
     if (thd->multi_trx_in_batch()) {
       if (thd->get_duckdb_context()->commit_partial_batch()) {
+        trans_rollback_stmt(thd);
         trans_rollback(thd);
         my_error(ER_DUCKDB_COMMIT_ERROR, MYF(0),
                  "Commit partial batch failed!");
@@ -2675,6 +2681,40 @@ ulong Relay_log_info::adapt_to_master_version_updown(ulong master_version,
   }
 
   return master_version;
+}
+
+void Relay_log_info::do_report(loglevel level, int err_code, const char *msg,
+                               va_list args) const {
+  if (!get_brr_cache()) {
+    Slave_reporting_capability::do_report(level, err_code, msg, args);
+    return;
+  }
+
+  char buff_msg[MAX_SLAVE_ERRMSG];
+  ulonglong brr_index = get_brr_cache()->get_brr_index();
+  char *curr_buff = buff_msg;
+
+  curr_buff += snprintf(
+      buff_msg, sizeof(buff_msg),
+      "Brr Worker failed executing transaction brr index %llu: ", brr_index);
+
+  vsnprintf(curr_buff, MAX_SLAVE_ERRMSG - (curr_buff - buff_msg), msg, args);
+
+  LogEvent()
+      .type(LOG_TYPE_ERROR)
+      .subsys(LOG_SUBSYSTEM_TAG)
+      .prio(level)
+      /* if it's a client err-code, flag it as from diagnostics area */
+      .errcode((err_code < ER_SERVER_RANGE_START)
+                   ? ER_RPL_REPLICA_ERROR_INFO_FROM_DA
+                   : err_code)
+      .subsys("Repl")
+      /*
+        We'll use the original error-code in the actual message,
+        even if it's out of range. That should make it easier
+        to find, debug, and fix.
+      */
+      .message("%s. Error_code: MY-%06d", buff_msg, err_code);
 }
 
 bool is_mts_db_partitioned(Relay_log_info *rli) {

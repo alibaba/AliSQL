@@ -138,6 +138,7 @@
 #include "sql/xa/sql_cmd_xa.h"  // Sql_cmd_xa_*
 #include "sql_partition.h"
 #include "thr_lock.h"
+#include "sql/rpl_binlog_sender_ext.h"
 
 #include "sql/binlog_ext.h"
 #include "sql/duckdb/duckdb_config.h"
@@ -1196,6 +1197,7 @@ class binlog_trx_cache_data : public binlog_cache_data {
   void restore_savepoint(my_off_t pos) {
     DBUG_TRACE;
     DBUG_PRINT("enter", ("before_stmt_pos: %llu", (ulonglong)before_stmt_pos));
+    get_cache()->get_rds_cache_storage()->rollback_brr_trx();
     binlog_cache_data::truncate(pos);
     if (pos <= before_stmt_pos) before_stmt_pos = MY_OFF_T_UNDEF;
     cache_state_rollback(pos);
@@ -1615,6 +1617,16 @@ int binlog_cache_data::write_event(Log_event *ev) {
     DBUG_EXECUTE_IF("simulate_disk_full_at_flush_pending",
                     { DBUG_SET("+d,simulate_file_write_error"); });
 
+    assert(current_thd);
+    if (current_thd->get_rds_context().get_brr_trx()) {
+      /*
+        We call rollback_brr_trx before writing Query_log_event to binlog cache,
+        so the DDL will never be considered as a long transaction and transmit
+        using brr.
+      */
+      m_cache.get_rds_cache_storage()->rollback_brr_trx();
+    }
+
     /*
       In binlog cache free flush, some space will be reserved in the front of
       binlog cache tmp file to contain FD, prev GTID and GTID events.
@@ -1662,6 +1674,9 @@ int binlog_cache_data::write_event(Log_event *ev) {
         break;
     }
 
+    /* Update brr position for this transaction after write a whole event. */
+    m_cache.get_rds_cache_storage()->update_brr_pos_after_write();
+
     if (ev->is_using_immediate_logging()) flags.immediate = true;
     /* DDL gets marked as xid-requiring at its caching. */
     if (is_atomic_ddl_event(ev)) flags.with_xid = true;
@@ -1675,6 +1690,14 @@ int binlog_cache_data::write_event(Log_event *ev) {
     m_event_counter++;
     DBUG_PRINT("debug",
                ("event_counter= %lu", static_cast<ulong>(m_event_counter)));
+
+    /* Rollback current brr_trx if the stmt cache has been written. */
+    if (current_thd && !is_trx_cache()) {
+      thd_get_cache_mngr(current_thd)
+          ->trx_cache.get_cache()
+          ->get_rds_cache_storage()
+          ->rollback_brr_trx();
+    }
   }
   return 0;
 }
@@ -1895,6 +1918,25 @@ bool MYSQL_BIN_LOG::write_transaction(THD *thd, binlog_cache_data *cache_data,
   bool ret = DBUG_EVALUATE_IF("simulate_write_trans_without_gtid", false,
                               gtid_event.write(writer));
   if (ret) goto end;
+
+  /*
+    If brr_source_index != 0, it means we have send SA to replica, we need
+    to send brr Gtid_log_event to replica, so that brr worker will commit
+    this DDL.
+    We bind the gno and sid to brr_trx. Then we will send the brr
+    gtid_log_event later.
+  */
+  if (thd->get_rds_context().get_brr_trx()) {
+    brr_trx_mngr.update_brr_trx_gtid(thd->get_rds_context().get_brr_trx(),
+                                     gtid_event.get_sid(),
+                                     gtid_event.get_gno());
+
+    thd->get_rds_context().set_brr_trx(nullptr);
+  } else {
+    /* Update brr gtid of current transaction. */
+    cache_data->get_cache()->get_rds_cache_storage()->update_brr_gtid(
+        gtid_event.get_sid(), gtid_event.get_gno());
+  }
 
   if (!binlog_cache_free_flush.is_free_flushing()) {
     /*
@@ -2628,6 +2670,9 @@ void binlog_trx_cache_data::truncate(THD *thd, bool all) {
               all ? "all" : "stmt"));
 
   remove_pending_event();
+
+  /* Rollback the brr_trx if truncate happened. */
+  get_cache()->get_rds_cache_storage()->rollback_brr_trx();
 
   /*
     If rolling back an entire transaction or a single statement not
@@ -4072,6 +4117,9 @@ bool MYSQL_BIN_LOG::open(PSI_file_key log_file_key, const char *log_name,
     // Open binlog cache tmp file instead of new binlog file in free flush mode.
     const char *file_name = binlog_cache_free_flush.get_tmp_file_name();
     ret = m_binlog_file->open(log_file_key, file_name, flags, true /* exist */);
+  } else if (is_relay_log && tmp_relay_file_name != nullptr) {
+    /* Rename brr cache tmp file to relay log file and open it. */
+    ret = rename_brr_cache_to_relay_log();
   } else
     ret = m_binlog_file->open(log_file_key, log_file_name, flags);
 
@@ -5334,11 +5382,20 @@ bool MYSQL_BIN_LOG::open_binlog(
       goto err;
     bytes_written += extra_description_event->common_header->data_written;
   }
-  if (m_binlog_file->flush_and_sync()) goto err;
 
   /* Update reserved_size after each rotation. */
   if (!is_relay_log)
     binlog_cache_free_flush.update_reserved_size(m_binlog_file->position());
+  else {
+    relay_log_reserved_size = m_binlog_file->position() +
+                              binary_log::Gtid_event::MAX_EVENT_LENGTH + 4096;
+    /* Write the empty event to fill the reserve space. */
+    if (tmp_relay_file_name != nullptr)
+      if (write_empty_event_to_relay_log())
+        goto err;
+  }
+
+  if (m_binlog_file->flush_and_sync()) goto err;
 
   if (write_file_name_to_index_file) {
     DBUG_EXECUTE_IF("crash_create_critical_before_update_index",

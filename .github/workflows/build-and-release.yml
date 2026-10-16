@@ -1,23 +1,30 @@
 name: build-and-release
-run-name: AliSQL release ${{ inputs.tag || github.ref_name }}
+run-name: AliSQL ${{ inputs.tag || github.event.release.tag_name || github.ref_name }} (${{ github.event_name == 'workflow_dispatch' && !inputs.publish && 'validation' || 'publish' }})
 
 on:
   push:
     tags:
       - 'AliSQL-8.0.*'
       - 'AliSQL-5.7.*'
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing AliSQL tag to build or retry'
+        description: 'Version tag for package names; publishing requires this tag to exist'
         required: true
         type: string
+      publish:
+        description: 'Publish release assets (false builds the selected branch without publishing)'
+        required: true
+        default: false
+        type: boolean
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: release-${{ inputs.tag || github.ref_name }}
+  group: release-${{ inputs.tag || github.event.release.tag_name || github.ref_name }}-${{ github.event_name == 'workflow_dispatch' && !inputs.publish && github.ref || 'publish' }}
   cancel-in-progress: false
 
 env:
@@ -26,6 +33,7 @@ env:
 
 jobs:
   parse:
+    if: github.event_name != 'release' || startsWith(github.event.release.tag_name, 'AliSQL-8.0.') || startsWith(github.event.release.tag_name, 'AliSQL-5.7.')
     runs-on: ubuntu-latest
     outputs:
       tag:     ${{ steps.p.outputs.tag }}
@@ -34,18 +42,32 @@ jobs:
       minor:   ${{ steps.p.outputs.minor }}
       patch:   ${{ steps.p.outputs.patch }}
       extra:   ${{ steps.p.outputs.extra }}
+      publish: ${{ steps.p.outputs.publish }}
+      source_ref: ${{ steps.p.outputs.source_ref }}
     steps:
       - id: p
         env:
           REQUESTED_TAG: ${{ inputs.tag }}
+          REQUESTED_PUBLISH: ${{ inputs.publish }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           set -euo pipefail
 
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
             TAG="$REQUESTED_TAG"
+            PUBLISH="${REQUESTED_PUBLISH:-false}"
+          elif [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
+            TAG="$RELEASE_TAG"
+            PUBLISH=true
           else
             TAG="$GITHUB_REF_NAME"
+            PUBLISH=true
           fi
+
+          case "$PUBLISH" in
+            true|false) ;;
+            *) echo 'publish must be true or false' >&2; exit 1 ;;
+          esac
 
           if [[ "$TAG" =~ ^AliSQL-([0-9]+)\.([0-9]+)\.([0-9]+)-([0-9A-Za-z][0-9A-Za-z._-]*)$ ]]; then
             MAJOR="${BASH_REMATCH[1]}"
@@ -66,6 +88,11 @@ jobs:
           esac
 
           VERSION="${TAG#AliSQL-}"
+          if [[ "$PUBLISH" == true ]]; then
+            SOURCE_REF="refs/tags/${TAG}"
+          else
+            SOURCE_REF="$GITHUB_SHA"
+          fi
           {
             echo "tag=$TAG"
             echo "version=$VERSION"
@@ -73,11 +100,55 @@ jobs:
             echo "minor=$MINOR"
             echo "patch=$PATCH"
             echo "extra=$EXTRA"
+            echo "publish=$PUBLISH"
+            echo "source_ref=$SOURCE_REF"
           } >> "$GITHUB_OUTPUT"
           echo "Parsed: version=$VERSION major=$MAJOR minor=$MINOR patch=$PATCH extra=$EXTRA"
+          echo "Source: $SOURCE_REF; publish: $PUBLISH"
+
+  notes:
+    needs: parse
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout workflow helpers
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: workflow-tools
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+
+      - name: Checkout source changelogs
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.parse.outputs.source_ref }}
+          path: release-source
+          sparse-checkout: wiki
+          persist-credentials: false
+
+      - name: Validate and render release notes
+        env:
+          TAG: ${{ needs.parse.outputs.tag }}
+          LINK_REF: ${{ needs.parse.outputs.publish == 'true' && needs.parse.outputs.tag || needs.parse.outputs.source_ref }}
+        run: |
+          set -euo pipefail
+          python3 workflow-tools/.github/scripts/test_release_notes.py
+          python3 workflow-tools/.github/scripts/release-notes.py \
+            --source-root release-source \
+            --repository "$GITHUB_REPOSITORY" \
+            --tag "$TAG" --link-ref "$LINK_REF" \
+            --docker-image "$DOCKER_IMAGE" --docker-repository "$DOCKER_REPOSITORY" \
+            --output release-notes.md
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: release-notes.md
+          if-no-files-found: error
+          retention-days: 7
 
   build:
-    needs: parse
+    needs: [parse, notes]
     strategy:
       fail-fast: false
       matrix:
@@ -89,12 +160,21 @@ jobs:
             runner: ubuntu-24.04-arm
             cmake_arch: aarch64
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 120
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.parse.outputs.tag }}
+          ref: ${{ needs.parse.outputs.source_ref }}
           fetch-depth: 1
+          persist-credentials: false
+
+      - name: Checkout package validation helper
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .release-ci
+          sparse-checkout: .github/scripts
+          persist-credentials: false
 
       - name: Build inside oraclelinux:7
         env:
@@ -104,14 +184,15 @@ jobs:
           EXTRA:      ${{ needs.parse.outputs.extra }}
           CMAKE_ARCH: ${{ matrix.cmake_arch }}
         run: |
-          set -eux
+          set -euxo pipefail
+          git log -1 --format='Building source %H'
           mkdir -p "${GITHUB_WORKSPACE}/out"
           docker run --rm -i \
             -v "${GITHUB_WORKSPACE}:/AliSQL" \
             -v "${GITHUB_WORKSPACE}/out:/out" \
             -e MAJOR -e MINOR -e PATCH -e EXTRA -e CMAKE_ARCH \
             oraclelinux:7 \
-            bash -ex <<'INNER'
+            bash -exo pipefail <<'INNER'
 
           # ---- Toolchain repo (devtoolset-10) ----
           cat >/etc/yum.repos.d/ol7-scl.repo <<'REPO'
@@ -125,7 +206,7 @@ jobs:
 
           yum clean all
           yum makecache
-          yum install -y git wget \
+          yum install -y git wget python3 \
             devtoolset-10-gcc devtoolset-10-gcc-c++ devtoolset-10-binutils \
             openssl openssl-devel ncurses-devel libaio-devel perl-IPC-Cmd bison
 
@@ -209,30 +290,48 @@ jobs:
             --exclude='alisql/mysqlrouter-log-rotate' \
             alisql/
           ls -lh "/out/${PKG}"
+
+          # Validate the relocated archive, including its shared-library paths.
+          SMOKE_ROOT="$(mktemp -d /tmp/alisql-package.XXXXXX)"
+          tar -xJf "/out/${PKG}" -C "$SMOKE_ROOT"
+          bash /AliSQL/.release-ci/.github/scripts/smoke-release.sh \
+            "${SMOKE_ROOT}/${TOPDIR}" "$VER" /AliSQL \
+            2>&1 | tee "/out/smoke-${ARCH}.log"
           INNER
+
+      - name: Upload package smoke logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-${{ matrix.arch }}
+          path: ${{ github.workspace }}/out/smoke-*.log
+          if-no-files-found: ignore
+          retention-days: 7
 
       - uses: actions/upload-artifact@v4
         with:
           name: alisql-${{ matrix.arch }}
           path: ${{ github.workspace }}/out/alisql-*.tar.xz
+          if-no-files-found: error
           retention-days: 7
 
   release:
-    needs: [parse, build]
+    needs: [parse, notes, build]
+    if: needs.parse.outputs.publish == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - name: Checkout release changelog
-        uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
         with:
-          ref: ${{ needs.parse.outputs.tag }}
-          persist-credentials: false
-          sparse-checkout: wiki/changes/changes-in-alisql-8.0.44.2026-06-30-en.md
-          sparse-checkout-cone-mode: false
+          pattern: alisql-*
+          path: artifacts
+          merge-multiple: true
 
       - uses: actions/download-artifact@v4
         with:
-          path: artifacts
-          merge-multiple: true
+          name: release-notes
+          path: notes
 
       - name: List artifacts
         run: ls -lh artifacts/
@@ -247,35 +346,11 @@ jobs:
 
           X86_PACKAGE="alisql-${VERSION}-linux-glibc2.17-x86_64.tar.xz"
           ARM_PACKAGE="alisql-${VERSION}-linux-glibc2.17-aarch64.tar.xz"
-          CHANGELOG_FILE="wiki/changes/changes-in-alisql-8.0.44.2026-06-30-en.md"
-          NOTES_FILE="${RUNNER_TEMP}/release-notes.md"
+          NOTES_FILE="notes/release-notes.md"
 
           test -f "artifacts/${X86_PACKAGE}"
           test -f "artifacts/${ARM_PACKAGE}"
-          if [[ "$VERSION" == 8.0.44-* ]]; then
-            test -f "$CHANGELOG_FILE"
-          fi
-
-          {
-            printf '# AliSQL %s\n\n' "$VERSION"
-            printf 'Prebuilt AliSQL binaries and Docker images for this release. / 本次发布提供 AliSQL 预编译二进制包和 Docker 镜像。\n\n'
-            printf '## Binary packages / 二进制包\n\n'
-            printf '| Platform | Package |\n'
-            printf '| --- | --- |\n'
-            printf '| Linux x86_64 (glibc 2.17) | [%s](https://github.com/%s/releases/download/%s/%s) |\n' "$X86_PACKAGE" "$GITHUB_REPOSITORY" "$TAG" "$X86_PACKAGE"
-            printf '| Linux aarch64 (glibc 2.17) | [%s](https://github.com/%s/releases/download/%s/%s) |\n\n' "$ARM_PACKAGE" "$GITHUB_REPOSITORY" "$TAG" "$ARM_PACKAGE"
-            printf '## Docker image / Docker 镜像\n\n'
-            printf 'The multi-architecture image supports linux/amd64 and linux/arm64. It is published after the binary packages are available.\n\n'
-            printf -- '- Image: [%s:%s](https://hub.docker.com/r/%s/tags?name=%s)\n' "$DOCKER_IMAGE" "$VERSION" "$DOCKER_IMAGE" "$VERSION"
-            printf -- '- Build: [GitHub Actions](https://github.com/%s/actions/workflows/build.yml)\n\n' "$DOCKER_REPOSITORY"
-            printf '    docker pull %s:%s\n' "$DOCKER_IMAGE" "$VERSION"
-
-            if [[ "$VERSION" == 8.0.44-* ]]; then
-              printf '\n## English changelog\n\n'
-              printf '[Standalone English changelog](https://github.com/%s/blob/%s/%s) | [中文变更说明](https://github.com/%s/blob/%s/wiki/changes/changes-in-alisql-8.0.44.2026-06-30-zh.md)\n\n' "$GITHUB_REPOSITORY" "$TAG" "$CHANGELOG_FILE" "$GITHUB_REPOSITORY" "$TAG"
-              sed -n '5,$ { s/^### /#### /; s/^## /### /; p; }' "$CHANGELOG_FILE"
-            fi
-          } > "$NOTES_FILE"
+          test -s "$NOTES_FILE"
 
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$TAG" \
@@ -300,6 +375,7 @@ jobs:
   # The Docker build downloads these release assets, so it must run afterwards.
   trigger-docker:
     needs: [parse, release]
+    if: needs.parse.outputs.publish == 'true' && github.repository == 'alibaba/AliSQL'
     runs-on: ubuntu-latest
     steps:
       - name: Push release tag to the Docker repository

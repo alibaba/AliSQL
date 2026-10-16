@@ -76,6 +76,11 @@ class Bootstrap_error_handler {
  public:
   Bootstrap_error_handler();
 
+  // Return the bootstrap error handler function pointer.
+  static ErrorHandlerFunctionPointer bootstrap_handler_fn() {
+    return my_message_bootstrap;
+  }
+
   // Log all errors to the error log file too.
   void set_log_error(bool log_error);
 

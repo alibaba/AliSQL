@@ -10101,6 +10101,9 @@ ER_FLASHBACK_PK_INVISIBLE
 ER_FLASHBACK_INTERNAL_ERROR
   eng "Flashback query encountered an internal error"
 
+ER_OPTIMIZE_MUTI_TABLES_WITH_SET_GTID_NEXT
+  eng "It is not allowed to perform optimize operations on multiple tables after setting gtid_next."
+
 #
 #  End of RDS error message.
 #

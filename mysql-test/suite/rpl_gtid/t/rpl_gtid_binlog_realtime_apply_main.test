@@ -1,0 +1,302 @@
+# ==== Purpose ====
+# This test verifies the main function of binlog realtime apply.
+#
+# ==== Implementation ===
+# 0) Prepare data.
+# 1) Test short or instant ddl will not using real time apply.
+# 2) Test realtime apply for successfully submitted DDL will be applied by the replica.
+# 3) Test realtime apply for the failed DDL will be rolled back by the replica.
+# 4) Test that the brr worker failed apply DDL, it will not affect other thread and normal worker can apply it.
+# 5) Cleanup.
+
+--let $rpl_require_row_format=2:1
+--source include/master-slave.inc
+--source include/have_binlog_format_row.inc
+--source include/have_debug.inc
+
+CALL mtr.add_suppression("\\[Warning\\] .*MY-\\d+.* \\[Repl\\] \\[RDS Diagnose\\] .*");
+CALL mtr.add_suppression("\\[ERROR\\] .*MY-\\d+.* \\[Repl\\] Brr Worker failed executing transaction .*");
+
+--echo
+--echo #
+--echo # 0. Prepare data.
+--echo ########################################################
+--echo #
+connection master;
+CREATE DATABASE rpl_test;
+CREATE TABLE rpl_test.t1 (s LONGTEXT);
+CREATE TABLE rpl_test.t2 (s LONGTEXT);
+CREATE TEMPORARY TABLE rpl_test.t3 (s LONGTEXT);
+--disable_query_log
+--let $i=0
+while ($i < 2)
+{
+  --eval INSERT INTO rpl_test.t1 values(repeat("1", 5242880))
+  --inc $i
+}
+--enable_query_log
+--source include/rpl_sync.inc
+
+--echo #
+--echo # 1. Test short or instant ddl will not using real time apply.
+--echo ########################################################
+--echo #
+--echo ## Ensure binlog realtime apply is enabled on replica
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.2.err
+--let $assert_count = 1
+--let $assert_select = .* \[Note\] \[MY-[0-9]+] \[Repl\] Binlog realtime replica message: Realtime apply enabled.
+--let $assert_text = Ensure binlog realtime apply is enabled on replica.
+--source include/assert_grep.inc
+
+connection slave;
+--let $assert_text= replica_brr_worker_size should be 4
+--let $assert_status_name= replica_brr_worker_size
+--let $assert_status_value= 4
+--source include/assert_status.inc
+
+--echo
+--echo ## Test instant DDL will not use real-time applications.
+connection master;
+ALTER TABLE rpl_test.t1 ADD COLUMN id INT, ALGORITHM=INSTANT;
+--source include/rpl_sync.inc
+connection master;
+SHOW CREATE TABLE rpl_test.t1;
+# assert the brr_trx is not created
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_count = 0
+--let $assert_select = .* Binlog realtime replica message: brr trx start on source, brr index.*
+--let $assert_text = Test instant DDL will not use real-time applications.
+
+--echo
+--echo ## Test analyze table not use real-time applications.
+connection master;
+ANALYZE TABLE rpl_test.t1;
+# assert the brr_trx is not created
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_count = 0
+--let $assert_select = .* Binlog realtime replica message: brr trx start on source, brr index.*
+--let $assert_text = Test analyze table not use real-time applications.
+--source include/assert_grep.inc
+
+--echo
+--echo ## Test set sql_log_bin=0 will not use real-time applications.
+connection master;
+set sql_log_bin=0;
+ALTER TABLE rpl_test.t1 DROP COLUMN id, ALGORITHM=INPLACE;
+set sql_log_bin=1;
+# assert the brr_trx is not created
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_count = 0
+--let $assert_select = .* Binlog realtime replica message: brr trx start on source, brr index.*
+--let $assert_text = assert the brr_trx is not created
+--source include/assert_grep.inc
+
+--echo
+--echo ## Test alter temporary table not use real-time applications.
+connection master;
+ALTER TABLE rpl_test.t3 ADD COLUMN id int;
+# assert the brr_trx is not created
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_count = 0
+--let $assert_select = .* Binlog realtime replica message: brr trx start on source, brr index.*
+--let $assert_text = assert the brr_trx is not created
+--source include/assert_grep.inc
+
+--echo
+--echo ## Test short-duration DDL will not use real-time applications.
+--echo ### Committed DDL.
+connection master;
+SET SESSION debug = '+d,brr_wait_inplace_alter_table';
+--send ALTER TABLE rpl_test.t1 ADD COLUMN id0 INT, ALGORITHM=INPLACE
+
+# assert the brr_trx is created
+connection master1;
+--let $status_var= source_brr_trx_count
+--let $status_var_value= 1
+--source include/wait_for_status_var.inc
+SET DEBUG_SYNC = 'now SIGNAL continue';
+
+connection master;
+--reap
+SET SESSION debug = '-d,brr_wait_inplace_alter_table';
+--source include/rpl_sync.inc
+
+--let $status_var= source_brr_trx_count
+--let $status_var_value= 0
+--source include/wait_for_status_var.inc
+
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_count = 1
+--let $assert_select = .* Binlog realtime replica message: remove brr reader by dump thread, thread_id: .*, replica server_id: 2, brr index: 1, is trx send complete: 1. The trx type is DDL, total trx content events sent: 0, total brr events sent: 0, brr status: 1, brr trx gno : 10
+--let $assert_text = Test short-duration DDL will not use real-time applications.
+--source include/assert_grep.inc
+
+--echo ### Rolled back DDL.
+connection master;
+SET SESSION debug = '+d,brr_wait_inplace_alter_table';
+--send ALTER TABLE rpl_test.t1 ADD COLUMN id3 INT, ALGORITHM=INPLACE
+
+connection master1;
+
+# assert the brr_trx is created
+--let $status_var= source_brr_trx_count
+--let $status_var_value= 1
+--source include/wait_for_status_var.inc
+
+SELECT id INTO @id FROM information_schema.processlist WHERE INFO like '%rpl_test%' LIMIT 1;
+KILL QUERY @id;
+
+connection master;
+--error ER_QUERY_INTERRUPTED
+--reap
+SET SESSION debug = '-d,brr_wait_inplace_alter_table';
+
+--let $status_var= source_brr_trx_count
+--let $status_var_value= 0
+--source include/wait_for_status_var.inc
+
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_count = 1
+--let $assert_select = .* Binlog realtime replica message: remove brr reader by dump thread, thread_id: .*, replica server_id: 2, brr index: 2, is trx send complete: 0. The trx type is DDL, total trx content events sent: 0, total brr events sent: 0, brr status: 2, brr trx gno : 0
+--let $assert_text = Test short-duration DDL will not use real-time applications.
+--source include/assert_grep.inc
+
+--echo
+--echo #
+--echo # 2. Test realtime apply for successfully submitted DDL will be applied by the replica.
+--echo ########################################################
+--echo #
+--echo
+--echo ## Test realtime apply inplace DDL.
+connection master;
+SET GLOBAL debug='+d,ignore_brr_ddl_time_limit';
+connection slave;
+FLUSH RELAY LOGS;
+--let $ddl_statement= ALTER TABLE rpl_test.t1 ADD COLUMN id1 INT
+--let $expect_assigned_to_brr_worker_value=1
+--let $expect_commit_by_brr_worker_value=1
+--let $algorithm=INPLACE
+--let $wait_timeout=100000
+--source suite/rpl/include/binlog_realtime_apply_one_ddl.inc
+
+--echo
+--echo # Test realtime apply copy DDL.
+--let $ddl_statement= ALTER TABLE rpl_test.t1 ADD COLUMN id2 INT
+--let $expect_assigned_to_brr_worker_value=2
+--let $expect_commit_by_brr_worker_value=2
+--let $algorithm=COPY
+--let $wait_timeout=100000
+--source suite/rpl/include/binlog_realtime_apply_one_ddl.inc
+
+--echo
+--echo # Check relay log file.
+--let $binlog_file=slave-relay-bin.000003
+--let $keep_gtid_events= 1
+--source include/show_relaylog_events.inc
+connection master;
+
+--echo
+--echo #
+--echo # 3. Test realtime transmit for the failed DDL will be rolled back by the replica.
+--echo ##################################################################################
+--echo #
+--echo
+--echo ## Test realtime rollback inplace DDL.
+connection master;
+--let $ddl_statement= ALTER TABLE rpl_test.t1 ADD COLUMN id3 INT
+--let $expect_assigned_to_brr_worker_value=3
+--let $expect_rollback_by_brr_worker_value=1
+--let $algorithm=INPLACE
+--let $wait_timeout=100000
+--source suite/rpl/include/binlog_realtime_rollback_one_ddl.inc
+
+--echo
+--echo ## Test realtime rollback copy DDL.
+--let $ddl_statement= ALTER TABLE rpl_test.t1 ADD COLUMN id4 INT
+--let $expect_assigned_to_brr_worker_value=4
+--let $expect_rollback_by_brr_worker_value=2
+--let $algorithm=COPY
+--let $wait_timeout=100000
+--source suite/rpl/include/binlog_realtime_rollback_one_ddl.inc
+
+--echo
+--echo #
+--echo # 4. Test that the brr worker failed apply DDL, it will not affect other thread 
+--echo #    and normal worker can apply it.
+--echo ###############################################################################
+--echo #
+connection slave;
+show status like "%replica_brr_trx_not_assigned_to_brr_worker%";
+SET GLOBAL debug = '+d,abort_inplace_alter_table';
+
+connection master;
+SET SESSION debug = '+d,brr_wait_inplace_alter_table'; 
+--send ALTER TABLE rpl_test.t1 ADD COLUMN id5 INT, ALGORITHM=INPLACE
+
+--echo
+--echo ## If the brr worker failed to replay the brr transaction, other brr
+--echo ## worker will not get the chance to replay the brr transaction. 
+connection slave;
+--let $status_var= replica_brr_trx_assigned_to_brr_worker
+--let $status_var_value= 5
+--source include/wait_for_status_var.inc
+
+--let $status_var= replica_brr_ddl_rollback_by_brr_worker
+--let $status_var_value= 3
+--source include/wait_for_status_var.inc
+
+--echo
+--echo ## brr worker will not remove the brr cache
+--let $assert_text= replica_brr_cache_count should be 1
+--let $assert_status_name= replica_brr_cache_count
+--let $assert_status_value=1
+--source include/assert_status.inc
+
+--echo
+--echo ## Test that the brr worker failed apply DDL, it will not affect other thread.
+--let $assert_text= replica_brr_worker_size should be 4
+--let $assert_status_name= replica_brr_worker_size
+--let $assert_status_value=4
+--source include/assert_status.inc
+
+--let $assert_text= IO thread is running
+--let $assert_cond= "[SHOW SLAVE STATUS, Slave_IO_Running, 1]" LIKE "Yes"
+--source include/assert.inc
+
+--let $assert_text= SQL thread is running
+--let $assert_cond= "[SHOW SLAVE STATUS, Slave_SQL_Running, 1]" LIKE "Yes"
+--source include/assert.inc
+
+connection master1;
+SET DEBUG_SYNC = 'now SIGNAL continue';
+
+connection master;
+--reap
+SET SESSION debug = '-d,brr_wait_copy_alter_table';
+
+--source include/rpl_sync.inc
+connection slave;
+
+--echo ## brr cache will not removed brr cache, IO thread will receive subsequent brr events. (Brr_gtid_executed_log_even and brr Gtid_log_event)
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.2.err
+--let $assert_count = 1
+--let $assert_select = .* \[Note\] \[MY-[0-9]+] \[Repl\] Binlog realtime replica message: brr cache with gno: 13, brr index: 7, trx content events received: 2, brr events received: 2, is_old: 0, is_complete: 1, is_assigned: 1
+--let $assert_text = brr cache will not removed brr cache, IO thread will receive subsequent brr events.
+--source include/assert_grep.inc
+
+--echo
+--echo ## normal worker can apply it.
+SHOW CREATE TABLE rpl_test.t1;
+SET GLOBAL debug = '-d,abort_inplace_alter_table'; 
+show status like "%replica_brr_trx_not_assigned_to_brr_worker%";
+
+--echo
+--echo #
+--echo # 5. clean up 
+--echo #############
+--echo #
+connection master;
+SET GLOBAL debug='-d,ignore_brr_ddl_time_limit';
+DROP DATABASE rpl_test;
+--source include/rpl_sync.inc
+--source include/rpl_end.inc

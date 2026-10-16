@@ -95,6 +95,15 @@ class TimeZoneOffsetHelper {
   static std::map<int64_t, std::string> timezone_offset_map;
 };
 
+/**
+  Convert a MySQL Time_zone object to a DuckDB-compatible IANA timezone name.
+
+  @param tz        MySQL Time_zone object to convert
+  @param warn_msg  [out] warning message if conversion is imprecise
+  @return DuckDB-compatible IANA timezone name (e.g., 'Etc/GMT-8')
+*/
+std::string convert_timezone_for_duckdb(Time_zone *tz, std::string &warn_msg);
+
 /** Sets duckdb's time_zone for current thread
   @param thd   THD
 */

@@ -97,8 +97,58 @@ SELECT UNIX_TIMESTAMP(timestamp_char), UNIX_TIMESTAMP(date_char), UNIX_TIMESTAMP
 UNIX_TIMESTAMP(timestamp_char)	UNIX_TIMESTAMP(date_char)	UNIX_TIMESTAMP()
 1766648850	1766610000	1753226301
 SET timestamp = default;
+CREATE TABLE t3 (id INT PRIMARY KEY, date_text TEXT, time_text TEXT, timestamp_text TEXT) ENGINE=DuckDB;
+INSERT INTO t3 VALUES (1, '2025-12-25', '10:47:30', '2025-12-25 10:47:30');
+SELECT LAST_DAY(date_text), LAST_DAY(timestamp_text)
+FROM t3;
+LAST_DAY(date_text)	LAST_DAY(timestamp_text)
+2025-12-31	2025-12-31
+SELECT DAYNAME(timestamp_text), WEEK(timestamp_text)
+, DAYOFYEAR(timestamp_text), QUARTER(timestamp_text)
+, YEAR(timestamp_text), MONTH(timestamp_text)
+FROM t3;
+DAYNAME(timestamp_text)	WEEK(timestamp_text)	DAYOFYEAR(timestamp_text)	QUARTER(timestamp_text)	YEAR(timestamp_text)	MONTH(timestamp_text)
+Thursday	51	359	4	2025	12
+SELECT CONVERT_TZ(timestamp_text, 'GMT', 'Asia/Shanghai') FROM t3;
+CONVERT_TZ(timestamp_text, 'GMT', 'Asia/Shanghai')
+2025-12-25 18:47:30.000000
+SET timestamp = 1753226301;
+SELECT UNIX_TIMESTAMP(timestamp_text), UNIX_TIMESTAMP(date_text), UNIX_TIMESTAMP() FROM t3;
+UNIX_TIMESTAMP(timestamp_text)	UNIX_TIMESTAMP(date_text)	UNIX_TIMESTAMP()
+1766648850	1766610000	1753226301
+SET timestamp = default;
+SELECT HOUR(time_text), MINUTE(time_text)
+, SECOND(time_text), MICROSECOND(time_text)
+FROM t3;
+HOUR(time_text)	MINUTE(time_text)	SECOND(time_text)	MICROSECOND(time_text)
+10	47	30	0
+SELECT DATE_FORMAT(timestamp_text, '%W %M %Y %H %i %s') FROM t3;
+DATE_FORMAT(timestamp_text, '%W %M %Y %H %i %s')
+Thursday December 2025 10 47 30
+SELECT TIME_FORMAT(time_text, '%H %i %s') FROM t3;
+TIME_FORMAT(time_text, '%H %i %s')
+10 47 30
+SELECT EXTRACT(YEAR FROM date_text), EXTRACT(SECOND FROM time_text)
+, EXTRACT(YEAR FROM timestamp_text), EXTRACT(SECOND FROM timestamp_text)
+FROM t3;
+EXTRACT(YEAR FROM date_text)	EXTRACT(SECOND FROM time_text)	EXTRACT(YEAR FROM timestamp_text)	EXTRACT(SECOND FROM timestamp_text)
+2025	30	2025	30
+SELECT TIMESTAMPDIFF(MONTH, date_text, timestamp_text) FROM t3;
+TIMESTAMPDIFF(MONTH, date_text, timestamp_text)
+0
 DROP TABLE t1;
 DROP TABLE t2;
+DROP TABLE t3;
+CREATE TABLE t1 (id INT PRIMARY KEY, date_char CHAR(20)) ENGINE=DuckDB;
+INSERT INTO t1 VALUES (1, '2020-01-01'), (2, '2020-01-01 12:13:14');
+SELECT date_char + INTERVAL 1 DAY, date_char + INTERVAL 1 SECOND
+, DATE_SUB(DATE_FORMAT('2020-01-01', '%Y-%m-%d'), INTERVAL 1 DAY)
+, DATE_SUB(DATE_FORMAT('2020-01-01', '%Y-%m-%d'), INTERVAL 1 SECOND)
+FROM t1;
+date_char + INTERVAL 1 DAY	date_char + INTERVAL 1 SECOND	DATE_SUB(DATE_FORMAT('2020-01-01', '%Y-%m-%d'), INTERVAL 1 DAY)	DATE_SUB(DATE_FORMAT('2020-01-01', '%Y-%m-%d'), INTERVAL 1 SECOND)
+2020-01-02	2020-01-01 00:00:01	2019-12-31	2019-12-31 23:59:59
+2020-01-02 12:13:14	2020-01-01 12:13:15	2019-12-31	2019-12-31 23:59:59
+DROP TABLE t1;
 --------------------------
 3. Support interval expr unit
 --------------------------
@@ -166,6 +216,9 @@ GROUP_CONCAT(col1, col2 ORDER BY col1 SEPARATOR ' ')
 SELECT GROUP_CONCAT(DISTINCT col1, col2 SEPARATOR ' ') in ('11 02', '02 11') FROM t1;
 GROUP_CONCAT(DISTINCT col1, col2 SEPARATOR ' ') in ('11 02', '02 11')
 1
+SELECT GROUP_CONCAT(col1, '🟥' ORDER BY col1 SEPARATOR '🟥') FROM t1;
+GROUP_CONCAT(col1, '?' ORDER BY col1 SEPARATOR '?')
+0🟥🟥1🟥🟥1🟥
 DROP TABLE t1;
 CREATE TABLE t1 (
 id INT PRIMARY KEY,
@@ -323,6 +376,13 @@ CAST(id AS SIGNED)
 5
 0
 DROP TABLE t1;
+CREATE TABLE t2 (id INT PRIMARY KEY, num_text TEXT) ENGINE=DuckDB;
+INSERT INTO t2 VALUES (1, '12345'), (2, '67.89');
+SELECT CAST(num_text AS SIGNED) FROM t2;
+CAST(num_text AS SIGNED)
+12345
+67
+DROP TABLE t2;
 --------------------------
 12. Index hint
 --------------------------
@@ -416,6 +476,57 @@ SELECT '[4,5]' MEMBER OF('[[3,4],[4,5]]') FROM t1;
 SELECT '\"' MEMBER OF('["\\\""]'), '"' MEMBER OF('["\\\""]') FROM t1;
 '\"' MEMBER OF('["\\\""]')	'"' MEMBER OF('["\\\""]')
 1	1
+DROP TABLE t1;
+--------------------------
+15. VALUES ROW
+--------------------------
+CREATE TABLE t1 (id INT PRIMARY KEY, col1 INT) ENGINE=DuckDB;
+INSERT INTO t1 VALUES (1, 3);
+SELECT * FROM (VALUES ROW(1, 2), ROW(3, 4) UNION SELECT * FROM t1) d ORDER BY column_1;
+column_0	column_1
+1	2
+1	3
+3	4
+SELECT column_1 FROM (VALUES ROW(1, 2), ROW(3, 4) UNION SELECT * FROM t1) d ORDER BY column_1;
+column_1
+2
+3
+4
+SELECT * FROM (VALUES ROW(1, 2), ROW(3, 4)) d1, t1 WHERE d1.column_0 = t1.id ORDER BY column_1, t1.id;
+column_0	column_1	id	col1
+1	2	1	3
+SELECT * FROM (VALUES ROW(1, 2), ROW(3, 4)) d1(id, col1), t1 WHERE d1.id = t1.id ORDER BY d1.id, t1.id;
+id	col1	id	col1
+1	2	1	3
+DROP TABLE t1;
+--------------------------
+16. System variable replacement for DuckDB
+--------------------------
+CREATE TABLE t1 (id INT PRIMARY KEY) ENGINE=DuckDB;
+INSERT INTO t1 VALUES (1);
+SET time_zone = '+00:00';
+SELECT @@session.time_zone FROM t1;
+@@session.time_zone
+Etc/GMT
+SET time_zone = default;
+SELECT @@session.auto_increment_increment FROM t1;
+@@session.auto_increment_increment
+1
+DROP TABLE t1;
+--------------------------
+17. Temporal columns in boolean context (zero date comparison)
+--------------------------
+CREATE TABLE t1 (id INT PRIMARY KEY, ts TIMESTAMP NULL DEFAULT NULL, d DATE DEFAULT NULL) ENGINE=DuckDB;
+INSERT INTO t1 VALUES (1, '2025-01-01 00:00:00', '2025-01-01');
+INSERT INTO t1 VALUES (2, NULL, NULL);
+SELECT * FROM t1 WHERE ts OR id = 2 ORDER BY id;
+id	ts	d
+1	2025-01-01 00:00:00	2025-01-01
+2	NULL	NULL
+SELECT * FROM t1 WHERE d OR id = 2 ORDER BY id;
+id	ts	d
+1	2025-01-01 00:00:00	2025-01-01
+2	NULL	NULL
 DROP TABLE t1;
 --------------------------
 1. GROUP BY ... WITH ROLLUP ORDER BY ...
@@ -648,8 +759,8 @@ PREPARE STMT1 FROM "SELECT UNIX_TIMESTAMP('2020-01-01') FROM t1";
 EXECUTE STMT1;
 ERROR HY000: [DuckDB] Binder Error: Could not choose a best candidate function for the function call "unix_timestamp(STRING_LITERAL)". In order to select one, please add explicit type casts.
 	Candidate functions:
-	unix_timestamp(TIMESTAMP WITH TIME ZONE) -> DOUBLE
 	unix_timestamp(TIMESTAMP) -> DOUBLE
+	unix_timestamp(TIMESTAMP WITH TIME ZONE) -> DOUBLE
 
 
 LINE 1: SELECT UNIX_TIMESTAMP('2020-01-01') FROM t1
@@ -662,8 +773,8 @@ SET duckdb_sql_normalization = 0;
 EXECUTE STMT1;
 ERROR HY000: [DuckDB] Binder Error: Could not choose a best candidate function for the function call "unix_timestamp(STRING_LITERAL)". In order to select one, please add explicit type casts.
 	Candidate functions:
-	unix_timestamp(TIMESTAMP WITH TIME ZONE) -> DOUBLE
 	unix_timestamp(TIMESTAMP) -> DOUBLE
+	unix_timestamp(TIMESTAMP WITH TIME ZONE) -> DOUBLE
 
 
 LINE 1: SELECT UNIX_TIMESTAMP('2020-01-01') FROM t1

@@ -1,0 +1,71 @@
+# This test case is used to test for slave lag spikes caused by real-time transmission of long transactions.
+
+--source include/master-slave.inc
+--source include/have_binlog_format_row.inc
+--source include/have_debug.inc
+
+--echo #
+--echo # 0. Prepare data.
+--echo ########################################################
+--echo #
+connection master;
+CREATE DATABASE rpl_test;
+CREATE TABLE rpl_test.t1 (s LONGTEXT);
+CREATE TABLE rpl_test.t2 (s LONGTEXT);
+
+--disable_query_log
+--let $i=0
+while ($i < 4)
+{
+  --eval INSERT INTO rpl_test.t1 values(repeat("1", 5242880))
+  --inc $i
+}
+--enable_query_log
+
+--echo #
+--echo # 1. Ignorable_log_event when field is used to set last_master_timestamp
+--echo ########################################################################
+--echo #
+--source include/rpl_sync.inc
+
+connection slave;
+SET GLOBAL debug = '+d,not_set_relay_flag_to_ignore_event';
+
+connection master;
+INSERT INTO rpl_test.t2 SELECT s FROM rpl_test.t1;
+
+--source include/rpl_sync.inc
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.2.err
+--let $assert_count = 1
+--let $assert_select = .* \[Note\] \[MY-[0-9]+] \[Repl\] Binlog realtime replica message: use Ignorable_log_event when field to set last_master_timestamp
+--let $assert_text = Ignorable_log_event when field is used to set last_master_timestamp.
+--source include/assert_grep.inc
+
+--echo #
+--echo # 2. After fix Ignorable_log_event when field is not used to set last_master_timestamp
+--echo ######################################################################################
+--echo #
+--source include/rpl_sync.inc
+
+connection slave;
+SET GLOBAL debug = '-d,not_set_relay_flag_to_ignore_event';
+
+connection master;
+INSERT INTO rpl_test.t2 SELECT s FROM rpl_test.t1;
+
+--source include/rpl_sync.inc
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.2.err
+--let $assert_count = 1
+--let $assert_select = .* \[Note\] \[MY-[0-9]+] \[Repl\] Binlog realtime replica message: use Ignorable_log_event when field to set last_master_timestamp
+--let $assert_text = Ignorable_log_event when field is used to set last_master_timestamp.
+--source include/assert_grep.inc
+
+--echo
+--echo #
+--echo # 3. clean up 
+--echo #############
+--echo #
+connection master;
+DROP DATABASE rpl_test;
+--source include/rpl_sync.inc
+--source include/rpl_end.inc

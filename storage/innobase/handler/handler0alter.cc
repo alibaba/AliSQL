@@ -6137,6 +6137,7 @@ bool ha_innobase::inplace_alter_table_impl(TABLE *altered_table,
   ut_ad(!rw_lock_own(dict_operation_lock, RW_LOCK_X));
   ut_ad(!rw_lock_own(dict_operation_lock, RW_LOCK_S));
 
+  bool skip_build = (ha_alter_info->nonblock_ddl_process_flag);
   DEBUG_SYNC(m_user_thd, "innodb_inplace_alter_table_enter");
 
   auto all_ok = [=]() -> bool {
@@ -6174,11 +6175,13 @@ bool ha_innobase::inplace_alter_table_impl(TABLE *altered_table,
   dict_index_t *pk = m_prebuilt->table->first_index();
   ut_ad(pk != nullptr);
 
-  /* For partitioned tables this could be already allocated from a
-  previous partition invocation. For normal tables this is NULL. */
-  ut::delete_(ctx->m_stage);
+  if (!skip_build) {
+    /* For partitioned tables this could be already allocated from a
+    previous partition invocation. For normal tables this is NULL. */
+    ut::delete_(ctx->m_stage);
 
-  ctx->m_stage = ut::new_withkey<Alter_stage>(UT_NEW_THIS_FILE_PSI_KEY, pk);
+    ctx->m_stage = ut::new_withkey<Alter_stage>(UT_NEW_THIS_FILE_PSI_KEY, pk);
+  }
 
   if (m_prebuilt->table->ibd_file_missing ||
       dict_table_is_discarded(m_prebuilt->table)) {
@@ -6322,6 +6325,11 @@ bool ha_innobase::inplace_alter_table_impl(TABLE *altered_table,
 
     return true;
   };
+
+  /* Only apply row log for nonblock DDL retry interval. */
+  if (skip_build) {
+    return clean_up(DB_SUCCESS);
+  }
 
   /* Read the clustered index of the table and build
   indexes based on this information using temporary
@@ -10447,6 +10455,9 @@ bool ha_innopart::inplace_alter_table(TABLE *altered_table,
                                       const dd::Table *old_table_def,
                                       dd::Table *new_table_def) {
   if (alter_parts::apply_to(ha_alter_info)) {
+    if (ha_alter_info->nonblock_ddl_process_flag) {
+      return false;
+    }
     return (inplace_alter_partition(ha_alter_info));
   }
 

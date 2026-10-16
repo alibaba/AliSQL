@@ -1,0 +1,146 @@
+# ==== Purpose ====
+# Test binlog realtime transmit related i_s table.
+#
+# ==== Implementation ====
+# 1) Prepare data.
+# 2) Test BRR_SENDER_TRX_INFO and BRR_SOURCE_TRX_INFO table is correct.
+# 3) Cleanup.
+ 
+--source include/master-slave.inc
+--source include/have_binlog_format_row.inc
+--source include/have_semisync_plugin.inc
+--source include/install_semisync.inc
+  
+--echo #
+--echo # 1. Prepare data.
+--echo ########################################################
+--echo #
+--source include/rpl_connection_master.inc
+RESET MASTER;
+--echo ## 1.1 Check table BRR_SENDER_TRX_INFO definition is correct.
+SHOW CREATE TABLE INFORMATION_SCHEMA.BRR_SENDER_TRX_INFO;
+
+--let $assert_text = No rows in BRR_SENDER_TRX_INFO table 
+--let $assert_cond = [SELECT COUNT(*) FROM INFORMATION_SCHEMA.BRR_SENDER_TRX_INFO] =0
+--source include/assert.inc
+
+--echo ## 1.2 Check table BRR_SOURCE_TRX_INFO definition is correct.
+SHOW CREATE TABLE INFORMATION_SCHEMA.BRR_SOURCE_TRX_INFO;
+
+--let $assert_text = No rows in BRR_SOURCE_TRX_INFO table 
+--let $assert_cond = [SELECT COUNT(*) FROM INFORMATION_SCHEMA.BRR_SOURCE_TRX_INFO] =0
+--source include/assert.inc
+
+--source include/rpl_connection_slave.inc
+--source include/rpl_reset.inc
+  
+--echo ## 1.3 Prepare data.
+--source include/rpl_connection_master.inc
+CREATE DATABASE rpl_test;
+CREATE TABLE rpl_test.t1 (s LONGTEXT);
+CREATE TABLE rpl_test.t2 (s LONGTEXT);
+ 
+--disable_query_log
+--let $i=0
+while ($i < 4)
+{
+  --eval INSERT INTO rpl_test.t1 values(repeat("1", 5242880))
+  --inc $i
+}
+--enable_query_log
+ 
+--echo #
+--echo # 2. Test BRR_SENDER_TRX_INFO table is correct.
+--echo ########################################################
+--echo # 
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+ 
+--echo
+--echo ### Ensure brr trx is create.
+--let $assert_text = Ensure brr trx is create.
+--let $assert_cond = [show status like "source_brr_trx_count", Value, 1] =1
+--source include/assert.inc
+ 
+--replace_column 1 # 4 # 5 # 6 #
+SELECT * FROM INFORMATION_SCHEMA.BRR_SENDER_TRX_INFO;
+
+--replace_column 1 # 5 # 6 # 7 #
+SELECT * FROM INFORMATION_SCHEMA.BRR_SOURCE_TRX_INFO;
+
+--echo
+--echo ### Test the replica_server_id is correct
+--let $assert_text= test the replica_server_id is correct
+--let $assert_cond= [SELECT REPLICA_SERVER_ID FROM INFORMATION_SCHEMA.BRR_SENDER_TRX_INFO, REPLICA_SERVER_ID, 1] = 2
+--source include/assert.inc
+
+--echo
+--echo ### Test the brr_index is correct
+--let $assert_text= test BRR_SENDER_TRX_INFO brr_index is correct
+--let $assert_cond= [SELECT BRR_INDEX FROM INFORMATION_SCHEMA.BRR_SENDER_TRX_INFO, BRR_INDEX, 1] = 1
+--source include/assert.inc
+
+--let $assert_text= test BRR_SOURCE_TRX_INFO brr_index is correct
+--let $assert_cond= [SELECT BRR_INDEX FROM INFORMATION_SCHEMA.BRR_SOURCE_TRX_INFO, BRR_INDEX, 1] = 1
+--source include/assert.inc
+
+--echo
+--echo ### Test the gno is correct
+--let $assert_text= test the gno is correct
+--let $assert_cond= [SELECT GNO FROM INFORMATION_SCHEMA.BRR_SOURCE_TRX_INFO, GNO, 1] = 0
+--source include/assert.inc
+ 
+--echo
+--echo ### Test the dump_thread_id is correct
+--let $dump_thread_id = query_get_value(SELECT * FROM INFORMATION_SCHEMA.BRR_SENDER_TRX_INFO, DUMP_THREAD_ID, 1)
+
+--let $dump_thread_id_ = query_get_value(SELECT * FROM INFORMATION_SCHEMA.PROCESSLIST WHERE COMMAND='Binlog Dump GTID', ID, 1)
+
+--let $assert_text = dump_thread_id is correct
+--let $assert_cond = $dump_thread_id = $dump_thread_id_
+--source include/assert.inc
+ 
+--echo
+--echo ### Test that the brr_thread_id is correct
+--let $brr_thread_id = query_get_value(SELECT * FROM INFORMATION_SCHEMA.BRR_SOURCE_TRX_INFO, TRX_THREAD_ID, 1)
+--let $show_statement= SHOW PROCESSLIST
+--let $field= Id
+--let $condition= = '$brr_thread_id'
+--source include/wait_show_condition.inc
+ 
+--echo
+--echo ### Test brr_thread_id and dump_thread_id are different
+if ($dump_thread_id == $brr_thread_id)
+{
+  --echo "Unexpected: dump_thread_id == brr_thread_id"
+  --die
+}
+ 
+--source include/rpl_connection_master.inc
+COMMIT;
+
+--echo
+--echo ### After the test reconnects, there is no abnormality in accessing the IS table.
+--source include/rpl_connection_slave.inc
+--source include/stop_slave.inc
+--source include/start_slave.inc
+
+--source include/rpl_connection_master.inc
+--let $show_statement= SHOW PROCESSLIST
+--let $field= Id
+--let $condition= != '$dump_thread_id'
+--source include/wait_show_condition.inc
+
+SELECT * FROM INFORMATION_SCHEMA.BRR_SENDER_TRX_INFO;
+SELECT * FROM INFORMATION_SCHEMA.BRR_SOURCE_TRX_INFO;
+
+--echo 
+--echo #
+--echo # 3. Cleanup.
+--echo ########################################################
+--echo #
+DROP DATABASE rpl_test; 
+--source include/rpl_connection_slave.inc
+--source include/rpl_sync.inc
+--source include/uninstall_semisync.inc
+--source include/rpl_end.inc

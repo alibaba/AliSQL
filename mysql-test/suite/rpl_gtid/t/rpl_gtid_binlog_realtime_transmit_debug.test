@@ -1,0 +1,276 @@
+# ==== Purpose ====
+# This test include the testcase of binlog realtime transmit that should be test on debug mode.
+#
+# ==== Implementation ====
+# 0) Prepare data.
+# 1) Test rollback transaction in send_brr_events() before real send.
+#   1.1) Test read brr event error will rollback the brr transaction.
+#   1.2) Test read brr event ok but condition of brr transaction is rollback.
+# 2) Test read rest brr event error during find_and_finish_brr_transaction,
+#    slave will reconnect and the transaction will be transmit normally again.
+# 3) Test realtime transmit after transaction commit and binlog cache reset.
+# 4) Test slave will not enable realtime transmit if rds release date check fail.
+# 5) Cleanup.
+
+--source include/have_debug.inc
+--source include/master-slave.inc
+--source include/have_binlog_format_row.inc
+--source include/have_semisync_plugin.inc
+--source include/install_semisync.inc
+
+--let $keep_gtid_events= 1
+
+call mtr.add_suppression("Read brr event from binlog cache tmp file failed");
+call mtr.add_suppression("Read rest of brr event from binlog cache tmp file failed");
+call mtr.add_suppression("Timeout waiting for reply of binlog");
+FLUSH STATUS;
+--source include/rpl_connection_slave.inc
+FLUSH STATUS;
+
+--source include/rpl_connection_master.inc
+SET GLOBAL binlog_realtime_transmit_source_enabled = ON;
+
+--echo #
+--echo # 0. Prepare data.
+--echo ########################################################
+--echo #
+--source include/rpl_connection_slave.inc
+--source include/stop_slave.inc
+SET GLOBAL binlog_realtime_transmit_replica_enabled = ON;
+--source include/start_slave.inc
+
+--source include/rpl_connection_master.inc
+CREATE DATABASE rpl_test;
+CREATE TABLE rpl_test.t1 (s LONGTEXT);
+CREATE TABLE rpl_test.t2 (s LONGTEXT);
+
+--disable_query_log
+--let $i=0
+while ($i < 4)
+{
+  --eval INSERT INTO rpl_test.t1 values(repeat("1", 5242880))
+  --inc $i
+}
+--enable_query_log
+
+--echo #
+--echo # 1. Test rollback transaction in send_brr_events() before real send.
+--echo ########################################################
+--echo #
+--echo # 1.1 Test read brr event error will rollback the brr transaction.
+--echo # 1.1.1 Test rollback before any brr events sent to slave.
+--source include/rpl_connection_master.inc
+SET GLOBAL debug = '+d,send_brr_events_wait_before_read';
+
+--let $wait_for_replica_brr_cache_count=0
+--let $include_commit_transaction=0
+--source suite/rpl/include/binlog_realtime_transmit_execute_one_transaction.inc
+
+--echo # Wait for source_brr_reader_count, expect 1
+--let $show_statement= SHOW STATUS LIKE 'source_brr_reader_count'
+--let $field= Value
+--let $condition= = '1'
+--source include/wait_show_condition.inc
+SHOW STATUS LIKE 'source_brr%';
+
+--source include/rpl_connection_slave.inc
+SHOW STATUS LIKE 'replica_brr_cache_count';
+
+--source include/rpl_connection_master.inc
+ROLLBACK;
+SET debug_sync='now SIGNAL continue_before_read_brr_event';
+
+--echo # Wait for source_brr_trx_count, expect 0
+--let $show_statement= SHOW STATUS LIKE 'source_brr_trx_count'
+--let $field= Value
+--let $condition= = '0'
+--source include/wait_show_condition.inc
+SHOW STATUS LIKE 'source_brr%';
+
+--let $wait_for_replica_brr_cache_count_value=0
+--source suite/rpl/include/binlog_realtime_transmit_wait_and_test_replica.inc
+
+--source include/rpl_connection_master.inc
+SET GLOBAL debug = '-d,send_brr_events_wait_before_read';
+
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_count= 1
+--let $assert_select= Read brr event from binlog cache tmp file failed, rollback this brr_trx
+--let $assert_text= Read brr event fail, rollback this brr_trx.
+--source include/assert_grep.inc
+
+--echo # 1.1.2 Test rollback after some brr events sent to slave.
+--let $wait_for_replica_brr_cache_count=1
+--let $include_commit_transaction=0
+--source suite/rpl/include/binlog_realtime_transmit_execute_one_transaction.inc
+
+--source include/rpl_connection_master.inc
+SET GLOBAL debug = '+d,send_brr_events_wait_before_read';
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+ROLLBACK;
+SET debug_sync='now SIGNAL continue_before_read_brr_event';
+
+--echo # Wait for source_brr_trx_count, expect 0
+--let $show_statement= SHOW STATUS LIKE 'source_brr_trx_count'
+--let $field= Value
+--let $condition= = '0'
+--source include/wait_show_condition.inc
+SHOW STATUS LIKE 'source_brr%';
+
+--let $wait_for_replica_brr_cache_count_value=0
+--source suite/rpl/include/binlog_realtime_transmit_wait_and_test_replica.inc
+
+--source include/rpl_connection_master.inc
+SET GLOBAL debug = '-d,send_brr_events_wait_before_read';
+
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_count= 2
+--let $assert_select= Read brr event from binlog cache tmp file failed, rollback this brr_trx
+--let $assert_text= Read brr event fail, rollback this brr_trx.
+--source include/assert_grep.inc
+
+--echo # 1.2 Test read brr event ok but condition of brr transaction is rollback.
+--source include/rpl_connection_master.inc
+SET GLOBAL debug = '+d,send_brr_events_wait_before_read';
+
+--let $wait_for_replica_brr_cache_count=0
+--let $include_commit_transaction=0
+--source suite/rpl/include/binlog_realtime_transmit_execute_one_transaction.inc
+
+SAVEPOINT identifier;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+SHOW STATUS LIKE 'source_brr%';
+
+--source include/rpl_connection_slave.inc
+SHOW STATUS LIKE 'replica_brr_cache_count';
+
+--source include/rpl_connection_master.inc
+ROLLBACK TO identifier;
+SET debug_sync='now SIGNAL continue_before_read_brr_event';
+
+--echo # Wait for source_brr_trx_count, expect 0
+--let $show_statement= SHOW STATUS LIKE 'source_brr_trx_count'
+--let $field= Value
+--let $condition= = '0'
+--source include/wait_show_condition.inc
+SHOW STATUS LIKE 'source_brr%';
+
+--let $wait_for_replica_brr_cache_count_value=0
+--source suite/rpl/include/binlog_realtime_transmit_wait_and_test_replica.inc
+
+--source include/rpl_connection_master.inc
+SET GLOBAL debug = '-d,send_brr_events_wait_before_read';
+
+--echo #
+--echo # 2. Test read rest brr event error during find_and_finish_brr_transaction
+--echo #     slave will reconnect and the transaction will be transmit normally again.
+--echo ########################################################
+--echo #
+--let $wait_for_replica_brr_cache_count=1
+--let $include_commit_transaction=0
+--source suite/rpl/include/binlog_realtime_transmit_execute_one_transaction.inc
+
+--source include/rpl_connection_master.inc
+SET GLOBAL debug = '+d,send_brr_events_wait_before_read';
+SET GLOBAL debug = "+d,simulate_read_rest_brr_event_error";
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+COMMIT;
+
+SET debug_sync='now SIGNAL continue_before_read_brr_event';
+
+--echo # Wait for source_brr_trx_count, expect 0
+--let $show_statement= SHOW STATUS LIKE 'source_brr_trx_count'
+--let $field= Value
+--let $condition= = '0'
+--source include/wait_show_condition.inc
+
+--let $wait_for_replica_brr_cache_count_value=0
+--source suite/rpl/include/binlog_realtime_transmit_wait_and_test_replica.inc
+
+--source include/rpl_connection_slave.inc
+--source include/rpl_sync.inc
+
+# The dump thread should interrupt and slave reconnect.
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.2.err
+--let $assert_count= 1
+--let $assert_select= Failed registering on source, reconnecting to try again
+--let $assert_text= The dump thread should interrupt and slave reconnect.
+--source include/assert_grep.inc
+
+--echo # The transaction should be transmit normally without ignorable event.
+--let $binlog_file=slave-relay-bin.000005
+--source include/show_relaylog_events.inc
+
+--source include/rpl_connection_master.inc
+SET GLOBAL debug = '-d,send_brr_events_wait_before_read';
+SET GLOBAL debug = "-d,simulate_read_rest_brr_event_error";
+
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_count= 1
+--let $assert_select= Read rest of brr event from binlog cache tmp file failed, rollback this brr_trx
+--let $assert_text= Read rest of brr event fail, rollback this brr_trx.
+--source include/assert_grep.inc
+
+--echo #
+--echo # 3. Test realtime transmit after transaction commit and binlog cache reset.
+--echo ########################################################
+--echo #
+--source include/rpl_connection_master.inc
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+--echo # Wait for source_brr_trx_count, expect 1
+--let $show_statement= SHOW STATUS LIKE 'source_brr_trx_count'
+--let $field= Value
+--let $condition= = '1'
+--source include/wait_show_condition.inc
+
+SET GLOBAL debug = '+d,send_brr_events_wait_before_loop';
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+COMMIT;
+
+--echo # Test current session can executed transaction normally
+--echo # before last transaction finished realtime transmit.
+INSERT INTO rpl_test.t2 VALUES('abc');
+
+--echo # Continue realtime transmit.
+SET GLOBAL debug = '-d,send_brr_events_wait_before_loop';
+SET debug_sync='now SIGNAL continue_brr_before_loop';
+
+--source include/rpl_connection_slave.inc
+--source include/rpl_sync.inc
+
+--echo # The transaction should be transmit realtimely with ignorable event.
+--let $binlog_file=slave-relay-bin.000006
+--source include/show_relaylog_events.inc
+
+--echo #
+--echo # 4. Test slave will not enable realtime transmit if rds release date check fail.
+--echo ########################################################
+--echo #
+--source include/rpl_connection_slave.inc
+SET GLOBAL DEBUG= "+d,simulate_slave_check_rds_brr_version_error";
+
+--source include/rpl_stop_slaves.inc
+--source include/rpl_start_slaves.inc
+
+SHOW STATUS LIKE "replica_brr_io_thread_count";
+SET GLOBAL DEBUG= "-d,simulate_slave_check_rds_brr_version_error";
+
+--echo #
+--echo # 5. cleanup.
+--echo ########################################################
+--echo #
+--source include/rpl_connection_master.inc
+SHOW STATUS LIKE "source_sent_brr_events_count";
+SET GLOBAL binlog_realtime_transmit_source_enabled = DEFAULT;
+DROP DATABASE rpl_test;
+
+--source include/rpl_connection_slave.inc
+SET GLOBAL binlog_realtime_transmit_replica_enabled = DEFAULT;
+--source include/rpl_sync.inc
+SHOW STATUS LIKE "replica_received_brr_events_count";
+--source include/uninstall_semisync.inc
+--source include/rpl_end.inc

@@ -25,12 +25,14 @@ this program; if not, write to the Free Software Foundation, Inc.,
 *****************************************************************************/
 
 #include "ddl_convertor.h"
+#include <algorithm>
 #include <iomanip>
 #include "m_ctype.h"             // my_strcasecmp
 #include "sql/create_field.h"    // Create_field
 #include "sql/dd/types/table.h"  // dd::Table
 #include "sql/duckdb/duckdb_charset_collation.h"
 #include "sql/duckdb/duckdb_config.h"  // use_double_for_decimal
+#include "sql/duckdb/duckdb_sql_quote.h"
 #include "sql/duckdb/duckdb_table.h"
 #include "sql/item.h"  // Item
 #include "sql/mysqld.h"
@@ -56,6 +58,25 @@ inline static bool is_nullable_change(const Create_field *new_field,
                                       const Field *field) {
   return ((new_field->flags & NOT_NULL_FLAG) != 0) ^
          field->is_flag_set(NOT_NULL_FLAG);
+}
+
+inline static bool is_numeric_field_type(enum_field_types t) {
+  switch (t) {
+    case MYSQL_TYPE_TINY:
+    case MYSQL_TYPE_SHORT:
+    case MYSQL_TYPE_INT24:
+    case MYSQL_TYPE_LONG:
+    case MYSQL_TYPE_LONGLONG:
+    case MYSQL_TYPE_FLOAT:
+    case MYSQL_TYPE_DOUBLE:
+    case MYSQL_TYPE_DECIMAL:
+    case MYSQL_TYPE_NEWDECIMAL:
+    case MYSQL_TYPE_BIT:
+    case MYSQL_TYPE_YEAR:
+      return true;
+    default:
+      return false;
+  }
 }
 
 /** Check if the name of column is changed.
@@ -156,8 +177,10 @@ inline static std::string get_default_value(Field *field,
 
         default_value = toHex(data, data_len);
       } else {
-        std::string def_val = col_obj->default_value_utf8().c_str();
-        default_value = "'" + def_val + "'";
+        const dd::String_type &default_value_utf8 =
+            col_obj->default_value_utf8();
+        default_value = myduck::quote_duckdb_string(
+            default_value_utf8.data(), default_value_utf8.length());
       }
     }
   }
@@ -165,12 +188,6 @@ inline static std::string get_default_value(Field *field,
 }
 
 bool FieldConvertor::check() {
-  // not support auto_increment
-  if (m_field->is_flag_set(AUTO_INCREMENT_FLAG)) {
-    return myduck::report_duckdb_table_struct_error(
-        "AUTO_INCREMENT is not supported");
-  }
-
   /* No support for INVISIBLE. */
   if (m_field->is_hidden()) {
     return myduck::report_duckdb_table_struct_error(
@@ -203,9 +220,7 @@ std::string FieldConvertor::translate() {
   if (field->is_hidden_by_system()) return "";
   std::ostringstream result;
 
-  result << '`';
-  result << field->field_name;
-  result << '`';
+  result << myduck::quote_duckdb_ident(field->field_name);
   result << " ";
 
   result << convert_type(m_field);
@@ -225,8 +240,6 @@ std::string FieldConvertor::translate() {
   /* Get default value from DD. */
   std::string default_value = get_default_value(field, m_dd_table);
   if (!default_value.empty()) result << " DEFAULT " << default_value;
-
-  assert(!(field->auto_flags & Field::NEXT_NUMBER));
 
   return result.str();
 }
@@ -380,8 +393,8 @@ static constexpr char DROP_NOT_NULL_STR[] = " DROP NOT NULL";
 inline static void append_stmt_alter_table(std::ostringstream &output,
                                            const std::string &schema_name,
                                            const std::string &table_name) {
-  output << "USE `" << schema_name << "`;";
-  output << ALTER_TABLE_OP_STR << '`' << table_name << '`';
+  output << "USE " << myduck::quote_duckdb_ident(schema_name) << ";";
+  output << ALTER_TABLE_OP_STR << myduck::quote_duckdb_ident(table_name);
 }
 
 /** Append 'ADD COLUMN ... TYPE ... DEFAULT ...' to statement.
@@ -402,7 +415,7 @@ inline static void append_stmt_column_add(std::ostringstream &output,
   assert(!schema_name.empty() && !table_name.empty() && !column_name.empty() &&
          !column_type.empty());
   append_stmt_alter_table(output, schema_name, table_name);
-  output << ADD_COLUMN_OP_STR << '`' << column_name << '`' << " "
+  output << ADD_COLUMN_OP_STR << myduck::quote_duckdb_ident(column_name) << " "
          << column_type;
   if (has_default) {
     output << DEFINE_DEFAULT_STR << default_value << "";
@@ -422,7 +435,8 @@ inline static void append_stmt_column_drop(std::ostringstream &output,
                                            const std::string &column_name) {
   assert(!schema_name.empty() && !table_name.empty() && !column_name.empty());
   append_stmt_alter_table(output, schema_name, table_name);
-  output << DROP_COLUMN_OP_STR << '`' << column_name << '`' << ";";
+  output << DROP_COLUMN_OP_STR << myduck::quote_duckdb_ident(column_name)
+         << ";";
 }
 
 /** Append 'ALTER TABLE ... ALTER COLUMN ... SET DATA TYPE ...' to statement.
@@ -438,7 +452,7 @@ inline static void append_stmt_column_change_type(
   assert(!schema_name.empty() && !table_name.empty() && !column_name.empty() &&
          !column_type.empty());
   append_stmt_alter_table(output, schema_name, table_name);
-  output << ALTER_COLUMN_OP_STR << '`' << column_name << '`'
+  output << ALTER_COLUMN_OP_STR << myduck::quote_duckdb_ident(column_name)
          << SET_DATA_TYPE_STR << column_type << ";";
 }
 
@@ -457,8 +471,8 @@ inline static void append_stmt_column_rename(
   assert(!schema_name.empty() && !table_name.empty() &&
          !old_column_name.empty() && !new_column_name.empty());
   append_stmt_alter_table(output, schema_name, table_name);
-  output << RENAME_COLUMN_OP_STR << '`' << old_column_name << '`' << " TO "
-         << '`' << new_column_name << '`' << ";";
+  output << RENAME_COLUMN_OP_STR << myduck::quote_duckdb_ident(old_column_name)
+         << " TO " << myduck::quote_duckdb_ident(new_column_name) << ";";
 }
 
 /** Append 'ALTER TABLE ... ALTER COLUMN ... SET DEFAULT ...' to statement.
@@ -474,8 +488,8 @@ inline static void append_stmt_column_set_default(
   assert(!schema_name.empty() && !table_name.empty() && !column_name.empty() &&
          !default_value.empty());
   append_stmt_alter_table(output, schema_name, table_name);
-  output << ALTER_COLUMN_OP_STR << '`' << column_name << '`' << SET_DEFAULT_STR
-         << default_value << ";";
+  output << ALTER_COLUMN_OP_STR << myduck::quote_duckdb_ident(column_name)
+         << SET_DEFAULT_STR << default_value << ";";
 }
 
 /** Append 'ALTER TABLE ... ALTER COLUMN ... DROP DEFAULT' to statement.
@@ -488,8 +502,8 @@ inline static void append_stmt_column_drop_default(
     const std::string &table_name, const std::string &column_name) {
   assert(!schema_name.empty() && !table_name.empty() && !column_name.empty());
   append_stmt_alter_table(output, schema_name, table_name);
-  output << ALTER_COLUMN_OP_STR << '`' << column_name << '`' << DROP_DEFAULT_STR
-         << ";";
+  output << ALTER_COLUMN_OP_STR << myduck::quote_duckdb_ident(column_name)
+         << DROP_DEFAULT_STR << ";";
 }
 
 /** Append 'ALTER TABLE ... ALTER COLUMN ... SET NOT NULL' to statement.
@@ -502,8 +516,8 @@ inline static void append_stmt_column_set_not_null(
     const std::string &table_name, const std::string &column_name) {
   assert(!schema_name.empty() && !table_name.empty() && !column_name.empty());
   append_stmt_alter_table(output, schema_name, table_name);
-  output << ALTER_COLUMN_OP_STR << '`' << column_name << '`' << SET_NOT_NULL_STR
-         << ";";
+  output << ALTER_COLUMN_OP_STR << myduck::quote_duckdb_ident(column_name)
+         << SET_NOT_NULL_STR << ";";
 }
 
 /** Append 'ALTER TABLE ... ALTER COLUMN ... DROP NOT NULL' to statement.
@@ -516,8 +530,28 @@ inline static void append_stmt_column_drop_not_null(
     const std::string &table_name, const std::string &column_name) {
   assert(!schema_name.empty() && !table_name.empty() && !column_name.empty());
   append_stmt_alter_table(output, schema_name, table_name);
-  output << ALTER_COLUMN_OP_STR << '`' << column_name << '`'
+  output << ALTER_COLUMN_OP_STR << myduck::quote_duckdb_ident(column_name)
          << DROP_NOT_NULL_STR << ";";
+}
+
+/** Append 'UPDATE t SET c = v WHERE c IS NULL;' to statement. Used to
+back-fill NULL rows before SET NOT NULL on MODIFY/CHANGE COLUMN; DuckDB's
+SET DEFAULT does not touch existing rows.
+@param[in, out]  output       statement stream
+@param[in]       schema_name  schema name
+@param[in]       table_name   table name
+@param[in]       column_name  column name
+@param[in]       fill_value   value to write in place of NULL */
+inline static void append_stmt_update_null_with_default(
+    std::ostringstream &output, const std::string &schema_name,
+    const std::string &table_name, const std::string &column_name,
+    const std::string &fill_value) {
+  assert(!schema_name.empty() && !table_name.empty() && !column_name.empty() &&
+         !fill_value.empty());
+  output << "USE " << myduck::quote_duckdb_ident(schema_name) << ";";
+  output << "UPDATE " << myduck::quote_duckdb_ident(table_name) << " SET "
+         << myduck::quote_duckdb_ident(column_name) << " = " << fill_value
+         << " WHERE " << myduck::quote_duckdb_ident(column_name) << " IS NULL;";
 }
 
 /** Append 'ALTER TABLE ... RENAME TO ...' to statement.
@@ -536,7 +570,8 @@ inline static void append_stmt_table_rename(std::ostringstream &output,
          !new_schema_name.empty() && !new_table_name.empty());
   assert(old_schema_name == new_schema_name);
   append_stmt_alter_table(output, old_schema_name, old_table_name);
-  output << RENAME_TABLE_OP_STR << '`' << new_table_name << '`' << ";";
+  output << RENAME_TABLE_OP_STR << myduck::quote_duckdb_ident(new_table_name)
+         << ";";
 }
 
 bool CreateTableConvertor::check() {
@@ -576,13 +611,13 @@ std::string CreateTableConvertor::translate() {
   std::ostringstream result;
   assert((m_create_info->options & HA_LEX_CREATE_TMP_TABLE) == 0);
 
-  result << "USE" << '`' << m_schema_name << '`' << ";";
+  result << "USE " << myduck::quote_duckdb_ident(m_schema_name) << ";";
 
   result << CREATE_TABLE_STR;
   if (m_create_info->options & HA_LEX_CREATE_IF_NOT_EXISTS) {
     result << IF_NOT_EXISTS_STR;
   }
-  result << '`' << m_table_name << '`';
+  result << myduck::quote_duckdb_ident(m_table_name);
   result << " (";
 
   append_column_definition(result);
@@ -624,6 +659,111 @@ std::string RenameTableConvertor::translate() {
   return result.str();
 }
 
+/** Get MySQL's implicit default value for a field, translated to DuckDB syntax.
+  MySQL fills existing rows with the type's implicit default when adding a
+  NOT NULL column without an explicit DEFAULT. DuckDB has no such concept,
+  so we must supply it explicitly.
+  @param[in]  field         the field
+  @param[in]  is_add_column true for ADD COLUMN, false for MODIFY/CHANGE.
+              ENUM differs: ADD fills the first enum value, MODIFY fills ''
+              (enum index 0 sentinel) to match InnoDB behaviour.
+  @return default value string suitable for DuckDB SQL */
+inline static std::string get_implicit_default_for_duckdb(
+    const Field *field, bool is_add_column = true) {
+  enum_field_types field_type = field->real_type();
+
+  switch (field_type) {
+    /* Numeric types: MySQL implicit default is 0. */
+    case MYSQL_TYPE_TINY:
+    case MYSQL_TYPE_SHORT:
+    case MYSQL_TYPE_INT24:
+    case MYSQL_TYPE_LONG:
+    case MYSQL_TYPE_LONGLONG:
+    case MYSQL_TYPE_FLOAT:
+    case MYSQL_TYPE_DOUBLE:
+    case MYSQL_TYPE_DECIMAL:
+    case MYSQL_TYPE_NEWDECIMAL:
+    case MYSQL_TYPE_YEAR:
+    case MYSQL_TYPE_BIT:
+      return "0";
+
+    /*
+      TIME's MySQL implicit default '00:00:00' is a legal DuckDB value,
+      so it goes through the normal path.
+    */
+    case MYSQL_TYPE_TIME:
+    case MYSQL_TYPE_TIME2:
+      return "'00:00:00'";
+
+    /*
+      DATE / DATETIME / TIMESTAMP: zero-date '0000-00-00[ 00:00:00]'.
+      In strict mode, the server sets error_if_not_empty
+      in non-strict mode, ha_duckdb returns HA_ALTER_INPLACE_INSTANT, and the SQL layer
+      aborts at sql/sql_table.cc:13719 before this helper runs.
+      TODO: properly define this behaviour and fix.
+    */
+    case MYSQL_TYPE_DATE:
+    case MYSQL_TYPE_NEWDATE:
+      return "'0000-00-00'";
+
+    case MYSQL_TYPE_DATETIME:
+    case MYSQL_TYPE_DATETIME2:
+    case MYSQL_TYPE_TIMESTAMP:
+    case MYSQL_TYPE_TIMESTAMP2:
+      return "'0000-00-00 00:00:00'";
+
+    /* JSON null value. */
+    case MYSQL_TYPE_JSON:
+      return "'null'";
+
+    case MYSQL_TYPE_SET:
+      return "''";
+
+    case MYSQL_TYPE_ENUM: {
+      if (!is_add_column) return "''";
+      auto *f = down_cast<const Field_enum *>(field);
+      if (f->typelib && f->typelib->count > 0) {
+        return myduck::quote_duckdb_string(f->typelib->type_names[0],
+                                           f->typelib->type_lengths[0]);
+      }
+      return "''";
+    }
+
+    /*
+      BINARY(N): fixed-length binary, InnoDB fills N zero bytes.
+      CHAR(N): fixed-length text, InnoDB fills empty string.
+    */
+    case MYSQL_TYPE_STRING:
+      if (!field->has_charset()) {
+        uint32 len = field->field_length;
+        std::string hex = "'";
+        for (uint32 i = 0; i < len; i++) hex += "\\x00";
+        hex += "'::BLOB";
+        return hex;
+      }
+      return "''";
+
+    /*
+      Variable-length string/BLOB types: text columns get empty string,
+      binary columns (no charset) need the DuckDB ''::BLOB cast.
+    */
+    case MYSQL_TYPE_TINY_BLOB:
+    case MYSQL_TYPE_MEDIUM_BLOB:
+    case MYSQL_TYPE_LONG_BLOB:
+    case MYSQL_TYPE_BLOB:
+    case MYSQL_TYPE_VARCHAR:
+    case MYSQL_TYPE_VAR_STRING:
+      return field->has_charset() ? "''" : "''::BLOB";
+
+    /* GEOMETRY has not been supported yet. */
+    case MYSQL_TYPE_GEOMETRY:
+      assert(false);
+
+    default:
+      return "NULL";
+  }
+}
+
 void AddColumnConvertor::prepare_columns() {
   List_iterator<Create_field> new_field_it(m_alter_info->create_list);
   Create_field *new_field;
@@ -652,6 +792,8 @@ bool AddColumnConvertor::check() {
           "Adding generated columns after table creation is not supported");
     }
 
+    assert(!field->is_flag_set(AUTO_INCREMENT_FLAG));
+
     if (FieldConvertor(field, m_new_dd_table).check()) {
       return true;
     }
@@ -678,9 +820,30 @@ std::string AddColumnConvertor::translate() {
     std::string default_value = get_default_value(field, m_new_dd_table);
     default_value = default_value.empty() ? "NULL" : default_value;
 
+    /*
+      MySQL fills existing rows with the type's implicit default (0,
+      '', etc.) when adding a NOT NULL column without DEFAULT. DuckDB
+      fills with NULL, so SET NOT NULL would fail. Inject the default
+      to back-fill existing rows, then drop it below so the resulting
+      column metadata matches InnoDB (no DEFAULT). Future INSERTs are
+      handled by MySQL Server's strict / non-strict implicit-default
+      logic before reaching DuckDB, so the column itself does not need
+      a DEFAULT to stay aligned with InnoDB semantics.
+    */
+    bool injected_default = false;
+    if (!has_default && (new_field->flags & NOT_NULL_FLAG) != 0) {
+      default_value = get_implicit_default_for_duckdb(field);
+      injected_default = true;
+    }
+
     append_stmt_column_add(result, m_schema_name, m_table_name,
-                           new_field->field_name, type, has_default,
-                           default_value);
+                           new_field->field_name, type,
+                           has_default || injected_default, default_value);
+
+    if (injected_default) {
+      append_stmt_column_drop_default(result, m_schema_name, m_table_name,
+                                      new_field->field_name);
+    }
   }
 
   for (auto &pair : m_columns_to_set_not_null) {
@@ -704,6 +867,16 @@ void DropColumnConvertor::prepare_columns() {
 
     m_columns_to_drop.emplace_back(nullptr, field);
   }
+
+  /*
+    Drop generated columns before the physical columns they depend on,
+    otherwise DuckDB rejects the DROP because the expression still
+    references the base column.
+  */
+  std::stable_sort(m_columns_to_drop.begin(), m_columns_to_drop.end(),
+                   [](const Column &a, const Column &b) {
+                     return a.second->is_gcol() && !b.second->is_gcol();
+                   });
 }
 
 bool DropColumnConvertor::check() {
@@ -868,6 +1041,40 @@ std::string ChangeColumnConvertor::translate() {
     does not support it, so ignore it now. */
   }
 
+  /*
+    Numeric → ENUM data mapping. After SET DATA TYPE VARCHAR, integer
+    values become string representations ('1','2',...). InnoDB maps by
+    ENUM index (1→first name, 2→second name), so we emit an UPDATE
+    with CASE to replicate that mapping. Out-of-range indices map to
+    '' (ENUM index 0 sentinel), matching InnoDB.
+  */
+  for (auto &pair : m_columns_to_change_type) {
+    Create_field *new_field = pair.first;
+    Field *new_field_obj = pair.second;
+    Field *old_field = new_field->field;
+
+    if (new_field_obj->real_type() == MYSQL_TYPE_ENUM &&
+        is_numeric_field_type(old_field->real_type())) {
+      auto *ef = down_cast<const Field_enum *>(new_field_obj);
+      if (ef->typelib && ef->typelib->count > 0) {
+        std::string q_column =
+            myduck::quote_duckdb_ident(new_field->field_name);
+        std::ostringstream case_expr;
+        case_expr << "CASE " << q_column;
+        for (uint i = 0; i < ef->typelib->count; i++) {
+          case_expr << " WHEN '" << (i + 1) << "' THEN "
+                    << myduck::quote_duckdb_string(ef->typelib->type_names[i],
+                                                   ef->typelib->type_lengths[i]);
+        }
+        case_expr << " ELSE '' END";
+        result << "USE " << myduck::quote_duckdb_ident(m_schema_name) << ";";
+        result << "UPDATE " << myduck::quote_duckdb_ident(m_table_name)
+               << " SET " << q_column << " = " << case_expr.str() << " WHERE "
+               << q_column << " IS NOT NULL;";
+      }
+    }
+  }
+
   /* Change default value. All columns should be processed. */
   for (auto &pair : m_columns) {
     Create_field *new_field = pair.first;
@@ -902,7 +1109,24 @@ std::string ChangeColumnConvertor::translate() {
 
   for (auto &pair : m_columns_to_set_not_null) {
     Create_field *new_field = pair.first;
+    Field *field = pair.second;
     assert((new_field->flags & NOT_NULL_FLAG) != 0);
+
+    /*
+      MySQL non-strict mode fills existing NULL rows with the type's
+      implicit default before SET NOT NULL. DuckDB's SET DEFAULT
+      doesn't touch existing rows, so emit an UPDATE first.
+      Strict mode rejects in InnoDB (ER_INVALID_USE_OF_NULL); skip
+      the UPDATE so DuckDB also rejects (Constraint Error at SET
+      NOT NULL), keeping the two engines aligned. Also skip when
+      the helper returns "NULL" (unsupported type): falls back to
+      the pre-fix Constraint Error.
+    */
+    std::string fill_value = get_implicit_default_for_duckdb(field, false);
+    if (!current_thd->is_strict_mode() && fill_value != "NULL") {
+      append_stmt_update_null_with_default(result, m_schema_name, m_table_name,
+                                           new_field->field_name, fill_value);
+    }
     append_stmt_column_set_not_null(result, m_schema_name, m_table_name,
                                     new_field->field_name);
   }
@@ -947,10 +1171,10 @@ std::string DropPartitionConvertor::translate() { return m_query; }
 
 std::string toHex(const char *data, size_t length) {
   std::stringstream ss;
-  ss << "'";
+  ss << "x'";
+  ss << std::hex << std::uppercase << std::setfill('0');
   for (size_t i = 0; i < length; ++i) {
-    ss << "\\x" << std::hex << std::uppercase << std::setw(2)
-       << std::setfill('0')
+    ss << std::setw(2)
        << static_cast<int>(static_cast<unsigned char>(data[i]));
   }
   ss << "'::BLOB";

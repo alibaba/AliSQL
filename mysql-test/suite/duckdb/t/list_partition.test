@@ -246,6 +246,9 @@ ALTER TABLE t_list REPAIR PARTITION p0;
 --echo #
 --echo # 11) DML which specify partition
 --echo #
+# A following parser error without a position must not reuse this position.
+--error ER_DUCKDB_CLIENT
+DELETE FROM t_list PARTITION(p0) WHERE id = 0;
 --error ER_DUCKDB_CLIENT
 SELECT * FROM t_list PARTITION(p0);
 

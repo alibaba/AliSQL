@@ -1,0 +1,139 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+include/install_semisync.inc
+CALL mtr.add_suppression("Send brr event failed, event length is too long");
+[connection master]
+FLUSH STATUS;
+SET GLOBAL binlog_realtime_transmit_source_enabled = ON;
+[connection slave]
+FLUSH STATUS;
+#
+# 0. Prepare data.
+########################################################
+#
+[connection master]
+CREATE DATABASE rpl_test;
+CREATE TABLE rpl_test.t1 (s LONGTEXT);
+CREATE TABLE rpl_test.t2 (s LONGTEXT);
+#
+# 1. Test transaction not realtime transmit if the size of single event exceed the max_send_size.
+########################################################
+#
+[connection master]
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+[connection master]
+COMMIT;
+[connection slave]
+include/rpl_sync.inc
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+4
+include/show_relaylog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+slave-relay-bin.000004	#	Previous_gtids	#	#	Gtid_set
+slave-relay-bin.000004	#	Format_desc	#	#	SERVER_VERSION, BINLOG_VERSION
+slave-relay-bin.000004	#	Ignorable	#	#	# Unrecognized ignorable event
+slave-relay-bin.000004	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= 'Gtid_set'
+slave-relay-bin.000004	#	Query	#	#	BEGIN
+slave-relay-bin.000004	#	Table_map	#	#	table_id: # (rpl_test.t2)
+slave-relay-bin.000004	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000004	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000004	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000004	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+slave-relay-bin.000004	#	Xid	#	#	COMMIT /* XID */
+slave-relay-bin.000004	#	Rotate	#	#	slave-relay-bin.000005;pos=POS
+[connection master]
+SHOW STATUS LIKE "source_brr%";
+Variable_name	Value
+source_brr_exceed_max_send_size_count	0
+source_brr_reader_count	0
+source_brr_sender_count	1
+source_brr_trx_count	0
+SHOW STATUS LIKE "source_sent_brr_events_count";
+Variable_name	Value
+source_sent_brr_events_count	10
+include/assert_grep.inc [Send brr event failed, event length is too long]
+# Wait for source_brr_reader_count, expect 0
+#
+# 2. Test send brr trx one by one if the total size of brr event in one loop exceed the max_send_size.
+########################################################
+#
+[connection master]
+# Expect source_sent_brr_events_count is 10 (now brr support asynchronous replication, so there are two FDE event, cause we start asynchronous replication, then start semi-sync replication after call  install_semisync.inc)
+SHOW STATUS LIKE 'source_sent_brr_events_count';
+Variable_name	Value
+source_sent_brr_events_count	10
+# Stop the dump thread before update brr_reader_list, to make sure 2 trxs append into brr_reader_list together.
+SET GLOBAL binlog_realtime_transmit_max_send_size=10000000;
+SET GLOBAL debug = '+d,wait_before_update_brr_reader_list';
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+# Continue read and send brr event, check max_size logic use source_brr_exceed_max_send_size_count later.
+SET GLOBAL debug = '-d,wait_before_update_brr_reader_list';
+SET debug_sync='now SIGNAL continue_update_brr_reader_list';
+# Wait for source_brr_exceed_max_send_size_count, expect 4
+# Wait for source_brr_reader_count, expect 2
+COMMIT;
+COMMIT;
+# Wait for source_brr_reader_count, expect 0
+SHOW STATUS LIKE "source_%";
+Variable_name	Value
+source_brr_exceed_max_send_size_count	4
+source_brr_reader_count	0
+source_brr_sender_count	1
+source_brr_trx_count	0
+source_sent_brr_events_count	26
+[connection slave]
+include/rpl_sync.inc
+include/show_relaylog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+slave-relay-bin.000006	#	Previous_gtids	#	#	Gtid_set
+slave-relay-bin.000006	#	Format_desc	#	#	SERVER_VERSION, BINLOG_VERSION
+slave-relay-bin.000006	#	Ignorable	#	#	# Unrecognized ignorable event
+slave-relay-bin.000006	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= 'Gtid_set'
+slave-relay-bin.000006	#	Query	#	#	BEGIN
+slave-relay-bin.000006	#	Table_map	#	#	table_id: # (rpl_test.t2)
+slave-relay-bin.000006	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000006	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000006	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000006	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+slave-relay-bin.000006	#	Xid	#	#	COMMIT /* XID */
+slave-relay-bin.000006	#	Rotate	#	#	slave-relay-bin.000007;pos=POS
+include/show_relaylog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+slave-relay-bin.000008	#	Previous_gtids	#	#	Gtid_set
+slave-relay-bin.000008	#	Format_desc	#	#	SERVER_VERSION, BINLOG_VERSION
+slave-relay-bin.000008	#	Ignorable	#	#	# Unrecognized ignorable event
+slave-relay-bin.000008	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= 'Gtid_set'
+slave-relay-bin.000008	#	Query	#	#	BEGIN
+slave-relay-bin.000008	#	Table_map	#	#	table_id: # (rpl_test.t2)
+slave-relay-bin.000008	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000008	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000008	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000008	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+slave-relay-bin.000008	#	Xid	#	#	COMMIT /* XID */
+slave-relay-bin.000008	#	Rotate	#	#	slave-relay-bin.000009;pos=POS
+#
+# 3. Cleanup.
+########################################################
+#
+[connection master]
+SHOW STATUS LIKE "source_sent_brr_events_count";
+Variable_name	Value
+source_sent_brr_events_count	26
+SET GLOBAL binlog_realtime_transmit_source_enabled = DEFAULT;
+SET GLOBAL binlog_realtime_transmit_max_send_size = DEFAULT;
+DROP DATABASE rpl_test;
+[connection slave]
+SHOW STATUS LIKE "replica_received_brr_events_count";
+Variable_name	Value
+replica_received_brr_events_count	26
+include/rpl_sync.inc
+include/uninstall_semisync.inc
+include/rpl_end.inc

@@ -27,6 +27,9 @@
 #include <openssl/evp.h>
 #include "sql/basic_ostream.h"
 #include "sql/rpl_log_encryption.h"
+#include "sql/log_event.h"     //Gtid_log_event
+
+class Brr_trx;
 
 // True if binlog cache is reset.
 #ifndef NDEBUG
@@ -235,10 +238,7 @@ class RDS_binlog_cache_storage : public Truncatable_ostream {
      Reset status and drop all data. It looks like a cache never was used after
      reset.
   */
-  bool reset() {
-    m_file_reserved_size = 0;
-    return m_file.reset();
-  }
+  bool reset();
 
   bool write(const unsigned char *buffer, my_off_t length) override;
   /* purecov: inspected */
@@ -313,6 +313,42 @@ class RDS_binlog_cache_storage : public Truncatable_ostream {
             m_file.get_io_cache()->m_decryptor != nullptr);
   }
 
+  /**
+    Update the sid and gno of this brr trx. This function will be called binlog
+    commit process, after generate gtid event.
+
+    @param sid_ptr The ptr of sid of this transaction.
+    @param gno The gno of this transaction.
+  */
+  void update_brr_gtid(const rpl_sid *sid_ptr, rpl_gno gno);
+
+  /**
+    Change the condition of brr trx to rollback.
+
+    This function will be called in following situation:
+    1. transaction rollback.
+    2. transaction rollback to savepoint.
+    3. some events have been written to stmt_cache.
+    4. binlog_realtime_transmit_source_enabled has been set to off.
+
+    This transaction will not be add to brr manager again after this rollback,
+    even if some events continue write to this cache in situation 2,3,4.
+  */
+  void rollback_brr_trx();
+
+  /**
+    Flush binlog cache and update brr pos if needed.
+
+    @return false on success, true on error.
+  */
+  bool flush_and_update_brr_pos();
+
+  /**
+    Update brr pos if needed. This function will be called after a event have
+    been written to binlog cache completely.
+  */
+  void update_brr_pos_after_write();
+
  private:
   /**
     Generate the file name for the cache tmp file.
@@ -340,6 +376,25 @@ class RDS_binlog_cache_storage : public Truncatable_ostream {
     binlog header and events. It will be set to zero if free flush is disabled.
   */
   my_off_t m_file_reserved_size = 0;
+
+  /*
+    Whether binlog realtime transmit is enabled for this transaction.
+    - Set to true if current cache is trx cache and brr source enabled and
+    current thd is not slave applier, when the cache is initialized or reset.
+    - Set to false in rollback_brr_trx(you can check the comment of this
+    function to see when this function will be called). Once it is set to false,
+    it will not be set to true again for current transaction.
+  */
+  bool m_brr_enabled;
+
+  /*
+    The ptr of brr_trx of this transaction. The value of brr_trx will be:
+    - Set to Nullptr when binlog cache initialized.
+    - Set to brr_trx ptr when this transaction is appended to brr_trx_mngr.
+    - Set to nullptr when this transaction is removed from brr_trx_mngr, when
+    this transaction commit or m_brr_enabled switch to false.
+  */
+  Brr_trx *m_brr_trx;
 
   IO_CACHE_binlog_cache_storage m_file;
 };

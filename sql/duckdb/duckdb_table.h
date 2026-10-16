@@ -30,6 +30,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/sql_alter.h"
 namespace myduck {
 
+static constexpr char DUCKDB_ENGINE_NAME[] = "DUCKDB";
+static constexpr char DUCKDB_AUTO_INC[] = "duckdb_auto_inc_val";
+
 /** Prepares the creation of a DuckDB table by modifying the create_info and
   alter_info objects to align with DuckDB's constraints and limitations.
   Called by mysql_prepare_create_table.

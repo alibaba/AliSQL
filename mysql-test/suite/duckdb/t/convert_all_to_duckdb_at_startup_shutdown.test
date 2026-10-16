@@ -53,6 +53,9 @@ while ($shutdown_counter < 7) {
   --replace_result $error_log_file MYSQLD_ERROR_LOG
   --source include/restart_mysqld.inc
 
+  # Ensure that the server has started and is running
+  --sleep 3
+
   --source include/shutdown_mysqld.inc
   --let restart_parameters="restart:"
   --source include/start_mysqld.inc

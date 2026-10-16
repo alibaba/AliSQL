@@ -294,8 +294,9 @@ class Basic_binlog_file_reader : public IBasic_binlog_file_reader {
   typedef EVENT_OBJECT_ISTREAM<Event_data_istream> Event_object_istream;
 
   Basic_binlog_file_reader(bool verify_checksum,
-                           unsigned int max_event_size = UINT_MAX)
-      : m_ifile(&m_error),
+                           unsigned int max_event_size = UINT_MAX,
+                           bool skip_check_binlog_magic = false)
+      : m_ifile(&m_error, skip_check_binlog_magic),
         m_data_istream(&m_error, &m_ifile, max_event_size),
         m_object_istream(&m_error, &m_data_istream),
         m_fde(BINLOG_VERSION, ::server_version),

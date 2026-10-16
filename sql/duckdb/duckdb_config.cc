@@ -49,6 +49,10 @@ bool global_use_dio = false;
 
 bool global_scheduler_process_partial = true;
 
+bool global_enable_background_checkpoint = false;
+
+ulonglong global_background_checkpoint_full_interval = 0;
+
 ulonglong appender_allocator_flush_threshold = 0;
 
 ulonglong checkpoint_threshold = 268435456;
@@ -116,19 +120,26 @@ bool update_scheduler_process_partial(sys_var *sys_var [[maybe_unused]],
   return duckdb_query_and_send(thd, oss.str(), false, true);
 }
 
-bool update_appender_allocator_flush_threshold(sys_var *sys_var
-                                               [[maybe_unused]],
-                                               THD *thd,
-                                               enum_var_type type
-                                               [[maybe_unused]]) {
+bool update_enable_background_checkpoint(sys_var *sys_var [[maybe_unused]],
+                                         THD *thd,
+                                         enum_var_type type [[maybe_unused]]) {
   std::ostringstream oss;
-  if (appender_allocator_flush_threshold == 0) {
-    oss << "RESET GLOBAL appender_allocator_flush_threshold";
+  oss << "SET GLOBAL enable_background_checkpoint = ";
+  if (global_enable_background_checkpoint) {
+    oss << "true";
   } else {
-    oss << "SET GLOBAL appender_allocator_flush_threshold = '";
-    oss << BytesToHumanReadableString(appender_allocator_flush_threshold);
-    oss << "'";
+    oss << "false";
   }
+
+  return duckdb_query_and_send(thd, oss.str(), false, true);
+}
+
+bool update_background_checkpoint_full_interval(
+    sys_var *sys_var [[maybe_unused]], THD *thd,
+    enum_var_type type [[maybe_unused]]) {
+  std::ostringstream oss;
+  oss << "SET GLOBAL background_checkpoint_full_interval = "
+      << global_background_checkpoint_full_interval;
 
   return duckdb_query_and_send(thd, oss.str(), false, true);
 }

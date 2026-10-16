@@ -12,8 +12,13 @@
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/common/enums/checkpoint_type.hpp"
 #include "duckdb/common/queue.hpp"
+#include "duckdb/common/thread.hpp"
+#include "duckdb/storage/checkpoint/checkpoint_options.hpp"
+
+#include <condition_variable>
 
 namespace duckdb {
+class DuckTransactionManager;
 class DuckTransaction;
 struct UndoBufferProperties;
 
@@ -26,6 +31,15 @@ struct DuckCleanupInfo {
 
 	void Cleanup() noexcept;
 	bool ScheduleCleanup() noexcept;
+};
+
+struct ActiveCheckpointWrapper {
+	explicit ActiveCheckpointWrapper(DuckTransactionManager &manager);
+
+	void Clear();
+
+	DuckTransactionManager &manager;
+	bool is_cleared;
 };
 
 //! The Transaction Manager is responsible for creating and managing
@@ -56,6 +70,11 @@ public:
 	transaction_t GetLastCommit() const {
 		return last_commit;
 	}
+	transaction_t GetActiveCheckpoint() const {
+		return active_checkpoint;
+	}
+	transaction_t GetNewCheckpointId();
+	void ResetCheckpointId();
 
 	bool IsDuckTransactionManager() override {
 		return true;
@@ -63,7 +82,14 @@ public:
 
 	//! Obtains a shared lock to the checkpoint lock
 	unique_ptr<StorageLockKey> SharedCheckpointLock();
+	//! Try to obtain an exclusive checkpoint lock
+	unique_ptr<StorageLockKey> TryGetCheckpointLock();
 	unique_ptr<StorageLockKey> TryUpgradeCheckpointLock(StorageLockKey &lock);
+	unique_ptr<StorageLockKey> SharedVacuumLock();
+	unique_ptr<StorageLockKey> TryGetVacuumLock();
+
+	//! Shutdown the background checkpoint thread (blocks until current checkpoint finishes).
+	void ShutdownBackgroundCheckpoint();
 
 	//! Returns the current version of the catalog (incremented whenever anything changes, not stored between restarts)
 	DUCKDB_API idx_t GetCatalogVersion(Transaction &transaction);
@@ -94,6 +120,16 @@ private:
 	//! Whether or not we can checkpoint
 	CheckpointDecision CanCheckpoint(DuckTransaction &transaction, unique_ptr<StorageLockKey> &checkpoint_lock,
 	                                 const UndoBufferProperties &properties);
+	//! Get the checkpoint type of an automatic checkpoint
+	CheckpointDecision GetCheckpointType(DuckTransaction &transaction, const UndoBufferProperties &undo_properties);
+
+	bool HasOtherTransactions(DuckTransaction &transaction);
+	void CleanupTransactions();
+
+	//! Background checkpoint thread loop.
+	void BackgroundCheckpointLoop();
+	//! Schedule a checkpoint to run on the background thread.
+	void ScheduleBackgroundCheckpoint(CheckpointOptions options, unique_ptr<StorageLockKey> lock);
 
 private:
 	//! The current start timestamp used by transactions
@@ -106,20 +142,20 @@ private:
 	atomic<transaction_t> lowest_active_start;
 	//! The last commit timestamp
 	atomic<transaction_t> last_commit;
+	//! The currently active checkpoint
+	atomic<transaction_t> active_checkpoint;
 	//! Set of currently running transactions
 	vector<unique_ptr<DuckTransaction>> active_transactions;
 	//! Set of recently committed transactions
 	vector<unique_ptr<DuckTransaction>> recently_committed_transactions;
-	//! Transactions awaiting GC
-	vector<unique_ptr<DuckTransaction>> old_transactions;
 	//! The lock used for transaction operations
 	mutex transaction_lock;
 	//! The checkpoint lock
 	StorageLock checkpoint_lock;
+	//! The vacuum lock - necessary to start vacuum operations
+	StorageLock vacuum_lock;
 	//! Lock necessary to start transactions only - used by FORCE CHECKPOINT to prevent new transactions from starting
 	mutex start_transaction_lock;
-	//! Mutex used to control writes to the WAL - separate from the transaction lock
-	mutex wal_lock;
 
 	atomic<idx_t> last_uncommitted_catalog_version = {TRANSACTION_ID_START};
 	idx_t last_committed_version = 0;
@@ -132,6 +168,19 @@ private:
 	//! E.g., if one transaction drops a table, and another creates a table,
 	//! inverting the cleanup order can result in catalog errors.
 	queue<unique_ptr<DuckCleanupInfo>> cleanup_queue;
+
+	//! Background checkpoint thread.
+	std::thread background_checkpoint_thread;
+	//! Mutex and condition variable for background checkpoint signaling.
+	mutex checkpoint_cv_lock;
+	std::condition_variable checkpoint_cv;
+	//! Pending checkpoint options and lock to be picked up by the background thread.
+	CheckpointOptions pending_checkpoint_options;
+	unique_ptr<StorageLockKey> pending_checkpoint_lock;
+	//! Whether a checkpoint is pending.
+	bool checkpoint_pending = false;
+	//! Whether the background checkpoint thread should shut down.
+	bool shutdown_checkpoint_thread = false;
 
 protected:
 	virtual void OnCommitCheckpointDecision(const CheckpointDecision &decision, DuckTransaction &transaction) {

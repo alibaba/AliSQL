@@ -48,6 +48,8 @@
 #include "mysql/udf_registration_types.h"
 #include "mysql_com.h"          // Item_result
 #include "sql/binlog_reader.h"  // Binlog_file_reader
+#include "spin_lock.h"
+#include "sql/log.h"
 #include "sql/rpl_commit_stage_manager.h"
 #include "sql/rpl_trx_tracking.h"
 #include "sql/tc_log.h"            // TC_LOG
@@ -315,13 +317,12 @@ class MYSQL_BIN_LOG : public TC_LOG {
    */
   bool read_binlog_in_use_flag(Binlog_file_reader &binlog_file_reader);
 
- protected:
+ public:
   /**
   @brief Notifies waiting threads that binary log has been updated
   */
   void signal_update();
 
- public:
   const char *generate_name(const char *log_name, const char *suffix,
                             char *buff);
   bool is_open() const { return atomic_log_state != LOG_CLOSED; }
@@ -875,6 +876,18 @@ class MYSQL_BIN_LOG : public TC_LOG {
   bool truncate_update_log_file(const char *log_name, my_off_t valid_pos,
                                 my_off_t binlog_size, bool update);
 
+  /**
+    Rename relay log cache tmp file to relay log file.
+    @return false - sucess, true - failed
+  */
+  bool rename_brr_cache_to_relay_log();
+  /**
+    Write the empty event to relay log to fill the reserve space.
+
+    @return false - sucess, true - failed
+  */
+  bool write_empty_event_to_relay_log();
+
  public:
   void make_log_name(char *buf, const char *log_ident);
   bool is_active(const char *log_file_name) const;
@@ -1081,6 +1094,38 @@ class MYSQL_BIN_LOG : public TC_LOG {
   */
   void adjust_linfo_offsets(my_off_t purge_offset);
 
+  /**
+    This function rename the brr cache tmp file to relay log file. Rotate
+    will be done twice in this function, which will generate three relay log
+    files.
+
+    relay_log.000001      (Active relay log before this transaction)
+    relay_log.000002      (relay log renamed from cache tmp file)
+    relay_log.000003      (Active relay log after this transaction)
+
+    @param mi The Master_info object.
+    @param tmp_file_name The name of brr cache tmp file.
+    @param file_reserved_size The reserved size of brr cache tmp file.
+    @param file_end_pos The end position of brr cache tmp file.
+    @param gtid_ev The gtid of this transaction.
+  */
+  bool rename_tmp_to_relay(Master_info *mi, const char *tmp_file_name,
+                           my_off_t file_reserved_size, my_off_t file_end_pos,
+                           Gtid_log_event *gtid_ev);
+
+  /**
+    The name of brr cache tmp file, which will be renamed to relay log
+    file in rename_tmp_to_relay.
+  */
+  const char *tmp_relay_file_name = nullptr;
+
+  /**
+    The reserved size of brr cache tmp file, which will be renamed to
+    relay log file in rename_tmp_to_relay.
+  */
+  my_off_t tmp_relay_file_reserved_size = 0;
+
+  ulong relay_log_reserved_size = 0;
  private:
   mysql_mutex_t LOCK_log_info;
   // Set of log info objects that are in usage and might prevent some other

@@ -43,6 +43,7 @@ class THD;
 struct TABLE;
 
 typedef Prealloced_array<Slave_worker *, 4> Slave_worker_array;
+typedef Prealloced_array<Relay_log_info *, 4> Slave_brr_worker_array;
 
 enum enum_mts_parallel_type {
   /* Parallel slave based on Database name */

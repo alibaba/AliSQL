@@ -248,6 +248,8 @@ duckdb_multi_trx_max_batch_length=268435456
 
 The replica `server_id` must differ from the primary and every other server in the replication topology.
 
+This example uses DuckDB Multi-Trx Batch. BRR early apply requires parallel replication workers and must not be enabled by simply adding BRR workers to this configuration. See the [BRR guide](../binlog-realtime-replication/binlog-realtime-replication-en.md) for transmission-only and early-apply requirements. For AUTO_INCREMENT and background checkpoints added in the current DuckDB snapshot, see the [DuckDB guide](./duckdb-en.md#auto_increment-and-background-checkpoints).
+
 3. **Provision existing data and GTID state**
 
 For a nonempty primary, provision a consistent physical or logical backup before starting replication. The restored data and `gtid_executed`/`gtid_purged` state must describe the same source snapshot. For a physical backup, restore its InnoDB data and use the startup conversion in section 2. For a logical backup, import the dump into the DuckDB node and restore the GTID metadata recorded by the backup tool. Verify row counts and GTID state before continuing.

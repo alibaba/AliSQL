@@ -192,6 +192,7 @@
 #include "sql/duckdb/duckdb_table.h"
 #include "sql/sql_table_ext.h"
 #include "vidx/vidx_index.h"
+#include "sql/rpl_binlog_sender_ext.h"
 
 namespace dd {
 class View;
@@ -13457,6 +13458,21 @@ static bool mysql_inplace_alter_table(
   bool rollback_needs_dict_cache_reset = false;
   MDL_request_list mdl_requests;
 
+  /*
+    If in nonblock DDL mode, in order to avoid applying row log for too long
+    in the COMMIT phase and causing MDL-X to be held for too long, the row log
+    is applied in each gap of the nonblock retry.
+  */
+  std::function<bool()> nonblock_ddl_processor = [&]() {
+    DBUG_EXECUTE_IF("simulate_failed_processor",
+                    my_error(ER_UNKNOWN_ERROR, MYF(0));
+                    return true;);
+    DBUG_EXECUTE_IF("simulate_process_for_long_time",
+                    std::this_thread::sleep_for(std::chrono::seconds(5)););
+    return table->file->ha_inplace_apply_log_only(altered_table, ha_alter_info,
+                                                  table_def, altered_table_def);
+  };
+
   DBUG_TRACE;
 
   /*
@@ -13512,6 +13528,7 @@ static bool mysql_inplace_alter_table(
     - Or this is requested by the user
     Note that under LOCK TABLES, we will already have SHARED_NO_READ_WRITE.
   */
+  /* Only NDB will reach here, so we do not change is with nonblock mode. */
   if ((inplace_supported == HA_ALTER_INPLACE_SHARED_LOCK ||
        alter_info->requested_lock == Alter_info::ALTER_TABLE_LOCK_SHARED) &&
       thd->mdl_context.upgrade_shared_lock(table->mdl_ticket,
@@ -13656,6 +13673,11 @@ static bool mysql_inplace_alter_table(
       goto rollback;
     }
 
+    /* After we get MDL X lock, we send SA to replica. */
+    Brr_ddl_write_guard::write_start_alter(
+        thd, (db_type->flags & HTON_SUPPORTS_ATOMIC_DDL),
+        inplace_supported == HA_ALTER_INPLACE_INSTANT);
+
     /*
       Downgrade the lock if storage engine has told us that exclusive lock was
       necessary only for prepare phase (unless we are not under LOCK TABLES) and
@@ -13680,13 +13702,39 @@ static bool mysql_inplace_alter_table(
     DEBUG_SYNC(thd, "alter_table_inplace_after_lock_downgrade");
     THD_STAGE_INFO(thd, stage_alter_inplace);
 
+    DBUG_EXECUTE_IF("abort_inplace_alter_table", {
+      if (thd->rli_slave && thd->rli_slave->get_brr_cache()) {
+        my_error(ER_QUERY_INTERRUPTED, MYF(0));
+        goto rollback;
+      }
+    });
+
     if (table->file->ha_inplace_alter_table(altered_table, ha_alter_info,
                                             table_def, altered_table_def)) {
       goto rollback;
     }
 
+    DBUG_EXECUTE_IF("abort_after_inplace_alter_table", {
+      DBUG_SET("-d,abort_after_inplace_alter_table");
+      my_error(ER_QUERY_INTERRUPTED, MYF(0));
+      goto rollback;
+    });
+
+    DBUG_EXECUTE_IF("brr_wait_inplace_alter_table", {
+      const char act[] = "now SIGNAL brr_ddl_paused WAIT_FOR continue";
+      assert(opt_debug_sync_timeout > 0);
+      assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(act)));
+    };);
+
+    /* Wait for the brr DDL result before geting MDL X lock. */
+    if (brr_rpl_info.wait_for_gtid_event(thd)) {
+      my_error(ER_QUERY_INTERRUPTED, MYF(0));
+      goto rollback;
+    }
+
     // Upgrade to EXCLUSIVE before commit.
-    if (wait_while_table_is_used(thd, table, HA_EXTRA_PREPARE_FOR_RENAME))
+    if (wait_while_table_is_used(thd, table, HA_EXTRA_PREPARE_FOR_RENAME,
+                                 &nonblock_ddl_processor))
       goto rollback;
 
     if (collect_and_lock_fk_tables_for_complex_alter_table(
@@ -16416,6 +16464,8 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
                        Alter_info *alter_info) {
   DBUG_TRACE;
 
+  Brr_ddl_write_guard brr_ddl_writer(thd);
+
   /*
     Check if we attempt to alter mysql.slow_log or
     mysql.general_log table and return an error if
@@ -17896,6 +17946,16 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
       goto err_new_table_cleanup;
   }
 
+  /* After we get MDL X lock, we send SA to replica. */
+  /*
+    Temporary table will not record to binlog, so we can't use brr if alter
+    a temporary table. And alter temporary table can use algorithm inplace,
+    so we just add the condition here.
+  */
+  if (table->s->tmp_table == NO_TMP_TABLE) {
+    Brr_ddl_write_guard::write_start_alter(thd, (atomic_replace && !is_noop));
+  }
+
   /*
     We do not copy data for MERGE tables. Only the children have data.
     MERGE tables have HA_NO_COPY_ON_ALTER set.
@@ -17917,6 +17977,18 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
                                  new_table, alter_info->create_list, &copied,
                                  &deleted, alter_info->keys_onoff, &alter_ctx))
       goto err_new_table_cleanup;
+
+    DBUG_EXECUTE_IF("brr_wait_copy_alter_table", {
+      const char act[] = "now SIGNAL brr_ddl_paused WAIT_FOR continue";
+      assert(opt_debug_sync_timeout > 0);
+      assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(act)));
+    };);
+
+    /* Wait for the brr DDL result after copy data. */
+    if (brr_rpl_info.wait_for_gtid_event(thd)) {
+      my_error(ER_QUERY_INTERRUPTED, MYF(0));
+      goto err_new_table_cleanup;
+    }
 
     DEBUG_SYNC(thd, "alter_after_copy_table");
   } else {
@@ -18354,6 +18426,32 @@ end_inplace_noop:
 
     uncommitted_tables.add_table(table_list);
 
+    DBUG_EXECUTE_IF("sync_before_update_view_metadata", {
+      /*
+        Barrier: wait until two threads both reach this point (each holding
+        MDL_EXCLUSIVE on its own table) before proceeding to
+        update_referencing_views_metadata(). This deterministically
+        reproduces the VIEW MDL deadlock during parallel conversion.
+      */
+      static std::atomic<int> barrier_count{0};
+      barrier_count.fetch_add(1);
+      while (barrier_count.load() < 2) my_sleep(100000);
+    });
+
+    /*
+      Minimal-repro hook for the FIL-cache fs-charset-vs-system-charset
+      split bug: any copy-style ALTER that rolls back through err_with_mdl
+      after mysql_rename_table goes through Log_DDL::post_ddl ->
+      fil_op_replay_rename, whose "rollback target file does NOT exist"
+      branch string-slices the .ibd path with zero charset decoding and
+      leaves space->name in filesystem charset (e.g. "mydb@002dx/t1").
+      Engine-agnostic — used by bugfix_alter_rollback_fs_charset_split.test.
+    */
+    DBUG_EXECUTE_IF("force_alter_rollback_after_rename", {
+      my_error(ER_LOCK_DEADLOCK, MYF(0));
+      goto err_with_mdl;
+    });
+
     if (update_referencing_views_metadata(thd, table_list, new_db, new_name,
                                           !atomic_replace, &uncommitted_tables))
       goto err_with_mdl;
@@ -18429,6 +18527,7 @@ end_temporary:
            ER_THD(thd, ER_INSERT_INFO), (long)(copied + deleted), (long)deleted,
            (long)thd->get_stmt_da()->current_statement_cond_count());
   my_ok(thd, copied + deleted, 0L, alter_ctx.tmp_name);
+  brr_ddl_writer.set_ddl_res(false);
   return false;
 
 err_new_table_cleanup:

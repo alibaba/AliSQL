@@ -1,0 +1,268 @@
+# ==== Purpose ====
+# This test case is to test the interaction between brr worker and IO thread.
+#
+# ==== Implementation ===
+# 0) Prepare data.
+# 1) Test stop slave io_thread will kill the brr worker thread when it is idle.
+# 2) Test stop slave io_thread will kill the brr worker thread when it is running.
+# 3) Test stop slave io_thread will kill the brr worker thread when it is running but not execute brr event.
+# 4) If the server exits abnormally, the remaining brr cache files will be cleared after restart.
+# 5) Cleanup.
+
+--let $rpl_require_row_format=2:1
+--source include/master-slave.inc
+--source include/have_binlog_format_row.inc
+--source include/have_debug.inc
+
+CALL mtr.add_suppression("\\[ERROR\\] .*MY-\\d+.* \\[Repl\\] Brr Worker failed executing transaction .*");
+CALL mtr.add_suppression(".*The replica coordinator and worker threads are stopped.*");
+
+--echo
+--echo #
+--echo # 0. Prepare data.
+--echo ########################################################
+--echo #
+connection master;
+SET GLOBAL debug='+d,ignore_brr_ddl_time_limit';
+CREATE DATABASE rpl_test;
+CREATE TABLE rpl_test.t1 (s LONGTEXT);
+--disable_query_log
+--let $i=0
+while ($i < 2)
+{
+  --eval INSERT INTO rpl_test.t1 values(repeat("1", 5242880))
+  --inc $i
+}
+--enable_query_log
+--source include/rpl_sync.inc
+
+--echo
+--echo #
+--echo # 1. Test stop slave io_thread will not kill the brr worker thread when it is idle.
+--echo ###################################################################################
+--echo #
+--echo # stop slave io_thread will cause the brr worker thread exit. 
+connection slave;
+--disable_warnings
+--source include/stop_slave_io.inc
+--enable_warnings
+
+--let $assert_status_name= replica_brr_worker_size
+--let $assert_status_value=4
+--source include/assert_status.inc
+
+--source include/start_slave_io.inc
+
+--echo
+--echo #
+--echo # 2. Test stop slave io_thread will not kill the brr worker thread when it is running.
+--echo ######################################################################################
+--echo #
+connection slave;
+SET GLOBAL DEBUG = '+d,brr_worker_wait_clean_up';
+connection master;
+SET SESSION DEBUG = '+d,brr_wait_inplace_alter_table'; 
+--send ALTER TABLE rpl_test.t1 ADD COLUMN id_1 INT, ALGORITHM=INPLACE;
+
+--echo 
+--echo ## The brr worker will rollback the DDL when stop slave io_thread.
+connection slave;
+
+--let $status_var= replica_brr_trx_assigned_to_brr_worker
+--let $status_var_value= 1
+--source include/wait_for_status_var.inc
+
+# Wait until the DDL is ready to commit before interrupting IO.
+--let $grep_file= $MYSQLTEST_VARDIR/log/mysqld.2.err
+--let $grep_pattern= wait_for_gtid_event, brr index: 1 start waiting
+--let $wait_timeout= 60
+--source include/wait_for_pattern_in_file.inc
+--let $wait_timeout= 0
+
+--disable_warnings
+--source include/stop_slave_io.inc
+--enable_warnings
+
+--let $status_var= replica_brr_ddl_rollback_by_brr_worker
+--let $status_var_value= 1
+--source include/wait_for_status_var.inc
+
+--echo ## Wait before clean up so, brr cache is not removed.
+--let $assert_text= replica_brr_cache_count should be 1
+--let $assert_status_name= replica_brr_cache_count
+--let $assert_status_value= 1
+--source include/assert_status.inc
+
+--let $MYSQLD_DATADIR= `select @@datadir`
+--let $RELAY_LOG_CACHE_TEMP_FILE_DIR = $MYSQLD_DATADIR/#alisql_binlog_cache_temp_file
+--exec ls $RELAY_LOG_CACHE_TEMP_FILE_DIR|grep "RL"
+
+--echo 
+--echo ## The brr worker will be suspend when stop slave io_thread.
+--let $assert_status_name= replica_brr_worker_size
+--let $assert_status_value=4
+--source include/assert_status.inc
+--echo 
+--echo ## When IO thread start again, new brr cache will be create.
+--source include/start_slave_io.inc
+
+--let $status_var= replica_brr_cache_count
+--let $status_var_value= 2
+--source include/wait_for_status_var.inc
+
+--let $assert_status_name= replica_brr_worker_size
+--let $assert_status_value=4
+--source include/assert_status.inc
+
+--echo
+--echo ## New brr cache file is created.
+--exec ls $RELAY_LOG_CACHE_TEMP_FILE_DIR|grep "RL"
+
+--echo
+--echo ## New brr cache will be assigned to brr worker, and it will finish apply it.
+--let $status_var= replica_brr_trx_assigned_to_brr_worker
+--let $status_var_value= 2
+--source include/wait_for_status_var.inc
+
+connection slave1;
+# brr worker can clean up brr cache.
+SET DEBUG_SYNC = 'now SIGNAL brr_worker_continue';
+SET GLOBAL DEBUG = '-d,brr_worker_wait_clean_up'; 
+
+connection master1;
+SET DEBUG_SYNC = 'now SIGNAL continue';
+
+connection master;
+--reap
+
+connection slave;
+--let $status_var= replica_brr_ddl_commit_by_brr_worker
+--let $status_var_value= 1
+--source include/wait_for_status_var.inc
+
+--source include/rpl_sync.inc
+SHOW CREATE TABLE rpl_test.t1;
+
+--echo
+--echo ## Both old and new brr cache will be cleaned up.
+connection slave;
+--let $assert_text= replica_brr_cache_count should be 0
+--let $assert_status_name= replica_brr_cache_count
+--let $assert_status_value= 0
+--source include/assert_status.inc
+
+--exec ls $RELAY_LOG_CACHE_TEMP_FILE_DIR|grep "RL"|wc -l
+
+--echo
+--echo #
+--echo # 3. Test stop slave io_thread will kill the brr worker thread when it is running but not execute brr event.
+--echo ############################################################################################################
+--echo #
+connection slave;
+SET GLOBAL DEBUG = '+d,brr_worker_stop_before_apply_event'; 
+
+connection master;
+SET SESSION DEBUG = '+d,brr_wait_inplace_alter_table'; 
+--send ALTER TABLE rpl_test.t1 ADD COLUMN id_2 INT, ALGORITHM=INPLACE
+
+--echo
+--echo ## Wait for new brr worker get brr cache.
+connection slave;
+--let $status_var= replica_brr_trx_assigned_to_brr_worker
+--let $status_var_value= 3
+--source include/wait_for_status_var.inc
+
+--echo
+--echo ## Wait set_gtid_next finished.
+connection master1;
+SET DEBUG_SYNC = 'now SIGNAL continue';
+
+connection master;
+--reap
+
+connection master;
+SET SESSION DEBUG = '+d,brr_wait_inplace_alter_table'; 
+--send ALTER TABLE rpl_test.t1 ADD COLUMN id_3 INT, ALGORITHM=INPLACE
+
+# Another brr worker get trx, it means set_gtid_next must finished for previous brr worker. 
+connection slave;
+--let $status_var= replica_brr_trx_assigned_to_brr_worker
+--let $status_var_value= 4
+--source include/wait_for_status_var.inc
+
+connection master1;
+SET DEBUG_SYNC = 'now SIGNAL continue';
+
+connection master;
+--reap
+
+--echo
+--echo ## Stop IO thread.
+connection slave;
+--disable_warnings
+--source include/stop_slave_io.inc
+--enable_warnings
+
+--echo
+--echo ## Signal brr worker continue.
+connection slave1;
+SET DEBUG_SYNC = 'now SIGNAL brr_worker_continue';
+SET GLOBAL DEBUG = '-d,brr_worker_wait_clean_up'; 
+
+--echo
+--echo ## Start IO thread.
+connection slave;
+--source include/start_slave_io.inc
+
+--echo
+--echo ## The replica can be synchronized with the master.
+--source include/rpl_sync.inc
+
+--echo
+--echo #
+--echo # 4. If the server exits abnormally, the remaining brr cache files will be cleared after restart.
+--echo #################################################################################################
+--echo #
+connection master;
+SET SESSION DEBUG = '+d,brr_wait_inplace_alter_table'; 
+--send ALTER TABLE rpl_test.t1 ADD COLUMN id_4 INT, ALGORITHM=INPLACE
+
+--echo
+--echo ## Brr cache file is created.
+connection slave;
+--let $status_var= replica_brr_cache_count
+--let $status_var_value= 1
+--source include/wait_for_status_var.inc
+--exec ls $RELAY_LOG_CACHE_TEMP_FILE_DIR|grep "RL"|wc -l
+
+--echo
+--echo ## Shutdown and restart server.
+--let $restart_parameters=restart:--skip_replica_start=ON
+--source include/kill_and_restart_mysqld.inc
+--let $rpl_server_number= 2
+--source include/rpl_reconnect.inc
+
+--echo
+--echo ## The remaining brr cache files is cleared after restart
+--exec ls $RELAY_LOG_CACHE_TEMP_FILE_DIR|grep "RL"|wc -l
+
+--source include/start_slave.inc
+--source include/wait_for_slave_to_start.inc
+
+--echo
+--echo #
+--echo # 5. Clean up.
+--echo ########################################################
+--echo #
+connection master1;
+SET DEBUG_SYNC = 'now SIGNAL continue';
+
+connection master;
+--reap
+
+connection master;
+SET GLOBAL debug='-d,ignore_brr_ddl_time_limit';
+DROP DATABASE rpl_test;
+
+--source include/rpl_sync.inc
+--source include/rpl_end.inc

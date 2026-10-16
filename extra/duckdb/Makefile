@@ -59,8 +59,8 @@ endif
 ifeq (${DISABLE_VPTR_SANITIZER}, 1)
 	DISABLE_SANITIZER_FLAG:=${DISABLE_SANITIZER_FLAG} -DDISABLE_VPTR_SANITIZER=1
 endif
-ifeq (${FORCE_SANITIZER}, 1)
-	DISABLE_SANITIZER_FLAG:=${DISABLE_SANITIZER_FLAG} -DFORCE_SANITIZER=1
+ifeq (${RELEASE_SANITIZER}, 1)
+	DISABLE_SANITIZER_FLAG:=${DISABLE_SANITIZER_FLAG} -DRELEASE_SANITIZER=1
 endif
 ifeq (${THREADSAN}, 1)
 	DISABLE_SANITIZER_FLAG:=${DISABLE_SANITIZER_FLAG} -DENABLE_THREAD_SANITIZER=1
@@ -163,11 +163,11 @@ ifdef CORE_EXTENSIONS
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};${CORE_EXTENSIONS}
 endif
 ifeq (${BUILD_ALL_EXT}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXTENSION_CONFIGS=".github/config/in_tree_extensions.cmake;.github/config/out_of_tree_extensions.cmake;.github/config/external_extensions.cmake;.github/config/rust_based_extensions.cmake"
+	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXTENSION_CONFIGS=".github/config/in_tree_extensions.cmake;.github/config/out_of_tree_extensions.cmake;.github/config/rust_based_extensions.cmake"
 else ifeq (${BUILD_ALL_IT_EXT}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXTENSION_CONFIGS=".github/config/in_tree_extensions.cmake"
 else ifeq (${BUILD_ALL_OOT_EXT}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXTENSION_CONFIGS=".github/config/out_of_tree_extensions.cmake;.github/config/external_extensions.cmake;"
+	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXTENSION_CONFIGS=".github/config/out_of_tree_extensions.cmake"
 endif
 ifeq (${STATIC_OPENSSL}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DOPENSSL_USE_STATIC_LIBS=1
@@ -250,6 +250,9 @@ endif
 ifeq (${LATEST_STORAGE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DLATEST_STORAGE=1
 endif
+ifeq (${BLOCK_VERIFICATION}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DBLOCK_VERIFICATION=1
+endif
 ifneq (${DISABLE_CPP_UNITTESTS}, )
 	CMAKE_VARS:=${CMAKE_VARS} -DENABLE_UNITTEST_CPP_TESTS=0
 endif
@@ -294,14 +297,21 @@ ifeq (${OVERRIDE_NEW_DELETE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DOVERRIDE_NEW_DELETE=1
 endif
 ifeq (${MAIN_BRANCH_VERSIONING}, 0)
-        CMAKE_VARS:=${CMAKE_VARS} -DMAIN_BRANCH_VERSIONING=0
+	CMAKE_VARS:=${CMAKE_VARS} -DMAIN_BRANCH_VERSIONING=0
 endif
 ifeq (${MAIN_BRANCH_VERSIONING}, 1)
-        CMAKE_VARS:=${CMAKE_VARS} -DMAIN_BRANCH_VERSIONING=1
+	CMAKE_VARS:=${CMAKE_VARS} -DMAIN_BRANCH_VERSIONING=1
 endif
 ifeq (${STANDALONE_DEBUG}, 1)
-        CMAKE_VARS:=${CMAKE_VARS} -DSTANDALONE_DEBUG=1
+	CMAKE_VARS:=${CMAKE_VARS} -DSTANDALONE_DEBUG=1
 endif
+ifneq (${DUCKDB_PREBUILT_LIBRARY}, )
+	CMAKE_VARS:=${CMAKE_VARS} -DPREBUILT_BINARY=${DUCKDB_PREBUILT_LIBRARY}
+endif
+ifdef REDUCE_SYMBOLS
+	CMAKE_VARS:=${CMAKE_VARS} -DREDUCE_SYMBOLS=1
+endif
+
 
 # Optional overrides
 ifneq (${STANDARD_VECTOR_SIZE}, )
@@ -400,15 +410,12 @@ build/extension_configuration/vcpkg.json: extension/extension_config_local.cmake
 
 unittest: debug
 	build/debug/test/unittest
-	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
 
 unittest_release: release
 	build/release/test/unittest
-	build/release/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
 
 unittestci:
 	$(PYTHON) scripts/run_tests_one_by_one.py build/debug/test/unittest --time_execution
-	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
 
 unittestarrow:
 	build/debug/test/unittest "[arrow]"
@@ -519,8 +526,10 @@ bloaty: reldebug bloaty/bloaty
 	./bloaty/bloaty  build/reldebug/duckdb -d symbols -n 20 --debug-file=build/reldebug/duckdb.dSYM/Contents/Resources/DWARF/duckdb
 	# ./bloaty/bloaty  build/reldebug/extension/parquet/parquet.duckdb_extension -d symbols -n 20 # to execute on extension
 
+# Generate compile commands without actually building
 clangd:
-	cmake -DCMAKE_BUILD_TYPE=Debug ${CMAKE_VARS} -B build/clangd .
+	cmake -DCMAKE_BUILD_TYPE=Debug ${CMAKE_VARS} -B .cache/clangd/debug .
+	cp .cache/clangd/debug/compile_commands.json .cache/clangd/compile_commands.json
 
 coverage-check:
 	./scripts/coverage_check.sh
@@ -534,9 +543,8 @@ generate-files:
 	$(PYTHON) scripts/generate_settings.py
 	$(PYTHON) scripts/generate_serialization.py
 	$(PYTHON) scripts/generate_storage_info.py
-	$(PYTHON) scripts/generate_enum_util.py
 	$(PYTHON) scripts/generate_metric_enums.py
-	$(PYTHON) scripts/generate_builtin_types.py
+	$(PYTHON) scripts/generate_enum_util.py
 # Run the formatter again after (re)generating the files
 	$(MAKE) format-main
 
@@ -546,6 +554,7 @@ bundle-setup:
 	mkdir -p bundle && \
 	cp src/libduckdb_static.a bundle/. && \
 	cp third_party/*/libduckdb_*.a bundle/. && \
+	cp extension/libduckdb_generated_extension_loader.a bundle/. && \
 	cp extension/*/lib*_extension.a bundle/. && \
 	{ [ -d vcpkg_installed ] && find vcpkg_installed -name '*.a' -exec cp {} bundle/. \; || true; } && \
 	cd bundle && \
@@ -569,6 +578,7 @@ bundle-setup-debug:
 	mkdir -p bundle && \
 	cp src/libduckdb_static.a bundle/. && \
 	cp third_party/*/libduckdb_*.a bundle/. && \
+	cp extension/libduckdb_generated_extension_loader.a bundle/. && \
 	cp extension/*/lib*_extension.a bundle/. && \
 	cd bundle && \
 	find . -name '*.a' -exec mkdir -p {}.objects \; -exec mv {} {}.objects \; && \
@@ -587,4 +597,19 @@ gather-libs: release
 	mkdir -p libs && \
 	cp src/libduckdb_static.a libs/. && \
 	cp third_party/*/libduckdb_*.a libs/. && \
+	cp extension/libduckdb_generated_extension_loader.a libs/. && \
 	cp extension/*/lib*_extension.a libs/.
+
+#### Setup VCPKG to correct version 2025.12.12 tag is 84bab45d415d22042bd0b9081aea57f362da3f35
+vcpkg/scripts/buildsystems/vcpkg.cmake:
+	git -C vcpkg fetch || git clone --branch 2025.12.12 https://github.com/microsoft/vcpkg
+	cd vcpkg && ./bootstrap-vcpkg.sh
+
+setup-vcpkg: vcpkg/scripts/buildsystems/vcpkg.cmake
+	@echo 'Consider exporting VCPKG_TOOLCHAIN_PATH=$(PWD)/vcpkg/scripts/buildsystems/vcpkg.cmake'
+
+cleanup-vcpkg:
+	rm -rf vcpkg
+
+test-utils:
+	make release EXTENSION_CONFIGS='.github/config/extensions/httpfs.cmake;.github/config/extensions/test-utils.cmake;.github/config/extensions/inet.cmake' DUCKDB_EXTENSIONS='tpcds;icu;autocomplete;tpch;json'

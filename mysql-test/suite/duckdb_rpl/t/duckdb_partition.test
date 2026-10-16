@@ -29,8 +29,10 @@ while ($p < 3) {
     --inc $i
 
     --let $log_file = $MYSQLTEST_VARDIR/log/mysqld.2.err
-    --exec grep "DELETE FROM \`t" $log_file | grep -v "alibaba_rds_row_no" | sed 's/.*my_duckdb: //'
-    --exec echo "" > $log_file
+    --let $grep_pattern = DELETE FROM \`t
+    --let $grep_exclude = alibaba_rds_row_no
+    --let $truncate_log = 1
+    --source suite/duckdb/include/grep_error_log.inc
     --echo
   }
   --inc $p
@@ -55,8 +57,10 @@ while ($i <= $num1) {
   --inc $i
 
   --let $log_file = $MYSQLTEST_VARDIR/log/mysqld.2.err
-  --exec grep "DELETE FROM \`t" $log_file | grep -v "alibaba_rds_row_no" | sed 's/.*my_duckdb: //'
-  --exec echo "" > $log_file
+  --let $grep_pattern = DELETE FROM \`t
+  --let $grep_exclude = alibaba_rds_row_no
+  --let $truncate_log = 1
+  --source suite/duckdb/include/grep_error_log.inc
   --echo
 }
 
@@ -79,8 +83,10 @@ while ($i <= $num1) {
   --inc $i
 
   --let $log_file = $MYSQLTEST_VARDIR/log/mysqld.2.err
-  --exec grep "DELETE FROM \`t" $log_file | grep -v "alibaba_rds_row_no" | sed 's/.*my_duckdb: //'
-  --exec echo "" > $log_file
+  --let $grep_pattern = DELETE FROM \`t
+  --let $grep_exclude = alibaba_rds_row_no
+  --let $truncate_log = 1
+  --source suite/duckdb/include/grep_error_log.inc
   --echo
 }
 
@@ -102,8 +108,10 @@ while ($i <= $num1) {
   --inc $i
 
   --let $log_file = $MYSQLTEST_VARDIR/log/mysqld.2.err
-  --exec grep "DELETE FROM \`t" $log_file | grep -v "alibaba_rds_row_no" | sed 's/.*my_duckdb: //'
-  --exec echo "" > $log_file
+  --let $grep_pattern = DELETE FROM \`t
+  --let $grep_exclude = alibaba_rds_row_no
+  --let $truncate_log = 1
+  --source suite/duckdb/include/grep_error_log.inc
   --echo
 }
 
@@ -125,8 +133,10 @@ while ($i <= $num1) {
   --inc $i
 
   --let $log_file = $MYSQLTEST_VARDIR/log/mysqld.2.err
-  --exec grep "DELETE FROM \`t" $log_file | grep -v "alibaba_rds_row_no" | sed 's/.*my_duckdb: //'
-  --exec echo "" > $log_file
+  --let $grep_pattern = DELETE FROM \`t
+  --let $grep_exclude = alibaba_rds_row_no
+  --let $truncate_log = 1
+  --source suite/duckdb/include/grep_error_log.inc
   --echo
 }
 
@@ -155,8 +165,10 @@ while ($p < 3) {
     --inc $i
 
     --let $log_file = $MYSQLTEST_VARDIR/log/mysqld.2.err
-    --exec grep "DELETE FROM \`t" $log_file | grep -v "alibaba_rds_row_no" | sed 's/.*my_duckdb: //'
-    --exec echo "" > $log_file
+    --let $grep_pattern = DELETE FROM \`t
+    --let $grep_exclude = alibaba_rds_row_no
+    --let $truncate_log = 1
+    --source suite/duckdb/include/grep_error_log.inc
     --echo
   }
   --inc $p
@@ -181,8 +193,10 @@ while ($i <= $num1) {
   --inc $i
 
   --let $log_file = $MYSQLTEST_VARDIR/log/mysqld.2.err
-  --exec grep "DELETE FROM \`t" $log_file | grep -v "alibaba_rds_row_no" | sed 's/.*my_duckdb: //'
-  --exec echo "" > $log_file
+  --let $grep_pattern = DELETE FROM \`t
+  --let $grep_exclude = alibaba_rds_row_no
+  --let $truncate_log = 1
+  --source suite/duckdb/include/grep_error_log.inc
   --echo
 }
 
@@ -204,8 +218,10 @@ while ($i <= $num1) {
   --inc $i
 
   --let $log_file = $MYSQLTEST_VARDIR/log/mysqld.2.err
-  --exec grep "DELETE FROM \`t" $log_file | grep -v "alibaba_rds_row_no" | sed 's/.*my_duckdb: //'
-  --exec echo "" > $log_file
+  --let $grep_pattern = DELETE FROM \`t
+  --let $grep_exclude = alibaba_rds_row_no
+  --let $truncate_log = 1
+  --source suite/duckdb/include/grep_error_log.inc
   --echo
 }
 
@@ -227,8 +243,10 @@ while ($i <= $num1) {
   --inc $i
 
   --let $log_file = $MYSQLTEST_VARDIR/log/mysqld.2.err
-  --exec grep "DELETE FROM \`t" $log_file | grep -v "alibaba_rds_row_no" | sed 's/.*my_duckdb: //'
-  --exec echo "" > $log_file
+  --let $grep_pattern = DELETE FROM \`t
+  --let $grep_exclude = alibaba_rds_row_no
+  --let $truncate_log = 1
+  --source suite/duckdb/include/grep_error_log.inc
   --echo
 }
 

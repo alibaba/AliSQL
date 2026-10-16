@@ -178,6 +178,9 @@ ScalarFunctionSet JSONFunctions::GetMemberOfFunction() {
 	ScalarFunctionSet set("member_of");
 	AddMemberOfFunction(set, LogicalType::ANY, LogicalType::VARCHAR);
 	AddMemberOfFunction(set, LogicalType::ANY, LogicalType::JSON());
+	for (auto &func : set.functions) {
+		func.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
+	}
 	return set;
 }
 

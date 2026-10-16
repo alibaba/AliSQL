@@ -42,7 +42,7 @@ t1	e	CAST('str' AS VARCHAR)
 t1	j_val1	CAST(json_extract("content", '$.val1') AS INTEGER)
 t1	content	NULL
 t1	j_val2	CAST(json_extract("content", '$.val2') AS VARCHAR)
-t1	j_val3	CAST(json_extract("content", '$.val3') AS DECIMAL(38,20))
+t1	j_val3	CAST(json_extract("content", '$.val3') AS DECIMAL(38, 20))
 
 
 #
@@ -106,7 +106,7 @@ t1	e	CAST('str' AS VARCHAR)
 t1	j_val1	CAST(json_extract("content", '$.val1') AS INTEGER)
 t1	content	NULL
 t1	j_val2	CAST(json_extract("content", '$.val2') AS VARCHAR)
-t1	j_val3	CAST(json_extract("content", '$.val3') AS DECIMAL(38,20))
+t1	j_val3	CAST(json_extract("content", '$.val3') AS DECIMAL(38, 20))
 
 
 ALTER TABLE t1
@@ -198,7 +198,7 @@ t1	e	CAST('str' AS VARCHAR)
 t1	j_val1	CAST(json_extract("content", '$.val1') AS INTEGER)
 t1	content	NULL
 t1	j_val2	CAST(json_extract("content", '$.val2') AS VARCHAR)
-t1	j_val3	CAST(json_extract("content", '$.val3') AS DECIMAL(38,20))
+t1	j_val3	CAST(json_extract("content", '$.val3') AS DECIMAL(38, 20))
 t1	created_at	'2025-02-01 00:00:00'
 t1	created_date	CAST(CAST(created_at AS DATE) AS DATE)
 t1	created_month	CAST("month"(created_at) AS INTEGER)
@@ -288,7 +288,7 @@ t1	e	CAST('str' AS VARCHAR)
 t1	j_val1	CAST(json_extract("content", '$.val1') AS INTEGER)
 t1	content	NULL
 t1	j_val2	CAST(json_extract("content", '$.val2') AS VARCHAR)
-t1	j_val3	CAST(json_extract("content", '$.val3') AS DECIMAL(38,20))
+t1	j_val3	CAST(json_extract("content", '$.val3') AS DECIMAL(38, 20))
 t1	created_at	'2025-02-01 00:00:00'
 t1	created_date	CAST(CAST(created_at AS DATE) AS DATE)
 t1	created_month	CAST("month"(created_at) AS INTEGER)
@@ -378,7 +378,7 @@ t1	e	CAST('str' AS VARCHAR)
 t1	j_val1	CAST(json_extract("content", '$.val1') AS INTEGER)
 t1	content	NULL
 t1	j_val2	CAST(json_extract("content", '$.val2') AS VARCHAR)
-t1	j_val3	CAST(json_extract("content", '$.val3') AS DECIMAL(38,20))
+t1	j_val3	CAST(json_extract("content", '$.val3') AS DECIMAL(38, 20))
 t1	created_at	'2025-02-01 00:00:00'
 t1	created_month	CAST("month"(created_at) AS INTEGER)
 t1	created_year	CAST("year"(created_at) AS SMALLINT)
@@ -487,7 +487,7 @@ t1	e	CAST('str' AS VARCHAR)
 t1	j_val1	CAST(json_extract("content", '$.val1') AS INTEGER)
 t1	content	NULL
 t1	j_val2	CAST(json_extract("content", '$.val2') AS VARCHAR)
-t1	j_val3	CAST(json_extract("content", '$.val3') AS DECIMAL(38,20))
+t1	j_val3	CAST(json_extract("content", '$.val3') AS DECIMAL(38, 20))
 t1	created_at	'2025-02-01 00:00:00'
 t1	created_month	CAST("month"(created_at) AS INTEGER)
 t1	created_year	CAST("year"(created_at) AS SMALLINT)

@@ -1364,6 +1364,27 @@ class Item : public Parse_tree_node {
   }
 
   /**
+    Check whether this Item can be treated as a string type in DuckDB context.
+    Returns true for string types whose character set is not binary.
+  */
+  bool is_duckdb_string_type() const {
+    const enum_field_types dt = data_type();
+    switch (dt) {
+      case MYSQL_TYPE_VAR_STRING:
+      case MYSQL_TYPE_STRING:
+      case MYSQL_TYPE_VARCHAR:
+      case MYSQL_TYPE_JSON:
+      case MYSQL_TYPE_BLOB:
+      case MYSQL_TYPE_TINY_BLOB:
+      case MYSQL_TYPE_MEDIUM_BLOB:
+      case MYSQL_TYPE_LONG_BLOB:
+        return collation.collation != &my_charset_bin;
+      default:
+        return false;
+    }
+  }
+
+  /**
     Retrieve actual data type for an item. Equal to data_type() for
     all items, except parameters.
   */

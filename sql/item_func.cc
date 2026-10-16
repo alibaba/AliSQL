@@ -145,6 +145,7 @@
 #include "template_utils.h"  // pointer_cast
 #include "thr_mutex.h"
 
+#include "sql/duckdb/duckdb_timezone.h"
 #include "sql/parse_tree_items.h"
 
 using std::max;
@@ -749,9 +750,7 @@ void Item_func::update_used_tables() {
 void Item_func::print(const THD *thd, String *str,
                       enum_query_type query_type) const {
   if (query_type & QT_DUCKDB_REWRITE) {
-    if (arg_count > 0 && (args[0]->data_type() == MYSQL_TYPE_VARCHAR ||
-                          args[0]->data_type() == MYSQL_TYPE_VAR_STRING ||
-                          args[0]->data_type() == MYSQL_TYPE_STRING)) {
+    if (arg_count > 0 && args[0]->is_duckdb_string_type()) {
       if (functype() == HOUR_FUNC || functype() == MINUTE_FUNC ||
           functype() == SECOND_FUNC || functype() == MICROSECOND_FUNC) {
         str->append(func_name());
@@ -1898,9 +1897,7 @@ bool Item_func_numhybrid::get_time(MYSQL_TIME *ltime) {
 void Item_typecast_signed::print(const THD *thd, String *str,
                                  enum_query_type query_type) const {
   if (query_type & QT_DUCKDB_REWRITE) {
-    if (args[0]->data_type() == MYSQL_TYPE_VARCHAR ||
-        args[0]->data_type() == MYSQL_TYPE_VAR_STRING ||
-        args[0]->data_type() == MYSQL_TYPE_STRING) {
+    if (args[0]->is_duckdb_string_type()) {
       str->append(STRING_WITH_LEN("cast(split("));
       args[0]->print(thd, str, query_type);
       str->append(STRING_WITH_LEN(", '.')[1] as bigint)"));
@@ -7166,7 +7163,55 @@ bool Item_func_get_system_var::resolve_type(THD *) {
 }
 
 void Item_func_get_system_var::print(const THD *, String *str,
-                                     enum_query_type) const {
+                                     enum_query_type query_type) const {
+  if (query_type & QT_DUCKDB_REWRITE) {
+    // For DuckDB rewrite, replace system variable references (e.g.,
+    // @@session.time_zone) with their actual values, since DuckDB does not
+    // understand MySQL system variables.
+
+    // Special handling for time_zone: MySQL time_zone values (like 'SYSTEM',
+    // '+08:00') may not be recognized by DuckDB, so convert them to
+    // DuckDB-compatible IANA timezone names (like 'Etc/GMT-8').
+    const char *var_name = var_tracker.get_var_name();
+    if (var_name != nullptr && strcmp(var_name, "time_zone") == 0) {
+      THD *thd = current_thd;
+      std::string warn_msg;
+      // Pick the correct Time_zone* based on variable scope:
+      // @@global.time_zone -> global, @@session.time_zone -> session
+      Time_zone *tz = (var_scope == OPT_GLOBAL)
+                          ? global_system_variables.time_zone
+                          : thd->variables.time_zone;
+      std::string tz_name = myduck::convert_timezone_for_duckdb(tz, warn_msg);
+      str->append('\'');
+      str->append(tz_name.c_str(), tz_name.length());
+      str->append('\'');
+      return;
+    }
+
+    Item_func_get_system_var *non_const_this =
+        const_cast<Item_func_get_system_var *>(this);
+    String buf;
+    String *val = non_const_this->val_str(&buf);
+    if (val != nullptr && !non_const_this->null_value) {
+      switch (var_tracker.cached_show_type()) {
+        case SHOW_CHAR:
+        case SHOW_CHAR_PTR:
+        case SHOW_LEX_STRING:
+          // String-type variables: print as a quoted string literal
+          str->append('\'');
+          val->print(str, true);
+          str->append('\'');
+          break;
+        default:
+          // Numeric/bool/double types: print the value directly
+          str->append(*val);
+          break;
+      }
+    } else {
+      str->append(STRING_WITH_LEN("NULL"));
+    }
+    return;
+  }
   str->append(item_name);
 }
 

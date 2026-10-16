@@ -303,6 +303,12 @@ Binlog_read_error::Error_type binlog_event_deserialize(
     case binary_log::TRANSACTION_PAYLOAD_EVENT:
       ev = new Transaction_payload_log_event(buf, fde);
       break;
+    case binary_log::IGNORABLE_LOG_EVENT:
+      if (uint2korr(buf + FLAGS_OFFSET) & LOG_EVENT_RDS_F) {
+        ev = new Brr_gtid_executed_log_event(buf, fde);
+        break;
+      }
+      [[fallthrough]];
     default:
       /*
         Create an object of Ignorable_log_event for unrecognized sub-class.

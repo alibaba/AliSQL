@@ -74,6 +74,14 @@
 #define SERVER_VERSION_LENGTH 60
 #define SQLSTATE_LENGTH 5
 
+#define BINLOG_TMP_FILE_LEN (FN_REFLEN * SYSTEM_CHARSET_MBMAXLEN)
+
+/*
+  Currently only two types of DDL are supported: long_transaction, where the
+  length of long_transaction is 16.
+*/
+#define BRR_TYPE_LEN 17
+
 /*
   In FIDO terminology, relying party is the server where required services are
   running. Relying party ID is unique name given to server.

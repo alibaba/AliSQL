@@ -1,0 +1,234 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+include/install_semisync.inc
+CALL mtr.add_suppression("\\[ERROR\\] .*MY-\\d+.* \\[Repl\\] Semi-sync source failed on .*");
+CALL mtr.add_suppression("\\[ERROR\\] .*MY-\\d+.* \\[Repl\\] Binlog realtime replica failed because: .*");
+[connection master]
+FLUSH STATUS;
+SET GLOBAL binlog_realtime_transmit_source_enabled = ON;
+#
+# 0. Prepare data.
+########################################################
+#
+[connection slave]
+include/stop_slave.inc
+SET GLOBAL binlog_realtime_transmit_replica_enabled = ON;
+include/start_slave.inc
+FLUSH STATUS;
+[connection master]
+CREATE DATABASE rpl_test;
+CREATE TABLE rpl_test.t1 (s LONGTEXT);
+CREATE TABLE rpl_test.t2 (s LONGTEXT);
+#
+# 1. Test stop slave during transaction realtime transmit.
+########################################################
+#
+# 1.1 Test start slave with realtime transmit after stop slave.
+[connection master]
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+[connection slave]
+# Wait for replica_brr_cache_count, expect 1
+# Check tmp files in binlog cache tmp file dir.
+RL_rds_relay_log_cache_0_1
+include/rpl_sync.inc
+[connection slave]
+include/stop_slave.inc
+[connection slave]
+# Wait for replica_brr_cache_count, expect 0
+# Check tmp files in binlog cache tmp file dir.
+[connection master]
+include/stop_dump_threads.inc
+# Wait for source_brr_sender_count, expect 0
+SHOW STATUS LIKE 'source_brr%';
+Variable_name	Value
+source_brr_exceed_max_send_size_count	0
+source_brr_reader_count	0
+source_brr_sender_count	0
+source_brr_trx_count	1
+[connection slave]
+include/start_slave.inc
+[connection slave]
+# Wait for replica_brr_cache_count, expect 1
+# Check tmp files in binlog cache tmp file dir.
+RL_rds_relay_log_cache_1_1
+[connection master]
+SHOW STATUS LIKE 'source_brr%';
+Variable_name	Value
+source_brr_exceed_max_send_size_count	0
+source_brr_reader_count	1
+source_brr_sender_count	1
+source_brr_trx_count	1
+COMMIT;
+[connection slave]
+include/rpl_sync.inc
+include/show_relaylog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+slave-relay-bin.000006	#	Previous_gtids	#	#	Gtid_set
+slave-relay-bin.000006	#	Format_desc	#	#	SERVER_VERSION, BINLOG_VERSION
+slave-relay-bin.000006	#	Ignorable	#	#	# Unrecognized ignorable event
+slave-relay-bin.000006	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= 'Gtid_set'
+slave-relay-bin.000006	#	Query	#	#	BEGIN
+slave-relay-bin.000006	#	Table_map	#	#	table_id: # (rpl_test.t2)
+slave-relay-bin.000006	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000006	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000006	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000006	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+slave-relay-bin.000006	#	Xid	#	#	COMMIT /* XID */
+slave-relay-bin.000006	#	Rotate	#	#	slave-relay-bin.000007;pos=POS
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+4
+# 1.2 Test start slave without realtime transmit after stop slave.
+[connection master]
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+[connection slave]
+# Wait for replica_brr_cache_count, expect 1
+# Check tmp files in binlog cache tmp file dir.
+RL_rds_relay_log_cache_1_2
+include/rpl_sync.inc
+[connection slave]
+include/stop_slave.inc
+[connection master]
+include/stop_dump_threads.inc
+[connection slave]
+# Wait for replica_brr_cache_count, expect 0
+# Check tmp files in binlog cache tmp file dir.
+[connection master]
+SHOW STATUS LIKE 'source_brr%';
+Variable_name	Value
+source_brr_exceed_max_send_size_count	0
+source_brr_reader_count	0
+source_brr_sender_count	0
+source_brr_trx_count	1
+[connection slave]
+SET GLOBAL binlog_realtime_transmit_replica_enabled = OFF;
+include/start_slave.inc
+[connection master]
+SHOW STATUS LIKE 'source_brr%';
+Variable_name	Value
+source_brr_exceed_max_send_size_count	0
+source_brr_reader_count	0
+source_brr_sender_count	0
+source_brr_trx_count	1
+COMMIT;
+[connection slave]
+include/rpl_sync.inc
+include/show_relaylog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+slave-relay-bin.000008	#	Previous_gtids	#	#	Gtid_set
+slave-relay-bin.000008	#	Rotate	#	#	master-bin.000001;pos=POS
+slave-relay-bin.000008	#	Format_desc	#	#	SERVER_VERSION, BINLOG_VERSION
+slave-relay-bin.000008	#	Rotate	#	#	master-bin.000001;pos=POS
+slave-relay-bin.000008	#	Rotate	#	#	master-bin.000001;pos=POS
+slave-relay-bin.000008	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= 'Gtid_set'
+slave-relay-bin.000008	#	Query	#	#	BEGIN
+slave-relay-bin.000008	#	Table_map	#	#	table_id: # (rpl_test.t2)
+slave-relay-bin.000008	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000008	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000008	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000008	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+slave-relay-bin.000008	#	Xid	#	#	COMMIT /* XID */
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+8
+include/stop_slave.inc
+SET GLOBAL binlog_realtime_transmit_replica_enabled = ON;
+include/start_slave.inc
+#
+# 2. Test slave reconnect during transaction realtime transmit.
+########################################################
+#
+[connection master]
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+[connection slave]
+# Wait for replica_brr_cache_count, expect 1
+# Check tmp files in binlog cache tmp file dir.
+RL_rds_relay_log_cache_2_3
+include/rpl_sync.inc
+[connection slave]
+# Wait for replica_received_brr_events_count, expect 29
+[connection master]
+# Wait for source_brr_sender_count, expect 1.
+# Kill dump thread on master to make slave IO thread reconnect.
+[connection slave]
+# Wait for replica_received_brr_events_count, expect 36 because current transaction re-transmit in brr dump thread.
+include/start_slave.inc
+Warnings:
+Note	3083	Replication thread(s) for channel '' are already runnning.
+SHOW STATUS LIKE "replica_brr_io_thread_count";
+Variable_name	Value
+replica_brr_io_thread_count	1
+[connection master]
+# Wait for source_brr_sender_count, expect 1.
+SHOW STATUS LIKE "source_%";
+Variable_name	Value
+source_brr_exceed_max_send_size_count	0
+source_brr_reader_count	1
+source_brr_sender_count	1
+source_brr_trx_count	1
+source_sent_brr_events_count	36
+COMMIT;
+[connection slave]
+include/rpl_sync.inc
+include/show_relaylog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+slave-relay-bin.000011	#	Previous_gtids	#	#	Gtid_set
+slave-relay-bin.000011	#	Format_desc	#	#	SERVER_VERSION, BINLOG_VERSION
+slave-relay-bin.000011	#	Ignorable	#	#	# Unrecognized ignorable event
+slave-relay-bin.000011	#	Gtid	#	#	SET @@SESSION.GTID_NEXT= 'Gtid_set'
+slave-relay-bin.000011	#	Query	#	#	BEGIN
+slave-relay-bin.000011	#	Table_map	#	#	table_id: # (rpl_test.t2)
+slave-relay-bin.000011	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000011	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000011	#	Write_rows	#	#	table_id: #
+slave-relay-bin.000011	#	Write_rows	#	#	table_id: # flags: STMT_END_F
+slave-relay-bin.000011	#	Xid	#	#	COMMIT /* XID */
+slave-relay-bin.000011	#	Rotate	#	#	slave-relay-bin.000012;pos=POS
+SELECT COUNT(*) FROM rpl_test.t2;
+COUNT(*)
+12
+SET GLOBAL binlog_realtime_transmit_replica_enabled = ON;
+#
+# 3. Test slave will not enable realtime transmit for non-default channel.
+########################################################
+#
+[connection slave]
+include/stop_slave.inc
+include/rpl_reset_slave.inc
+SHOW STATUS LIKE "replica_brr_io_thread_count";
+Variable_name	Value
+replica_brr_io_thread_count	0
+CHANGE MASTER TO MASTER_HOST='127.0.0.1', MASTER_PORT=MASTER_PORT, MASTER_USER='root', MASTER_AUTO_POSITION= 1 FOR CHANNEL 'C1';
+include/start_slave.inc [FOR CHANNEL 'c1']
+SHOW STATUS LIKE "replica_brr_io_thread_count";
+Variable_name	Value
+replica_brr_io_thread_count	0
+include/assert_grep.inc [slave will not enable realtime transmit for non-default channel.]
+include/stop_slave.inc [FOR CHANNEL 'c1']
+include/rpl_reset_slave.inc
+CHANGE MASTER TO MASTER_HOST='127.0.0.1', MASTER_PORT=MASTER_PORT, MASTER_USER='root', MASTER_AUTO_POSITION= 1;
+include/start_slave.inc [FOR CHANNEL '']
+#
+# 4. Cleanup.
+########################################################
+#
+[connection master]
+SHOW STATUS LIKE "source_sent_brr_events_count";
+Variable_name	Value
+source_sent_brr_events_count	39
+SET GLOBAL binlog_realtime_transmit_source_enabled = DEFAULT;
+DROP DATABASE rpl_test;
+[connection slave]
+SHOW STATUS LIKE "replica_received_brr_events_count";
+Variable_name	Value
+replica_received_brr_events_count	39
+SET GLOBAL binlog_realtime_transmit_replica_enabled = DEFAULT;
+include/rpl_sync.inc
+include/uninstall_semisync.inc
+include/rpl_end.inc

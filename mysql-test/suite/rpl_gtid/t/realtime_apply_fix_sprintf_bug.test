@@ -1,0 +1,71 @@
+# ==== Purpose ====
+# This test case is used to test whether the string can be printed correctly when it is too long.
+
+
+--let $rpl_require_row_format=2:1
+--source include/master-slave.inc
+--source include/have_binlog_format_row.inc
+--source include/have_debug.inc
+
+CALL mtr.add_suppression("\\[Warning\\] .*MY-\\d+.* \\[Repl\\] \\[RDS Diagnose\\] .*");
+CALL mtr.add_suppression("\\[ERROR\\] .*MY-\\d+.* \\[Repl\\] Brr Worker failed executing transaction .*");
+
+--echo
+--echo #
+--echo # 0. Prepare data.
+--echo ########################################################
+--echo #
+connection master;
+CREATE DATABASE rpl_test;
+CREATE TABLE rpl_test.t1 (s LONGTEXT);
+CREATE TABLE rpl_test.t2 (s LONGTEXT);
+--disable_query_log
+--let $i=0
+while ($i < 2)
+{
+  --eval INSERT INTO rpl_test.t1 values(repeat("1", 5242880))
+  --inc $i
+}
+--enable_query_log
+--source include/rpl_sync.inc
+
+--echo
+--echo #
+--echo # 1. Realtime apply ddl.
+--echo ########################################################
+--echo #
+connection slave;
+SET GLOBAL debug='+d,simulate_long_gtid_executed';
+connection master;
+SET GLOBAL debug='+d,ignore_brr_ddl_time_limit';
+--let $ddl_statement= ALTER TABLE rpl_test.t1 ADD COLUMN id1 INT
+--let $expect_assigned_to_brr_worker_value=1
+--let $expect_commit_by_brr_worker_value=1
+--let $algorithm=INPLACE
+--let $wait_timeout=100000
+--source suite/rpl/include/binlog_realtime_apply_one_ddl.inc
+--source include/rpl_sync.inc
+
+connection slave;
+SET GLOBAL debug='-d,simulate_long_gtid_executed';
+--echo
+--echo #
+--echo # 2. Check error log.
+--echo ########################################################
+--echo #
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.2.err
+--let $assert_count = 2
+--let $assert_select = .* \[Note\] \[MY-[0-9]+] \[Repl\] Binlog realtime replica message: read_next_event, long_gtid_executed, gtid:.*
+--let $assert_text = Test rds diagnose log record big transaction.
+--source include/assert_grep.inc
+
+--echo
+--echo #
+--echo # 3. Cleanup.
+--echo ########################################################
+--echo #
+connection master;
+SET GLOBAL debug='-d,ignore_brr_ddl_time_limit';
+DROP DATABASE rpl_test;
+--source include/rpl_sync.inc
+--source include/rpl_end.inc

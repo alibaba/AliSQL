@@ -39,9 +39,6 @@ SELECT id, hex(col1) FROM t2 WHERE col1 = 0xFF;
 ERROR HY000: [DuckDB] Parser Error: syntax error at or near "xFF"
 
 LINE 1: SELECT id, hex(col1) FROM t2 WHERE col1 = 0xFF
-                                                   ^
-
-LINE 1: SELECT id, hex(col1) FROM t2 WHERE col1 = 0xFF
                                                    ^.
 SELECT id, hex(col1) FROM t2 WHERE col1 = x'FF';
 id	hex(col1)

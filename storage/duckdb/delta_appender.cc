@@ -35,6 +35,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/duckdb/duckdb_config.h"  // use_double_for_decimal
 #include "sql/duckdb/duckdb_context.h"
 #include "sql/duckdb/duckdb_manager.h"
+#include "sql/duckdb/duckdb_sql_quote.h"
 #include "sql/duckdb/duckdb_timezone.h"  // days_at_timestart
 #include "sql/field.h"                   // field
 #include "sql/tztime.h"                  // my_tz_UTC
@@ -105,9 +106,15 @@ void DeltaAppenders::reset_all() { m_append_infos.clear(); }
 bool DeltaAppenders::rollback_trx(ulonglong trx_no) {
   DBUG_EXECUTE_IF("simulate_duckdb_rollback_partial_trx_failed", return true;);
 
-  for (auto &pair : m_append_infos) {
-    auto appender = pair.second.get();
-    if (appender->rollback(trx_no)) return true;
+  try {
+    for (auto &pair : m_append_infos) {
+      auto appender = pair.second.get();
+      if (appender->rollback(trx_no)) return true;
+    }
+  } catch (std::exception &ex) {
+    duckdb::ErrorData error(ex);
+    LogErr(INFORMATION_LEVEL, ER_DUCKDB, error.RawMessage().c_str());
+    return true;
   }
 
   return false;
@@ -222,17 +229,19 @@ bool DeltaAppender::Initialize(TABLE *table) {
   if (m_use_tmp_table) {
     m_tmp_table_name = buf_table_name(m_schema_name, m_table_name);
 
-    std::stringstream ss;
-    ss << "USE `" << m_schema_name << "`;";
-    ss << "CREATE TEMPORARY TABLE IF NOT EXISTS main.`" << m_tmp_table_name
-       << "` AS FROM `" << m_table_name << "` LIMIT 0;";
+    const std::string q_tmp = myduck::quote_duckdb_ident(m_tmp_table_name);
 
-    ss << "ALTER TABLE main.`" << m_tmp_table_name
-       << "` ADD COLUMN `#alibaba_rds_delete_flag` BOOL;";
-    ss << "ALTER TABLE main.`" << m_tmp_table_name
-       << "` ADD COLUMN `#alibaba_rds_row_no` INT;";
-    ss << "ALTER TABLE main.`" << m_tmp_table_name
-       << "` ADD COLUMN `#alibaba_rds_trx_no` INT;";
+    std::stringstream ss;
+    ss << "USE " << myduck::quote_duckdb_ident(m_schema_name) << ";";
+    ss << "CREATE TEMPORARY TABLE IF NOT EXISTS main." << q_tmp << " AS FROM "
+       << myduck::quote_duckdb_ident(m_table_name) << " LIMIT 0;";
+
+    ss << "ALTER TABLE main." << q_tmp
+       << " ADD COLUMN `#alibaba_rds_delete_flag` BOOL;";
+    ss << "ALTER TABLE main." << q_tmp
+       << " ADD COLUMN `#alibaba_rds_row_no` INT;";
+    ss << "ALTER TABLE main." << q_tmp
+       << " ADD COLUMN `#alibaba_rds_trx_no` INT;";
 
     auto ret = myduck::duckdb_query(m_thd, ss.str());
     if (ret->HasError()) {
@@ -240,7 +249,9 @@ bool DeltaAppender::Initialize(TABLE *table) {
     }
     std::string schema_name("main");
     m_appender = std::make_unique<duckdb::PhysicalAppender>(
-        con, schema_name, m_tmp_table_name, duckdb::AppenderType::PHYSICAL);
+        con, schema_name, m_tmp_table_name, duckdb::AppenderType::PHYSICAL,
+        myduck::appender_allocator_flush_threshold != 0 ? myduck::appender_allocator_flush_threshold
+                                                        : duckdb::DConstants::INVALID_INDEX);
 
     // get pklist and pk_bitmap
     KEY *key_info = table->key_info;
@@ -249,9 +260,7 @@ bool DeltaAppender::Initialize(TABLE *table) {
     KEY_PART_INFO *key_part = key_info->key_part;
     for (uint i = 0; i < key_info->user_defined_key_parts; i++, key_part++) {
       if (i) m_pk_list += ", ";
-      m_pk_list += "`";
-      m_pk_list += key_part->field->field_name;
-      m_pk_list += "`";
+      m_pk_list += myduck::quote_duckdb_ident(key_part->field->field_name);
       bitmap_set_bit(&m_pk_bitmap, key_part->field->field_index());
     }
 
@@ -263,14 +272,14 @@ bool DeltaAppender::Initialize(TABLE *table) {
         continue;
       }
       if (!is_first_field) m_col_list += ", ";
-      m_col_list += "`";
-      m_col_list += table->field[i]->field_name;
-      m_col_list += "`";
+      m_col_list += myduck::quote_duckdb_ident(table->field[i]->field_name);
       is_first_field = false;
     }
   } else {
     m_appender = std::make_unique<duckdb::PhysicalAppender>(
-        con, m_schema_name, m_table_name, duckdb::AppenderType::PHYSICAL);
+        con, m_schema_name, m_table_name, duckdb::AppenderType::PHYSICAL,
+        myduck::appender_allocator_flush_threshold != 0 ? myduck::appender_allocator_flush_threshold
+                                                        : duckdb::DConstants::INVALID_INDEX);
   }
 
   return false;
@@ -280,27 +289,33 @@ static void appendSelectQuery(std::stringstream &ss,
                               const std::string &select_list,
                               const std::string &pk_list,
                               const std::string &table_name, int delete_flag) {
-  ss << "SELECT UNNEST(r) FROM (SELECT LAST(ROW(" << select_list
+  // STRUCT_PACK is required (not ROW): in DuckDB v1.5.2 UNNEST on a struct
+  // resolves children by name, and ROW(...) produces an unnamed struct which
+  // triggers "struct_extract with a string key cannot be used on an unnamed
+  // struct". STRUCT_PACK uses the column name as the field name, so the
+  // resulting struct's children are named after the source columns.
+  ss << "SELECT UNNEST(r) FROM (SELECT LAST(STRUCT_PACK(" << select_list
      << ") ORDER BY `#alibaba_rds_row_no`) AS r, "
         "LAST(`#alibaba_rds_delete_flag` ORDER BY `#alibaba_rds_row_no`) AS "
-        "`#alibaba_rds_delete_flag` FROM main.`"
-     << table_name << "` GROUP BY " << pk_list << ")";
+        "`#alibaba_rds_delete_flag` FROM main."
+     << myduck::quote_duckdb_ident(table_name) << " GROUP BY " << pk_list
+     << ")";
   if (!delete_flag) ss << " WHERE `#alibaba_rds_delete_flag` = " << delete_flag;
 }
 
 void DeltaAppender::generateQuery(std::stringstream &ss, bool delete_flag) {
   ss.str("");
-  ss << "USE `" << m_schema_name << "`;";
+  ss << "USE " << myduck::quote_duckdb_ident(m_schema_name) << ";";
   if (!delete_flag) {
-    ss << "INSERT INTO `" << m_table_name << "` ";
+    ss << "INSERT INTO " << myduck::quote_duckdb_ident(m_table_name) << " ";
     if (m_has_gcols) {
       ss << "(" << m_col_list << ") ";
     }
     appendSelectQuery(ss, m_col_list, m_pk_list, m_tmp_table_name, delete_flag);
     ss << ";";
   } else {
-    ss << "DELETE FROM `" << m_table_name << "` WHERE ("
-       << m_pk_list << ") IN (";
+    ss << "DELETE FROM " << myduck::quote_duckdb_ident(m_table_name)
+       << " WHERE (" << m_pk_list << ") IN (";
     appendSelectQuery(ss, m_pk_list, m_pk_list, m_tmp_table_name, delete_flag);
     ss << ");";
   }
@@ -343,7 +358,7 @@ int DeltaAppender::flush_partial_batch() {
   }
 
   std::stringstream ss;
-  ss << "TRUNCATE main.`" << m_tmp_table_name << "`;";
+  ss << "TRUNCATE main." << myduck::quote_duckdb_ident(m_tmp_table_name) << ";";
   if (myduck::duckdb_query(m_thd, ss.str())->HasError()) {
     LogErr(INFORMATION_LEVEL, ER_DUCKDB, "flush_partial_batch truncate failed");
     my_error(ER_DUCKDB_APPENDER_ERROR, MYF(0),
@@ -364,8 +379,8 @@ bool DeltaAppender::rollback(ulonglong trx_no) {
     /* Flush to tmp table, then we can rollback the TRX's modified rows */
     m_appender->Flush();
     std::stringstream ss;
-    ss << "DELETE FROM main.`" << m_tmp_table_name
-       << "` WHERE `#alibaba_rds_trx_no` = " << trx_no;
+    ss << "DELETE FROM main." << myduck::quote_duckdb_ident(m_tmp_table_name)
+       << " WHERE `#alibaba_rds_trx_no` = " << trx_no;
 
     auto ret = myduck::duckdb_query(m_thd, ss.str());
     if (ret->HasError()) {
@@ -380,7 +395,8 @@ void DeltaAppender::cleanup() {
   if (m_use_tmp_table) {
     bitmap_free(&m_pk_bitmap);
     std::stringstream ss;
-    ss << "DROP TABLE IF EXISTS main.`" << m_tmp_table_name << "`;";
+    ss << "DROP TABLE IF EXISTS main."
+       << myduck::quote_duckdb_ident(m_tmp_table_name) << ";";
     myduck::duckdb_query(m_thd, ss.str());
   }
 }

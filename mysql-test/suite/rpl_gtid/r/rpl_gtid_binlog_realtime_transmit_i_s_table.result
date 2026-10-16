@@ -1,0 +1,99 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+include/install_semisync.inc
+#
+# 1. Prepare data.
+########################################################
+#
+[connection master]
+RESET MASTER;
+## 1.1 Check table BRR_SENDER_TRX_INFO definition is correct.
+SHOW CREATE TABLE INFORMATION_SCHEMA.BRR_SENDER_TRX_INFO;
+Table	Create Table
+BRR_SENDER_TRX_INFO	CREATE TEMPORARY TABLE `BRR_SENDER_TRX_INFO` (
+  `DUMP_THREAD_ID` bigint unsigned NOT NULL DEFAULT '0',
+  `BRR_INDEX` bigint unsigned NOT NULL DEFAULT '0',
+  `REPLICA_SERVER_ID` bigint unsigned NOT NULL DEFAULT '0',
+  `SEND_POS` bigint unsigned NOT NULL DEFAULT '0',
+  `EVENTS_SEND` bigint unsigned NOT NULL DEFAULT '0',
+  `TRX_CONTENT_EVENTS_SEND` bigint unsigned NOT NULL DEFAULT '0'
+) ENGINE=MEMORY DEFAULT CHARSET=utf8mb3
+include/assert.inc [No rows in BRR_SENDER_TRX_INFO table ]
+## 1.2 Check table BRR_SOURCE_TRX_INFO definition is correct.
+SHOW CREATE TABLE INFORMATION_SCHEMA.BRR_SOURCE_TRX_INFO;
+Table	Create Table
+BRR_SOURCE_TRX_INFO	CREATE TEMPORARY TABLE `BRR_SOURCE_TRX_INFO` (
+  `TRX_THREAD_ID` bigint unsigned NOT NULL DEFAULT '0',
+  `BRR_INDEX` bigint unsigned NOT NULL DEFAULT '0',
+  `BRR_TYPE` varchar(17) NOT NULL DEFAULT '',
+  `STATUS` tinyint unsigned NOT NULL DEFAULT '0',
+  `START_POS` bigint unsigned NOT NULL DEFAULT '0',
+  `READABLE_POS` bigint unsigned NOT NULL DEFAULT '0',
+  `TMP_FILE_NAME` varchar(1536) NOT NULL DEFAULT '',
+  `GNO` bigint NOT NULL DEFAULT '0'
+) ENGINE=MEMORY DEFAULT CHARSET=utf8mb3
+include/assert.inc [No rows in BRR_SOURCE_TRX_INFO table ]
+[connection slave]
+include/rpl_reset.inc
+## 1.3 Prepare data.
+[connection master]
+CREATE DATABASE rpl_test;
+CREATE TABLE rpl_test.t1 (s LONGTEXT);
+CREATE TABLE rpl_test.t2 (s LONGTEXT);
+#
+# 2. Test BRR_SENDER_TRX_INFO table is correct.
+########################################################
+# 
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+### Ensure brr trx is create.
+include/assert.inc [Ensure brr trx is create.]
+SELECT * FROM INFORMATION_SCHEMA.BRR_SENDER_TRX_INFO;
+DUMP_THREAD_ID	BRR_INDEX	REPLICA_SERVER_ID	SEND_POS	EVENTS_SEND	TRX_CONTENT_EVENTS_SEND
+#	1	2	#	#	#
+SELECT * FROM INFORMATION_SCHEMA.BRR_SOURCE_TRX_INFO;
+TRX_THREAD_ID	BRR_INDEX	BRR_TYPE	STATUS	START_POS	READABLE_POS	TMP_FILE_NAME	GNO
+#	1	LONG_TRANSACTION	0	#	#	#	0
+
+### Test the replica_server_id is correct
+include/assert.inc [test the replica_server_id is correct]
+
+### Test the brr_index is correct
+include/assert.inc [test BRR_SENDER_TRX_INFO brr_index is correct]
+include/assert.inc [test BRR_SOURCE_TRX_INFO brr_index is correct]
+
+### Test the gno is correct
+include/assert.inc [test the gno is correct]
+
+### Test the dump_thread_id is correct
+include/assert.inc [dump_thread_id is correct]
+
+### Test that the brr_thread_id is correct
+
+### Test brr_thread_id and dump_thread_id are different
+[connection master]
+COMMIT;
+
+### After the test reconnects, there is no abnormality in accessing the IS table.
+[connection slave]
+include/stop_slave.inc
+include/start_slave.inc
+[connection master]
+SELECT * FROM INFORMATION_SCHEMA.BRR_SENDER_TRX_INFO;
+DUMP_THREAD_ID	BRR_INDEX	REPLICA_SERVER_ID	SEND_POS	EVENTS_SEND	TRX_CONTENT_EVENTS_SEND
+SELECT * FROM INFORMATION_SCHEMA.BRR_SOURCE_TRX_INFO;
+TRX_THREAD_ID	BRR_INDEX	BRR_TYPE	STATUS	START_POS	READABLE_POS	TMP_FILE_NAME	GNO
+
+#
+# 3. Cleanup.
+########################################################
+#
+DROP DATABASE rpl_test;
+[connection slave]
+include/rpl_sync.inc
+include/uninstall_semisync.inc
+include/rpl_end.inc

@@ -24,9 +24,14 @@
 #include "mysys/mysys_priv.h"
 #include "sql/binlog.h"
 #include "sql/binlog_ext.h"
+#include "sql/rpl_binlog_sender_ext.h"
 
 RDS_binlog_cache_storage::RDS_binlog_cache_storage()
-    : m_trx_flag(false), m_enabled(false), m_file_reserved_size(0) {}
+    : m_trx_flag(false),
+      m_enabled(false),
+      m_file_reserved_size(0),
+      m_brr_enabled(false),
+      m_brr_trx(nullptr) {}
 
 RDS_binlog_cache_storage::~RDS_binlog_cache_storage() { close(); }
 
@@ -35,6 +40,8 @@ bool RDS_binlog_cache_storage::open(const char *dir, const char *prefix,
                                     my_off_t max_cache_size,
                                     bool trx_flag_arg) {
   m_trx_flag = trx_flag_arg;
+  m_brr_enabled = brr_trx_mngr.get_enabled() && m_trx_flag && current_thd &&
+                  !current_thd->is_applier_thread();
 
   return m_file.open(dir, prefix, cache_size, max_cache_size);
 }
@@ -56,6 +63,8 @@ void RDS_binlog_cache_storage::init_file_reserved_size() {
   m_file_reserved_size =
       should_enabled ? binlog_cache_free_flush.get_reserved_size() : 0;
 
+  /* The unlinked tmp file does not support realtime transmit. */
+  if (m_file_reserved_size == 0) m_brr_enabled = false;
   /*
     Aligned reserved_size with IO_SIZE, to avoid cache buffer will reduce in
     reinit_io_cache().
@@ -162,9 +171,52 @@ void RDS_binlog_cache_storage::detach_temp_file() {
 }
 
 bool RDS_binlog_cache_storage::flush_and_sync() {
-  IO_CACHE *info = m_file.get_io_cache();
+  if (flush_and_update_brr_pos()) return true;
+  if (mysql_file_sync(m_file.get_io_cache()->file, MYF(MY_WME))) return true;
+  return false;
+}
 
-  if (my_b_flush_io_cache(info, 1)) return true;
-  if (mysql_file_sync(info->file, MYF(MY_WME))) return true;
+bool RDS_binlog_cache_storage::reset() {
+  m_file_reserved_size = 0;
+
+  /*
+    The info->file != -1 means that this function has not used
+    Binlog_cache_free_flush, which will flush, detach and rename the cache tmp
+    file before binlog commits.
+
+    The tmp file of this cache will be truncate to 0 in m_file.reset(). If this
+    is a transaction using realtime transmit, we need to detach the tmp file
+    from before reset, because dump threads may not finish reading it.
+
+    The tmp file will also be unlinked here, it will be released after all
+    dump threads finish reading it.
+  */
+  if (m_brr_trx && m_file.get_io_cache()->file != -1) {
+    unlink(tmp_file_name());
+    detach_temp_file();
+  }
+
+  m_brr_trx = nullptr;
+  m_brr_enabled = brr_trx_mngr.get_enabled() && m_trx_flag && current_thd &&
+                  !current_thd->is_applier_thread();
+  return m_file.reset();
+}
+
+void RDS_binlog_cache_storage::rollback_brr_trx() {
+  m_brr_enabled = false;
+  if (m_brr_trx == nullptr) return;
+
+  brr_trx_mngr.close_brr_trx(m_brr_trx, Brr_trx_status::ROLLBACK);
+  m_brr_trx = nullptr;
+}
+
+bool RDS_binlog_cache_storage::flush_and_update_brr_pos() {
+  if (my_b_flush_io_cache(m_file.get_io_cache(), 1)) return true;
+  assert(m_file.get_io_cache()->pos_in_file == m_file.length());
+
+  /* Update the brr trx end position. */
+  if (unlikely(m_brr_trx))
+    brr_trx_mngr.update_brr_trx_position(m_brr_trx, m_file.length());
+
   return false;
 }

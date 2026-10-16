@@ -1,0 +1,4 @@
+--relay_log_purge=OFF
+--binlog_realtime_apply_workers=4
+--replica_preserve_commit_order=off
+$SEMISYNC_PLUGIN_OPT

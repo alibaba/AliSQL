@@ -35,7 +35,8 @@ set(JSON_EXTENSION_FILES
     json_functions/json_serialize_sql.cpp
     json_functions/json_serialize_plan.cpp
     json_functions/read_json.cpp
-    json_functions/read_json_objects.cpp)
+    json_functions/read_json_objects.cpp
+    json_functions/json_objectagg.cpp)
 
 build_static_extension(json ${JSON_EXTENSION_FILES})
 set(PARAMETERS "-warnings")

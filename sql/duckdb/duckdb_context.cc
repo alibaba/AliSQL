@@ -36,6 +36,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/transaction.h"
 #include "sql/duckdb/duckdb_config.h"
 #include "sql/duckdb/duckdb_log.h"
+#include "sql/duckdb/duckdb_sql_quote.h"
 
 bool duckdb_idempotent_data_import_enabled = false;
 #define my_millisecond_getsystime() (my_getsystime() / 10000)
@@ -73,7 +74,7 @@ DuckdbThdContext::DuckdbSessionConfig::compare_and_config(
   if (thd->db().str != nullptr && thd->db().length > 0 &&
       std::string(thd->db().str) != m_database) {
     db = std::string(thd->db().str);
-    std::string sql = "USE `" + db + "`";
+    std::string sql = "USE " + quote_duckdb_ident(db);
     /* Allow 'use db' execution failure */
     auto res = duckdb_query(connection, sql, false);
     m_database.Set(res->HasError() ? "" : db);

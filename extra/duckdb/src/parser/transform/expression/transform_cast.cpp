@@ -12,8 +12,16 @@ unique_ptr<ParsedExpression> Transformer::TransformTypeCast(duckdb_libpgquery::P
 	auto type_name = root.typeName;
 	LogicalType target_type = TransformTypeName(*type_name);
 
+	string cast_type_name;
+	if (type_name->names && type_name->names->length > 0) {
+		auto name_cell = type_name->names->tail;
+		cast_type_name = PGPointerCast<duckdb_libpgquery::PGValue>(name_cell->data.ptr_value)->val.str;
+	}
+	// Since v1.5.2, TransformTypeName returns UNBOUND, so check the PG type name directly.
+	auto type_id = TransformStringToLogicalTypeId(cast_type_name);
+
 	// check for a constant BLOB value, then return ConstantExpression with BLOB
-	if (!root.tryCast && target_type == LogicalType::BLOB && root.arg->type == duckdb_libpgquery::T_PGAConst) {
+	if (!root.tryCast && type_id == LogicalTypeId::BLOB && root.arg->type == duckdb_libpgquery::T_PGAConst) {
 		auto c = PGPointerCast<duckdb_libpgquery::PGAConst>(root.arg);
 		if (c->val.type == duckdb_libpgquery::T_PGString) {
 			CastParameters parameters;
@@ -34,12 +42,14 @@ unique_ptr<ParsedExpression> Transformer::TransformTypeCast(duckdb_libpgquery::P
 	// now create a cast operation
 	auto result = make_uniq<CastExpression>(target_type, std::move(expression), try_cast);
 	SetQueryLocation(*result, root.location);
-	if (target_type == LogicalTypeId::VARCHAR) {
-		if (type_name->typmods) {
+	// When casting to CHAR(N)/VARCHAR(N), DuckDB ignores the length modifier.
+	// To match MySQL semantics, wrap in LEFT(cast_result, N) to truncate.
+	if (type_name->typmods) {
+		if (type_id == LogicalTypeId::VARCHAR) {
 			std::vector<unique_ptr<ParsedExpression>> children;
 			auto &const_val = *Transformer::PGPointerCast<duckdb_libpgquery::PGAConst>(type_name->typmods->head->data.ptr_value);
 			children.push_back(std::move(result));
-			children.push_back(std::move(make_uniq<ConstantExpression>(Value::BIGINT(const_val.val.val.ival)) ));
+			children.push_back(std::move(make_uniq<ConstantExpression>(Value::BIGINT(const_val.val.val.ival))));
 			auto function = make_uniq<FunctionExpression>("left", std::move(children));
 			return std::move(function);
 		}

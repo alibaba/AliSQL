@@ -1,0 +1,38 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+#
+# 0. Prepare data.
+########################################################
+#
+CREATE DATABASE rpl_test;
+CREATE TABLE rpl_test.t1 (s LONGTEXT);
+CREATE TABLE rpl_test.t2 (s LONGTEXT);
+#
+# 1. Ignorable_log_event when field is used to set last_master_timestamp
+########################################################################
+#
+include/rpl_sync.inc
+SET GLOBAL debug = '+d,not_set_relay_flag_to_ignore_event';
+INSERT INTO rpl_test.t2 SELECT s FROM rpl_test.t1;
+include/rpl_sync.inc
+include/assert_grep.inc [Ignorable_log_event when field is used to set last_master_timestamp.]
+#
+# 2. After fix Ignorable_log_event when field is not used to set last_master_timestamp
+######################################################################################
+#
+include/rpl_sync.inc
+SET GLOBAL debug = '-d,not_set_relay_flag_to_ignore_event';
+INSERT INTO rpl_test.t2 SELECT s FROM rpl_test.t1;
+include/rpl_sync.inc
+include/assert_grep.inc [Ignorable_log_event when field is used to set last_master_timestamp.]
+
+#
+# 3. clean up 
+#############
+#
+DROP DATABASE rpl_test;
+include/rpl_sync.inc
+include/rpl_end.inc

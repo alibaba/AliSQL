@@ -41,6 +41,7 @@
 #include "sql/log_event.h"                // Format_description_log_event
 #include "sql/rpl_gtid.h"                 // Gtid
 #include "sql/rpl_info.h"                 // Rpl_info
+#include "sql/rpl_replica_ext.h"
 #include "sql/rpl_rli.h"                  // rli->get_log_lock()
 #include "sql/rpl_trx_boundary_parser.h"  // Transaction_boundary_parser
 #include "sql/sql_const.h"
@@ -92,6 +93,12 @@ class Master_info : public Rpl_info {
     Host name or ip address stored in the master.info.
   */
   char host[HOSTNAME_LENGTH + 1];
+
+  std::atomic<bool> m_realtime_transmit_enabled = false;
+
+  bool is_realtime_transmit_enabled() { return m_realtime_transmit_enabled; }
+
+  void enable_realtime_transmit() { m_realtime_transmit_enabled = true; }
 
   /*
     Check if the channel is configured.

@@ -24,8 +24,7 @@ t1	CREATE TABLE `t1` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 CALL dbms_duckdb.query("SELECT * FROM mysql.duckdb_binlog_position");
 RESULT
-Catalog Error: Table with name duckdb_binlog_position does not exist!
-Did you mean "main.duckdb_logs"?
+Catalog Error: Table with name "mysql.duckdb_binlog_position" does not exist because schema "mysql" does not exist.
 
 LINE 1: SELECT * FROM mysql.duckdb_binlog_position
                       ^

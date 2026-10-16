@@ -1,0 +1,418 @@
+# ==== Purpose ====
+# This test verifies the main function of long trx realtime apply.
+#
+# ==== Implementation ===
+# 0) Prepare data.
+# 1) Test a successfully executed long transaction can be applied by brr.
+# 2) Test a rollback transaction, the brr will also roll back it.
+# 3) Test worker thread will wait the brr worker apply the long transaction.
+# 4) Test worker thread will apply the long transaction if the brr worker failed to apply it.
+# 5) Test stop slave io_thread will make the brr worker roll back the long transaction.
+# 6) Test stop slave sql_thread will make the brr worker roll back the long transaction.
+# 7) Test binlog_realtime_apply_long_trx_enabled is off, not using realtime apply.
+# 8) Test trx using stmt cache will not using realtime transmit.
+# 9) Test XA transaction will not using realtime transmit.
+# 10) Testing enabling realtime apply simultaneously with DDL and long transactions did not result in circular waits. 
+# 11) Cleanup.
+
+--source include/master-slave.inc
+--source include/have_binlog_format_row.inc
+--source include/have_debug.inc
+
+CALL mtr.add_suppression("\\[Warning\\] .*MY-\\d+.* \\[Repl\\] \\[RDS Diagnose\\] .*");
+CALL mtr.add_suppression("\\[ERROR\\] .*MY-\\d+.* \\[Repl\\] Brr Worker failed executing transaction .*");
+
+--echo
+--echo #
+--echo # 0. Prepare data.
+--echo ########################################################
+--echo #
+--source include/rpl_connection_master.inc
+CREATE DATABASE rpl_test;
+CREATE TABLE rpl_test.t1 (s LONGTEXT);
+CREATE TABLE rpl_test.t2 (s LONGTEXT);
+CREATE TABLE rpl_test.t3 (s LONGTEXT);
+CREATE TABLE rpl_test.t4 (s LONGTEXT) engine=MYISAM;
+CREATE TABLE rpl_test.t5 (s LONGTEXT);
+--disable_query_log
+--let $i=0
+while ($i < 3)
+{
+  --eval INSERT INTO rpl_test.t1 values(repeat("1", 5242880))
+  --inc $i
+}
+--enable_query_log
+--source include/rpl_sync.inc
+
+--echo
+--echo #
+--echo # 1. Test a successfully executed long transaction can be applied by brr.
+--echo #########################################################################
+--echo #
+--source include/rpl_connection_master.inc
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+INSERT INTO rpl_test.t3 SELECT * FROM rpl_test.t1;
+
+--echo
+--echo ## Confirmed that the source has generated a brr cache.
+--let $status_var= source_brr_trx_count
+--let $status_var_value= 1
+--source include/wait_for_status_var.inc
+
+--echo
+--echo ## Confirmed that brr worker gets the transaction.
+--source include/rpl_connection_slave.inc
+--let $status_var= replica_brr_trx_assigned_to_brr_worker
+--let $status_var_value= 1
+--source include/wait_for_status_var.inc
+
+--echo
+--echo ## Confirmed that brr worker realtime apply the event.
+--let $wait_condition= SELECT COUNT(*)=3 FROM rpl_test.t2
+--source include/wait_condition.inc
+
+--let $wait_condition= SELECT COUNT(*)=3 FROM rpl_test.t3
+--source include/wait_condition.inc
+
+--echo
+--echo ## Commit the long transaction and check source and replica data.
+--source include/rpl_connection_master.inc
+commit;
+
+--source include/rpl_connection_slave.inc
+--let $status_var= replica_brr_long_trx_commit_by_brr_worker
+--let $status_var_value= 1
+--source include/wait_for_status_var.inc
+
+select count(*) from rpl_test.t2;
+select count(*) from rpl_test.t3;
+
+--echo
+--echo #
+--echo # 2. Test a rollback transaction, the brr will also roll back it.
+--echo #################################################################
+--echo #
+--source include/rpl_connection_master.inc
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+--echo
+--echo ## Confirmed that brr worker gets the transaction.
+--source include/rpl_connection_slave.inc
+--let $status_var= replica_brr_trx_assigned_to_brr_worker
+--let $status_var_value= 2
+--source include/wait_for_status_var.inc
+
+--echo
+--echo ## Rollback the long transaction and check source and replica data.
+--source include/rpl_connection_master.inc
+ROLLBACK;
+
+--source include/rpl_connection_slave.inc
+--let $status_var= replica_brr_long_trx_rollback_by_brr_worker
+--let $status_var_value= 1
+--source include/wait_for_status_var.inc
+
+select count(*) from rpl_test.t2;
+
+--echo
+--echo #
+--echo # 3. Test worker thread will wait the brr worker apply the long transaction.
+--echo #############################################################################
+--echo #
+--echo
+--echo ## 
+--source include/rpl_connection_slave.inc
+set global debug="+d,brr_wait_apply";
+
+--source include/rpl_connection_master.inc
+BEGIN;
+DELETE FROM rpl_test.t2;
+
+--echo
+--echo ## Confirmed that brr worker gets the transaction.
+--source include/rpl_connection_slave.inc
+--let $status_var= replica_brr_trx_assigned_to_brr_worker
+--let $status_var_value= 3
+--source include/wait_for_status_var.inc
+
+--echo ## Commit the transaction.
+--source include/rpl_connection_master.inc
+COMMIT;
+
+--echo
+--echo ## Worker thread should be waiting for the transaction to be committed by brr worker
+--source include/rpl_connection_slave.inc
+--let $show_statement= SHOW PROCESSLIST
+--let $field= State
+--let $condition= = 'Waiting for GTID to be committed'
+--source include/wait_show_condition.inc
+
+connection slave1;
+SET GLOBAL debug="-d,brr_wait_apply";
+SET DEBUG_SYNC = 'now SIGNAL apply_continue';
+
+--source include/rpl_connection_slave.inc
+--let $status_var= replica_brr_long_trx_commit_by_brr_worker
+--let $status_var_value= 2
+--source include/wait_for_status_var.inc
+select count(*) from rpl_test.t2;
+
+--echo
+--echo #
+--echo # 4. Test worker thread will apply the long transaction if the brr worker failed to apply it.
+--echo #############################################################################################
+--echo #
+--source include/rpl_connection_slave.inc
+SET GLOBAL debug="+d,brr_worker_abort_apply";
+
+--source include/rpl_connection_master.inc
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+--echo
+--echo ## Confirmed that brr worker gets the transaction.
+--source include/rpl_connection_slave.inc
+--let $status_var= replica_brr_trx_assigned_to_brr_worker
+--let $status_var_value= 4
+--source include/wait_for_status_var.inc
+
+--echo
+--echo ## Confirmed that brr worker roll back the transaction.
+--source include/rpl_connection_slave.inc
+--let $status_var= replica_brr_long_trx_rollback_by_brr_worker
+--let $status_var_value= 2
+--source include/wait_for_status_var.inc
+select count(*) from rpl_test.t2;
+
+--echo
+--echo ## Commit the transaction.
+--source include/rpl_connection_master.inc
+COMMIT;
+
+--echo
+--echo ## Confirmed that normal worker apply the transaction.
+--source include/rpl_connection_slave.inc
+--source include/rpl_sync.inc
+select count(*) from rpl_test.t2;
+SET GLOBAL debug="-d,brr_worker_abort_apply";
+
+--echo
+--echo #
+--echo # 5. Test stop slave io_thread will make the brr worker roll back the long transaction.
+--echo #######################################################################################
+--echo #
+--source include/rpl_connection_slave.inc
+set global debug="+d,brr_wait_apply";
+
+--source include/rpl_connection_master.inc
+BEGIN;
+DELETE FROM rpl_test.t3;
+
+--echo
+--echo ## Confirmed that brr worker gets the transaction.
+--source include/rpl_connection_slave.inc
+--let $status_var= replica_brr_trx_assigned_to_brr_worker
+--let $status_var_value= 5
+--source include/wait_for_status_var.inc
+
+--echo
+--echo ## Commit the transaction.
+--source include/rpl_connection_master.inc
+COMMIT;
+
+--echo
+--echo ## brr roll back transaction.
+--source include/rpl_connection_slave.inc
+--source include/stop_slave_io.inc
+--let $status_var= replica_brr_long_trx_rollback_by_brr_worker
+--let $status_var_value= 3
+--source include/wait_for_status_var.inc
+select count(*) from rpl_test.t3;
+
+--echo
+--echo ## Normal worker apply the transaction.
+--source include/start_slave_io.inc
+--source include/rpl_sync.inc
+select count(*) from rpl_test.t3;
+
+--echo
+--echo #
+--echo # 6. Test stop slave sql_thread will make the brr worker roll back the long transaction.
+--echo ########################################################################################
+--echo #
+--source include/rpl_connection_master.inc
+BEGIN;
+DELETE FROM rpl_test.t2;
+
+--echo
+--echo ## Confirmed that brr worker gets the transaction.
+--source include/rpl_connection_slave.inc
+--let $status_var= replica_brr_trx_assigned_to_brr_worker
+--let $status_var_value= 6
+--source include/wait_for_status_var.inc
+
+--echo
+--echo ## Commit the transaction.
+--source include/rpl_connection_master.inc
+COMMIT;
+
+--echo
+--echo ## brr roll back transaction.
+--source include/rpl_connection_slave.inc
+--source include/stop_slave_sql.inc
+--let $status_var= replica_brr_long_trx_rollback_by_brr_worker
+--let $status_var_value= 4
+--source include/wait_for_status_var.inc
+select count(*) from rpl_test.t2;
+
+--echo
+--echo ## Normal worker apply the transaction.
+--source include/start_slave_sql.inc
+--source include/rpl_sync.inc
+select count(*) from rpl_test.t2;
+set global debug="-d,brr_wait_apply";
+
+--echo
+--echo #
+--echo # 7. Test binlog_realtime_apply_long_trx_enabled is off, not using realtime apply.
+--echo ##################################################################################
+--echo #
+--source include/rpl_connection_master.inc
+set global binlog_realtime_apply_long_trx_enabled=OFF;
+BEGIN;
+INSERT INTO rpl_test.t2 SELECT * FROM rpl_test.t1;
+
+--echo
+--echo ## Confirmed that the source has generated a brr trx and this brr trx not using realtime apply.
+--let $status_var= source_brr_trx_count
+--let $status_var_value= 1
+--source include/wait_for_status_var.inc
+
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_count = 1
+--let $assert_select = .* Binlog realtime replica message: brr reader start on source.* brr index: 7.* using realtime_apply: 0
+--let $assert_text = Confirmed that the source has generated a brr trx.
+--source include/assert_grep.inc
+
+--echo
+--echo ## Confirmed that the replica has generated a brr cache.
+--source include/rpl_connection_slave.inc
+--let $status_var= replica_brr_cache_count
+--let $status_var_value= 1
+--source include/wait_for_status_var.inc
+
+--echo
+--echo ## Confirmed the trx is not applied by brr worker.
+--source include/rpl_connection_master.inc
+COMMIT;
+
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.2.err
+--let $assert_count = 1
+--let $assert_select = .* Binlog realtime replica message: Trx not using realtime apply brr index: 7
+--let $assert_text = Confirmed the trx is not applied by brr worker.
+--source include/assert_grep.inc
+
+--source include/rpl_connection_slave.inc
+--let $status_var= replica_brr_trx_not_assigned_to_brr_worker
+--let $status_var_value= 1
+--source include/wait_for_status_var.inc
+
+--echo
+--echo ## Confirmed Gtid_executed_log_event is not generate.
+--let $binlog_file=slave-relay-bin.000014
+--source include/show_relaylog_events.inc
+
+--echo
+--echo #
+--echo # 8. Test trx using stmt cache will not using realtime transmit.
+--echo ################################################################
+--echo #
+--source include/rpl_connection_master.inc
+set global binlog_realtime_apply_long_trx_enabled=ON;
+INSERT INTO rpl_test.t4 SELECT * FROM rpl_test.t1;
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_count = 0
+--let $assert_select = .* Binlog realtime replica message: brr trx start on source, brr index: 8
+--let $assert_text = Confirmed the trx is not applied by brr worker.
+
+--echo
+--echo #
+--echo # 9. Test XA transaction will not using realtime transmit.
+--echo ##########################################################
+--echo #
+--source include/rpl_connection_master.inc
+XA START 'trx1';
+INSERT INTO rpl_test.t3 SELECT * FROM rpl_test.t1;
+XA END 'trx1';
+XA PREPARE 'trx1';
+XA COMMIT 'trx1';
+
+--let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_count = 0
+--let $assert_select = .* Binlog realtime replica message: brr trx start on source, brr index: 8
+--let $assert_text = Confirmed the trx is not applied by brr worker.
+
+--echo
+--echo #
+--echo # 10. Testing enabling realtime apply simultaneously with DDL and long transactions did not result in circular waits. 
+--echo #####################################################################################################################
+--echo #
+--echo # Execute DDL
+--source include/rpl_connection_slave.inc
+SET GLOBAL debug = '+d,brr_wait_mdl_lock';
+
+--source include/rpl_connection_master.inc
+SET GLOBAL debug = '+d,brr_wait_inplace_alter_table';
+--send ALTER TABLE rpl_test.t5 ADD COLUMN id1 INT, ALGORITHM=INPLACE
+
+--echo # Execute trx1
+--source include/rpl_connection_master1.inc
+--let $status_var= source_brr_trx_count
+--let $status_var_value= 1
+--source include/wait_for_status_var.inc
+BEGIN;
+INSERT INTO rpl_test.t5(s) SELECT * FROM rpl_test.t1;
+
+--echo # Confirm that the BRR worker begin apply the long trx
+--source include/rpl_connection_slave.inc
+--let $wait_condition= SELECT COUNT(*)=3 FROM rpl_test.t5
+--source include/wait_condition.inc
+
+--echo # Confirm that the BRR worker begin apply the DDL and waiting MDL lock.
+--let $wait_condition= SELECT COUNT(*)=1 FROM performance_schema.threads WHERE NAME LIKE "%brr%" AND PROCESSLIST_STATE='Waiting for table metadata lock'
+--source include/wait_condition.inc
+
+--echo # Commit trx2
+connect (master2,localhost,root,,);
+--connection master2
+INSERT INTO rpl_test.t5(s) SELECT * FROM rpl_test.t1;
+
+--echo # Confirm that the BRR worker begin apply the trx2 and waiting MDL lock.
+--source include/rpl_connection_slave.inc
+--let $wait_condition= SELECT COUNT(*)=2 FROM performance_schema.threads WHERE NAME LIKE "%brr%" AND PROCESSLIST_STATE='Waiting for table metadata lock'
+--source include/wait_condition.inc
+
+--source include/rpl_connection_master1.inc
+COMMIT;
+SET DEBUG_SYNC = 'now SIGNAL continue';
+
+--source include/rpl_connection_master.inc
+--reap
+SET GLOBAL debug = '-d,brr_wait_inplace_alter_table';
+
+--echo # Confirm not block.
+--source include/rpl_sync.inc
+
+--source include/rpl_connection_slave.inc
+SET GLOBAL debug = '-d,brr_wait_mdl_lock';
+--echo
+--echo #
+--echo # 11. Cleanup.
+--echo #############
+--echo #
+--source include/rpl_connection_master.inc
+DROP DATABASE rpl_test;
+--source include/rpl_sync.inc
+--source include/rpl_end.inc
