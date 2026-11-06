@@ -68,7 +68,7 @@
  *
  * \section IODevice Concept of IO Device
  * A Device is simply an object used to read and write data to and from a stream.
- * The IODevice was added as a template paramter to be able to replace the file_name
+ * The IODevice was added as a template parameter to be able to replace the file_name
  * access functionality. This is only an interim solution, as soon as boost provides
  * a good IO library, interfaces/constraints provided by that library could be used.
  *
